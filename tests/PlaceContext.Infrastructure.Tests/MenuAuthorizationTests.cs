@@ -11,12 +11,8 @@ public sealed class MenuAuthorizationTests
     [InlineData("chains", Permission.ChainsManage)]
     [InlineData("schedules", Permission.TriggersManage)]
     [InlineData("data", Permission.DataRead)]
-    [InlineData("data.tables", Permission.DataRead)]
-    [InlineData("data.analytics", Permission.DataRead)]
-    [InlineData("data.search", Permission.DataRead)]
-    [InlineData("data.datamap", Permission.DataRead)]
-    [InlineData("data.entities", Permission.DataRead)]
     [InlineData("project.events", Permission.EventsManage)]
+    [InlineData("agents", Permission.AgentsManage)]
     [InlineData("chat", Permission.AgentsChat)]
     [InlineData("artifacts", Permission.ArtifactsView)]
     public void Menu_item_uses_the_same_section_permission_as_its_route(

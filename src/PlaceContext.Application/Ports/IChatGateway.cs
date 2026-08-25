@@ -21,4 +21,5 @@ public sealed record ChatMessage(string Role, string Content);
 public sealed record ChatSettings(
     float? Temperature = null,
     float? TopP = null,
-    int? MaxTokens = null);
+    int? MaxTokens = null,
+    string? Model = null);

@@ -1,0 +1,121 @@
+@page "/settings/agents"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
+@inject AgentsSettingsViewModel Vm
+@implements IDisposable
+
+<PageTitle>PlaceContext — Agents settings</PageTitle>
+
+<div class="agents-settings-page">
+    <header class="settings-head">
+        <div>
+            <span class="settings-kicker">Agent teams</span>
+            <h2>Agents</h2>
+            <p>Configure the model and shared operating context used by each project’s agent team and group chats.</p>
+        </div>
+        <button class="dcbtn primary" disabled="@(Vm.ProjectId is null || Vm.Saving)" @onclick="Vm.SaveAsync">
+            @(Vm.Saving ? "Saving…" : "Save settings")
+        </button>
+    </header>
+
+    <div class="dcfield project-picker">
+        <label>Project / agent team</label>
+        <select class="dcinput" value="@Vm.ProjectId" @onchange="Vm.ProjectChangedAsync">
+            <option value="">Select a project…</option>
+            @foreach (var project in Vm.Projects)
+            {
+                <option value="@project.Id">@project.Name</option>
+            }
+        </select>
+    </div>
+
+    @if (Vm.Message is not null)
+    {
+        <div class="settings-message @(Vm.MessageIsError ? "error" : "success")">@Vm.Message</div>
+    }
+
+    @if (Vm.Loading)
+    {
+        <Skeleton Kind="list" Rows="5" />
+    }
+    else if (Vm.ProjectId is null)
+    {
+        <section class="dccard empty-note">Choose a project to configure its agent team.</section>
+    }
+    else
+    {
+        <section class="dccard team-card">
+            <div>
+                <span class="card-kicker">Team</span>
+                <strong>@Vm.EnabledAgentCount active agent@(Vm.EnabledAgentCount == 1 ? "" : "s")</strong>
+                <p>The team shares project-scoped channels and works toward the goals on its work board.</p>
+            </div>
+            <button class="dcbtn" @onclick="Vm.OpenTeam">Manage team and goals</button>
+        </section>
+
+        <section class="dccard settings-card">
+            <header>
+                <div>
+                    <strong>Runtime</strong>
+                    <p>These defaults apply to every channel owned by this project’s agent team.</p>
+                </div>
+                <label class="enabled-toggle">
+                    <input type="checkbox" @bind="Vm.Enabled" />
+                    <span>Agent chat enabled</span>
+                </label>
+            </header>
+            <div class="settings-grid">
+                <div class="dcfield model-field">
+                    <label>Local base model</label>
+                    <input class="dcinput" @bind="Vm.BaseModel" placeholder="qwen3.5:0.8b" />
+                </div>
+                <div class="dcfield">
+                    <label>Context chunks</label>
+                    <input class="dcinput" type="number" min="1" max="50" @bind="Vm.MaxContextChunks" />
+                </div>
+                <div class="dcfield">
+                    <label>Temperature</label>
+                    <input class="dcinput" type="number" min="0" max="2" step="0.1" @bind="Vm.Temperature" />
+                </div>
+                <div class="dcfield">
+                    <label>Top P</label>
+                    <input class="dcinput" type="number" min="0" max="1" step="0.05" @bind="Vm.TopP" />
+                </div>
+            </div>
+        </section>
+
+        <section class="dccard settings-card prompt-card">
+            <header>
+                <div>
+                    <strong>Shared instructions</strong>
+                    <p>The Command Agent adds team-member instructions after this shared prompt.</p>
+                </div>
+            </header>
+            <div class="dcfield">
+                <label>System prompt</label>
+                <textarea class="dcinput prompt-input" rows="8" @bind="Vm.SystemPrompt"></textarea>
+            </div>
+            <details class="advanced-settings">
+                <summary>Advanced prompt and tool settings</summary>
+                <div class="dcfield">
+                    <label>Preamble</label>
+                    <textarea class="dcinput code-input" rows="6" @bind="Vm.Preamble"></textarea>
+                </div>
+                <div class="dcfield">
+                    <label>Interactive chat tool catalog</label>
+                    <textarea class="dcinput code-input" rows="10" @bind="Vm.ToolCatalog"></textarea>
+                </div>
+                <div class="dcfield">
+                    <label>Unattended agent tool catalog</label>
+                    <textarea class="dcinput code-input" rows="10" @bind="Vm.LaunchpadToolCatalog"></textarea>
+                </div>
+            </details>
+        </section>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnInitializedAsync() => Vm.LoadAsync();
+    public void Dispose() => Vm.Detach();
+}

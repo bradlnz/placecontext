@@ -185,7 +185,10 @@ public sealed class AgentSessionRunner
         {
             var chatMessages = BuildChatMessages(systemPrompt, messages);
             var response = await _gateway.ChatAsync(
-                projectId, chatMessages, new ChatSettings(Temperature: temperature), ct);
+                projectId, chatMessages, new ChatSettings(
+                    Temperature: temperature,
+                    TopP: config?.TopP,
+                    Model: config?.BaseModel), ct);
 
             var toolCalls = AgentToolCallParser.Parse(response);
             if (toolCalls.Count == 0)

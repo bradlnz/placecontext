@@ -74,6 +74,7 @@ public sealed class ClusterChatGateway : IChatGateway, IDisposable
             Temperature = settings?.Temperature,
             TopP = settings?.TopP,
             MaxTokens = settings?.MaxTokens,
+            Model = settings?.Model,
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, url)
@@ -118,6 +119,7 @@ public sealed class ClusterChatGateway : IChatGateway, IDisposable
             Temperature = settings?.Temperature,
             TopP = settings?.TopP,
             MaxTokens = settings?.MaxTokens,
+            Model = settings?.Model,
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, url)
@@ -242,6 +244,7 @@ public sealed class ClusterChatGateway : IChatGateway, IDisposable
         [JsonPropertyName("temperature")] public float? Temperature { get; set; }
         [JsonPropertyName("top_p")] public float? TopP { get; set; }
         [JsonPropertyName("max_tokens")] public int? MaxTokens { get; set; }
+        [JsonPropertyName("model")] public string? Model { get; set; }
     }
 
     private sealed class MsgDto

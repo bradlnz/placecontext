@@ -14,9 +14,11 @@ public sealed class VaultProjectChatGatewayTests
     public async Task Uses_external_llm_when_project_vault_has_api_token()
     {
         HttpRequestMessage? captured = null;
+        string? capturedBody = null;
         var factory = new StubHttpClientFactory(new StubHandler(async request =>
         {
             captured = request;
+            capturedBody = await request.Content!.ReadAsStringAsync();
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{\"choices\":[{\"message\":{\"content\":\"external reply\"}}]}", Encoding.UTF8, "application/json"),
@@ -27,12 +29,17 @@ public sealed class VaultProjectChatGatewayTests
             factory, local, new FakeSecrets("LLM_API_TOKEN", "encrypted-token"),
             new FakeProtector("secret-token"), Configuration());
 
-        var reply = await gateway.ChatAsync(Guid.NewGuid(), [new ChatMessage("user", "hello")]);
+        var reply = await gateway.ChatAsync(
+            Guid.NewGuid(),
+            [new ChatMessage("user", "hello")],
+            new ChatSettings(Model: "team-model")
+        );
 
         Assert.Equal("external reply", reply);
         Assert.Equal(0, local.CallCount);
         Assert.Equal("Bearer", captured!.Headers.Authorization!.Scheme);
         Assert.Equal("secret-token", captured.Headers.Authorization.Parameter);
+        Assert.Contains("\"model\":\"test-model\"", capturedBody);
     }
 
     [Fact]

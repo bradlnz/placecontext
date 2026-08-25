@@ -482,12 +482,13 @@
 .side-panel {
     width: 300px;
     background: var(--bg-2);
-    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
     overscroll-behavior: contain;
+    order: -1;
 }
 
 .side-panel-scrim,
@@ -532,6 +533,26 @@
     color: var(--muted);
     letter-spacing: 0.5px;
 }
+
+.team-section-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.team-section-head h4 { margin:0; }
+.team-section-head a { color:var(--brand-2); font-size:9px; text-decoration:none; }
+.team-section-head a:hover { text-decoration:underline; }
+.team-members { display:flex; flex-direction:column; gap:5px; }
+.team-member { display:flex; align-items:center; gap:7px; min-width:0; color:var(--text-2); font-size:10.5px; }
+.team-avatar { display:inline-flex; width:22px; height:22px; flex:none; align-items:center; justify-content:center; border-radius:6px; background:var(--brand-bg); color:var(--brand-2); font-size:9px; font-weight:700; }
+.team-empty { display:block; color:var(--muted); font-size:10px; line-height:1.45; }
+.team-goal { display:flex; align-items:flex-start; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); }
+.team-goal:last-child { border-bottom:0; }
+.goal-status { width:7px; height:7px; flex:none; margin-top:4px; border-radius:50%; background:var(--text-3); }
+.goal-status.work-status-queued { background:var(--text-3); }
+.goal-status.work-status-running { background:var(--brand-2); box-shadow:0 0 0 3px var(--brand-bg); }
+.goal-status.work-status-review { background:var(--warn); }
+.goal-status.work-status-done { background:var(--good); }
+.goal-status.work-status-blocked { background:var(--bad); }
+.goal-copy { min-width:0; }
+.goal-copy strong { display:block; overflow:hidden; color:var(--text); font-size:10px; font-weight:550; line-height:1.35; text-overflow:ellipsis; white-space:nowrap; }
+.goal-copy small { display:block; margin-top:2px; color:var(--muted); font-size:8.5px; }
 
 /* Active actions */
 .action-item {
@@ -1807,11 +1828,11 @@ a.attachment-tile:hover {
     .side-panel {
         position: absolute;
         top: 0;
-        right: 0;
+        left: 0;
         bottom: 0;
         width: min(320px, 88vw);
         z-index: 30;
-        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.3);
+        box-shadow: 8px 0 24px rgba(0, 0, 0, 0.3);
     }
 
     .side-panel-close {

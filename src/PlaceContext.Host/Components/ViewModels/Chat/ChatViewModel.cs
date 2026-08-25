@@ -161,6 +161,10 @@ public sealed partial class ChatViewModel : PageViewModel
     public bool ShowSessionList { get; set; } = true;
     public IReadOnlyList<ChatSessionSummary> Sessions { get; private set; } =
         Array.Empty<ChatSessionSummary>();
+    public IReadOnlyList<AgentDefinitionView> TeamAgents { get; private set; } =
+        Array.Empty<AgentDefinitionView>();
+    public IReadOnlyList<RunReportView> TeamGoals { get; private set; } =
+        Array.Empty<RunReportView>();
     public readonly List<AgentAction> ActiveActions = new();
     public readonly List<FetchedData> FetchedData = new();
     public readonly List<ToolHistoryEntry> ToolHistory = new();
@@ -178,10 +182,12 @@ public sealed partial class ChatViewModel : PageViewModel
     // ── Private state ────────────────────────────────────────────────────────
 
     private string _systemPrompt = ChatCopy.DefaultSystemPrompt;
+    private string _baseModel = "";
     private string _preamble = ChatCopy.DefaultPreamble;
     private string _toolCatalog = ChatCopy.DefaultToolCatalog;
     private string _launchpadToolCatalog = ChatCopy.DefaultLaunchpadToolCatalog;
     private bool _ragEnabled = true;
+    private bool _agentEnabled = true;
     private int _maxContextChunks = 5;
     private float _temperature = 0.7f;
     private int _maxTokens = 2048;
@@ -195,9 +201,39 @@ public sealed partial class ChatViewModel : PageViewModel
     private ProjectChatStatus _chatStatus = new(ProjectChatBackend.None, false, "No model configured");
     private CommandAgentRoute? _activeRoute;
 
+    public string ChannelName => ChannelSlug(_sessionTitle);
+    public int EnabledTeamMemberCount => TeamAgents.Count(agent => agent.Enabled);
+
+    public string TeamMemberInitial(AgentDefinitionView agent) =>
+        string.IsNullOrWhiteSpace(agent.Name) ? "A" : agent.Name.Trim()[..1].ToUpperInvariant();
+
+    public string GoalText(RunReportView goal) =>
+        string.IsNullOrWhiteSpace(goal.Run.Snapshot.Goal)
+            ? goal.JobName
+            : goal.Run.Snapshot.Goal;
+
+    public string GoalStatus(RunReportView goal) =>
+        AgentsViewModel.WorkStatusLabel(goal.Run.Status);
+
+    public string GoalStatusClass(RunReportView goal) =>
+        AgentsViewModel.WorkBucketClass(goal.Run.Status);
+
     public string ActiveAgentName => _activeRoute is { CollaboratingAgents.Count: > 0 } route
         ? string.Join(" + ", route.CollaboratingAgents.Select(agent => agent.Name))
         : "Command Agent";
+
+    private static string ChannelSlug(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title) || title == ChatCopy.DefaultSessionTitle)
+            return "new-channel";
+
+        var slug = System.Text.RegularExpressions.Regex.Replace(
+            title.Trim().ToLowerInvariant(),
+            @"[^a-z0-9]+",
+            "-"
+        ).Trim('-');
+        return string.IsNullOrWhiteSpace(slug) ? "channel" : slug;
+    }
 
     /// <summary>Cancels the currently running chat send loop.</summary>
     public async Task StopAsync()
@@ -219,11 +255,19 @@ public sealed partial class ChatViewModel : PageViewModel
 
     // ── Gateway status ───────────────────────────────────────────────────────
 
-    public string GatewayStatusText => _chatStatus.Label;
+    public string GatewayStatusText => _agentEnabled ? _chatStatus.Label : "Agent chat disabled";
 
     public bool GatewayIsCluster => _gateway is ClusterChatGateway;
 
-    public bool GatewayReady => _chatStatus.IsEnabled;
+    public bool GatewayReady => _agentEnabled && _chatStatus.IsEnabled;
+
+    public string ChatInputPlaceholder => !_agentEnabled
+        ? "Agent chat is disabled in Settings → Agents"
+        : !_chatStatus.IsEnabled
+            ? "Configure a model before starting a channel"
+            : PendingClarification != null
+                ? "Respond to the question above…"
+                : "Message the agent team…";
 
     /// <summary>True once sessions, MCP, artifacts, and agent config have finished loading.</summary>
     public bool WorkspaceLoaded { get; private set; }

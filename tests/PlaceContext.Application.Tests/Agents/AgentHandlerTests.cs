@@ -162,6 +162,8 @@ public class AgentHandlerTests
         Assert.Equal(2, chat.LastMessages.Count);
         Assert.Equal("system", chat.LastMessages[0].Role);
         Assert.Equal("user", chat.LastMessages[1].Role);
+        Assert.Equal(config.BaseModel, chat.LastSettings?.Model);
+        Assert.Equal(config.TopP, chat.LastSettings?.TopP);
 
         // Session was persisted.
         Assert.Single(await sessions.ListForProjectAsync(projectId));

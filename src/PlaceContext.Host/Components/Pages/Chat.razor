@@ -1,4 +1,5 @@
 @page "/chat"
+@page "/project/{RouteProjectId:guid}/agent-chat"
 @attribute [Authorize(Policy = Permission.AgentsChat)]
 @layout PlaceContext.Host.Components.Layout.MainLayout
 @implements IDisposable
@@ -16,16 +17,20 @@
 <div class="page">
     <div class="page-head">
         <div>
-            <h2 class="page-title">Agent Chat</h2>
+            <h2 class="page-title"># @Vm.ChannelName</h2>
             <div class="page-sub">
-                <span>@Vm.GatewayStatusText — @Vm.ProjectName — via @Vm.ActiveAgentName</span>
+                <span>@Vm.ProjectName agent team · @Vm.EnabledTeamMemberCount member@(Vm.EnabledTeamMemberCount == 1 ? "" : "s") · @Vm.GatewayStatusText</span>
             </div>
         </div>
         <div class="chat-controls">
             @if (Vm.ProjectId.HasValue)
             {
                 <button class="dcbtn sm" @onclick="Vm.ToggleSidePanel">@(Vm.ShowSidePanel ? "Hide Panel" : "Show Panel")</button>
-                <button class="dcbtn sm" @onclick="Vm.OpenSettingsAsync">⚙ Settings</button>
+                <AuthorizeView Policy="@Policies.DefaultAdmin">
+                    <Authorized>
+                        <a class="dcbtn sm" href="@PageRoutes.AgentsSettings">⚙ Settings</a>
+                    </Authorized>
+                </AuthorizeView>
             }
         </div>
     </div>
@@ -97,7 +102,7 @@
                             </div>
                             <div class="msg-body">
                                 <div class="msg-role-row">
-                                    <span class="msg-role">@msg.Role</span>
+                                    <span class="msg-role">@(Vm.IsAssistant(msg) ? Vm.ActiveAgentName : "You")</span>
                                     @if (Vm.IsAssistant(msg) && !Vm.Streaming)
                                     {
                                         <button class="msg-copy-btn" @onclick="@(() => Vm.CopyMessageAsync(msg.Content))" title="Copy response">
@@ -283,7 +288,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                         </div>
                         <div class="msg-body">
-                            <div class="msg-role">assistant</div>
+                            <div class="msg-role">@Vm.ActiveAgentName</div>
                             @if (Vm.CurrentToolCall != null)
                             {
                                 <div class="tool-calls">
@@ -398,8 +403,8 @@
                         }
                         <input class="dcinput chat-input" @bind="Vm.Input" @bind:event="oninput"
                                @bind:after="Vm.HandleInputChanged"
-                               placeholder="@(Vm.PendingClarification != null ? "Respond to the question above…" : "Ask about data, jobs, or request a graph…")"
-                               disabled="@(Vm.Streaming && Vm.PendingClarification == null)"
+                               placeholder="@Vm.ChatInputPlaceholder"
+                               disabled="@(!Vm.GatewayReady || (Vm.Streaming && Vm.PendingClarification == null))"
                                @onkeydown="@(e => Vm.HandleInputKeydownAsync(e, Vm.MessagesElement, Vm.ScrollAnchorElement))" />
                     </div>
                     @if (Vm.Streaming && Vm.PendingClarification == null)
@@ -409,7 +414,7 @@
                     else
                     {
                         <button class="dcbtn primary"
-                                disabled="@(string.IsNullOrWhiteSpace(Vm.Input) && Vm.AttachedFile is null)"
+                                disabled="@(!Vm.GatewayReady || (string.IsNullOrWhiteSpace(Vm.Input) && Vm.AttachedFile is null))"
                                 @onclick="Vm.SendFromUiAsync">Send</button>
                     }
                 </div>
@@ -440,7 +445,7 @@
             <div class="side-panel-scrim" aria-hidden="true" @onclick="Vm.ToggleSidePanel"></div>
             <div class="side-panel" aria-label="Agent workspace">
                 <div class="side-panel-head">
-                    <h3>Agent Workspace</h3>
+                    <h3>@Vm.ProjectName</h3>
                     @if (Vm.GraphNodes.Count > 0)
                     {
                         <span class="graph-badge">@Vm.GraphNodes.Count nodes · @Vm.GraphLinks links</span>
@@ -475,26 +480,69 @@
                 }
                 else
                 {
+                <div class="side-section team-section">
+                    <div class="team-section-head">
+                        <h4>Agent team</h4>
+                        <a href="@(Vm.ProjectId is { } teamProjectId ? PageRoutes.ProjectAgents(teamProjectId) : "#")">Manage</a>
+                    </div>
+                    <div class="team-members" aria-label="Agent team members">
+                        @foreach (var agent in Vm.TeamAgents.Where(agent => agent.Enabled))
+                        {
+                            <span class="team-member" title="@agent.Description">
+                                <span class="team-avatar">@Vm.TeamMemberInitial(agent)</span>
+                                <span>@agent.Name</span>
+                            </span>
+                        }
+                        @if (!Vm.TeamAgents.Any(agent => agent.Enabled))
+                        {
+                            <span class="team-empty">The Command Agent will lead this channel.</span>
+                        }
+                    </div>
+                </div>
                 @if (Vm.ShowSessionList)
                 {
                     <div class="side-section">
                         <div class="session-header">
-                            <h4>Sessions</h4>
+                            <h4>Channels</h4>
                             <div class="session-header-actions">
-                                <button class="dcbtn xs" @onclick="Vm.ClearCurrentSessionAsync" disabled="@(Vm.Messages.Count == 0 || Vm.Streaming)" title="Clear messages in this session">Clear</button>
-                                <button class="dcbtn xs" @onclick="Vm.NewSession" disabled="@Vm.Streaming">+ New</button>
+                                <button class="dcbtn xs" @onclick="Vm.ClearCurrentSessionAsync" disabled="@(Vm.Messages.Count == 0 || Vm.Streaming)" title="Clear messages in this channel">Clear</button>
+                                <button class="dcbtn xs" @onclick="Vm.NewSession" disabled="@Vm.Streaming">+ Channel</button>
                             </div>
                         </div>
                         @foreach (var s in Vm.Sessions.Take(20))
                         {
                             <div class="session-item @(s.Id == Vm.SessionId ? "active" : "")" @onclick="@(() => Vm.SelectSessionAsync(s))">
-                                <span class="session-title">@s.Title</span>
+                                <span class="session-title"># @s.Title</span>
                                 <span class="session-meta">@s.MessageCount msgs · @Vm.SessionTime(s.LastMessageAt)</span>
-                                <button class="session-delete" @onclick="@(() => Vm.DeleteSessionAsync(s))" @onclick:stopPropagation="true" title="Delete session">×</button>
+                                <button class="session-delete" @onclick="@(() => Vm.DeleteSessionAsync(s))" @onclick:stopPropagation="true" title="Delete channel">×</button>
                             </div>
                         }
                     </div>
                 }
+
+                <div class="side-section goals-section">
+                    <div class="team-section-head">
+                        <h4>Team goals</h4>
+                        <a href="@(Vm.ProjectId is { } goalProjectId ? PageRoutes.ProjectAgentGoals(goalProjectId) : "#")">Open board</a>
+                    </div>
+                    @if (Vm.TeamGoals.Count == 0)
+                    {
+                        <span class="team-empty">No goals yet. Add one from the team work board.</span>
+                    }
+                    else
+                    {
+                        @foreach (var goal in Vm.TeamGoals)
+                        {
+                            <div class="team-goal">
+                                <span class="goal-status @Vm.GoalStatusClass(goal)"></span>
+                                <span class="goal-copy">
+                                    <strong>@Vm.GoalText(goal)</strong>
+                                    <small>@goal.JobName · @Vm.GoalStatus(goal)</small>
+                                </span>
+                            </div>
+                        }
+                    }
+                </div>
 
                 @if (Vm.ActiveActions.Count > 0)
                 {
@@ -748,6 +796,8 @@
 
 
 @code {
+    [Parameter] public Guid? RouteProjectId { get; set; }
+
     protected override void OnInitialized()
     {
         base.OnInitialized();

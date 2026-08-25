@@ -43,6 +43,7 @@ public sealed partial class ChatViewModel
                 LoadCommandsAsync(),
                 LoadPanelArtifactsAsync()
             );
+            await LoadTeamWorkspaceAsync();
             if (Sessions.Count > 0)
                 await SelectSessionAsync(Sessions[0]);
         }
@@ -76,6 +77,7 @@ public sealed partial class ChatViewModel
         await LoadMcpConnectionsAsync();
         await LoadCommandsAsync();
         await LoadPanelArtifactsAsync();
+        await LoadTeamWorkspaceAsync();
         NewSession();
         WorkspaceLoaded = true;
         NotifyStateChanged();
@@ -85,5 +87,29 @@ public sealed partial class ChatViewModel
     {
         if (ProjectId.HasValue)
             _chatStatus = await _projectChat.GetStatusAsync(ProjectId.Value);
+    }
+
+    private async Task LoadTeamWorkspaceAsync()
+    {
+        if (ProjectId is null)
+            return;
+
+        try
+        {
+            TeamAgents = await _svc.ListAgentDefinitionsAsync(ProjectId.Value);
+            var jobs = await _svc.ListJobsAsync(ProjectId.Value);
+            var projectJobIds = jobs.Select(job => job.Id).ToHashSet();
+            TeamGoals = (await _svc.ListRecentRunReportsAsync(80))
+                .Where(report => projectJobIds.Contains(report.JobId))
+                .Where(report => !string.IsNullOrWhiteSpace(report.Run.Snapshot.Goal))
+                .OrderByDescending(report => report.Run.StartedAt)
+                .Take(8)
+                .ToList();
+        }
+        catch
+        {
+            TeamAgents = Array.Empty<AgentDefinitionView>();
+            TeamGoals = Array.Empty<RunReportView>();
+        }
     }
 }

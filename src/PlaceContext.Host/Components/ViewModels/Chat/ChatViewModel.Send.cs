@@ -21,7 +21,7 @@ public sealed partial class ChatViewModel
         var hasAttachment =
             AttachedFile is { Length: > 0 } && !string.IsNullOrWhiteSpace(AttachedFileName);
         var sentAttachmentName = AttachedFileName;
-        if ((string.IsNullOrEmpty(text) && !hasAttachment) || Streaming || !ProjectId.HasValue)
+        if ((string.IsNullOrEmpty(text) && !hasAttachment) || Streaming || !ProjectId.HasValue || !GatewayReady)
             return;
 
         // Expand /commands into tool calls before sending to the LLM.
@@ -146,7 +146,8 @@ public sealed partial class ChatViewModel
                 {
                     var settings = new ChatSettings(
                         Temperature: _temperature,
-                        MaxTokens: _maxTokens
+                        MaxTokens: _maxTokens,
+                        Model: _baseModel
                     );
                     var tokenCount = 0;
                     var renderThrottle = System.Diagnostics.Stopwatch.StartNew();
@@ -183,7 +184,8 @@ public sealed partial class ChatViewModel
                 {
                     var settings = new ChatSettings(
                         Temperature: _temperature,
-                        MaxTokens: _maxTokens
+                        MaxTokens: _maxTokens,
+                        Model: _baseModel
                     );
                     StreamBuffer = await _projectChat.ChatAsync(ProjectId.Value, messages, settings, ct);
                 }
@@ -339,7 +341,8 @@ public sealed partial class ChatViewModel
                         StreamBuffer = "";
                         var settings = new ChatSettings(
                             Temperature: _temperature,
-                            MaxTokens: _maxTokens
+                            MaxTokens: _maxTokens,
+                            Model: _baseModel
                         );
                         if (_chatStatus.Backend == ProjectChatBackend.LocalCluster
                             && _gateway is ClusterChatGateway cg2 && cg2.IsEnabled)
@@ -403,7 +406,8 @@ public sealed partial class ChatViewModel
                     StreamBuffer = "";
                     var settings = new ChatSettings(
                         Temperature: _temperature,
-                        MaxTokens: _maxTokens
+                        MaxTokens: _maxTokens,
+                        Model: _baseModel
                     );
                     if (_chatStatus.Backend == ProjectChatBackend.LocalCluster
                         && _gateway is ClusterChatGateway cg3 && cg3.IsEnabled)

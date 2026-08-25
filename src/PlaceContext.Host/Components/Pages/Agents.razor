@@ -1,3 +1,4 @@
+@page "/project/{ProjectId:guid}/agents"
 @attribute [Authorize(Policy = Permission.AgentsManage)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IAsyncDisposable
@@ -371,9 +372,16 @@
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
+        _activeTab = RequestedTab?.Trim().ToLowerInvariant() switch
+        {
+            "work" or "goals" => AgentsSectionTab.Work,
+            "chat" => AgentsSectionTab.Chat,
+            _ => AgentsSectionTab.Agents,
+        };
         Vm.Attach(() => InvokeAsync(StateHasChanged));
         await Vm.LoadAsync(ProjectId);
 

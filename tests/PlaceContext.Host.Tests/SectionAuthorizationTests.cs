@@ -42,6 +42,7 @@ public sealed class SectionAuthorizationTests
         new()
         {
             typeof(Pages.AccessSettings),
+            typeof(Pages.AgentsSettings),
             typeof(Pages.ArtifactSettings),
             typeof(Pages.BackupSettings),
             typeof(Pages.BrandingSettings),

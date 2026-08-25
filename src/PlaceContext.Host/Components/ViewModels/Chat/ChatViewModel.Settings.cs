@@ -20,6 +20,8 @@ public sealed partial class ChatViewModel
         try
         {
             var config = await _svc.GetAgentConfigAsync(ProjectId.Value);
+            _baseModel = config.BaseModel;
+            _agentEnabled = config.Enabled;
             _systemPrompt = config.SystemPrompt;
             _preamble = string.IsNullOrWhiteSpace(config.Preamble)
                 ? ChatCopy.DefaultPreamble

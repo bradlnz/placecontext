@@ -490,6 +490,7 @@ internal static class MainLayoutIconCatalog
             "map" => "<polygon points='3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21 3 6'/><path d='M9 3v15M15 6v15'/>",
             "key" => "<circle cx='8' cy='15' r='4'/><path d='m11 12 8-8M15 8l3 3M17 6l2 2'/>",
             "pulse" => "<path d='M3 12h4l2.5-5 5 10 2.5-5h4'/>",
+            "agents" => "<circle cx='8' cy='8' r='3'/><circle cx='17' cy='7' r='2.5'/><path d='M3 20v-2a5 5 0 0 1 10 0v2M14 19v-1.5a4 4 0 0 1 7-2.6'/>",
             "chat" => "<path d='M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z'/><path d='M8 9h8M8 13h5'/>",
             "file" => "<path d='M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5Z'/><path d='M14 2v5h5M9 13h6M9 17h6'/>",
             "ledger" => "<rect x='4' y='3' width='16' height='18' rx='2'/><path d='M8 3v18M12 8h5M12 12h5M12 16h3'/>",

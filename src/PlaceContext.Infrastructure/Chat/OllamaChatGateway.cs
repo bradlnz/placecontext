@@ -35,7 +35,7 @@ public sealed class OllamaChatGateway : IChatGateway
 
         var payload = new
         {
-            model = _model,
+            model = string.IsNullOrWhiteSpace(settings?.Model) ? _model : settings.Model,
             messages = messages.Select(m => new { role = m.Role, content = m.Content }).ToList(),
             stream = false,
             options = new

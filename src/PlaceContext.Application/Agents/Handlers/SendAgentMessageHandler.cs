@@ -78,7 +78,8 @@ public sealed class SendAgentMessageHandler : ICommandHandler<SendAgentMessageCo
         // 5. Call the chat gateway.
         var settings = new ChatSettings(
             Temperature: config.Temperature,
-            TopP: config.TopP);
+            TopP: config.TopP,
+            Model: config.BaseModel);
         var reply = await _chat.ChatAsync(command.ProjectId, messages, settings, ct);
 
         // 6. Persist the new messages.

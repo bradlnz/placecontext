@@ -44,6 +44,8 @@ public sealed class VaultProjectChatGateway(
             endpoint = DefaultEndpoint;
         var model = configuration["PlaceContext:ExternalLlm:Model"]?.Trim();
         if (string.IsNullOrWhiteSpace(model))
+            model = settings?.Model?.Trim();
+        if (string.IsNullOrWhiteSpace(model))
             model = DefaultModel;
 
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);

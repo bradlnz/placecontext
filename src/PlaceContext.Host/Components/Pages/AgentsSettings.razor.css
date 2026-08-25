@@ -1,0 +1,33 @@
+.agents-settings-page { width:min(920px,100%); margin:0 auto; padding:30px 28px 56px; box-sizing:border-box; }
+.settings-head { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin-bottom:18px; }
+.settings-kicker,.card-kicker { color:var(--brand-2); font-size:9px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+.settings-head h2 { margin:6px 0 5px; color:var(--text); font-size:24px; }
+.settings-head p,.settings-card p,.team-card p { margin:0; color:var(--text-2); font-size:11.5px; line-height:1.5; }
+.project-picker { max-width:440px; margin-bottom:14px; }
+.settings-message { margin-bottom:12px; padding:10px 12px; border:1px solid var(--border); border-radius:9px; color:var(--text-2); font-size:10.5px; }
+.settings-message.error { border-color:var(--bad); color:var(--bad); }
+.settings-message.success { border-color:var(--good); color:var(--good); }
+.empty-note { padding:24px; color:var(--text-3); font-size:11px; }
+.team-card { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:12px; padding:16px; }
+.team-card strong { display:block; margin:5px 0 3px; font-size:14px; }
+.settings-card { margin-bottom:12px; padding:0; overflow:hidden; }
+.settings-card > header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:15px 16px; border-bottom:1px solid var(--border); }
+.settings-card > header strong { display:block; margin-bottom:3px; color:var(--text); font-size:13px; }
+.enabled-toggle { display:flex; align-items:center; gap:8px; color:var(--text); font-size:11px; white-space:nowrap; }
+.settings-grid { display:grid; grid-template-columns:2fr repeat(3,1fr); gap:12px; padding:16px; }
+.prompt-card > .dcfield { padding:16px; }
+.prompt-input,.code-input { width:100%; resize:vertical; box-sizing:border-box; line-height:1.5; }
+.code-input { font-family:var(--font-mono); font-size:10.5px; }
+.advanced-settings { border-top:1px solid var(--border); }
+.advanced-settings summary { padding:12px 16px; color:var(--text-2); font-size:11px; cursor:pointer; }
+.advanced-settings[open] summary { border-bottom:1px solid var(--border); }
+.advanced-settings .dcfield { padding:14px 16px 0; }
+.advanced-settings .dcfield:last-child { padding-bottom:16px; }
+
+@media (max-width:700px) {
+    .agents-settings-page { padding:20px 12px 38px; }
+    .settings-head,.team-card,.settings-card > header { align-items:flex-start; flex-direction:column; }
+    .settings-head .dcbtn,.team-card .dcbtn { width:100%; min-height:40px; }
+    .settings-grid { grid-template-columns:1fr 1fr; }
+    .model-field { grid-column:1 / -1; }
+}
