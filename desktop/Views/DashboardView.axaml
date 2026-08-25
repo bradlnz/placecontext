@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="PlaceContext.Desktop.Views.DashboardView" x:CompileBindings="False">
+    <ScrollViewer>
+        <StackPanel Margin="34" Spacing="24">
+            <StackPanel><TextBlock Text="{Binding Title}" Classes="pageTitle" /><TextBlock Text="{Binding Subtitle}" Classes="muted" Margin="0,5,0,0" /></StackPanel>
+            <ItemsControl ItemsSource="{Binding Metrics}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="4" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate><DataTemplate>
+                    <Border Classes="card" Padding="18" Margin="0,0,12,0" MinHeight="124">
+                        <Grid RowDefinitions="Auto,*,Auto"><TextBlock Text="{Binding Label}" Classes="eyebrow" Foreground="{Binding Accent}" />
+                            <TextBlock Grid.Row="1" Text="{Binding Value}" FontSize="32" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="2" Text="{Binding Detail}" Classes="muted" FontSize="10" /></Grid>
+                    </Border>
+                </DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Grid ColumnDefinitions="2*,*" ColumnSpacing="16">
+                <Border Classes="card" Padding="20">
+                    <StackPanel Spacing="14"><TextBlock Text="RECENT ACTIVITY" Classes="eyebrow" />
+                        <ItemsControl ItemsSource="{Binding Activity}"><ItemsControl.ItemTemplate><DataTemplate>
+                            <Grid ColumnDefinitions="10,*,Auto" Margin="0,7"><Ellipse Width="7" Height="7" Fill="#46DF7B" VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="1"><TextBlock Text="{Binding Title}" FontSize="12" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="10" /></StackPanel>
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Right"><TextBlock Text="{Binding Status}" Foreground="#76EF9E" FontSize="10" /><TextBlock Text="{Binding Time}" Classes="muted" FontSize="9" HorizontalAlignment="Right" /></StackPanel>
+                            </Grid>
+                        </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Classes="card" Padding="20">
+                    <StackPanel Spacing="14"><TextBlock Text="WORKSPACE HEALTH" Classes="eyebrow" /><TextBlock Text="{Binding HealthSummary}" FontSize="17" FontWeight="SemiBold" />
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Desktop API" Classes="muted" /><TextBlock Grid.Column="1" Text="Healthy" Foreground="#76EF9E" /></Grid>
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Projects" Classes="muted" /><TextBlock Grid.Column="1" Text="{Binding ProjectStatus}" /></Grid>
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Jobs" Classes="muted" /><TextBlock Grid.Column="1" Text="{Binding JobStatus}" /></Grid>
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Runs" Classes="muted" /><TextBlock Grid.Column="1" Text="{Binding RunStatus}" /></Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

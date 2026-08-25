@@ -37,6 +37,18 @@ public static class OAuthServer
             });
         }).AllowAnonymous();
 
+        app.MapGet("/.well-known/oauth-protected-resource/desktop", (HttpContext ctx, IConfiguration config) =>
+        {
+            var b = PublicUrl.Base(ctx, config);
+            return Results.Json(new Dictionary<string, object?>
+            {
+                ["resource"] = $"{b}/api/desktop",
+                ["authorization_servers"] = new[] { b },
+                ["scopes_supported"] = new[] { "desktop" },
+                ["bearer_methods_supported"] = new[] { "header" },
+            });
+        }).AllowAnonymous();
+
         // Authorization Server Metadata (RFC 8414).
         app.MapGet("/.well-known/oauth-authorization-server", (HttpContext ctx, IConfiguration config) =>
         {
@@ -53,7 +65,7 @@ public static class OAuthServer
                 ["grant_types_supported"] = new[] { "authorization_code", "refresh_token" },
                 ["code_challenge_methods_supported"] = new[] { "S256" },
                 ["token_endpoint_auth_methods_supported"] = new[] { "none" },
-                ["scopes_supported"] = new[] { "mcp", "identity" },
+                ["scopes_supported"] = new[] { "mcp", "identity", "desktop" },
             });
         }).AllowAnonymous();
 
@@ -130,7 +142,7 @@ public static class OAuthServer
 
             var requestedScope = scope ?? "mcp";
             if (requestedScope.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Any(s => s is not ("mcp" or "identity")))
+                .Any(s => !IsSupportedScope(s)))
                 return Results.BadRequest("Unknown scope.");
             if (requestedScope.Contains("identity", StringComparison.Ordinal)
                 && trustedWebClient is null)
@@ -228,7 +240,7 @@ public static class OAuthServer
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = issuer,
-            Audience = $"{issuer}/mcp",
+            Audience = AudienceForScope(issuer, grant.Scope),
             Expires = DateTime.UtcNow.Add(AccessTokenLifetime),
             SigningCredentials = OAuthKeys.SigningCredentials,
             Claims = new Dictionary<string, object>
@@ -249,6 +261,13 @@ public static class OAuthServer
         return CryptographicOperations.FixedTimeEquals(
             Encoding.ASCII.GetBytes(computed), Encoding.ASCII.GetBytes(challenge));
     }
+
+    internal static bool IsSupportedScope(string scope) => scope is "mcp" or "identity" or "desktop";
+
+    internal static string AudienceForScope(string issuer, string scope) =>
+        scope.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("desktop", StringComparer.Ordinal)
+            ? $"{issuer}/api/desktop"
+            : $"{issuer}/mcp";
 
     internal static OAuthClient? TrustedWebClient(IConfiguration config, string clientId, string redirectUri)
     {

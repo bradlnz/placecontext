@@ -1,0 +1,71 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:PlaceContext.Desktop.Views"
+        x:Class="PlaceContext.Desktop.Views.MainWindow"
+        x:CompileBindings="False"
+        Width="1280" Height="800" MinWidth="960" MinHeight="640"
+        WindowStartupLocation="CenterScreen" Title="PlaceContext">
+    <Grid>
+        <views:ConnectionView IsVisible="{Binding ShowConnection}" />
+
+        <Grid IsVisible="{Binding ShowWorkspace}" ColumnDefinitions="248,*">
+            <Border Grid.Column="0" Background="#0E1214" BorderBrush="#252C30" BorderThickness="0,0,1,0">
+                <Grid RowDefinitions="Auto,*,Auto" Margin="14,18,14,14">
+                    <StackPanel Margin="8,0,8,18">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <Border Width="28" Height="28" CornerRadius="7" Background="#46DF7B">
+                                <TextBlock Text="P" Foreground="#08110A" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="PLACECONTEXT" FontWeight="SemiBold" FontSize="13" LetterSpacing="1.1" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding ConnectedEndpoint}" Classes="muted" FontSize="10" Margin="38,4,0,0" />
+                    </StackPanel>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <ItemsControl ItemsSource="{Binding PrimaryNavigation}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Classes.nav="True" Classes.active="{Binding IsSelected}" Command="{Binding NavigateCommand}">
+                                            <Grid ColumnDefinitions="26,*"><TextBlock Text="{Binding Icon}" FontSize="15" /><TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12" /></Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="AGENT TEAM" Classes="eyebrow" Margin="10,22,0,7" />
+                            <ItemsControl ItemsSource="{Binding TeamNavigation}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Classes.nav="True" Classes.active="{Binding IsSelected}" Command="{Binding NavigateCommand}">
+                                            <Grid ColumnDefinitions="26,*"><TextBlock Text="{Binding Icon}" FontSize="15" /><TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12" /></Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="WORKSPACE" Classes="eyebrow" Margin="10,22,0,7" />
+                            <ItemsControl ItemsSource="{Binding SystemNavigation}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Classes.nav="True" Classes.active="{Binding IsSelected}" Command="{Binding NavigateCommand}">
+                                            <Grid ColumnDefinitions="26,*"><TextBlock Text="{Binding Icon}" FontSize="15" /><TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12" /></Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="2" Spacing="7">
+                        <Button Classes="secondary" Command="{Binding RefreshCommand}" Content="{Binding RefreshButtonText}" />
+                        <Button Classes="secondary" Command="{Binding ChangeEndpointCommand}" HorizontalContentAlignment="Left">
+                            <StackPanel><TextBlock Text="Change endpoint" FontSize="11" /><TextBlock Text="Connection settings" Classes="muted" FontSize="9" /></StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <Border Grid.Column="1" Background="#0B0E10">
+                <ContentControl Content="{Binding CurrentPage}" />
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
