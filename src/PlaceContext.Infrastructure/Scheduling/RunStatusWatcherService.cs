@@ -3,6 +3,7 @@ using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -18,24 +19,35 @@ namespace PlaceContext.Infrastructure.Scheduling;
 /// </summary>
 public sealed class RunStatusWatcherService : BackgroundService
 {
-    private static readonly TimeSpan WatchInterval = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan DefaultWatchInterval = TimeSpan.FromSeconds(2);
+    internal static readonly TimeSpan MinimumWatchInterval = TimeSpan.FromMilliseconds(500);
+    internal static readonly TimeSpan MaximumWatchInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan TenantCacheInterval = TimeSpan.FromMinutes(5);
 
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<RunStatusWatcherService> _log;
+    private readonly TimeSpan _watchInterval;
     private readonly Dictionary<Guid, RunWatchState> _states = new();
     private List<TenantInfo> _cachedTenants = new();
     private DateTimeOffset _tenantsRefreshAt = DateTimeOffset.MinValue;
 
-    public RunStatusWatcherService(IServiceScopeFactory scopes, ILogger<RunStatusWatcherService> log)
+    public RunStatusWatcherService(
+        IServiceScopeFactory scopes,
+        ILogger<RunStatusWatcherService> log,
+        IConfiguration configuration)
     {
         _scopes = scopes;
         _log = log;
+        _watchInterval = ResolveWatchInterval(configuration);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(WatchInterval);
+        _log.LogInformation(
+            "Run-status notifications polling every {IntervalMilliseconds} ms.",
+            _watchInterval.TotalMilliseconds
+        );
+        using var timer = new PeriodicTimer(_watchInterval);
         do
         {
             try { await SweepAllTenantsAsync(stoppingToken); }
@@ -85,5 +97,22 @@ public sealed class RunStatusWatcherService : BackgroundService
     {
         try { return await timer.WaitForNextTickAsync(ct); }
         catch (OperationCanceledException) { return false; }
+    }
+
+    internal static TimeSpan ResolveWatchInterval(IConfiguration configuration)
+    {
+        var seconds = configuration.GetValue<double?>(
+            "PlaceContext:RunStatusWatcher:IntervalSeconds"
+        ) ?? DefaultWatchInterval.TotalSeconds;
+        if (!double.IsFinite(seconds))
+            return DefaultWatchInterval;
+
+        return TimeSpan.FromSeconds(
+            Math.Clamp(
+                seconds,
+                MinimumWatchInterval.TotalSeconds,
+                MaximumWatchInterval.TotalSeconds
+            )
+        );
     }
 }
