@@ -84,6 +84,214 @@ public partial class CollectionPageViewModel : PageViewModel
     }
 }
 
+public partial class DataPageViewModel : PageViewModel
+{
+    private readonly Func<Guid, string, Task<DesktopQueryResponse>> _query;
+
+    public DataPageViewModel(Func<Guid, string, Task<DesktopQueryResponse>> query)
+        : base("Data", "Explore project tables and run read-only SQL")
+    {
+        _query = query;
+    }
+
+    public ObservableCollection<CoreProject> Projects { get; } = [];
+    public ObservableCollection<PageListItem> Resources { get; } = [];
+    public ObservableCollection<string> Results { get; } = [];
+    [ObservableProperty] public partial CoreProject? SelectedProject { get; set; }
+    [ObservableProperty] public partial string Sql { get; set; } = "SELECT * FROM job_runs LIMIT 50";
+    [ObservableProperty] public partial string ResultSummary { get; set; } = "Choose a project and run a SELECT statement.";
+    [ObservableProperty] public partial bool IsRunning { get; set; }
+    public bool HasResources => Resources.Count > 0;
+    public bool HasResults => Results.Count > 0;
+
+    partial void OnSelectedProjectChanged(CoreProject? value) => RunQueryCommand.NotifyCanExecuteChanged();
+    partial void OnSqlChanged(string value) => RunQueryCommand.NotifyCanExecuteChanged();
+    partial void OnIsRunningChanged(bool value) => RunQueryCommand.NotifyCanExecuteChanged();
+
+    public void Update(WorkspaceSnapshot snapshot)
+    {
+        var selectedId = SelectedProject?.Id;
+        Projects.Clear();
+        foreach (var project in snapshot.Projects) Projects.Add(project);
+        SelectedProject = Projects.FirstOrDefault(project => project.Id == selectedId) ?? Projects.FirstOrDefault();
+
+        Resources.Clear();
+        var projects = snapshot.Projects.ToDictionary(project => project.Id);
+        foreach (var resource in snapshot.DataResources)
+        {
+            var projectName = resource.ProjectId is { } id && projects.TryGetValue(id, out var project)
+                ? project.Name
+                : resource.Meta;
+            Resources.Add(new PageListItem(resource.Title, resource.Detail, projectName, resource.Status));
+        }
+        OnPropertyChanged(nameof(HasResources));
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRunQuery))]
+    private async Task RunQueryAsync()
+    {
+        if (SelectedProject is null) return;
+        IsRunning = true;
+        Results.Clear();
+        OnPropertyChanged(nameof(HasResults));
+        try
+        {
+            var result = await _query(SelectedProject.Id, Sql);
+            Results.Add(string.Join("  │  ", result.Columns));
+            foreach (var row in result.Rows)
+                Results.Add(string.Join("  │  ", row.Select(value => value ?? "NULL")));
+            ResultSummary = result.Rows.Count == 0
+                ? "Query completed with no rows."
+                : $"{result.Rows.Count:N0} rows returned{(result.Truncated ? " (limited)" : string.Empty)}.";
+            OnPropertyChanged(nameof(HasResults));
+        }
+        catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException)
+        {
+            ResultSummary = $"Query failed · {exception.Message}";
+        }
+        finally
+        {
+            IsRunning = false;
+        }
+    }
+
+    private bool CanRunQuery() => !IsRunning && SelectedProject is not null && !string.IsNullOrWhiteSpace(Sql);
+}
+
+public partial class AgentChatPageViewModel : PageViewModel
+{
+    private readonly Func<Guid, Guid, Task<DesktopChatSession>> _load;
+    private readonly Func<Guid, Guid?, string, Task<DesktopChatSession>> _send;
+
+    public AgentChatPageViewModel(
+        Func<Guid, Guid, Task<DesktopChatSession>> load,
+        Func<Guid, Guid?, string, Task<DesktopChatSession>> send)
+        : base("Agent chat", "Talk to your workspace agents in a native conversation")
+    {
+        _load = load;
+        _send = send;
+    }
+
+    public ObservableCollection<CoreProject> Projects { get; } = [];
+    public ObservableCollection<CoreResourceItem> Sessions { get; } = [];
+    public ObservableCollection<ChatLine> Messages { get; } = [];
+    [ObservableProperty] public partial CoreProject? SelectedProject { get; set; }
+    [ObservableProperty] public partial CoreResourceItem? SelectedSession { get; set; }
+    [ObservableProperty] public partial string Message { get; set; } = string.Empty;
+    [ObservableProperty] public partial string ConversationTitle { get; set; } = "New conversation";
+    [ObservableProperty] public partial string Status { get; set; } = "Choose a session or start a new conversation.";
+    [ObservableProperty] public partial bool IsWorking { get; set; }
+
+    partial void OnSelectedProjectChanged(CoreProject? value)
+    {
+        FilterSessions();
+        SendCommand.NotifyCanExecuteChanged();
+    }
+    partial void OnSelectedSessionChanged(CoreResourceItem? value)
+    {
+        if (value?.Id is { } id && value.ProjectId is { } projectId)
+            _ = LoadAsync(projectId, id);
+    }
+    partial void OnMessageChanged(string value) => SendCommand.NotifyCanExecuteChanged();
+    partial void OnIsWorkingChanged(bool value) => SendCommand.NotifyCanExecuteChanged();
+
+    private IReadOnlyList<CoreResourceItem> AllSessions { get; set; } = [];
+
+    public void Update(WorkspaceSnapshot snapshot)
+    {
+        var selectedProjectId = SelectedProject?.Id;
+        Projects.Clear();
+        foreach (var project in snapshot.Projects) Projects.Add(project);
+        AllSessions = snapshot.AgentChats;
+        SelectedProject = Projects.FirstOrDefault(project => project.Id == selectedProjectId) ?? Projects.FirstOrDefault();
+        FilterSessions();
+    }
+
+    [RelayCommand]
+    private void NewConversation()
+    {
+        SelectedSession = null;
+        Messages.Clear();
+        ConversationTitle = "New conversation";
+        Status = "Write a message to start a new agent session.";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSend))]
+    private async Task SendAsync()
+    {
+        if (SelectedProject is null) return;
+        var content = Message.Trim();
+        var sessionId = SelectedSession?.Id;
+        Message = string.Empty;
+        IsWorking = true;
+        Status = "Agent is working…";
+        try
+        {
+            var session = await _send(SelectedProject.Id, sessionId, content);
+            ApplySession(session);
+            Status = "Reply received.";
+            if (Sessions.All(value => value.Id != session.Id))
+            {
+                var item = new CoreResourceItem(session.Id, session.ProjectId, "chat", session.Title,
+                    $"{session.Messages.Count} messages", session.UpdatedAt.ToLocalTime().ToString("g"), "Session");
+                Sessions.Insert(0, item);
+                SelectedSession = item;
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException)
+        {
+            Message = content;
+            Status = $"Message failed · {exception.Message}";
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    private bool CanSend() => !IsWorking && SelectedProject is not null && !string.IsNullOrWhiteSpace(Message);
+
+    private async Task LoadAsync(Guid projectId, Guid sessionId)
+    {
+        IsWorking = true;
+        Status = "Loading conversation…";
+        try
+        {
+            ApplySession(await _load(projectId, sessionId));
+            Status = "Conversation loaded.";
+        }
+        catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException)
+        {
+            Status = $"Conversation failed to load · {exception.Message}";
+        }
+        finally
+        {
+            IsWorking = false;
+        }
+    }
+
+    private void ApplySession(DesktopChatSession session)
+    {
+        ConversationTitle = session.Title;
+        Messages.Clear();
+        foreach (var message in session.Messages)
+            Messages.Add(new ChatLine(
+                message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) ? "You" : "Agent",
+                message.Content,
+                message.Timestamp.ToLocalTime().ToString("t"),
+                message.Role.Equals("user", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private void FilterSessions()
+    {
+        var selectedId = SelectedSession?.Id;
+        Sessions.Clear();
+        if (SelectedProject is { } project)
+            foreach (var session in AllSessions.Where(value => value.ProjectId == project.Id)) Sessions.Add(session);
+        SelectedSession = Sessions.FirstOrDefault(value => value.Id == selectedId);
+    }
+}
+
 public sealed class AgentsPageViewModel : PageViewModel
 {
     public AgentsPageViewModel() : base("Agents", "Build teams of agents around shared work and goals") { }

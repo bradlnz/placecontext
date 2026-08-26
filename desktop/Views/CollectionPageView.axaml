@@ -4,11 +4,14 @@
         <Grid ColumnDefinitions="*,Auto"><StackPanel><TextBlock Text="{Binding Title}" Classes="pageTitle" /><TextBlock Text="{Binding Subtitle}" Classes="muted" Margin="0,5,0,0" /></StackPanel>
             <Button Grid.Column="1" Classes="primary" Content="{Binding Action}" IsVisible="{Binding HasAction}" VerticalAlignment="Center" /></Grid>
         <Border Classes="card" IsVisible="{Binding HasItems}"><StackPanel>
-            <Grid ColumnDefinitions="*,220,120" Margin="20,14"><TextBlock Text="NAME" Classes="eyebrow" /><TextBlock Grid.Column="1" Text="DETAIL" Classes="eyebrow" /><TextBlock Grid.Column="2" Text="STATUS" Classes="eyebrow" /></Grid>
+            <Grid ColumnDefinitions="*,220,120,96" Margin="20,14"><TextBlock Text="NAME" Classes="eyebrow" /><TextBlock Grid.Column="1" Text="DETAIL" Classes="eyebrow" /><TextBlock Grid.Column="2" Text="STATUS" Classes="eyebrow" /></Grid>
             <Border Height="1" Background="#283035" />
             <ItemsControl ItemsSource="{Binding Items}"><ItemsControl.ItemTemplate><DataTemplate>
-                <Grid ColumnDefinitions="*,220,120" Margin="20,16"><StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="10" Margin="0,4,0,0" /></StackPanel>
-                    <TextBlock Grid.Column="1" Text="{Binding Meta}" Classes="muted" VerticalAlignment="Center" /><Border Grid.Column="2" Background="#173120" CornerRadius="10" Padding="9,4" HorizontalAlignment="Left" VerticalAlignment="Center"><TextBlock Text="{Binding Status}" Foreground="#76EF9E" FontSize="10" /></Border></Grid>
+                <Grid ColumnDefinitions="*,220,120,96" Margin="20,13"><StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="10" Margin="0,4,0,0" /></StackPanel>
+                    <TextBlock Grid.Column="1" Text="{Binding Meta}" Classes="muted" VerticalAlignment="Center" />
+                    <Border Grid.Column="2" Background="#173120" CornerRadius="10" Padding="9,4" HorizontalAlignment="Left" VerticalAlignment="Center"><TextBlock Text="{Binding Status}" Foreground="#76EF9E" FontSize="10" /></Border>
+                    <Button Grid.Column="3" Classes="secondary" Content="{Binding Action}" Command="{Binding ActionCommand}" IsVisible="{Binding HasAction}" Padding="12,7" HorizontalAlignment="Right" />
+                </Grid>
             </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
         </StackPanel></Border>
         <Border Classes="card" IsVisible="{Binding !HasItems}" Padding="28">

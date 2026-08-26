@@ -80,9 +80,13 @@ public partial class MainViewModel : ViewModelBase
         catch (Exception exception) when (exception is ArgumentException or HttpRequestException or OperationCanceledException)
         {
             ConnectionStatus = "Connection failed";
-            ConnectionError = exception is OperationCanceledException
-                ? "OAuth sign-in or the desktop API request timed out."
-                : exception.Message;
+            ConnectionError = exception switch
+            {
+                OperationCanceledException => "OAuth sign-in or the desktop API request timed out.",
+                HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized }
+                    => $"{exception.Message} The host rejected the token after sign-in. In a multi-service deployment, every desktop API service must use the same PlaceContext:OAuth:SigningKeyPem as the identity service.",
+                _ => exception.Message,
+            };
         }
         finally
         {
@@ -150,17 +154,17 @@ public partial class MainViewModel : ViewModelBase
         ["projects"] = LiveCollection("Projects", "Projects returned by /api/desktop/v1/projects"),
         ["jobs"] = LiveCollection("Jobs", "Jobs returned across connected projects"),
         ["runs"] = LiveCollection("Runs", "Recent job runs returned by the desktop API"),
-        ["tests"] = Unavailable("Tests", "Define checks and inspect their latest runs"),
-        ["chains"] = Unavailable("Chains", "Compose repeatable multi-step workflows"),
-        ["schedules"] = Unavailable("Schedules", "Automate jobs and chains"),
-        ["data"] = Unavailable("Data", "Explore workspace datasets and connections"),
-        ["vault"] = Unavailable("Vault", "Manage secrets without exposing values"),
-        ["agents"] = Unavailable("Agents", "Build teams of agents around shared work and goals"),
-        ["agent-chat"] = Unavailable("Agent chat", "Shared channels for your agent teams"),
-        ["artifacts"] = Unavailable("Artifacts", "Outputs shared by agents and jobs"),
-        ["observability"] = Unavailable("Observability", "Health, traces, and runtime signals"),
-        ["cluster"] = Unavailable("Cluster", "Nodes and services in this PlaceContext instance"),
-        ["wiki"] = Unavailable("Wiki", "Workspace knowledge for people and agents"),
+        ["tests"] = LiveCollection("Tests", "Native job checks and their latest results"),
+        ["chains"] = LiveCollection("Chains", "Native multi-stage job pipelines"),
+        ["schedules"] = LiveCollection("Schedules", "Schedules, events, launchpads, and commands"),
+        ["data"] = new DataPageViewModel(QueryDataAsync),
+        ["vault"] = LiveCollection("Vault", "Encrypted project secret names and status"),
+        ["agents"] = LiveCollection("Agents", "Command and worker agents across projects"),
+        ["agent-chat"] = new AgentChatPageViewModel(LoadAgentChatAsync, SendAgentMessageAsync),
+        ["artifacts"] = LiveCollection("Artifacts", "Files produced by jobs and agents"),
+        ["observability"] = LiveCollection("Observability", "Recent job and chain execution activity"),
+        ["cluster"] = LiveCollection("Cluster", "Native fleet node inventory"),
+        ["wiki"] = LiveCollection("Wiki", "Operator documentation available from the host"),
         ["about"] = LiveCollection("About", "PlaceContext desktop and connected instance information")
     };
 
@@ -178,7 +182,10 @@ public partial class MainViewModel : ViewModelBase
             job.Name,
             job.Description ?? $"{job.MapSourceKind} workload",
             projects.TryGetValue(job.ProjectId, out var project) ? project.Name : job.ProjectId.ToString("N"),
-            job.ReturnType)));
+            job.ReturnType,
+            "Run",
+            item => ExecuteActionAsync(item, connection =>
+                _connectionService.RunJobAsync(connection, job.ProjectId, job.Id)))));
 
         var jobs = snapshot.Jobs.ToDictionary(job => job.Id);
         ((CollectionPageViewModel)_pages["runs"]).ReplaceItems(snapshot.Runs.Select(run => new PageListItem(
@@ -186,6 +193,28 @@ public partial class MainViewModel : ViewModelBase
             $"{run.SucceededShards}/{run.ShardCount} shards succeeded",
             DashboardViewModel.RelativeTime(run.StartedAt),
             run.Status)));
+
+        ReplaceResources("tests", snapshot.Tests, projects, resource =>
+            ("Run", (item, connection) => _connectionService.RunTestAsync(
+                connection, resource.ProjectId!.Value, resource.Id!.Value)));
+        ReplaceResources("chains", snapshot.Chains, projects, resource =>
+            ("Run", (item, connection) => _connectionService.RunChainAsync(
+                connection, resource.ProjectId!.Value, resource.Id!.Value)));
+        ReplaceResources("schedules", snapshot.Schedules, projects, resource =>
+        {
+            var enable = !resource.Status.Equals("Enabled", StringComparison.OrdinalIgnoreCase);
+            return (enable ? "Enable" : "Disable", (item, connection) =>
+                _connectionService.SetScheduleEnabledAsync(
+                    connection, resource.ProjectId!.Value, resource.Id!.Value, enable));
+        });
+        ((DataPageViewModel)_pages["data"]).Update(snapshot);
+        ReplaceResources("vault", snapshot.Secrets, projects);
+        ReplaceResources("agents", snapshot.Agents, projects);
+        ((AgentChatPageViewModel)_pages["agent-chat"]).Update(snapshot);
+        ReplaceResources("artifacts", snapshot.Artifacts, projects);
+        ReplaceResources("observability", snapshot.Observability, projects);
+        ReplaceResources("cluster", snapshot.Cluster, projects);
+        ReplaceResources("wiki", snapshot.Wiki, projects);
 
         ((CollectionPageViewModel)_pages["about"]).ReplaceItems([
             new("Desktop API", connection.Endpoint.ToString().TrimEnd('/'), connection.Health.Role, "Connected"),
@@ -195,6 +224,74 @@ public partial class MainViewModel : ViewModelBase
 
     private static CollectionPageViewModel LiveCollection(string title, string subtitle) =>
         new(title, subtitle, string.Empty, []);
+
+    private void ReplaceResources(
+        string page,
+        IEnumerable<CoreResourceItem> resources,
+        IReadOnlyDictionary<Guid, CoreProject> projects,
+        Func<CoreResourceItem, (string Label, Func<PageListItem, OAuthConnection, Task<DesktopActionResponse>> Execute)>? action = null)
+    {
+        ((CollectionPageViewModel)_pages[page]).ReplaceItems(resources.Select(resource =>
+        {
+            var project = resource.ProjectId is { } projectId && projects.TryGetValue(projectId, out var value)
+                ? value.Name
+                : null;
+            var meta = project is null ? resource.Meta : $"{project} · {resource.Meta}";
+            if (action is null || resource.Id is null || resource.ProjectId is null)
+                return new PageListItem(resource.Title, resource.Detail, meta, resource.Status);
+
+            var resourceAction = action(resource);
+            return new PageListItem(
+                resource.Title,
+                resource.Detail,
+                meta,
+                resource.Status,
+                resourceAction.Label,
+                item => ExecuteActionAsync(item, connection => resourceAction.Execute(item, connection)));
+        }));
+    }
+
+    private async Task ExecuteActionAsync(
+        PageListItem item,
+        Func<OAuthConnection, Task<DesktopActionResponse>> execute)
+    {
+        if (_activeConnection is null) return;
+        var previousStatus = item.Status;
+        item.Status = "Working…";
+        try
+        {
+            var result = await execute(_activeConnection);
+            item.Status = result.Status;
+            ConnectedEndpoint = result.Message;
+            await RefreshAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException)
+        {
+            item.Status = previousStatus;
+            ConnectedEndpoint = $"Action failed · {exception.Message}";
+        }
+    }
+
+    private Task<DesktopQueryResponse> QueryDataAsync(Guid projectId, string sql)
+    {
+        if (_activeConnection is null)
+            throw new HttpRequestException("Connect to a workspace before running a query.");
+        return _connectionService.QueryDataAsync(_activeConnection, projectId, sql);
+    }
+
+    private Task<DesktopChatSession> LoadAgentChatAsync(Guid projectId, Guid sessionId)
+    {
+        if (_activeConnection is null)
+            throw new HttpRequestException("Connect to a workspace before loading agent chat.");
+        return _connectionService.GetAgentChatAsync(_activeConnection, projectId, sessionId);
+    }
+
+    private Task<DesktopChatSession> SendAgentMessageAsync(Guid projectId, Guid? sessionId, string message)
+    {
+        if (_activeConnection is null)
+            throw new HttpRequestException("Connect to a workspace before sending a message.");
+        return _connectionService.SendAgentMessageAsync(_activeConnection, projectId, sessionId, message);
+    }
 
     private static CollectionPageViewModel Unavailable(string title, string subtitle) =>
         new(title, subtitle, string.Empty, [],

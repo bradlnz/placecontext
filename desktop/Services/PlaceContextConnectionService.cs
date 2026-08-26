@@ -163,7 +163,147 @@ public sealed class PlaceContextConnectionService
             .OrderByDescending(run => run.StartedAt)
             .ToList();
 
-        return new WorkspaceSnapshot(projects, jobs, runs);
+        var projectResources = await Task.WhenAll(projects.Select(async project =>
+        {
+            var tests = GetOptionalAsync<CoreResourceItem>(connection, $"api/desktop/v1/projects/{project.Id:D}/tests", cancellationToken);
+            var chains = GetOptionalAsync<CoreResourceItem>(connection, $"api/desktop/v1/projects/{project.Id:D}/chains", cancellationToken);
+            var schedules = GetOptionalAsync<CoreResourceItem>(connection, $"api/desktop/v1/projects/{project.Id:D}/schedules", cancellationToken);
+            var data = GetOptionalAsync<CoreResourceItem>(connection, $"api/desktop/v1/projects/{project.Id:D}/data-resources", cancellationToken);
+            var secrets = GetOptionalAsync<CoreResourceItem>(connection, $"api/desktop/v1/projects/{project.Id:D}/secrets", cancellationToken);
+            var agents = GetOptionalAsync<CoreResourceItem>(connection, $"api/desktop/v1/projects/{project.Id:D}/agents", cancellationToken);
+            var chats = GetOptionalAsync<CoreResourceItem>(connection, $"api/desktop/v1/projects/{project.Id:D}/agent-chats", cancellationToken);
+            var artifacts = GetOptionalAsync<CoreResourceItem>(connection, $"api/desktop/v1/projects/{project.Id:D}/artifacts?take=200", cancellationToken);
+            await Task.WhenAll(tests, chains, schedules, data, secrets, agents, chats, artifacts);
+            return new ProjectResources(
+                await tests, await chains, await schedules, await data,
+                await secrets, await agents, await chats, await artifacts);
+        }));
+
+        var observabilityTask = GetOptionalAsync<CoreResourceItem>(
+            connection, "api/desktop/v1/observability?take=50", cancellationToken);
+        var clusterTask = GetOptionalAsync<CoreResourceItem>(
+            connection, "api/desktop/v1/cluster", cancellationToken);
+        var wikiTask = GetOptionalAsync<CoreResourceItem>(
+            connection, "api/desktop/v1/wiki", cancellationToken);
+        await Task.WhenAll(observabilityTask, clusterTask, wikiTask);
+
+        return new WorkspaceSnapshot(
+            projects,
+            jobs,
+            runs,
+            projectResources.SelectMany(value => value.Tests).ToList(),
+            projectResources.SelectMany(value => value.Chains).ToList(),
+            projectResources.SelectMany(value => value.Schedules).ToList(),
+            projectResources.SelectMany(value => value.Data).ToList(),
+            projectResources.SelectMany(value => value.Secrets).ToList(),
+            projectResources.SelectMany(value => value.Agents).ToList(),
+            projectResources.SelectMany(value => value.Chats).ToList(),
+            projectResources.SelectMany(value => value.Artifacts).ToList(),
+            await observabilityTask,
+            await clusterTask,
+            await wikiTask);
+    }
+
+    public async Task<DesktopActionResponse> RunJobAsync(
+        OAuthConnection connection,
+        Guid projectId,
+        Guid jobId,
+        CancellationToken cancellationToken = default) =>
+        await PostAsync<DesktopActionResponse>(
+            connection,
+            $"api/desktop/v1/projects/{projectId:D}/jobs/{jobId:D}/run",
+            new { inputPayload = (string?)null },
+            cancellationToken);
+
+    public async Task<DesktopActionResponse> RunTestAsync(
+        OAuthConnection connection,
+        Guid projectId,
+        Guid testId,
+        CancellationToken cancellationToken = default) =>
+        await PostAsync<DesktopActionResponse>(
+            connection,
+            $"api/desktop/v1/projects/{projectId:D}/tests/{testId:D}/run",
+            new { },
+            cancellationToken);
+
+    public async Task<DesktopActionResponse> RunChainAsync(
+        OAuthConnection connection,
+        Guid projectId,
+        Guid chainId,
+        CancellationToken cancellationToken = default) =>
+        await PostAsync<DesktopActionResponse>(
+            connection,
+            $"api/desktop/v1/projects/{projectId:D}/chains/{chainId:D}/run",
+            new { inputPayload = (string?)null },
+            cancellationToken);
+
+    public async Task<DesktopActionResponse> SetScheduleEnabledAsync(
+        OAuthConnection connection,
+        Guid projectId,
+        Guid scheduleId,
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        await PostAsync<DesktopActionResponse>(
+            connection,
+            $"api/desktop/v1/projects/{projectId:D}/schedules/{scheduleId:D}/enabled",
+            new { enabled },
+            cancellationToken);
+
+    public async Task<DesktopQueryResponse> QueryDataAsync(
+        OAuthConnection connection,
+        Guid projectId,
+        string sql,
+        CancellationToken cancellationToken = default) =>
+        await PostAsync<DesktopQueryResponse>(
+            connection,
+            $"api/desktop/v1/projects/{projectId:D}/data/query",
+            new { sql },
+            cancellationToken);
+
+    public async Task<DesktopChatSession> GetAgentChatAsync(
+        OAuthConnection connection,
+        Guid projectId,
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        await RefreshIfNeededAsync(connection, cancellationToken);
+        return await GetAsync<DesktopChatSession>(
+            connection.Endpoint,
+            $"api/desktop/v1/projects/{projectId:D}/agent-chats/{sessionId:D}",
+            connection.AccessToken,
+            cancellationToken);
+    }
+
+    public async Task<DesktopChatSession> SendAgentMessageAsync(
+        OAuthConnection connection,
+        Guid projectId,
+        Guid? sessionId,
+        string message,
+        CancellationToken cancellationToken = default) =>
+        await PostAsync<DesktopChatSession>(
+            connection,
+            $"api/desktop/v1/projects/{projectId:D}/agent-chats/messages",
+            new { sessionId, message },
+            cancellationToken);
+
+    private async Task<List<T>> GetOptionalAsync<T>(
+        OAuthConnection connection,
+        string relativePath,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await GetAsync<List<T>>(
+                connection.Endpoint,
+                relativePath,
+                connection.AccessToken,
+                cancellationToken);
+        }
+        catch (HttpRequestException exception) when (
+            exception.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+        {
+            return [];
+        }
     }
 
     private async Task RefreshIfNeededAsync(OAuthConnection connection, CancellationToken cancellationToken)
@@ -237,14 +377,32 @@ public sealed class PlaceContextConnectionService
         return await ReadResponseAsync<T>(response, cancellationToken);
     }
 
+    private async Task<T> PostAsync<T>(
+        OAuthConnection connection,
+        string relativePath,
+        object body,
+        CancellationToken cancellationToken)
+    {
+        await RefreshIfNeededAsync(connection, cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(connection.Endpoint, relativePath))
+        {
+            Content = JsonContent.Create(body, options: JsonOptions),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", connection.AccessToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        return await ReadResponseAsync<T>(response, cancellationToken);
+    }
+
     private static async Task<T> ReadResponseAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         if (!response.IsSuccessStatusCode)
         {
             var body = (await response.Content.ReadAsStringAsync(cancellationToken)).Trim();
             var detail = string.IsNullOrWhiteSpace(body) ? response.ReasonPhrase : body;
+            var route = response.RequestMessage?.RequestUri?.AbsolutePath;
+            var location = string.IsNullOrWhiteSpace(route) ? string.Empty : $" from {route}";
             throw new HttpRequestException(
-                $"PlaceContext returned {(int)response.StatusCode}: {detail}",
+                $"PlaceContext returned {(int)response.StatusCode}{location}: {detail}",
                 null,
                 response.StatusCode);
         }
@@ -381,4 +539,13 @@ public sealed class PlaceContextConnectionService
     }
 
     private sealed record OAuthCallback(string? Code, string? State, string? Error);
+    private sealed record ProjectResources(
+        IReadOnlyList<CoreResourceItem> Tests,
+        IReadOnlyList<CoreResourceItem> Chains,
+        IReadOnlyList<CoreResourceItem> Schedules,
+        IReadOnlyList<CoreResourceItem> Data,
+        IReadOnlyList<CoreResourceItem> Secrets,
+        IReadOnlyList<CoreResourceItem> Agents,
+        IReadOnlyList<CoreResourceItem> Chats,
+        IReadOnlyList<CoreResourceItem> Artifacts);
 }
