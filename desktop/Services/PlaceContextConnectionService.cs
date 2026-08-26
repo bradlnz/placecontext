@@ -209,10 +209,53 @@ public sealed class PlaceContextConnectionService
         Guid projectId,
         Guid jobId,
         CancellationToken cancellationToken = default) =>
+        await RunJobAsync(connection, projectId, jobId, null, cancellationToken);
+
+    public async Task<DesktopActionResponse> RunJobAsync(
+        OAuthConnection connection,
+        Guid projectId,
+        Guid jobId,
+        string? inputPayload,
+        CancellationToken cancellationToken = default) =>
         await PostAsync<DesktopActionResponse>(
             connection,
             $"api/desktop/v1/projects/{projectId:D}/jobs/{jobId:D}/run",
-            new { inputPayload = (string?)null },
+            new { inputPayload },
+            cancellationToken);
+
+    public async Task<DesktopJobDetail> GetJobAsync(
+        OAuthConnection connection,
+        Guid projectId,
+        Guid jobId,
+        CancellationToken cancellationToken = default)
+    {
+        await RefreshIfNeededAsync(connection, cancellationToken);
+        return await GetAsync<DesktopJobDetail>(
+            connection.Endpoint,
+            $"api/desktop/v1/projects/{projectId:D}/jobs/{jobId:D}",
+            connection.AccessToken,
+            cancellationToken);
+    }
+
+    public Task<DesktopJobDetail> CreateJobAsync(
+        OAuthConnection connection,
+        Guid projectId,
+        DesktopJobDetail job,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<DesktopJobDetail>(
+            connection,
+            $"api/desktop/v1/projects/{projectId:D}/jobs",
+            JobRequest(job),
+            cancellationToken);
+
+    public Task<DesktopJobDetail> UpdateJobAsync(
+        OAuthConnection connection,
+        DesktopJobDetail job,
+        CancellationToken cancellationToken = default) =>
+        PutAsync<DesktopJobDetail>(
+            connection,
+            $"api/desktop/v1/projects/{job.ProjectId:D}/jobs/{job.Id:D}",
+            JobRequest(job),
             cancellationToken);
 
     public async Task<DesktopActionResponse> RunTestAsync(
@@ -392,6 +435,53 @@ public sealed class PlaceContextConnectionService
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         return await ReadResponseAsync<T>(response, cancellationToken);
     }
+
+    private async Task<T> PutAsync<T>(
+        OAuthConnection connection,
+        string relativePath,
+        object body,
+        CancellationToken cancellationToken)
+    {
+        await RefreshIfNeededAsync(connection, cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Put, new Uri(connection.Endpoint, relativePath))
+        {
+            Content = JsonContent.Create(body, options: JsonOptions),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", connection.AccessToken);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        return await ReadResponseAsync<T>(response, cancellationToken);
+    }
+
+    private static object JobRequest(DesktopJobDetail job) => new
+    {
+        job.Name,
+        job.Description,
+        job.MapImage,
+        job.MapRuntimeId,
+        job.MapSource,
+        job.MapEntrypoint,
+        job.MapFiles,
+        job.InputPayloads,
+        job.MapEnv,
+        job.ReduceImage,
+        job.ReduceRuntimeId,
+        job.ReduceSource,
+        job.ReduceEntrypoint,
+        job.ReduceFiles,
+        job.ReduceEnv,
+        job.ConcurrencyLimit,
+        job.SuccessExitCodes,
+        job.PartialExitCodes,
+        job.AllowNetworkEgress,
+        job.AllowApiInvocation,
+        job.Parameters,
+        job.PostJobActions,
+        job.ReturnType,
+        job.ReturnFileName,
+        job.RetryCount,
+        job.RetryDelaySeconds,
+        job.McpConnectionIds,
+    };
 
     private static async Task<T> ReadResponseAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
     {

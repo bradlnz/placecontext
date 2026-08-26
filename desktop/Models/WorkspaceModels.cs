@@ -96,6 +96,47 @@ public sealed record CoreJobRun(
     int SucceededShards,
     int PartialShards,
     int FailedShards);
+public sealed record DesktopJobFile(string Path, string Content);
+public sealed record DesktopJobParameter(
+    string Name,
+    string? Label,
+    bool Required,
+    string Type,
+    IReadOnlyList<string>? Options);
+public sealed record DesktopJobDetail(
+    Guid Id,
+    Guid ProjectId,
+    string Name,
+    string? Description,
+    string MapSourceKind,
+    string? MapImage,
+    string? MapRuntimeId,
+    string? MapSource,
+    string? MapEntrypoint,
+    IReadOnlyList<DesktopJobFile> MapFiles,
+    IReadOnlyList<string> InputPayloads,
+    IReadOnlyDictionary<string, string> MapEnv,
+    string? ReduceSourceKind,
+    string? ReduceImage,
+    string? ReduceRuntimeId,
+    string? ReduceSource,
+    string? ReduceEntrypoint,
+    IReadOnlyList<DesktopJobFile> ReduceFiles,
+    IReadOnlyDictionary<string, string>? ReduceEnv,
+    int ConcurrencyLimit,
+    IReadOnlyList<int> SuccessExitCodes,
+    IReadOnlyList<int> PartialExitCodes,
+    bool AllowNetworkEgress,
+    bool AllowApiInvocation,
+    IReadOnlyList<DesktopJobParameter> Parameters,
+    IReadOnlyList<string> PostJobActions,
+    string ReturnType,
+    string? ReturnFileName,
+    int RetryCount,
+    int RetryDelaySeconds,
+    IReadOnlyList<Guid> McpConnectionIds,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
 public sealed record CoreResourceItem(
     Guid? Id,
     Guid? ProjectId,
@@ -104,7 +145,18 @@ public sealed record CoreResourceItem(
     string Detail,
     string Meta,
     string Status);
-public sealed record DesktopActionResponse(string Status, string Message, Guid? RunId);
+public sealed record DesktopActionResponse(
+    string Status,
+    string Message,
+    Guid? RunId,
+    IReadOnlyList<DesktopRunShard>? Shards = null);
+public sealed record DesktopRunShard(
+    int Index,
+    int ExitCode,
+    string Outcome,
+    string? Artifact,
+    string? Log);
+public sealed record RunResultLine(string Header, string Output, string Log);
 public sealed record DesktopQueryResponse(
     IReadOnlyList<string> Columns,
     IReadOnlyList<IReadOnlyList<string?>> Rows,

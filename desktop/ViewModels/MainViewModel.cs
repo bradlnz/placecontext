@@ -152,7 +152,7 @@ public partial class MainViewModel : ViewModelBase
         ["dashboard"] = new DashboardViewModel(),
         ["settings"] = new SettingsPageViewModel(ChangeEndpoint),
         ["projects"] = LiveCollection("Projects", "Projects returned by /api/desktop/v1/projects"),
-        ["jobs"] = LiveCollection("Jobs", "Jobs returned across connected projects"),
+        ["jobs"] = new JobsPageViewModel(LoadJobAsync, SaveJobAsync, RunJobAsync),
         ["runs"] = LiveCollection("Runs", "Recent job runs returned by the desktop API"),
         ["tests"] = LiveCollection("Tests", "Native job checks and their latest results"),
         ["chains"] = LiveCollection("Chains", "Native multi-stage job pipelines"),
@@ -178,14 +178,7 @@ public partial class MainViewModel : ViewModelBase
             project.Status)));
 
         var projects = snapshot.Projects.ToDictionary(project => project.Id);
-        ((CollectionPageViewModel)_pages["jobs"]).ReplaceItems(snapshot.Jobs.Select(job => new PageListItem(
-            job.Name,
-            job.Description ?? $"{job.MapSourceKind} workload",
-            projects.TryGetValue(job.ProjectId, out var project) ? project.Name : job.ProjectId.ToString("N"),
-            job.ReturnType,
-            "Run",
-            item => ExecuteActionAsync(item, connection =>
-                _connectionService.RunJobAsync(connection, job.ProjectId, job.Id)))));
+        ((JobsPageViewModel)_pages["jobs"]).Update(snapshot);
 
         var jobs = snapshot.Jobs.ToDictionary(job => job.Id);
         ((CollectionPageViewModel)_pages["runs"]).ReplaceItems(snapshot.Runs.Select(run => new PageListItem(
@@ -291,6 +284,29 @@ public partial class MainViewModel : ViewModelBase
         if (_activeConnection is null)
             throw new HttpRequestException("Connect to a workspace before sending a message.");
         return _connectionService.SendAgentMessageAsync(_activeConnection, projectId, sessionId, message);
+    }
+
+    private Task<DesktopJobDetail> LoadJobAsync(Guid projectId, Guid jobId)
+    {
+        if (_activeConnection is null)
+            throw new HttpRequestException("Connect to a workspace before loading a job.");
+        return _connectionService.GetJobAsync(_activeConnection, projectId, jobId);
+    }
+
+    private Task<DesktopJobDetail> SaveJobAsync(DesktopJobDetail job, bool create)
+    {
+        if (_activeConnection is null)
+            throw new HttpRequestException("Connect to a workspace before saving a job.");
+        return create
+            ? _connectionService.CreateJobAsync(_activeConnection, job.ProjectId, job)
+            : _connectionService.UpdateJobAsync(_activeConnection, job);
+    }
+
+    private Task<DesktopActionResponse> RunJobAsync(Guid projectId, Guid jobId, string? inputPayload)
+    {
+        if (_activeConnection is null)
+            throw new HttpRequestException("Connect to a workspace before running a job.");
+        return _connectionService.RunJobAsync(_activeConnection, projectId, jobId, inputPayload);
     }
 
     private static CollectionPageViewModel Unavailable(string title, string subtitle) =>

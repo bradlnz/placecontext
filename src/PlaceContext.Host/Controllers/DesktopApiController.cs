@@ -63,6 +63,56 @@ public sealed class DesktopApiController : ControllerBase
         return Ok(jobs.Select(CoreApiMapper.ToSummary).ToList());
     }
 
+    [HttpGet("v1/projects/{projectId:guid}/jobs/{jobId:guid}")]
+    [Authorize(Policy = Permission.JobsView)]
+    public async Task<ActionResult<JobResponse>> GetJobDefinition(Guid projectId, Guid jobId)
+    {
+        var job = await _service.GetJobAsync(jobId, HttpContext.RequestAborted);
+        return job is null || job.ProjectId != projectId
+            ? NotFound(new { error = "Job not found in this project." })
+            : Ok(JobApiMapper.ToResponse(job));
+    }
+
+    [HttpPost("v1/projects/{projectId:guid}/jobs")]
+    [Authorize(Policy = Permission.JobsEdit)]
+    public async Task<ActionResult<JobResponse>> CreateJobDefinition(Guid projectId, [FromBody] JobRequest request)
+    {
+        if (await _resources.GetProjectAsync(projectId, HttpContext.RequestAborted) is null)
+            return NotFound(new { error = "Project not found." });
+        try
+        {
+            var job = await _service.CreateJobAsync(
+                JobApiMapper.ToCreateCommand(projectId, request), HttpContext.RequestAborted);
+            return Ok(JobApiMapper.ToResponse(job));
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { error = exception.Message });
+        }
+    }
+
+    [HttpPut("v1/projects/{projectId:guid}/jobs/{jobId:guid}")]
+    [Authorize(Policy = Permission.JobsEdit)]
+    public async Task<ActionResult<JobResponse>> UpdateJobDefinition(
+        Guid projectId,
+        Guid jobId,
+        [FromBody] JobRequest request)
+    {
+        var existing = await _service.GetJobAsync(jobId, HttpContext.RequestAborted);
+        if (existing is null || existing.ProjectId != projectId)
+            return NotFound(new { error = "Job not found in this project." });
+        try
+        {
+            var job = await _service.UpdateJobAsync(
+                JobApiMapper.ToUpdateCommand(jobId, request), HttpContext.RequestAborted);
+            return Ok(JobApiMapper.ToResponse(job));
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { error = exception.Message });
+        }
+    }
+
     [HttpGet("v1/projects/{projectId:guid}/jobs/{jobId:guid}/runs")]
     [Authorize(Policy = Permission.JobsView)]
     public async Task<ActionResult<IReadOnlyList<CoreJobRunSummaryResponse>>> ListRuns(
@@ -88,7 +138,12 @@ public sealed class DesktopApiController : ControllerBase
         if (await _resources.GetJobAsync(projectId, jobId, HttpContext.RequestAborted) is null)
             return NotFound(new { error = "Job not found in this project." });
         var run = await _service.RunJobAsync(jobId, request?.InputPayload, null, HttpContext.RequestAborted);
-        return Ok(new DesktopActionResponse(run.Status, "Job run started.", run.Id));
+        return Ok(new DesktopActionResponse(
+            run.Status,
+            "Job run completed.",
+            run.Id,
+            run.ShardResults.Select(shard => new DesktopRunShardResponse(
+                shard.Index, shard.ExitCode, shard.Outcome, shard.Artifact, shard.Log)).ToList()));
     }
 
     [HttpGet("v1/projects/{projectId:guid}/tests")]
@@ -362,7 +417,17 @@ public sealed record DesktopResourceItemResponse(
 
 public sealed record DesktopRunRequest(string? InputPayload);
 public sealed record DesktopScheduleEnabledRequest(bool Enabled);
-public sealed record DesktopActionResponse(string Status, string Message, Guid? RunId);
+public sealed record DesktopActionResponse(
+    string Status,
+    string Message,
+    Guid? RunId,
+    IReadOnlyList<DesktopRunShardResponse>? Shards = null);
+public sealed record DesktopRunShardResponse(
+    int Index,
+    int ExitCode,
+    string Outcome,
+    string? Artifact,
+    string? Log);
 public sealed record DesktopQueryRequest(string Sql);
 public sealed record DesktopQueryResponse(
     IReadOnlyList<string> Columns,
