@@ -270,7 +270,15 @@ public partial class JobsPageViewModel : PageViewModel
         }
         catch (Exception exception) when (exception is HttpRequestException or OperationCanceledException)
         {
-            Status = $"Job failed to load · {exception.Message}";
+            Status = exception switch
+            {
+                HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound }
+                    => "Job failed to load · the connected host does not have the native job-detail endpoint, or the job no longer exists. Deploy commit 706a9721 or later.",
+                HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized }
+                    => "Job failed to load · the host rejected the desktop token for the job-detail endpoint.",
+                OperationCanceledException => "Job failed to load · the request timed out.",
+                _ => $"Job failed to load · {exception.Message}",
+            };
         }
         finally
         {

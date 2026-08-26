@@ -145,6 +145,9 @@ public sealed class PlaceContextConnectionServiceTests
             var path when path.EndsWith("/enabled", StringComparison.Ordinal) => Json("""{"status":"Disabled","message":"Schedule disabled.","runId":null}"""),
             var path when path.EndsWith("/data/query", StringComparison.Ordinal) => Json("""{"columns":["name"],"rows":[["Ada"]],"affectedRows":0,"truncated":false}"""),
             var path when path.EndsWith("/agent-chats/messages", StringComparison.Ordinal) => Json($$"""{"id":"{{resourceId}}","projectId":"{{projectId}}","title":"Native chat","messages":[{"role":"assistant","content":"Hello","timestamp":"2026-08-25T00:00:00Z"}],"updatedAt":"2026-08-25T00:00:00Z"}"""),
+            var path when path.EndsWith($"/jobs/{resourceId:D}", StringComparison.Ordinal) => Json($$"""
+                {"id":"{{resourceId}}","projectId":"{{projectId}}","name":"Native job","description":"Editable","mapSourceKind":"code","mapImage":null,"mapRuntimeId":"python","mapSource":"print('ok')","mapEntrypoint":"main.py","mapFiles":[{"path":"main.py","content":"print('ok')"}],"inputPayloads":["{}"],"mapEnv":{},"reduceSourceKind":null,"reduceImage":null,"reduceRuntimeId":null,"reduceSource":null,"reduceEntrypoint":null,"reduceFiles":[],"reduceEnv":null,"concurrencyLimit":4,"successExitCodes":[0],"partialExitCodes":[],"allowNetworkEgress":false,"allowApiInvocation":false,"parameters":[],"postJobActions":[],"returnType":"Json","returnFileName":null,"retryCount":0,"retryDelaySeconds":0,"mcpConnectionIds":[],"createdAt":"2026-08-25T00:00:00Z","updatedAt":"2026-08-25T00:00:00Z"}
+                """),
             _ => new HttpResponseMessage(HttpStatusCode.NotFound),
         });
         var service = new PlaceContextConnectionService(new HttpClient(handler), uri => CompleteAuthorizationAsync(uri, "code-123"));
@@ -156,6 +159,9 @@ public sealed class PlaceContextConnectionServiceTests
         Assert.Equal("Disabled", (await service.SetScheduleEnabledAsync(connection, projectId, resourceId, false)).Status);
         Assert.Equal("Ada", (await service.QueryDataAsync(connection, projectId, "SELECT name FROM people")).Rows[0][0]);
         Assert.Equal("Hello", (await service.SendAgentMessageAsync(connection, projectId, null, "Hi")).Messages[0].Content);
+        var job = await service.GetJobAsync(connection, projectId, resourceId);
+        Assert.Equal("print('ok')", Assert.Single(job.MapFiles).Content);
+        Assert.Equal("Native job", (await service.UpdateJobAsync(connection, job)).Name);
 
         var actionRequests = handler.Requests.Where(request => request.Uri.AbsolutePath.StartsWith("/api/desktop/v1", StringComparison.Ordinal));
         Assert.All(actionRequests, request => Assert.Equal("Bearer access-token", request.Authorization));
