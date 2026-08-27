@@ -90,76 +90,42 @@ def load_model_mlx(model_path: str):
 
 def mlx_forward_slice(hidden_states, attention_mask, layer_start, layer_end):
     """Run a slice of transformer layers on hidden states using MLX."""
-    import mlx.core as mx
-    from mlx_lm.layers import Attention
+    from mlx_lm.models.base import create_attention_mask, create_ssm_mask
 
-    # Handle both old (model.model.layers) and new (model.layers) structure
-    if hasattr(model, 'model') and hasattr(model.model, 'layers'):
-        layers = model.model.layers[layer_start:layer_end]
-    else:
-        layers = model.layers[layer_start:layer_end]
-
-    # Build causal mask for the sequence length
-    seq_len = hidden_states.shape[1]
-    mask = _make_causal_mask_mlx(seq_len, hidden_states.dtype)
-
-    # Combine with padding mask if provided
-    if attention_mask is not None:
-        # attention_mask: (batch, seq_len) -> (batch, 1, seq_len, seq_len)
-        padding_mask = mx.expand_dims(mx.expand_dims(attention_mask, 1), 2)
-        mask = mask + (1.0 - padding_mask) * -1e9
+    layers = _mlx_inner_model().layers[layer_start:layer_end]
+    attention_mask = create_attention_mask(hidden_states)
+    recurrent_mask = create_ssm_mask(hidden_states)
 
     hs = hidden_states
     for layer in layers:
-        # Each layer returns (hidden_states,) or (hidden_states, attn_weights, past_kv)
-        # We only need the hidden_states
-        h = hs
-        # Pre-norm + self-attention
-        h_norm = layer.input_layernorm(h) if hasattr(layer, 'input_layernorm') else h
-        attn_out = layer.self_attn(h_norm, mask=mask)
-        if isinstance(attn_out, tuple):
-            attn_out = attn_out[0]
-        hs = h + attn_out
-
-        # Pre-norm + MLP
-        h_norm = layer.post_attention_layernorm(hs) if hasattr(layer, 'post_attention_layernorm') else hs
-        mlp_out = layer.mlp(h_norm)
-        hs = hs + mlp_out
+        # Qwen 3.5 alternates recurrent Gated DeltaNet and full-attention
+        # layers. Calling the model's layer implementation preserves those
+        # architecture-specific details; manually invoking self_attn does not.
+        mask = recurrent_mask if getattr(layer, "is_linear", False) else attention_mask
+        hs = layer(hs, mask=mask)
 
     return hs
-
-
-def _make_causal_mask_mlx(seq_len, dtype):
-    """Create a causal attention mask in MLX."""
-    import mlx.core as mx
-    mask = mx.full((seq_len, seq_len), float('-inf'), dtype=dtype)
-    # Unmask upper triangle (causal: each position attends to itself and previous)
-    for i in range(seq_len):
-        mask[i, :i + 1] = 0.0
-    return mx.expand_dims(mask, 0)  # (1, seq_len, seq_len)
 
 
 def mlx_embed(token_ids):
     """Convert token IDs to embeddings."""
     import mlx.core as mx
     ids = mx.array([token_ids]) if isinstance(token_ids, list) else mx.expand_dims(mx.array(token_ids), 0)
-    # Handle both old and new model structure
-    if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
-        return model.model.embed_tokens(ids)
-    else:
-        return model.embed_tokens(ids)
+    return _mlx_inner_model().embed_tokens(ids)
 
 
 def mlx_lm_head(hidden_states):
     """Apply final layer norm + LM head to get logits."""
-    import mlx.core as mx
-    # Handle both old and new model structure
-    if hasattr(model, 'model') and hasattr(model.model, 'norm'):
-        h = model.model.norm(hidden_states)
-    else:
-        h = model.norm(hidden_states)
-    logits = model.lm_head(h)
-    return logits
+    inner = _mlx_inner_model()
+    h = inner.norm(hidden_states)
+    if hasattr(model, "lm_head"):
+        return model.lm_head(h)
+    language_model = getattr(model, "language_model", None)
+    if language_model is not None and hasattr(language_model, "lm_head"):
+        return language_model.lm_head(h)
+    if hasattr(inner.embed_tokens, "as_linear"):
+        return inner.embed_tokens.as_linear(h)
+    raise RuntimeError("Cannot locate the MLX language-model head")
 
 
 def mlx_sample(logits, temperature=0.7, top_p=0.9):
@@ -221,36 +187,103 @@ def load_model_torch(model_path: str):
     return mdl, tok, device
 
 
+def _torch_inner_model():
+    """Resolve the text transformer body across Transformers model layouts."""
+    candidates = []
+    outer = getattr(model, "model", None)
+    if outer is not None:
+        language_model = getattr(outer, "language_model", None)
+        if language_model is not None:
+            candidates.append(language_model)
+        candidates.append(outer)
+    language_model = getattr(model, "language_model", None)
+    if language_model is not None:
+        candidates.append(language_model)
+    candidates.append(model)
+    for candidate in candidates:
+        if all(hasattr(candidate, attribute) for attribute in ("embed_tokens", "layers", "norm")):
+            return candidate
+    raise RuntimeError("Cannot locate the Torch transformer body")
+
+
 def torch_forward_slice(hidden_states, attention_mask, layer_start, layer_end):
     """Run a slice of transformer layers on hidden states using torch."""
     import torch
 
-    layers = model.model.layers[layer_start:layer_end]
+    body = _torch_inner_model()
+    layers = body.layers[layer_start:layer_end]
     device = hidden_states.device
-
-    # Build causal mask
     seq_len = hidden_states.shape[1]
-    mask = torch.full((seq_len, seq_len), float('-inf'), device=device)
-    mask = torch.triu(mask, diagonal=1)
+    batch_size = hidden_states.shape[0]
+    positions = torch.arange(seq_len, device=device).unsqueeze(0).expand(batch_size, -1)
 
-    if attention_mask is not None:
-        # Expand padding mask: (batch, seq_len) -> (batch, 1, seq_len, seq_len)
-        padding_mask = attention_mask[:, None, None, :].float()
-        mask = mask.unsqueeze(0) + (1.0 - padding_mask) * -1e9
+    if hasattr(body, "rotary_emb"):
+        from transformers.masking_utils import create_causal_mask
 
+        model_type = getattr(body.config, "model_type", "")
+        if model_type in ("qwen3_5", "qwen3_5_text") or any(
+            hasattr(layer, "linear_attn") for layer in layers
+        ):
+            from transformers.masking_utils import create_recurrent_attention_mask
+
+            text_positions = positions
+            rotary_positions = positions.unsqueeze(0).expand(3, -1, -1)
+            mask_args = {
+                "config": body.config,
+                "inputs_embeds": hidden_states,
+                "attention_mask": attention_mask,
+                "past_key_values": None,
+                "position_ids": text_positions,
+            }
+            masks = {
+                "full_attention": create_causal_mask(**mask_args),
+                "linear_attention": create_recurrent_attention_mask(**mask_args),
+            }
+            position_embeddings = body.rotary_emb(hidden_states, rotary_positions)
+            hs = hidden_states
+            for index, layer in enumerate(layers, start=layer_start):
+                hs = layer(
+                    hs,
+                    position_embeddings=position_embeddings,
+                    attention_mask=masks[body.config.layer_types[index]],
+                    position_ids=text_positions,
+                    past_key_values=None,
+                    use_cache=False,
+                )
+            return hs
+
+        causal_mask = create_causal_mask(
+            config=body.config,
+            inputs_embeds=hidden_states,
+            attention_mask=attention_mask,
+            past_key_values=None,
+            position_ids=positions,
+        )
+        position_embeddings = body.rotary_emb(hidden_states, positions)
+        hs = hidden_states
+        for layer in layers:
+            hs = layer(
+                hs,
+                position_embeddings=position_embeddings,
+                attention_mask=causal_mask,
+                position_ids=positions,
+                past_key_values=None,
+                use_cache=False,
+            )
+        return hs
+
+    # Compatibility fallback for older decoder implementations.
+    mask = torch.triu(torch.full((seq_len, seq_len), float('-inf'), device=device), diagonal=1)
     hs = hidden_states
     for layer in layers:
-        h = hs
-        h_norm = layer.input_layernorm(h) if hasattr(layer, 'input_layernorm') else h
-        attn_out = layer.self_attn(h_norm, attention_mask=mask)
-        if isinstance(attn_out, tuple):
-            attn_out = attn_out[0]
-        hs = h + attn_out
-
-        h_norm = layer.post_attention_layernorm(hs) if hasattr(layer, 'post_attention_layernorm') else hs
-        mlp_out = layer.mlp(h_norm)
-        hs = hs + mlp_out
-
+        residual = hs
+        normalized = layer.input_layernorm(residual) if hasattr(layer, 'input_layernorm') else residual
+        attention = layer.self_attn(normalized, attention_mask=mask)
+        if isinstance(attention, tuple):
+            attention = attention[0]
+        hs = residual + attention
+        normalized = layer.post_attention_layernorm(hs) if hasattr(layer, 'post_attention_layernorm') else hs
+        hs = hs + layer.mlp(normalized)
     return hs
 
 
@@ -312,11 +345,12 @@ def embed_texts_torch(texts):
 
     vectors = []
     device = next(model.parameters()).device
+    body = _torch_inner_model()
     for text in texts:
         inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=2048).to(device)
         with torch.no_grad():
-            out = model.model(**inputs)
-            hs = model.model.norm(out.last_hidden_state)
+            out = body(**inputs)
+            hs = out.last_hidden_state
             mask = inputs["attention_mask"].unsqueeze(-1).float()
             vec = (hs * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)
             vec = torch.nn.functional.normalize(vec, p=2, dim=-1)
@@ -462,17 +496,11 @@ async def lifespan(app: FastAPI):
     if is_apple_silicon():
         backend = "mlx"
         model, tokenizer = load_model_mlx(args.model)
-        # MLX model structure varies - try common patterns
-        if hasattr(model, 'model') and hasattr(model.model, 'layers'):
-            total_layers = len(model.model.layers)
-        elif hasattr(model, 'layers'):
-            total_layers = len(model.layers)
-        else:
-            raise RuntimeError(f"Cannot find layers in model. Attributes: {dir(model)}")
+        total_layers = len(_mlx_inner_model().layers)
     else:
         backend = "torch"
         model, tokenizer, device = load_model_torch(args.model)
-        total_layers = len(model.model.layers)
+        total_layers = len(_torch_inner_model().layers)
 
     logger.info("Model has %d transformer layers", total_layers)
 
@@ -651,19 +679,9 @@ async def forward(req: ForwardRequest):
         if sc.is_first and req.prompt is not None:
             # First shard: tokenize prompt and embed
             token_ids = tokenizer.encode(req.prompt, add_special_tokens=False)
-            hidden_states = mx.array([token_ids])
-            # Handle both old and new model structure
-            if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
-                hidden_states = model.model.embed_tokens(hidden_states)
-            else:
-                hidden_states = model.embed_tokens(hidden_states)
+            hidden_states = mlx_embed(token_ids)
         elif sc.is_first and req.token_ids is not None:
-            hidden_states = mx.array([req.token_ids])
-            # Handle both old and new model structure
-            if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
-                hidden_states = model.model.embed_tokens(hidden_states)
-            else:
-                hidden_states = model.embed_tokens(hidden_states)
+            hidden_states = mlx_embed(req.token_ids)
         elif req.hidden_states is not None:
             hidden_states = mx.array(req.hidden_states)
             if hidden_states.ndim == 2:
@@ -709,12 +727,7 @@ async def forward(req: ForwardRequest):
                     current_ids.append(next_token)
 
                     # Forward pass for next token
-                    ids_arr = mx.array([current_ids])
-                    # Handle both old and new model structure
-                    if hasattr(model, 'model') and hasattr(model.model, 'embed_tokens'):
-                        hs = model.model.embed_tokens(ids_arr)
-                    else:
-                        hs = model.embed_tokens(ids_arr)
+                    hs = mlx_embed(current_ids)
                     hs = mlx_forward_slice(hs, mx.ones((1, len(current_ids))), sc.layer_start, sc.layer_end)
                     logits = mlx_lm_head(hs)
 
@@ -732,15 +745,16 @@ async def forward(req: ForwardRequest):
         import torch
         device = next(model.parameters()).device
         dtype = next(model.parameters()).dtype
+        body = _torch_inner_model()
 
         # Get input tensor
         if sc.is_first and req.prompt is not None:
             token_ids = tokenizer.encode(req.prompt, add_special_tokens=False)
             ids = torch.tensor([token_ids], dtype=torch.long, device=device)
-            hidden_states = model.model.embed_tokens(ids).to(dtype)
+            hidden_states = body.embed_tokens(ids).to(dtype)
         elif sc.is_first and req.token_ids is not None:
             ids = torch.tensor([req.token_ids], dtype=torch.long, device=device)
-            hidden_states = model.model.embed_tokens(ids).to(dtype)
+            hidden_states = body.embed_tokens(ids).to(dtype)
         elif req.hidden_states is not None:
             hidden_states = torch.tensor(req.hidden_states, dtype=dtype, device=device)
             if hidden_states.dim() == 2:
@@ -762,7 +776,7 @@ async def forward(req: ForwardRequest):
             hidden_states = torch_forward_slice(hidden_states, mask, sc.layer_start, sc.layer_end)
 
         if sc.is_last:
-            hidden_states = model.model.norm(hidden_states)
+            hidden_states = body.norm(hidden_states)
             logits = model.lm_head(hidden_states)
             result = {
                 "hidden_states": hidden_states.cpu().tolist(),
@@ -793,10 +807,10 @@ async def forward(req: ForwardRequest):
                     current_ids.append(token_id)
 
                     ids_arr = torch.tensor([current_ids], dtype=torch.long, device=device)
-                    hs = model.model.embed_tokens(ids_arr).to(dtype)
+                    hs = body.embed_tokens(ids_arr).to(dtype)
                     with torch.no_grad():
                         hs = torch_forward_slice(hs, mask[:, :len(current_ids)], sc.layer_start, sc.layer_end)
-                        hs = model.model.norm(hs)
+                        hs = body.norm(hs)
                         logits = model.lm_head(hs)
 
                 result["generated_tokens"] = generated
