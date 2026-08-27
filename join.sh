@@ -8,6 +8,7 @@ K3S_IMAGE="${K3S_IMAGE:-rancher/k3s:v1.31.5-k3s1}"
 TS_CONTAINER="${TS_CONTAINER:-placecontext-tailscale}"
 AGENT_CONTAINER="${AGENT_CONTAINER:-placecontext-agent}"
 APP_IMAGE="${APP_IMAGE:-ghcr.io/bradlnz/placecontext:latest}"
+NODE_TYPE="${NODE_TYPE:-standard-worker}"
 DOCKER="${DOCKER:-docker}"
 
 log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
@@ -108,10 +109,16 @@ while [ $# -gt 0 ]; do
     --code)   JOIN_CODE="$2"; shift 2;;
     --portal) PORTAL="$2"; shift 2;;
     --token)  TOKEN="$2"; shift 2;;
+    --node-type) NODE_TYPE="$2"; shift 2;;
     PC1.*|PC2.*) JOIN_CODE="$1"; shift;;
     *) die "Usage: $0 [--code PC2.xxxxx | --portal URL --token TOKEN | PC2.xxxxx]";;
   esac
 done
+
+case "$NODE_TYPE" in
+  standard-worker|ai-shard) ;;
+  *) die "Unsupported node type: $NODE_TYPE (expected standard-worker or ai-shard)" ;;
+esac
 
 # Exchange a one-time agent token for a real join code via the portal API.
 if [ -n "$TOKEN" ]; then
@@ -146,6 +153,7 @@ $DOCKER rm -f "$AGENT_CONTAINER" "$TS_CONTAINER" >/dev/null 2>&1 || true
 
 # ─── Tailscale ───────────────────────────────────────────────────────────────
 AGENT_ARGS=()
+AGENT_ARGS+=(--node-label="placecontext.io/node-type=$NODE_TYPE")
 if [ -n "$JOIN_TSKEY" ]; then
   TS_HOST="$(hostname 2>/dev/null | cut -d. -f1 || echo pc)-pc"
   log "Starting Tailscale sidecar..."

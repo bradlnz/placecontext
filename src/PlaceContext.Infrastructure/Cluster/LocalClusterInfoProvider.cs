@@ -27,7 +27,8 @@ public sealed class LocalClusterInfoProvider : IClusterInfoProvider, IClusterAdm
             IsSelf: true,
             IsControlPlane: true,
             IsDesignatedMaster: true,
-            TailscaleIp: null);
+            TailscaleIp: null,
+            NodeType: ClusterNodeType.ControlPlane);
 
         return Task.FromResult(new ClusterInfo(
             IsRealCluster: false,

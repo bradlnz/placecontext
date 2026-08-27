@@ -13,7 +13,7 @@ namespace PlaceContext.Infrastructure.Workload;
 /// <summary>
 /// Infrastructure adapter that runs a workload as a Kubernetes <b>Job</b> in the cluster the Host runs
 /// in — used when PlaceContext is deployed in-cluster (no Docker socket). The Host's ServiceAccount must
-/// have RBAC to manage Jobs/Pods/ConfigMaps/NetworkPolicies (see deploy/k3s/placecontext.yaml).
+/// have RBAC to manage Jobs/Pods/ConfigMaps/NetworkPolicies (see deploy/release/k3s/placecontext.yaml).
 ///
 /// Per run it: writes the code file set + the shard payload into a ConfigMap, materialises them into an
 /// emptyDir at /work via a busybox init container, then runs the runtime image which pipes

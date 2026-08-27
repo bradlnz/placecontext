@@ -2,7 +2,7 @@ namespace PlaceContext.Domain.ValueObjects;
 
 /// <summary>
 /// A post-job action: run once a job finishes, it extracts the run's artifacts and produces an output
-/// stored in the object store (surfaced as a link in the portal/TUI). Generic — no domain knowledge.
+/// stored in the object store (surfaced as a link in the portal). Generic — no domain knowledge.
 /// </summary>
 public enum PostJobActionKind
 {

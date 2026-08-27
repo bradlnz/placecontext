@@ -30,7 +30,7 @@ else
                 </button>
                 <button class="dcbtn primary" @onclick="Vm.AddWorkerAsync" disabled="@Vm.Busy">
                     <span class="button-plus">+</span>
-                    Add worker
+                    Add node
                 </button>
             </div>
         </section>
@@ -54,8 +54,12 @@ else
                 <span>control plane</span>
             </div>
             <div class="summary-count">
-                <strong>@(Vm.Nodes?.Count(n => !n.IsControlPlane) ?? 0)</strong>
-                <span>workers</span>
+                <strong>@(Vm.Nodes?.Count(n => n.NodeType == ClusterNodeType.StandardWorker) ?? 0)</strong>
+                <span>standard workers</span>
+            </div>
+            <div class="summary-count running">
+                <strong>@(Vm.Nodes?.Count(n => n.NodeType == ClusterNodeType.AiShard) ?? 0)</strong>
+                <span>AI shards</span>
             </div>
             <div class="summary-progress" title="@($"{Vm.ReadyPercent:0}% ready")">
                 <span style="width:@($"{Vm.ReadyPercent:0}%")"></span>
@@ -86,8 +90,8 @@ else
                     {
                         <article class="node-card @(!n.Ready ? "node-warning" : "")">
                             <div class="node-top">
-                                <div class="node-avatar @(n.IsControlPlane ? "master-avatar" : "")">
-                                    @(n.IsControlPlane ? "◇" : "◆")
+                                <div class="node-avatar @(n.IsControlPlane ? "master-avatar" : n.NodeType == ClusterNodeType.AiShard ? "ai-avatar" : "")">
+                                    @(n.IsControlPlane ? "◇" : n.NodeType == ClusterNodeType.AiShard ? "✦" : "◆")
                                     <span class="status-pin @(n.Ready ? "online" : "offline")"></span>
                                 </div>
                                 <div class="node-title">
@@ -108,6 +112,14 @@ else
                                 @if (n.IsDesignatedMaster)
                                 {
                                     <span class="role-chip master-chip">★ Fleet master</span>
+                                }
+                                @if (n.NodeType == ClusterNodeType.AiShard)
+                                {
+                                    <span class="role-chip ai-chip">AI shard</span>
+                                }
+                                else if (!n.IsControlPlane)
+                                {
+                                    <span class="role-chip">Standard worker</span>
                                 }
                                 @foreach (var role in n.Roles.Take(3))
                                 {
@@ -147,8 +159,8 @@ else
                     <div class="join-head">
                         <div class="join-symbol">＋</div>
                         <div>
-                            <h3>Add a worker</h3>
-                            <p>Connect another machine to this fleet.</p>
+                            <h3>Add a node</h3>
+                            <p>Connect job capacity or an AI model shard.</p>
                         </div>
                         <button class="dialog-close" @onclick="Vm.DismissJoin">×</button>
                     </div>
@@ -159,18 +171,31 @@ else
                         </div>
                         <div class="worker-target-grid">
                             <button
-                                class="worker-target-btn @(Vm.SelectedWorkerTarget == WorkerTarget.Server ? "selected" : "")"
-                                @onclick="() => Vm.SelectWorkerTarget(WorkerTarget.Server)">
-                                <strong>Server</strong>
-                                <span>Linux server or VM worker</span>
+                                class="worker-target-btn @(Vm.SelectedWorkerTarget == WorkerTarget.StandardWorker ? "selected" : "")"
+                                @onclick="() => Vm.SelectWorkerTarget(WorkerTarget.StandardWorker)">
+                                <strong>Standard worker</strong>
+                                <span>Runs jobs and workload shards</span>
                             </button>
                             <button
-                                class="worker-target-btn @(Vm.SelectedWorkerTarget == WorkerTarget.Mac ? "selected" : "")"
-                                @onclick="() => Vm.SelectWorkerTarget(WorkerTarget.Mac)">
-                                <strong>Mac</strong>
-                                <span>Mac workstation worker</span>
+                                class="worker-target-btn @(Vm.SelectedWorkerTarget == WorkerTarget.AiShard ? "selected" : "")"
+                                @onclick="() => Vm.SelectWorkerTarget(WorkerTarget.AiShard)">
+                                <strong>AI shard</strong>
+                                <span>Runs an ordered MLX/Torch layer slice</span>
                             </button>
                         </div>
+                        @if (Vm.SelectedWorkerTarget == WorkerTarget.AiShard)
+                        {
+                            <div class="shard-fields">
+                                <label>
+                                    <span>Shard index</span>
+                                    <input type="number" min="0" max="@(Vm.AiShardCount - 1)" value="@Vm.AiShardIndex" @onchange="Vm.SetAiShardIndex" />
+                                </label>
+                                <label>
+                                    <span>Total shards</span>
+                                    <input type="number" min="1" max="32" value="@Vm.AiShardCount" @onchange="Vm.SetAiShardCount" />
+                                </label>
+                            </div>
+                        }
                         <div class="join-step">
                             <span>2</span>
                             <p>@Vm.WorkerDescription(Vm.SelectedWorkerTarget)</p>

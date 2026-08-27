@@ -211,7 +211,7 @@ public sealed class PlaceContextTools
 
         ## The artifact IS the point
         Jobs exist to generate artifacts. Emit **JSON** on stdout, and when the result is a numeric
-        series (e.g. `[{"day":"mon","total":12}, …]` or `{"mon":12,"tue":31}`) the portal and TUI
+        series (e.g. `[{"day":"mon","total":12}, …]` or `{"mon":12,"tue":31}`) the portal
         chart it automatically — in the run detail and the global Reports view.
 
         ## Files & binary artifacts (PDFs, images, CSVs)

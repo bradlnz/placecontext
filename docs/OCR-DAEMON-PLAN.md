@@ -132,7 +132,7 @@ The existing `BearerTokenHandler` already validates API tokens. The OCR daemon w
 
 ```
 deploy/ocr-daemon/
-├── setup.sh              # One-shot setup (similar to mac-shard/setup.sh)
+├── setup.sh              # One-shot setup (similar to release/local-ai installation)
 ├── config.yaml           # Daemon configuration
 ├── ocr_daemon.py         # Main daemon script
 ├── placecontext_client.py # API client for polling/results
@@ -141,7 +141,7 @@ deploy/ocr-daemon/
 
 ### 2b. `setup.sh`
 
-Following the existing `deploy/mac-shard/setup.sh` pattern:
+Following the worker-service pattern in `deploy/release/local-ai`:
 
 ```bash
 #!/usr/bin/env bash

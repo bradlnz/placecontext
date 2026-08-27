@@ -1,0 +1,29 @@
+# Shard cluster topology — pipeline parallelism over TCP.
+# PlaceContext.ClusterHost owns tokenization, ordered forwarding, sampling, and
+# streaming. Each node only runs the packaged MLX/Torch inference worker.
+#
+# Model: Qwen3.5-4B (~8 GB fp16 SafeTensors, 36 layers).
+# Example 2-shard split:
+#   Shard 0 (Mac Mini): layers 0-17 + embedding
+#   Shard 1 (Mac Pro):  layers 18-35 + LM head
+
+model: "Qwen/Qwen3.5-4B"
+total_layers: 36
+
+# The release workflow replaces this placeholder with the immutable digest of the
+# multi-architecture PlaceContext runtime built from this repository's Dockerfile.
+runtime_image: "__PLACECONTEXT_RUNTIME_IMAGE__"
+runtime_service: "http://placecontext-cluster-host:8081/api/cluster"
+
+shard_servers:
+  - endpoint: "http://100.64.0.10:8080"
+    port: 8080
+    name: "first-mac"
+    platform: "macos-arm64"
+    layers: "0-17"
+
+  - endpoint: "http://100.64.0.11:8080"
+    port: 8080
+    name: "second-mac"
+    platform: "macos-arm64"
+    layers: "18-35"

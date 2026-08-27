@@ -33,7 +33,7 @@
              Link="wwwroot\join.sh"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\..\deploy\install.sh"
+    <Content Include="..\..\deploy\release\install.sh"
              Link="wwwroot\install.sh"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />

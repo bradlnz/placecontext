@@ -6,8 +6,8 @@ namespace PlaceContext.Host;
 
 /// <summary>
 /// Jobs exist to generate artifacts — and when an artifact is JSON carrying a numeric series, the
-/// portal renders it as an inline SVG bar chart beside the raw payload (the TUI does the same in
-/// ASCII; keep the shape rules in sync with deploy/tui/artchart.go). Shapes understood:
+/// portal renders it as an inline SVG bar chart beside the raw payload (other clients can use
+/// ASCII. Shapes understood:
 /// <code>
 ///   [3, 1, 4]                                    → indexed bars
 ///   [{"day":"mon","total":12}, …]                → label field + value field per object

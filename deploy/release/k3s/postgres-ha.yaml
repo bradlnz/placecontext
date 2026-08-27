@@ -3,7 +3,7 @@
 #
 # NOTE: continuous backup / WAL archiving to an object store is intentionally NOT configured here —
 # it accumulated WAL faster than it was pruned and filled the node disk. Database backups are the
-# bounded nightly dumps in deploy/k3s/pg-backup.yaml (7-day retention). If you ever want PITR back,
+# bounded nightly dumps in deploy/release/k3s/pg-backup.yaml (7-day retention). If you ever want PITR back,
 # re-add a `backup:` + `barmanObjectStore` stanza (and a ScheduledBackup) pointed at real,
 # capacity-managed S3 — never the in-cluster MinIO PVC.
 #

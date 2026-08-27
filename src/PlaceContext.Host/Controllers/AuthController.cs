@@ -23,8 +23,8 @@ namespace PlaceContext.Host.Controllers;
 /// (email + strong password → the tenant's Owner); from then on /login verifies email + password. In
 /// Development, /locked can auto-sign the operator in with no password after setup (the team's local
 /// workflow and the Playwright/verify harness rely on it); an unconfigured workspace always goes to
-/// /setup first. Everywhere else /locked redirects to /setup or /login. The pctl TUI's HMAC-token path
-/// (/auth/portal) is untouched — it never counts towards "configured" (see IAuthService.GetOrCreateOperatorAsync),
+/// /setup first. Everywhere else /locked redirects to /setup or /login. The legacy HMAC-token path
+/// (/auth/portal) does not count towards "configured" (see IAuthService.GetOrCreateOperatorAsync),
 /// so it can keep bootstrapping a headless session without ever needing a password. /join turns an
 /// invite token into a member. Login and setup actions are anonymous; 2FA management endpoints require authentication.
 /// </summary>
@@ -61,7 +61,7 @@ public sealed class AuthController : ControllerBase
         _placeContext = placeContext;
     }
 
-    // Token sign-in (self-hosted; the pctl TUI mints the token and opens /auth/portal).
+    // Token sign-in for compatible self-hosted automation that opens /auth/portal.
     // The portal has no password login. A valid short-lived token (HMAC-signed with the shared
     // PlaceContext:Portal:SigningKey) signs the cluster operator into the cookie. In Development with no
     // key configured, sign-in is automatic so `./run.sh` + opening localhost just works with no cluster.
@@ -163,7 +163,7 @@ public sealed class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Whether first-run admin setup is still needed. Used by the install CLI/TUI to decide whether
+    /// Whether first-run admin setup is still needed. Used by headless provisioning to decide whether
     /// to prompt for the default admin account.
     /// </summary>
     [HttpGet("/auth/setup/status")]
@@ -175,7 +175,7 @@ public sealed class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Non-browser first-run setup (install CLI / Terraform). JSON only; no antiforgery (there is no
+    /// Non-browser first-run setup (installer / Terraform). JSON only; no antiforgery (there is no
     /// form session). Fails closed once any Owner with a real password exists — same as the form path.
     /// Does not set a cookie (install is headless); the operator signs in at /login afterward.
     /// </summary>

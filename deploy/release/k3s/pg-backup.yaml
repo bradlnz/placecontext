@@ -6,10 +6,10 @@
 # compressed dumps. The trade-off: restores go to the nightly snapshot, not to an arbitrary instant.
 #
 # Works against either database deployment:
-#   • placecontext-pg-rw  (CloudNativePG HA cluster, `pctl db ha`)   — preferred when present
+#   • placecontext-pg-rw  (CloudNativePG HA cluster) — preferred when present
 #   • placecontext-db     (single-node postgres.yaml)                — fallback
 #
-# Driven by pctl:  db backup-now (run once now) · db backups (list) · db restore [--dump KEY]
+# The CronJob performs scheduled backups; use kubectl to run or inspect it manually.
 apiVersion: batch/v1
 kind: CronJob
 metadata:

@@ -64,7 +64,7 @@ public class AuthServiceTests
     [Fact]
     public async Task The_machine_provisioned_operator_row_does_not_count_as_configured()
     {
-        // GetOrCreateOperatorAsync backs the HMAC portal-token path (pctl TUI / headless) and must keep
+        // GetOrCreateOperatorAsync backs the HMAC portal-token path (headless automation) and must keep
         // working unchanged — but its unusable, random password must never satisfy first-run detection.
         var (auth, _) = NewService();
 

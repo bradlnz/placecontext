@@ -4,15 +4,13 @@
 
 PlaceContext turns code and containers into reusable jobs that run across infrastructure you own. Trigger work
 on demand, on schedules, or from events; fan it out across a fleet; connect jobs into multi-step pipelines; and
-retain the resulting data, logs, traces, and artifacts. The web portal, CLI/TUI, schedules, events, and MCP
-endpoint all operate on the same durable job engine.
+retain the resulting data, logs, traces, and artifacts. The web portal, schedules, events, and MCP endpoint all
+operate on the same durable job engine.
 
 ```bash
-# Install the placecontext CLI, then open the TUI
-curl -fsSL https://get.placecontext.io/install.sh | bash
-placecontext               # install / upgrade / connect a cluster
-# one command installs CLI + assets; cluster install pulls the PlaceContext image if not cached locally
-# after cluster install → portal http://localhost:7700   ·   MCP /mcp
+# Download the verified release and create a local k3d cluster plus local AI
+curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh | bash
+# portal http://localhost:7700 · MCP /mcp
 ```
 
 ### Connect automation and AI clients
@@ -64,33 +62,27 @@ sequenceDiagram
     W-->>M: exit codes + artifacts + logs
     M->>S: store HTML / charts / CSV outputs
     M-->>A: run status + artifacts (and job.completed fires triggers)
-    Note over M: portal bell + TUI show progress live
+    Note over M: portal shows progress live
 ```
 
-The same queue serves the portal's Run button, cron/event triggers, and the TUI — runs are durable
+The same queue serves the portal's Run button, cron/event triggers, and MCP clients — runs are durable
 rows claimed with `FOR UPDATE SKIP LOCKED`, so any replica can execute them and nothing is lost on
 restart.
 
 ## The fleet
 
-Everything deploys with **`pctl`** (bash) and its full-screen **TUI dashboard** (Go/Bubble Tea):
+The release installer creates a real [k3s](https://k3s.io) cluster through
+[k3d](https://k3d.io), starts the platform-native local-AI worker, and deploys the Host plus the
+.NET shard coordinator. From the portal's Cluster tab, each additional node has an explicit role:
 
-- **Dev**: a real 1-server + 2-agent [k3s](https://k3s.io) cluster via [k3d](https://k3d.io) on one
-  machine — `./deploy/pctl dev up`.
-- **Production**: genuine multi-machine k3s. `sudo ./deploy/pctl server up` on the master prints a
-  join code; run it on any Linux box — nodes connect over **Tailscale** (or self-hosted
-  [Headscale](https://headscale.net)), so a fleet can span homes, offices, and clouds with zero
-  port-forwarding. A **Mac laptop master** (k3d) can also mint join codes for remote Linux workers
-  when the API is published on `:6443` (default for new installs).
-- **Air-gap friendly**: images ship as tarballs inside cross-arch packages (`pctl package`) — no
-  registry pulls on the nodes.
-- **Jobs run on your machines**: job pods prefer worker nodes, so a small cloud master (e.g. a
-  DigitalOcean droplet) serves the portal while execution lands on the workers you joined.
-  `pctl jobs placement require` makes that a hard rule — the portal server never runs jobs.
-- Postgres and MinIO run in-cluster; the portal, MCP endpoint, and job scheduler are one
-  process, scaled horizontally.
+- **Standard worker** runs regular PlaceContext jobs and workload shards.
+- **AI shard** joins the fleet and runs one ordered MLX/Torch model layer slice.
 
-See [`deploy/README.md`](deploy/README.md) for the full pctl reference.
+The generated command handles the k3s join and, for an AI shard, downloads the same verified GitHub
+release and installs the worker service. Postgres and MinIO run in-cluster; the portal, MCP endpoint,
+and job scheduler share one Host process.
+
+See [`deploy/release/README.md`](deploy/release/README.md) for installer and shard options.
 
 ## Architecture
 
@@ -106,7 +98,7 @@ src/
                                  Razor views are MVVM-only: scoped ViewModels own state,
                                  commands, validation, navigation, service access, and JS interop
 deploy/
-  pctl · tui/ · k3s/           → cluster lifecycle CLI, Go TUI, Kubernetes manifests
+  release/                    → release installer, k3s manifests, local-AI runtime
 ```
 
 ```mermaid
@@ -114,7 +106,6 @@ flowchart LR
     subgraph clients [Clients]
         CC[Claude Code / MCP clients]
         B[Browser — portal]
-        T[pctl TUI]
     end
     subgraph cluster [k3s cluster — your machines]
         H[PlaceContext Host<br/>MCP + portal + scheduler]
@@ -124,7 +115,6 @@ flowchart LR
     end
     CC -- "MCP over HTTP + OAuth" --> H
     B --> H
-    T -- kubectl/psql --> cluster
     H --> P
     H --> O
     H -- Kubernetes API --> J
@@ -133,21 +123,19 @@ flowchart LR
 ## Developing
 
 ```bash
-./setup-tui.sh                      # interactive install wizard (choose option 1 for full local setup)
-                                    # pulls image from registry by default; set LOCAL_IMAGE_ONLY=1 for air-gapped/offline use
-./run.sh                            # first run: prerequisites, database, build, migrations, app
+./setup.sh                          # install source-development prerequisites
+./run.sh                            # database, build, migrations, app
 ./run.sh --fresh                    # destructive: recreate the local database, then start
 ./start.sh                          # later runs: build and start the prepared app
 ./start.sh --no-build --port 7710   # fast restart on a different port
 dotnet build && dotnet test        # all suites green; architecture tests enforce the onion
 dotnet run --project src/PlaceContext.Host   # portal http://localhost:7700, MCP at /mcp
-make -C deploy/tui                 # build the TUI binary
 ```
 
 On a database without a human owner account, opening the portal redirects to the first-run setup.
 That flow creates the default workspace owner and signs them in; no shared default password is used.
 
-You'll need the .NET 10 SDK, Go (for the TUI), and a PostgreSQL (the dev cluster provides one, or:
+You'll need the .NET 10 SDK and PostgreSQL (the release cluster provides one, or:
 `docker run -d -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=placecontext -p 5433:5432 postgres:16`).
 EF migrations apply automatically on startup.
 
@@ -163,9 +151,8 @@ operator-facing documentation shipped with each build.
 
 ## Upgrading
 
-- From a git checkout: `./deploy/pctl update --deploy` (pulls, rebuilds, rolls the cluster).
-- From a packaged install: re-run the one-click installer — it downloads the latest platform ZIP and
-  detects the existing cluster and rolls the new image in.
+- Re-run the installer to download and verify the newest GitHub release, then roll the deployment.
+- Pass `--version v1.2.3` to install or retain a specific release.
 
 ## License
 

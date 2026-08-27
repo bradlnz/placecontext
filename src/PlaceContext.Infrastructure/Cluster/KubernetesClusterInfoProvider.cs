@@ -16,6 +16,7 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
     public const string ClusterConfigMap = "placecontext-cluster";
     public const string JoinSecret = "placecontext-cluster-join";
     public const string MasterAnnotation = "placecontext.io/designated-master";
+    public const string NodeTypeLabel = "placecontext.io/node-type";
     private const string TailscaleIpAnnotation = "placecontext.io/tailscale-ip";
     private const string LegacyTailscaleIpAnnotation = "placecontext.ai/tailscale-ip";
     private const string MasterKey = "designatedMaster";
@@ -175,9 +176,8 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
                 ? $"""
                   On a new Linux machine (Mac masters hand this code to Linux workers):
                     1. Install Tailscale and join the same tailnet as the master ({master?.Name ?? "master"}).
-                    2. curl -fsSL https://get.placecontext.io/install.sh | bash
-                    3. placecontext connect --code {code}
-                       (or: sudo placecontext  → Connect, paste the code)
+                    2. curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/join.sh | \
+                         bash -s -- --code {code}
 
                   Server API (over Tailscale): {serverUrl}
                   The joining host must reach the master on the mesh; without an embedded auth key,
@@ -185,8 +185,8 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
                   """
                 : $"""
                   On a new Linux machine:
-                    curl -fsSL https://get.placecontext.io/install.sh | bash
-                    placecontext connect --code {code}
+                    curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/join.sh | \
+                      bash -s -- --code {code}
 
                   The code includes a Tailscale auth key and the master mesh address ({serverUrl}),
                   so a fresh host can join the tailnet and the k3s fleet in one step.
@@ -231,7 +231,9 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
             .Where(r => r.Length > 0)
             .ToList() ?? new List<string>();
         var controlPlane = IsControlPlane(node);
-        if (roles.Count == 0) roles.Add(controlPlane ? "control-plane" : "worker");
+        var nodeType = ReadNodeType(labels, controlPlane);
+        if (roles.Count == 0)
+            roles.Add(nodeType == ClusterNodeType.AiShard ? "ai-shard" : controlPlane ? "control-plane" : "worker");
 
         var ready = node.Status?.Conditions?.Any(c => c.Type == "Ready" && c.Status == "True") ?? false;
         var info = node.Status?.NodeInfo;
@@ -262,7 +264,21 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
             IsSelf: selfNodeName is not null && string.Equals(name, selfNodeName, StringComparison.Ordinal),
             IsControlPlane: controlPlane,
             IsDesignatedMaster: isDesignated,
-            TailscaleIp: tsIp);
+            TailscaleIp: tsIp,
+            NodeType: nodeType);
+    }
+
+    private static ClusterNodeType ReadNodeType(IDictionary<string, string>? labels, bool controlPlane)
+    {
+        if (controlPlane)
+            return ClusterNodeType.ControlPlane;
+        if (labels is not null
+            && labels.TryGetValue(NodeTypeLabel, out var value)
+            && string.Equals(value, "ai-shard", StringComparison.OrdinalIgnoreCase))
+        {
+            return ClusterNodeType.AiShard;
+        }
+        return ClusterNodeType.StandardWorker;
     }
 
     private static bool IsControlPlane(V1Node node)

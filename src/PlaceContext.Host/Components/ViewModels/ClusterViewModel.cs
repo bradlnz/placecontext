@@ -7,8 +7,8 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public enum WorkerTarget
 {
-    Server,
-    Mac
+    StandardWorker,
+    AiShard
 }
 
 public sealed class ClusterViewModel(
@@ -26,13 +26,14 @@ public sealed class ClusterViewModel(
     public IReadOnlyList<ClusterNode>? Nodes { get; private set; }
     public ClusterInfo? Cluster { get; private set; }
     public bool ShowAddWorkerOptions { get; private set; }
-    public WorkerTarget SelectedWorkerTarget { get; private set; } = WorkerTarget.Server;
+    public WorkerTarget SelectedWorkerTarget { get; private set; } = WorkerTarget.StandardWorker;
+    public int AiShardIndex { get; private set; }
+    public int AiShardCount { get; private set; } = 2;
     public bool Copied { get; private set; }
     public double ReadyPercent =>
         Nodes is { Count: > 0 } ? Nodes.Count(node => node.Ready) * 100d / Nodes.Count : 0;
     public string LastSyncLabel => $"Updated {Presentation.Time(DateTimeOffset.Now)}";
-    private string? _serverJoinCommand;
-    private string? _macJoinCommand;
+    private string? _joinToken;
 
     public async Task InitializeAsync()
     {
@@ -68,18 +69,17 @@ public sealed class ClusterViewModel(
     {
         Busy = true;
         Message = null;
-        _serverJoinCommand = null;
-        _macJoinCommand = null;
-        SelectedWorkerTarget = WorkerTarget.Server;
+        _joinToken = null;
+        SelectedWorkerTarget = WorkerTarget.StandardWorker;
+        AiShardIndex = 0;
+        AiShardCount = 2;
         Copied = false;
         ShowAddWorkerOptions = false;
         NotifyStateChanged();
         try
         {
             var token = await service.CreateAgentJoinTokenAsync();
-            var command = BuildJoinCommand(navigation.BaseUri, token);
-            _serverJoinCommand = command;
-            _macJoinCommand = command;
+            _joinToken = token;
             ShowAddWorkerOptions = true;
             MessageOk = true;
         }
@@ -106,10 +106,9 @@ public sealed class ClusterViewModel(
 
     public void DismissJoin()
     {
-        _serverJoinCommand = null;
-        _macJoinCommand = null;
+        _joinToken = null;
         ShowAddWorkerOptions = false;
-        SelectedWorkerTarget = WorkerTarget.Server;
+        SelectedWorkerTarget = WorkerTarget.StandardWorker;
         Copied = false;
         NotifyStateChanged();
     }
@@ -124,24 +123,51 @@ public sealed class ClusterViewModel(
     public string? WorkerDescription(WorkerTarget target) =>
         target switch
         {
-            WorkerTarget.Server => "Join a Linux/server machine with k3s and Docker.",
-            WorkerTarget.Mac => "Join a Mac workstation via Docker worker mode.",
+            WorkerTarget.StandardWorker => "Join a machine that runs normal PlaceContext jobs.",
+            WorkerTarget.AiShard => "Join the node, then install its ordered MLX/Torch model shard.",
             _ => "Join a worker node."
         };
 
-    private string? ActiveJoinCommand => SelectedWorkerTarget switch
+    public void SetAiShardIndex(ChangeEventArgs args)
     {
-        WorkerTarget.Server => _serverJoinCommand,
-        WorkerTarget.Mac => _macJoinCommand,
-        _ => _serverJoinCommand
-    };
+        if (int.TryParse(args.Value?.ToString(), out var index))
+            AiShardIndex = Math.Clamp(index, 0, AiShardCount - 1);
+        Copied = false;
+        NotifyStateChanged();
+    }
 
-    public string? JoinCommand => ActiveJoinCommand;
+    public void SetAiShardCount(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var count))
+            AiShardCount = Math.Clamp(count, 1, 32);
+        AiShardIndex = Math.Min(AiShardIndex, AiShardCount - 1);
+        Copied = false;
+        NotifyStateChanged();
+    }
+
+    public string? JoinCommand => _joinToken is null
+        ? null
+        : SelectedWorkerTarget == WorkerTarget.AiShard
+            ? BuildAiShardJoinCommand(navigation.BaseUri, _joinToken, AiShardIndex, AiShardCount)
+            : BuildJoinCommand(navigation.BaseUri, _joinToken);
 
     public static string BuildJoinCommand(string baseUri, string token)
     {
         var host = baseUri.TrimEnd('/');
-        return $"curl -fsSL {host}/join.sh | bash -s -- --portal {host} --token {token}";
+        return $"curl -fsSL {host}/join.sh | bash -s -- --portal {host} --token {token} --node-type standard-worker";
+    }
+
+    public static string BuildAiShardJoinCommand(
+        string baseUri,
+        string token,
+        int shardIndex,
+        int totalShards)
+    {
+        var host = baseUri.TrimEnd('/');
+        var join = $"curl -fsSL {host}/join.sh | bash -s -- --portal {host} --token {token} --node-type ai-shard";
+        var worker = "curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh"
+            + $" | bash -s -- --ai-shard --shard-index {shardIndex} --total-shards {totalShards}";
+        return $"{join} && {worker}";
     }
 
     public static string PlatformLabel(ClusterNode node) =>

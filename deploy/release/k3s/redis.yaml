@@ -38,8 +38,6 @@ spec:
       - name: data
         persistentVolumeClaim:
           claimName: redis-data
-      nodeSelector:
-        kubernetes.io/hostname: feasiblity-node-1
 ---
 apiVersion: v1
 kind: Service

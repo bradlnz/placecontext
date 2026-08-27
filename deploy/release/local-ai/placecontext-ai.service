@@ -1,0 +1,14 @@
+[Unit]
+Description=PlaceContext local AI inference worker
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=__PYTHON__ __WORKER__ --model __MODEL__ --port 8080
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=SHARD_SPEC=__SHARD_SPEC__
+
+[Install]
+WantedBy=default.target

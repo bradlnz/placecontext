@@ -4,7 +4,7 @@ namespace PlaceContext.Domain.Entities;
 
 /// <summary>
 /// A pointer to a post-job output stored in the object store (MinIO) for a given <see cref="JobRun"/> —
-/// an HTML report, chart, CSV, or a raw output file. Surfaced as an openable link in the portal/TUI.
+/// an HTML report, chart, CSV, or a raw output file. Surfaced as an openable link in the portal.
 /// The content lives in the object store; this records where and what it is.
 /// </summary>
 public sealed class RunArtifactLink

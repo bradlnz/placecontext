@@ -6,11 +6,11 @@ using Microsoft.IdentityModel.Tokens;
 namespace PlaceContext.Host.Auth;
 
 /// <summary>
-/// Validates the short-lived, HMAC-signed sign-in token the pctl TUI hands to the portal. The TUI mints
-/// the token from the shared <c>PlaceContext:Portal:SigningKey</c> (a cluster secret it reads via
+/// Validates the short-lived, HMAC-signed sign-in token compatible automation hands to the portal. The client
+/// mints the token from the shared <c>PlaceContext:Portal:SigningKey</c> (a cluster secret it reads via
 /// kubectl) and opens <c>/auth/portal?token=…</c>; the host re-derives the HMAC and, on a match within
 /// the expiry window, signs the operator into the cookie. Symmetric (HMAC-SHA256) on purpose: the OAuth
-/// RSA key is regenerated per process and never leaves the host, so a Go client can't sign with it.
+/// RSA key is regenerated per process and never leaves the host, so an external client cannot sign with it.
 ///
 /// Token format: <c>{expUnixSeconds}.{nonceHex}.{base64url(HMACSHA256(key, "{exp}.{nonce}"))}</c>.
 /// </summary>

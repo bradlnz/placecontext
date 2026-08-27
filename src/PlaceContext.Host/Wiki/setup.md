@@ -2,54 +2,31 @@
 
 *Install PlaceContext, configure a durable instance, and verify it before adding projects.*
 
-## Choose an installation
+## Install locally
 
-Use the Docker mode for a laptop, evaluation, or a single-machine workspace. Use the service mode
-for an always-on server or the first node of a fleet.
-
-| Mode | Command | Best for |
-|---|---|---|
-| Guided | `placecontext` | Choosing interactively |
-| Docker | `placecontext install --docker` | Local and single-machine use |
-| Service | `placecontext install --service` | A Linux server or fleet master |
-| Source checkout | `./run.sh` | Development and contributing |
-
-Install the client and start the guided installer:
+Docker, Python 3.11+, curl, and OpenSSL are required. The release installer downloads its own
+`k3d` and `kubectl`, creates the local cluster and secrets, starts local AI, and deploys the portal:
 
 ```bash
-curl -fsSL https://get.placecontext.io/install.sh | bash
-placecontext
+curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh | bash
 ```
 
-The installer prefers an included `lib/placecontext-local.tar` image for offline packages and pulls
-the configured release image otherwise. PostgreSQL and MinIO are installed with the managed cluster.
-The portal is normally available at `http://localhost:7700` until a reverse proxy is configured.
+PostgreSQL and MinIO are installed with the managed cluster. The portal is available at
+`http://localhost:7700` until a reverse proxy is configured.
 
-For a source checkout, install the .NET 10 SDK, Docker, PostgreSQL, and Go if you plan to build the
-TUI. Then run:
+For a source checkout, install the .NET 10 SDK, Docker, and PostgreSQL, then run:
 
 ```bash
-./setup-tui.sh
+./setup.sh
 ./run.sh
 ```
 
 ## First boot
 
-1. Run `placecontext doctor` and resolve failed prerequisite or connectivity checks.
-2. Open the URL printed by `placecontext url`.
-3. If there is no owner account, complete the first-run setup form. There is no default password.
-4. Create or onboard a project, then run a small job and confirm its logs and artifact are retained.
-5. Export a configuration backup from **Settings → Backup** and store it outside the cluster.
-
-Useful day-two commands are:
-
-```bash
-placecontext status
-placecontext logs -f
-placecontext url
-placecontext doctor
-placecontext upgrade
-```
+1. Open `http://localhost:7700`.
+2. If there is no owner account, complete the first-run setup form. There is no default password.
+3. Create or onboard a project, then run a small job and confirm its logs and artifact are retained.
+4. Export a configuration backup from **Settings → Backup** and store it outside the cluster.
 
 ## Production URL and reverse proxy
 
@@ -73,8 +50,8 @@ PlaceContext uses standard .NET configuration. A setting such as
 `PlaceContext__OpenSearch__Endpoint`. Environment variables override `appsettings.json`.
 
 Do not commit a populated `.env`, Kubernetes Secret, private key, password, or project Vault export.
-For managed cluster installs, let `pctl` create deployment secrets and use an environment-specific
-overlay for optional settings instead of editing the shared manifest with real values.
+Let the release installer create deployment secrets and use an environment-specific overlay for
+optional settings instead of editing the shared manifest with real values.
 
 Use **Settings → Connections** for a project-specific database or OpenSearch endpoint. Those
 credentials are encrypted in that project's Vault. Use workspace environment settings only when all
@@ -128,7 +105,7 @@ self-service, so signed-in users can manage their own tokens.
 
 Before opening the instance to other users, verify:
 
-- `placecontext doctor` and `placecontext status` are healthy;
+- the Cluster page reports the expected nodes as ready;
 - the public HTTPS URL produces the expected OAuth issuer metadata at
   `/.well-known/oauth-authorization-server`;
 - a test job can write logs and an artifact;

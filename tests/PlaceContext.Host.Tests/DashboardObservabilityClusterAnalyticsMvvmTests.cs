@@ -72,9 +72,22 @@ public sealed class DashboardObservabilityClusterAnalyticsMvvmTests
     {
         Assert.Equal(
             "curl -fsSL https://portal.example/join.sh | bash -s -- --portal "
-                + "https://portal.example --token token",
+                + "https://portal.example --token token --node-type standard-worker",
             ClusterViewModel.BuildJoinCommand("https://portal.example/", "token")
         );
+    }
+
+    [Fact]
+    public void Cluster_formats_ai_shard_join_and_runtime_command()
+    {
+        var command = ClusterViewModel.BuildAiShardJoinCommand(
+            "https://portal.example/",
+            "token",
+            shardIndex: 1,
+            totalShards: 3);
+
+        Assert.Contains("--node-type ai-shard", command, StringComparison.Ordinal);
+        Assert.Contains("--ai-shard --shard-index 1 --total-shards 3", command, StringComparison.Ordinal);
     }
 
     [Fact]

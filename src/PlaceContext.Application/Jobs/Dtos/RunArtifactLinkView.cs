@@ -1,6 +1,6 @@
 namespace PlaceContext.Application.Features;
 
-/// <summary>A post-job output stored for a run, surfaced as an openable link in the portal/TUI.</summary>
+/// <summary>A post-job output stored for a run, surfaced as an openable link in the portal.</summary>
 public sealed record RunArtifactLinkView(
     Guid Id,
     Guid RunId,

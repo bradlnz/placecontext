@@ -12,10 +12,10 @@ changes are all welcome.
 
 ## Development setup
 
-Install the .NET 10 SDK, Go, Docker, and PostgreSQL, then run:
+Install the .NET 10 SDK, Docker, and PostgreSQL, then run:
 
 ```bash
-./setup-tui.sh
+./setup.sh
 ./run.sh
 ```
 
@@ -28,7 +28,6 @@ Run the checks relevant to your change before opening a pull request:
 ```bash
 dotnet build PlaceContext.slnx
 dotnet test PlaceContext.slnx
-(cd deploy/tui && go test ./...)
 ```
 
 Add regression coverage for behavior changes. Update the embedded wiki under

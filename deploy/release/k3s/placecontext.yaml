@@ -1,5 +1,5 @@
 # PlaceContext Host deployment — portal + MCP + trigger scheduler.
-# __IMAGE__ is substituted by the `pctl` CLI with the container image ref.
+# __IMAGE__ is substituted by the release workflow with the immutable container image ref.
 # The deployment uses the `placecontext` namespace for all namespaced resources.
 # (Subscriptions/billing are handled by a separate web portal — no activation key here.)
 #
@@ -179,13 +179,13 @@ spec:
           env:
             - name: ASPNETCORE_URLS
               value: "http://+:7700"
-            # Connection string is built by pctl into placecontext-db (password never committed).
+            # Connection string is generated into placecontext-db (password never committed).
             - name: PlaceContext__ConnectionString
               valueFrom:
                 secretKeyRef:
                   name: placecontext-db
                   key: connection-string
-            # HMAC key the pctl TUI uses to mint short-lived portal sign-in tokens (see deploy/pctl).
+            # HMAC key used to mint short-lived portal sign-in tokens.
             - name: PlaceContext__Portal__SigningKey
               valueFrom:
                 secretKeyRef:
@@ -208,7 +208,7 @@ spec:
             # No in-cluster LLM: the jobs pipeline is fully deterministic.
             - name: PlaceContext__Llm__Provider
               value: "none"
-            # In-cluster MinIO stores post-job artifacts. pctl generates this secret at deploy time.
+            # In-cluster MinIO stores post-job artifacts. The installer generates this secret.
             - name: PlaceContext__ObjectStore__Endpoint
               value: "http://minio:9000"
             - name: PlaceContext__ObjectStore__AccessKey
@@ -245,11 +245,13 @@ spec:
             # Job placement: job pods always *prefer* worker (agent) nodes, so a cloud portal
             # server stays responsive while execution happens on the machines you joined over
             # Tailscale. Set "true" to *require* workers — jobs then never run on the control
-            # plane and queue until a worker is online (pctl jobs placement require|prefer).
+            # plane and queue until a standard worker is online.
             - name: PlaceContext__WorkloadRunner__RequireWorkerNodes
               value: "false"
             # Configure PlaceContext__ClusterChat__* or PlaceContext__Voyage__* only when an
             # operator has provisioned the corresponding local shards or external provider.
+            - name: PlaceContext__ClusterChat__Endpoint
+              value: "http://placecontext-cluster-host:8081/api/cluster"
             # Kept for reference if Voyage is unset and cluster embeddings are used instead.
             - name: PlaceContext__ClusterChat__EmbeddingDimensions
               value: "2560"

@@ -30,7 +30,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     // Arbitrary fixed key identifying the schedule-scan advisory lock.
     private const long ScanLockKey = 0x504C4143_4378_7363L; // "PLAC...sc"
     private static readonly TimeSpan ScanInterval = TimeSpan.FromSeconds(20);
-    // Queue pickup is the first hop of every TUI/trigger run — a short drain tick keeps queued runs
+    // Queue pickup is the first hop of every portal/trigger run — a short drain tick keeps queued runs
     // from idling; the claim query is a cheap indexed SKIP LOCKED select.
     // Keep a small interval to prevent startup/rollout stampede when multiple replicas start.
     private static readonly TimeSpan DrainInterval = TimeSpan.FromSeconds(3);
@@ -207,7 +207,7 @@ public sealed class TriggerSchedulerService : BackgroundService
                 await using var scope = _scopes.CreateAsyncScope();
 
                 // Surface this run in the notifications bell (Track/Mark* — the external-worker
-                // shape, like the analytics sweep) so trigger-fired and TUI-queued runs update
+                // shape, like the analytics sweep) so trigger-fired and portal-queued runs update
                 // the pane live, exactly like a portal-started run. The run id is pre-allocated
                 // and used as the op's correlation key, so the run-status watcher converges on
                 // this entry (and flips it terminal the moment the row commits) instead of

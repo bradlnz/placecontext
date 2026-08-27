@@ -211,7 +211,7 @@ builder.Services
         o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         o.Cookie.SameSite = SameSiteMode.Lax;
         // No password login: an unauthenticated request is sent to /locked, which tells the operator to
-        // open the portal from the pctl TUI (the TUI mints a token and signs them in via /auth/portal).
+        // open the portal from compatible automation that signs in via /auth/portal.
         o.LoginPath = "/locked";
         o.LogoutPath = "/auth/logout";
         o.ExpireTimeSpan = TimeSpan.FromDays(14);
@@ -438,7 +438,7 @@ if (app.Configuration.GetValue("PlaceContext:EncryptionAtRest:BootstrapOnStartup
 else
     app.Logger.LogInformation("Encryption-at-rest startup bootstrap skipped (PlaceContext:EncryptionAtRest:BootstrapOnStartup is not true).");
 
-// Subscriptions/billing are handled by a separate web portal (the TUI sends users there to pay), so the
+// Subscriptions/billing are handled by a separate web portal, so the
 // product is no longer gated by an activation key.
 
 app.UseResponseCompression();

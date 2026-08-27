@@ -8,7 +8,7 @@
 @keyframes spin { to { transform:rotate(360deg) } }
 .message-banner { margin-bottom:15px; padding:10px 13px; border:1px solid var(--good); border-radius:9px; background:var(--good-bg); color:var(--good); font-size:11.5px }
 .message-banner.err { border-color:var(--bad); background:var(--bad-bg); color:var(--bad) }
-.summary-strip { display:grid; grid-template-columns:repeat(4, minmax(80px, 120px)) 1fr; align-items:center; gap:8px; margin:0 0 16px }
+.summary-strip { display:grid; grid-template-columns:repeat(5, minmax(80px, 120px)) 1fr; align-items:center; gap:8px; margin:0 0 16px }
 
 .summary-count {
     display:flex;
@@ -37,6 +37,7 @@
 .node-top { display:flex; align-items:center; gap:10px }
 .node-avatar { position:relative; width:38px; height:38px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:10px; background:var(--card-2); color:var(--text-2); font-size:13px }
 .master-avatar { background:var(--brand-bg); color:var(--brand-2) }
+.ai-avatar { background:var(--warn-bg); color:var(--warn) }
 .status-pin { position:absolute; right:-2px; bottom:-2px; width:9px; height:9px; border:2px solid var(--card); border-radius:50% }
 .status-pin.online { background:var(--good) }
 .status-pin.offline { background:var(--bad) }
@@ -51,6 +52,7 @@
 .role-row { min-height:24px; display:flex; flex-wrap:wrap; gap:4px; margin:12px 0 }
 .role-chip { padding:3px 6px; border:1px solid var(--border); border-radius:5px; background:var(--card-2); color:var(--text-3); font-size:8.5px }
 .master-chip { border-color:color-mix(in srgb, var(--brand-2) 32%, var(--border)); background:var(--brand-bg); color:var(--brand-2); font-weight:700 }
+.ai-chip { border-color:color-mix(in srgb, var(--warn) 35%, var(--border)); background:var(--warn-bg); color:var(--warn); font-weight:700 }
 .resource-row { display:flex; align-items:stretch; padding:10px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border) }
 .resource { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px }
 .resource span { color:var(--text-3); font-size:8px; font-weight:700; text-transform:uppercase; letter-spacing:.06em }
@@ -114,6 +116,10 @@
 }
 
 .worker-target-btn.selected strong { color:var(--brand-2) }
+
+.shard-fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:0 0 14px }
+.shard-fields label { display:grid; gap:5px; color:var(--text-3); font-size:9px; font-weight:700 }
+.shard-fields input { width:100%; box-sizing:border-box; padding:8px 9px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text-1); font:11px var(--font-mono) }
 
 .security-note { display:flex; align-items:center; gap:7px; padding:9px 10px; border-radius:8px; background:var(--warn-bg); color:var(--warn); font-size:9.5px }
 

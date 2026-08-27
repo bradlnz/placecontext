@@ -428,6 +428,10 @@ class ChatRequest(BaseModel):
     max_tokens: Optional[int] = 2048
 
 
+class TokenizeRequest(BaseModel):
+    messages: List[ChatMessage]
+
+
 class ForwardRequest(BaseModel):
     """Pipeline mode: hidden states in, updated states out.
 
@@ -451,7 +455,7 @@ async def lifespan(app: FastAPI):
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=os.environ.get("MODEL_PATH", "Qwen/Qwen3.5-4B"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8080")))
-    parser.add_argument("--shard", default=None, help="Shard spec: index/total, e.g. 0/2")
+    parser.add_argument("--shard", default=os.environ.get("SHARD_SPEC"), help="Shard spec: index/total, e.g. 0/2")
     args = parser.parse_args()
 
     # Load full model first, then determine layer count
@@ -610,6 +614,21 @@ async def chat_stream(req: ChatRequest):
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(sse(), media_type="text/event-stream")
+
+
+@app.post("/v1/tokenize")
+async def tokenize(req: TokenizeRequest):
+    """Render the model's chat template and return exact IDs for the .NET coordinator."""
+    if tokenizer is None:
+        raise HTTPException(503, "Tokenizer not loaded")
+
+    messages = [{"role": m.role, "content": m.content} for m in req.messages]
+    prompt = render_chat_prompt(messages)
+    token_ids = tokenizer.encode(prompt, add_special_tokens=False)
+    return {
+        "token_ids": token_ids,
+        "eos_token_id": tokenizer.eos_token_id,
+    }
 
 
 @app.post("/v1/forward")
@@ -793,21 +812,6 @@ async def forward(req: ForwardRequest):
     else:
         raise HTTPException(500, f"Unknown backend: {backend}")
 
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default=os.environ.get("MODEL_PATH", "Qwen/Qwen3.5-4B"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8080")))
-    parser.add_argument("--shard", default=None, help="Shard spec: index/total, e.g. 0/2")
-    args, _ = parser.parse_known_args()
-    uvicorn.run(app, host="0.0.0.0", port=args.port)
-
-
-# ---------------------------------------------------------------------------
-# Decode endpoint (for pipeline coordinator)
-# ---------------------------------------------------------------------------
-
 class DecodeRequest(BaseModel):
     token_id: int
 
@@ -819,3 +823,13 @@ async def decode_token(req: DecodeRequest):
         raise HTTPException(503, "Tokenizer not loaded")
     text = tokenizer.decode([req.token_id], skip_special_tokens=True)
     return {"text": text, "token_id": req.token_id}
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", default=os.environ.get("MODEL_PATH", "Qwen/Qwen3.5-4B"))
+    parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8080")))
+    parser.add_argument("--shard", default=os.environ.get("SHARD_SPEC"), help="Shard spec: index/total, e.g. 0/2")
+    args, _ = parser.parse_known_args()
+    uvicorn.run(app, host="0.0.0.0", port=args.port)

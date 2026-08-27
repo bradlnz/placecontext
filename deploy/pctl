@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# Developer/internal shim — full control plane lives in tools/pctl (not shipped to clients).
-# Clients use: placecontext  (install | upgrade | connect)
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-exec "$ROOT/tools/pctl" "$@"

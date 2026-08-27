@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>io.placecontext.ai-worker</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PYTHON__</string><string>__WORKER__</string>
+    <string>--model</string><string>__MODEL__</string>
+    <string>--port</string><string>8080</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+    <key>SHARD_SPEC</key><string>__SHARD_SPEC__</string>
+  </dict>
+  <key>StandardOutPath</key><string>__LOG_DIR__/ai-worker.log</string>
+  <key>StandardErrorPath</key><string>__LOG_DIR__/ai-worker.log</string>
+</dict>
+</plist>
