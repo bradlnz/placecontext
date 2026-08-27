@@ -36,14 +36,15 @@ public sealed class EfJobTriggerRepository : IJobTriggerRepository
 
     public async Task<JobTrigger?> GetByIdAsync(Guid triggerId, CancellationToken ct = default)
     {
-        var row = await _db.JobTriggers.AsNoTracking().FirstOrDefaultAsync(t => t.Id == triggerId, ct);
+        var row = await _db.JobTriggers.AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == triggerId && (t.Kind == "Schedule" || t.Kind == "Event"), ct);
         return row is null ? null : ToDomain(row);
     }
 
     public async Task<IReadOnlyList<JobTrigger>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
     {
         var rows = await _db.JobTriggers.AsNoTracking()
-            .Where(t => t.ProjectId == projectId)
+            .Where(t => t.ProjectId == projectId && (t.Kind == "Schedule" || t.Kind == "Event"))
             .OrderBy(t => t.CreatedAt)
             .ToListAsync(ct);
         return rows.Select(ToDomain).ToList();
@@ -52,7 +53,7 @@ public sealed class EfJobTriggerRepository : IJobTriggerRepository
     public async Task<IReadOnlyList<JobTrigger>> ListForJobAsync(Guid jobId, CancellationToken ct = default)
     {
         var rows = await _db.JobTriggers.AsNoTracking()
-            .Where(t => t.JobId == jobId)
+            .Where(t => t.JobId == jobId && (t.Kind == "Schedule" || t.Kind == "Event"))
             .OrderBy(t => t.CreatedAt)
             .ToListAsync(ct);
         return rows.Select(ToDomain).ToList();
@@ -61,7 +62,7 @@ public sealed class EfJobTriggerRepository : IJobTriggerRepository
     public async Task<IReadOnlyList<JobTrigger>> ListDueSchedulesAsync(DateTimeOffset now, CancellationToken ct = default)
     {
         var rows = await _db.JobTriggers.AsNoTracking()
-            .Where(t => t.Enabled && (t.Kind == "Schedule" || t.Kind == "Launchpad" || t.Kind == "Command")
+            .Where(t => t.Enabled && t.Kind == "Schedule"
                         && t.NextRunAt != null && t.NextRunAt <= now)
             .ToListAsync(ct);
         return rows.Select(ToDomain).ToList();
@@ -86,10 +87,6 @@ public sealed class EfJobTriggerRepository : IJobTriggerRepository
         Enabled = t.Enabled,
         CronExpression = t.CronExpression,
         EventName = t.EventName,
-        ChainId = t.ChainId,
-        SourceTable = t.SourceTable,
-        Prompt = t.Prompt,
-        CommandId = t.CommandId,
         NextRunAt = t.NextRunAt,
         LastFiredAt = t.LastFiredAt,
         CreatedAt = t.CreatedAt,
@@ -99,6 +96,5 @@ public sealed class EfJobTriggerRepository : IJobTriggerRepository
     private static JobTrigger ToDomain(JobTriggerRow r) => JobTrigger.Rehydrate(
         r.Id, r.ProjectId, r.JobId, r.Name,
         Enum.Parse<TriggerKind>(r.Kind), r.Enabled,
-        r.CronExpression, r.EventName, r.ChainId, r.SourceTable, r.Prompt,
-        r.CommandId, r.NextRunAt, r.LastFiredAt, r.CreatedAt, r.UpdatedAt);
+        r.CronExpression, r.EventName, r.NextRunAt, r.LastFiredAt, r.CreatedAt, r.UpdatedAt);
 }

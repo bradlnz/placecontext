@@ -40,7 +40,7 @@ automatic refresh). No API keys to paste.
   OpenTelemetry traces, and operational status across the workspace.
 - **Governed access** — project and tenant boundaries, role-based permissions, OAuth 2.1 + PKCE, encrypted
   secrets, and sandboxed jobs with network egress disabled by default.
-- **Agent and automation integration** — durable project context and MCP tools let AI and automation clients use
+- **MCP and automation integration** — durable project context and MCP tools let AI and automation clients use
   the same governed data, jobs, pipelines, and artifacts as human operators.
 
 ## How a job runs across your fleet

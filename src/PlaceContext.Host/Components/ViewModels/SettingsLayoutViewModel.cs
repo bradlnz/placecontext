@@ -10,7 +10,6 @@ public sealed class SettingsLayoutViewModel : PageViewModel
     [
         new("Branding", "branding"),
         new("Menu", "menu"),
-        new("Agents", "agents"),
         new("Artifacts", "artifacts"),
         new("Communications", "communications"),
         new("MCP servers", "mcp"),

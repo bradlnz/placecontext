@@ -58,8 +58,6 @@ public sealed class UpdateTriggerHandler : ICommandHandler<UpdateTriggerCommand,
             if (enabled)
             {
                 var next = trigger.Kind is PlaceContext.Domain.ValueObjects.TriggerKind.Schedule
-                           or PlaceContext.Domain.ValueObjects.TriggerKind.Launchpad
-                           or PlaceContext.Domain.ValueObjects.TriggerKind.Command
                     ? _cron.Next(trigger.CronExpression!, now, _tenant.TimeZoneId)
                     : (DateTimeOffset?)null;
                 trigger.Enable(next, now);

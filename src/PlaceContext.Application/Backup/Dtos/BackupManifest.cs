@@ -101,15 +101,13 @@ public sealed record ChainActionManifest(
     string? Body = null,
     string? AttachmentPath = null);
 
-/// <summary>A schedule/event trigger on a job, or a launchpad on a chain. Natural key on import is (JobId, Name).</summary>
+/// <summary>A schedule/event trigger on a job. Natural key on import is (JobId, Name).</summary>
 public sealed record TriggerManifest(
     Guid TriggerId, Guid ProjectId,
-    /// <summary>Null for launchpads (they target <see cref="ChainId"/>).</summary>
     Guid? JobId, string Name,
-    /// <summary>"Schedule" | "Event" | "Launchpad".</summary>
+    /// <summary>"Schedule" | "Event".</summary>
     string Kind,
-    bool Enabled, string? CronExpression, string? EventName,
-    Guid? ChainId = null, string? SourceTable = null, string? Prompt = null);
+    bool Enabled, string? CronExpression, string? EventName);
 
 /// <summary>A user-defined event type. Natural key on import is <see cref="Name"/> (workspace-unique).</summary>
 public sealed record EventDefinitionManifest(string Name, string? Description, string? PayloadSchema);

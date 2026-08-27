@@ -44,7 +44,7 @@ public sealed partial class ProjectDataViewModel
         SidebarPane = pane;
         NotifyStateChanged();
         if (pane == SidebarPane.Indexes)
-            _ = LoadIndicesAsync(force: true);
+            _ = LoadIndicesAsync();
         else if (pane == SidebarPane.Queries && !SavedQueriesReady)
             _ = LoadSavedQueriesAsync();
     }
@@ -60,19 +60,19 @@ public sealed partial class ProjectDataViewModel
 
     public async Task LoadIndicesAsync(bool force = false)
     {
-        if (!force && IndicesReady && IndicesError is null)
+        if (!force && IndicesReady)
             return;
         if (_loadingIndices)
             return;
 
         _loadingIndices = true;
         IndicesReady = false;
-        IndicesError = null;
-        OpenSearchSetupRequired = false;
         NotifyStateChanged();
         try
         {
             Indices = await _svc.ListOpenSearchIndicesAsync(ProjectId);
+            IndicesError = null;
+            OpenSearchSetupRequired = false;
         }
         catch (Exception ex)
         {

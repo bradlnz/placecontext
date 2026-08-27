@@ -85,11 +85,7 @@
                     <input type="text" placeholder="Search indices" @bind="_tableFilter" @bind:event="oninput" />
                 </div>
                 <div class="studio-resource-list">
-                    @if (!Vm.IndicesReady)
-                    {
-                        <Skeleton Kind="list" Rows="6" />
-                    }
-                    else if (Vm.OpenSearchSetupRequired)
+                    @if (Vm.OpenSearchSetupRequired)
                     {
                         <div class="studio-index-setup">
                             <strong>OpenSearch isn’t set up</strong>
@@ -104,6 +100,10 @@
                             <span>@Vm.IndicesError</span>
                             <button class="dcbtn" @onclick="@(() => Vm.LoadIndicesAsync(force: true))">Try again</button>
                         </div>
+                    }
+                    else if (!Vm.IndicesReady)
+                    {
+                        <Skeleton Kind="list" Rows="6" />
                     }
                     else if (Vm.Indices.Count == 0)
                     {

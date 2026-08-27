@@ -20,7 +20,7 @@ public static class WikiLibrary
         "getting-started", "setup", "webhook-ingestion", "opensearch-integration", "sso-and-oauth",
         "projects", "jobs-and-artifacts",
         "events-and-schedules", "charts-and-reports", "project-data", "entities-and-insights",
-        "security-and-sharing", "cluster-and-nodes", "agent-chat", "mcp-and-agents",
+        "security-and-sharing", "cluster-and-nodes", "mcp-and-jobs",
     };
 
     private static readonly MarkdownPipeline Pipeline =

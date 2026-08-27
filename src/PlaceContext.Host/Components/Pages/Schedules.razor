@@ -15,7 +15,7 @@
         <div>
             <h2 class="page-title">Schedules</h2>
             <div class="page-sub">
-                Every trigger across this project's jobs — cron schedules, event hooks, and launchpads that run an autonomous agent session on a schedule.
+                Every trigger across this project's jobs — cron schedules and event hooks.
                 Cron fires in <span class="tz">@Vm.TimeZoneId</span>.
             </div>
         </div>
@@ -30,53 +30,26 @@
     <div class="dccard add-bar">
         <div class="dcfield field-sm">
             <label>Kind</label>
-            <select class="dcinput" @bind="Vm.NewKind" @bind:after="Vm.OnKindChangedAsync">
+            <select class="dcinput" @bind="Vm.NewKind">
                 <option value="@TriggerKind.Schedule">Schedule</option>
                 <option value="@TriggerKind.Event">Event</option>
-                <option value="@TriggerKind.Launchpad">Launchpad</option>
             </select>
         </div>
         <div class="dcfield field-name">
             <label>Name</label>
             <input class="dcinput" @bind="Vm.NewName" placeholder="nightly refresh" />
         </div>
-        @if (Vm.NewKind == TriggerKind.Launchpad)
-        {
-            <div class="dcfield field-job">
-                <label>Chain</label>
-                <select class="dcinput" @bind="Vm.NewChainId">
-                    <option value="@Guid.Empty">— pick a chain —</option>
-                    @foreach (var c in Vm.Chains ?? Array.Empty<JobChainView>())
-                    {
-                        <option value="@c.Id">@c.Name</option>
-                    }
-                </select>
-            </div>
-            <div class="dcfield field-job">
-                <label>Source table</label>
-                <select class="dcinput" @bind="Vm.NewSourceTable">
-                    <option value="">— optional —</option>
-                    @foreach (var t in Vm.Tables ?? Array.Empty<ProjectTableInfo>())
-                    {
-                        <option value="@t.Name">@t.Name</option>
-                    }
-                </select>
-            </div>
-        }
-        else
-        {
-            <div class="dcfield field-job">
-                <label>Job</label>
-                <select class="dcinput" @bind="Vm.NewJobId">
-                    <option value="@Guid.Empty">— pick a job —</option>
-                    @foreach (var j in Vm.Jobs ?? Array.Empty<JobView>())
-                    {
-                        <option value="@j.Id">@j.Name</option>
-                    }
-                </select>
-            </div>
-        }
-        @if (Vm.NewKind is TriggerKind.Schedule or TriggerKind.Launchpad)
+        <div class="dcfield field-job">
+            <label>Job</label>
+            <select class="dcinput" @bind="Vm.NewJobId">
+                <option value="@Guid.Empty">— pick a job —</option>
+                @foreach (var j in Vm.Jobs ?? Array.Empty<JobView>())
+                {
+                    <option value="@j.Id">@j.Name</option>
+                }
+            </select>
+        </div>
+        @if (Vm.NewKind == TriggerKind.Schedule)
         {
             @if (Vm.AdvancedCron)
             {
@@ -141,13 +114,6 @@
                 </select>
             </div>
         }
-        @if (Vm.NewKind == TriggerKind.Launchpad)
-        {
-            <div class="dcfield field-prompt">
-                <label>Prompt</label>
-                <textarea class="dcinput" rows="3" @bind="Vm.NewPrompt" placeholder="For each row, run the chain and summarize anomalies." />
-            </div>
-        }
         <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="@(() => Vm.AddTriggerAsync(ProjectId))">＋ Add trigger</button>
         @if (Vm.Error is not null)
         {
@@ -168,7 +134,7 @@
             else if (Vm.Triggers.Count == 0)
             {
                 <div class="empty-note">
-                    No triggers yet — add a cron schedule, an event hook, or an agent launchpad above.
+                    No triggers yet — add a cron schedule or event hook above.
                 </div>
             }
             else

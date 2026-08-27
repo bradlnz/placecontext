@@ -4,8 +4,8 @@
 
 ## What PlaceContext does
 
-PlaceContext keeps project work, customer information, automated tasks, saved files, and agent
-activity in one workspace.
+PlaceContext keeps project work, customer information, automated jobs, saved files, and activity in
+one workspace.
 
 You do not need to understand the technical parts to use the portal. A **job** is a saved task, a
 **chain** joins several tasks into a workflow, and an **artifact** is a file produced by a task.
@@ -56,12 +56,10 @@ search.
 | **Jobs** | Create, edit, run, and monitor jobs |
 | **Tests** | Check a job with saved example inputs before using it in a workflow |
 | **Chains** | Build multi-stage job pipelines |
-| **Schedules** | Manage scheduled, event, and launchpad triggers |
+| **Schedules** | Manage scheduled and event triggers for jobs |
 | **Data** | Tables, SQL analytics, data mappings, entities, and searchable project data |
 | **Vault** | Store encrypted project secrets |
 | **Events** | View event types and recent occurrences |
-| **Agents** | Configure the Command Agent, collaborating worker agents, capabilities, and Job access |
-| **Chat** | Ask the selected project's agent questions and run tools |
 | **Artifacts** | Browse, preview, and optionally share files produced by job runs |
 | **Observability** | Review job and chain runs across projects |
 | **Cluster** | Check nodes and add workers |
@@ -81,6 +79,6 @@ are used in dark mode; light mode uses its own readable light palette with the w
 
 ## A useful working loop
 
-Create or update code, record the change through the agent, run a job, inspect its output, and
+Create or update code, record the change through an MCP client, run a job, inspect its output, and
 map useful results into project tables. Use chains, schedules, and events when the workflow
 should run without manual steps.

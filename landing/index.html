@@ -11,7 +11,7 @@
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="/" aria-label="Placecontext home"><span class="brand-mark">›_</span><span>placecontext</span><small>CORE</small></a>
+    <a class="brand" href="/" aria-label="Placecontext home"><span class="brand-mark">›_</span><span>placecontext</span></a>
     <nav aria-label="Primary navigation">
       <a href="#fleet">Fleet</a>
       <a href="#console">Console</a>
@@ -38,7 +38,7 @@
           <button class="copy" type="button" data-copy="curl -fsSL https://get.placecontext.io/install.sh | bash">Copy</button>
         </div>
         <div class="capability-cloud" aria-label="Job engine capabilities">
-          <span class="active">Jobs</span><span>Data</span><span>Artifacts</span><span>OpenSearch optional</span><span>Local AI</span><span>3D rendering</span><span>Agents · MCP</span>
+          <span class="active">Jobs</span><span>Data</span><span>Artifacts</span><span>Local AI</span><span>3D rendering</span><span>Agents · MCP</span>
         </div>
       </div>
       <div class="hero-visual" aria-label="Placecontext jobs console preview">
@@ -51,7 +51,7 @@
               <header><span>⌄</span><strong>Job catalogue</strong><small>12 reusable workloads</small></header>
               <article class="job-row is-running"><span class="job-icon spinner"></span><div><div class="job-title"><strong>Blender scene render</strong><span>python code</span><span class="good-chip">2 triggers</span></div><p>Render frames and publish a 4K preview artifact.</p><small>12 shards · concurrency 6 · updated Aug 4</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
               <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Shopify order sync</strong><span>node code</span><span>json output</span></div><p>Import orders and map them into project tables.</p><small>4 shards · cron 15 * * * * · updated Aug 3</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
-              <article class="job-row"><span class="job-icon">□</span><div><div class="job-title"><strong>OpenSearch indexer</strong><span>container</span><span class="good-chip">automated</span></div><p>Refresh optional search indexes after pipeline runs.</p><small>1 shard · event job.completed · updated Aug 1</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
+              <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Nightly inventory forecast</strong><span>ruby code</span><span>json output</span></div><p>Forecast stock requirements and publish replenishment data.</p><small>2 shards · nightly · updated Jul 30</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
             </div>
           </div>
         </div>
@@ -84,14 +84,13 @@
       <div class="section-intro showcase-intro">
         <span class="eyebrow">Product console</span>
         <h2>The actual workspace, rendered live.</h2>
-        <p>Jobs, data, artifacts, optional OpenSearch, and cluster capacity share one authenticated console — designed for operators and agents alike.</p>
+        <p>Jobs, data, artifacts, and cluster capacity share one authenticated console — designed for operators and agents alike.</p>
       </div>
 
       <div class="console-picker" role="tablist" aria-label="Console views">
         <button type="button" role="tab" id="console-tab-jobs" aria-controls="console-view-jobs" aria-selected="true" class="is-active" data-view="jobs" data-title="Jobs" data-subtitle="12 jobs · 92 shards · 9 automated">Jobs</button>
         <button type="button" role="tab" id="console-tab-data" aria-controls="console-view-data" aria-selected="false" data-view="data" data-title="Data tables" data-subtitle="4 objects · SQL workspace">Data</button>
         <button type="button" role="tab" id="console-tab-artifacts" aria-controls="console-view-artifacts" aria-selected="false" data-view="artifacts" data-title="Artifacts" data-subtitle="48 files · 12 reports">Artifacts</button>
-        <button type="button" role="tab" id="console-tab-search" aria-controls="console-view-search" aria-selected="false" data-view="search" data-title="Data Search" data-subtitle="Optional OpenSearch · 3 indexes">Search</button>
         <button type="button" role="tab" id="console-tab-cluster" aria-controls="console-view-cluster" aria-selected="false" data-view="cluster" data-title="Cluster" data-subtitle="4 nodes · 3 healthy">Cluster</button>
       </div>
 
@@ -107,7 +106,6 @@
               <span class="side-item"><i>⇢</i><span>Chains</span></span>
               <span class="side-item"><i>▣</i><span>Artifacts</span></span>
               <span class="nav-section">Intelligence</span>
-              <span class="side-item"><i>⌕</i><span>Search</span></span>
               <span class="side-item"><i>✦</i><span>Agents</span></span>
               <span class="nav-section">Infrastructure</span>
               <span class="side-item"><i>◇</i><span>Cluster</span></span>
@@ -133,7 +131,6 @@
                     <header><span>⌄</span><strong>Job catalogue</strong><small>12 reusable workloads</small></header>
                     <article class="job-row is-running"><span class="job-icon spinner"></span><div><div class="job-title"><strong>Blender scene render</strong><span>python code</span><span>json output</span><span class="good-chip">2 triggers</span></div><p>Render frames and publish a 4K preview artifact.</p><small>12 shards · concurrency 6 · updated Aug 4</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
                     <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Shopify order sync</strong><span>node code</span><span>json output</span></div><p>Import orders and map them into project tables.</p><small>4 shards · cron 15 * * * * · updated Aug 3</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
-                    <article class="job-row"><span class="job-icon">□</span><div><div class="job-title"><strong>OpenSearch indexer</strong><span>container</span><span class="good-chip">automated</span></div><p>Refresh optional search indexes after pipeline runs.</p><small>1 shard · event job.completed · updated Aug 1</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
                     <article class="job-row"><span class="job-icon">⌁</span><div><div class="job-title"><strong>Nightly inventory forecast</strong><span>ruby code</span><span>json output</span></div><p>Forecast stock requirements and publish replenishment data.</p><small>2 shards · nightly · updated Jul 30</small></div><div class="job-actions">▶ ✎ &lt;/&gt; ⋯</div></article>
                   </div>
                   <div class="run-history">
@@ -200,22 +197,6 @@ LIMIT 5;</pre>
                 </div>
               </section>
 
-              <section class="app-view" id="console-view-search" role="tabpanel" aria-labelledby="console-tab-search" data-view="search">
-                <div class="app-page">
-                  <div class="app-page-head"><div><h3>Data Search</h3><p>Search OpenSearch documents, explore fields, and turn aggregations into reusable charts.</p></div><div class="head-actions"><span class="app-button">Sync now</span><span class="proxy-chip"><i></i>server proxy</span></div></div>
-                  <div class="index-grid">
-                    <div class="index-card is-active"><code>orders-2026</code><strong>84,211</strong><span>documents · 142 MB</span></div>
-                    <div class="index-card"><code>product-catalog</code><strong>12,480</strong><span>documents · 18 MB</span></div>
-                    <div class="index-card"><code>job-runs</code><strong>9,642</strong><span>documents · 26 MB</span></div>
-                  </div>
-                  <div class="app-card search-builder">
-                    <div class="search-query"><span>Index <code>orders-2026</code></span><span>Query <code>status:failed AND runtime:blender*</code></span><span class="app-button">Fields</span><span class="app-button primary">Search</span></div>
-                    <div class="chart-card"><header><strong>Failures by hour</strong><span>count by created_at</span></header><div class="chart-bars"><i style="--h:24%"></i><i style="--h:42%"></i><i style="--h:31%"></i><i style="--h:58%"></i><i style="--h:76%"></i><i style="--h:48%"></i><i style="--h:86%"></i><i style="--h:39%"></i><i style="--h:64%"></i><i style="--h:52%"></i></div></div>
-                    <div class="search-summary">84,211 documents · 23 ms · page 1 · results capped at 100</div>
-                  </div>
-                </div>
-              </section>
-
               <section class="app-view" id="console-view-cluster" role="tabpanel" aria-labelledby="console-tab-cluster" data-view="cluster">
                 <div class="app-page">
                   <div class="cluster-hero"><span>● Infrastructure</span><h3>Cluster overview</h3><p>Health, capacity, and worker placement across your fleet.</p><div><span class="app-button">↻ Refresh</span><span class="app-button primary">+ Add worker</span></div></div>
@@ -239,10 +220,9 @@ LIMIT 5;</pre>
         <article><span class="feature-number">01</span><h3>Data section</h3><p>Create tables, import CSV files, write SQL views, map job outputs into queryable data, and model entities with records, graphs, and analytics.</p></article>
         <article><span class="feature-number">02</span><h3>Artifacts view</h3><p>Search and filter outputs across projects, inspect versions, preview JSON, CSV, PDF, image, video, and HTML files, and share expiring links.</p></article>
         <article><span class="feature-number">03</span><h3>Job code editor</h3><p>Supported runtimes: Node.js, Python, Go, Ruby, and C#. Write multi-file jobs, test and deploy them, then chain them into a data pipeline or any automation.</p></article>
-        <article><span class="feature-number">04</span><h3>Optional OpenSearch</h3><p>Connect OpenSearch only when you need it: search indexes through the authenticated server proxy, explore fields, turn aggregations into charts, and save reusable dashboards.</p></article>
-        <article><span class="feature-number">05</span><h3>Triggers and chains</h3><p>Run jobs manually, on schedules, or from events, then connect them into multi-step flows with durable state and observable execution.</p></article>
-        <article><span class="feature-number">06</span><h3>Agents and MCP</h3><p>Give automation and AI clients governed access to the same data and operations as your team.</p></article>
-        <article><span class="feature-number">07</span><h3>Local AI shards</h3><p>Split supported local models across multiple computers for private inference without sending prompts outside your network.</p></article>
+        <article><span class="feature-number">04</span><h3>Triggers and chains</h3><p>Run jobs manually, on schedules, or from events, then connect them into multi-step flows with durable state and observable execution.</p></article>
+        <article><span class="feature-number">05</span><h3>Agents and MCP</h3><p>Give automation and AI clients governed access to the same data and operations as your team.</p></article>
+        <article><span class="feature-number">06</span><h3>Local AI shards</h3><p>Split supported local models across multiple computers for private inference without sending prompts outside your network.</p></article>
       </div>
     </section>
 

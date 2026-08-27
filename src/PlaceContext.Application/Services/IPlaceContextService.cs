@@ -210,23 +210,6 @@ public interface IPlaceContextService
     Task<IReadOnlyList<Ports.JobRunTelemetry>> ListJobRunTelemetryAsync(Guid jobId, int take = 20, CancellationToken ct = default);
     Task<IReadOnlyList<Ports.ChainRunTelemetry>> ListRecentChainRunTelemetryAsync(int take = 50, CancellationToken ct = default);
 
-    // Agent chat (Phase 1).
-    Task<AgentConfigView> GetAgentConfigAsync(Guid projectId, CancellationToken ct = default);
-    Task<AgentConfigView> UpdateAgentConfigAsync(UpdateAgentConfigCommand command, CancellationToken ct = default);
-    Task<AgentChatSessionView> SendAgentMessageAsync(SendAgentMessageCommand command, CancellationToken ct = default);
-    Task<IReadOnlyList<AgentChatSessionView>> ListAgentChatSessionsAsync(Guid projectId, CancellationToken ct = default);
-    Task<AgentChatSessionView?> GetAgentChatSessionAsync(Guid sessionId, CancellationToken ct = default);
-    Task<AgentDefinitionView> EnsureCommandAgentAsync(Guid projectId, CancellationToken ct = default);
-    Task<IReadOnlyList<AgentDefinitionView>> ListAgentDefinitionsAsync(Guid projectId, CancellationToken ct = default);
-    Task<AgentDefinitionView> SaveAgentDefinitionAsync(SaveAgentDefinitionCommand command, CancellationToken ct = default);
-    Task<bool> DeleteAgentDefinitionAsync(Guid agentId, CancellationToken ct = default);
-
-    // Chat commands
-    Task<ChatCommandView> CreateChatCommandAsync(Features.CreateChatCommandCommand command, CancellationToken ct = default);
-    Task<ChatCommandView> UpdateChatCommandAsync(Features.UpdateChatCommandCommand command, CancellationToken ct = default);
-    Task<bool> DeleteChatCommandAsync(Guid commandId, CancellationToken ct = default);
-    Task<IReadOnlyList<ChatCommandView>> ListChatCommandsAsync(Guid projectId, CancellationToken ct = default);
-
     // MCP connections
     Task<McpConnectionView> CreateMcpConnectionAsync(Features.CreateMcpConnectionCommand command, CancellationToken ct = default);
     Task<McpConnectionView> UpdateMcpConnectionAsync(Features.UpdateMcpConnectionCommand command, CancellationToken ct = default);

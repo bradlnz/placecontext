@@ -16,8 +16,6 @@ public sealed class SectionAuthorizationTests
             { typeof(Pages.ProjectView), Permission.ProjectsView },
             { typeof(Pages.Onboarding), Permission.ProjectsView },
             { typeof(Pages.Artifacts), Permission.ArtifactsView },
-            { typeof(Pages.Chat), Permission.AgentsChat },
-            { typeof(Pages.Agents), Permission.AgentsManage },
             { typeof(Pages.DataEntities), Permission.DataRead },
             { typeof(Pages.DataMap), Permission.DataRead },
             { typeof(Pages.ProjectAnalytics), Permission.DataRead },
@@ -42,7 +40,6 @@ public sealed class SectionAuthorizationTests
         new()
         {
             typeof(Pages.AccessSettings),
-            typeof(Pages.AgentsSettings),
             typeof(Pages.ArtifactSettings),
             typeof(Pages.BackupSettings),
             typeof(Pages.BrandingSettings),
@@ -75,7 +72,6 @@ public sealed class SectionAuthorizationTests
         new()
         {
             { typeof(ArtifactsController), Permission.ArtifactsView },
-            { typeof(ChatAttachmentsController), Permission.AgentsChat },
         };
 
     [Theory]

@@ -28,8 +28,6 @@ public static class Permission
     public const string MembersManage = "members.manage";
     public const string SettingsManage = "settings.manage";
     public const string EventsManage = "events.manage";
-    public const string AgentsChat = "agents.chat";
-    public const string AgentsManage = "agents.manage";
     public const string EmailSend = "email.send";
     public const string SmsSend = "sms.send";
 
@@ -40,6 +38,6 @@ public static class Permission
         ChainsManage, TriggersManage,
         DataRead, DataWrite, ArtifactsView, ArtifactsShare, ArtifactsDelete,
         SecretsManage, BackupManage, MembersManage, SettingsManage, EventsManage,
-        AgentsChat, AgentsManage, EmailSend, SmsSend,
+        EmailSend, SmsSend,
     };
 }

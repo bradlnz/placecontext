@@ -32,7 +32,7 @@ public sealed class SetTriggerEnabledHandler : ICommandHandler<SetTriggerEnabled
         var now = _clock.UtcNow;
         if (command.Enabled)
         {
-            DateTimeOffset? next = trigger.Kind is TriggerKind.Schedule or TriggerKind.Launchpad && trigger.CronExpression is { } cron
+            DateTimeOffset? next = trigger.Kind == TriggerKind.Schedule && trigger.CronExpression is { } cron
                 ? _cron.Next(cron, now, _tenant.TimeZoneId)
                 : null;
             trigger.Enable(next, now);

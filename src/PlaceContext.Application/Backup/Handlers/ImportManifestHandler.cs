@@ -307,12 +307,6 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
 
         foreach (var tm in manifests)
         {
-            if (tm.Kind.Equals("Launchpad", StringComparison.OrdinalIgnoreCase))
-            {
-                warnings.Add($"Trigger '{tm.Name}': launchpad triggers are not importable yet — skipped.");
-                skipped++;
-                continue;
-            }
             if (tm.JobId is not { } manifestJobId || !jobMap.TryGetValue(manifestJobId, out var job))
             {
                 warnings.Add($"Trigger '{tm.Name}': references a job that couldn't be imported — skipped.");

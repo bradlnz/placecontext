@@ -92,27 +92,10 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DefineEventTypeCommand, EventTypeView>, DefineEventTypeHandler>();
         services.AddScoped<ICommandHandler<EmitEventCommand, EventOccurrenceView>, EmitEventHandler>();
 
-        // Agent chat (Phase 1).
-        services.AddScoped<ICommandHandler<Features.UpdateAgentConfigCommand, Dtos.AgentConfigView>, Features.UpdateAgentConfigHandler>();
-        services.AddScoped<ICommandHandler<Features.SendAgentMessageCommand, Dtos.AgentChatSessionView>, Features.SendAgentMessageHandler>();
-        services.AddScoped<ICommandHandler<Features.EnsureCommandAgentCommand, Dtos.AgentDefinitionView>, Features.EnsureCommandAgentHandler>();
-        services.AddScoped<ICommandHandler<Features.SaveAgentDefinitionCommand, Dtos.AgentDefinitionView>, Features.SaveAgentDefinitionHandler>();
-        services.AddScoped<ICommandHandler<Features.DeleteAgentDefinitionCommand, bool>, Features.DeleteAgentDefinitionHandler>();
-        services.AddScoped<IQueryHandler<Features.GetAgentConfigQuery, Dtos.AgentConfigView>, Features.GetAgentConfigHandler>();
-        services.AddScoped<IQueryHandler<Features.ListAgentDefinitionsQuery, IReadOnlyList<Dtos.AgentDefinitionView>>, Features.ListAgentDefinitionsHandler>();
-        services.AddScoped<IQueryHandler<Features.ListAgentChatSessionsQuery, IReadOnlyList<Dtos.AgentChatSessionView>>, Features.ListAgentChatSessionsHandler>();
-        services.AddScoped<IQueryHandler<Features.GetAgentChatSessionQuery, Dtos.AgentChatSessionView?>, Features.GetAgentChatSessionHandler>();
-        services.AddScoped<Features.AgentContextBuilder>();
-        services.AddScoped<Agents.CommandAgentOrchestrator>();
         services.AddScoped<IMcpClientService, McpClientService>();
 
         // Job execution orchestrator (applies per-job retry policy).
         services.AddScoped<IJobRunner, JobRunner>();
-
-        // Launchpads / Slack: unattended agent sessions driven by the [[tool:...]] protocol.
-        services.AddScoped<Agents.Services.LaunchpadToolExecutor>();
-        services.AddScoped<Agents.Services.AgentSessionRunner>();
-        services.AddScoped<Agents.Services.SlackAgentBridge>();
 
         // MCP connections
         services.AddScoped<ICommandHandler<Features.CreateMcpConnectionCommand, Dtos.McpConnectionView>, Features.CreateMcpConnectionHandler>();
@@ -120,12 +103,6 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<Features.DeleteMcpConnectionCommand, bool>, Features.DeleteMcpConnectionHandler>();
         services.AddScoped<ICommandHandler<Features.TestMcpConnectionCommand, Dtos.McpConnectionView>, Features.TestMcpConnectionHandler>();
         services.AddScoped<IQueryHandler<Features.ListMcpConnectionsQuery, IReadOnlyList<Dtos.McpConnectionView>>, Features.ListMcpConnectionsHandler>();
-
-        // Chat commands
-        services.AddScoped<ICommandHandler<Features.CreateChatCommandCommand, Dtos.ChatCommandView>, Features.CreateChatCommandHandler>();
-        services.AddScoped<ICommandHandler<Features.UpdateChatCommandCommand, Dtos.ChatCommandView>, Features.UpdateChatCommandHandler>();
-        services.AddScoped<ICommandHandler<Features.DeleteChatCommandCommand, bool>, Features.DeleteChatCommandHandler>();
-        services.AddScoped<IQueryHandler<Features.ListChatCommandsQuery, IReadOnlyList<Dtos.ChatCommandView>>, Features.ListChatCommandsHandler>();
 
         // Queries.
         services.AddScoped<IQueryHandler<GetProjectsQuery, IReadOnlyList<ProjectSummaryView>>, GetProjectsHandler>();

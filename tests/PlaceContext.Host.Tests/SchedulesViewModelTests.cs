@@ -33,7 +33,6 @@ public sealed class SchedulesViewModelTests
     [Theory]
     [InlineData(TriggerKind.Schedule)]
     [InlineData(TriggerKind.Event)]
-    [InlineData(TriggerKind.Launchpad)]
     public void Editable_trigger_kinds_are_typed(TriggerKind kind)
     {
         Assert.Contains(kind, SchedulesViewModel.EditableTriggerKinds);

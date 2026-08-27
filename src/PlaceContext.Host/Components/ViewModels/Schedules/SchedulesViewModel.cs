@@ -20,13 +20,10 @@ public sealed class SchedulesViewModel : PageViewModel
     private static class Copy
     {
         public const string PageTitle = "Schedules";
-        public const string PageSubtitle = "cron + event triggers + launchpads across this project";
+        public const string PageSubtitle = "cron schedules and event triggers across this project's jobs";
         public const string NameRequired = "Name is required.";
-        public const string ChainRequired = "Pick a chain.";
-        public const string PromptRequired = "Prompt is required.";
         public const string JobRequired = "Pick a job.";
         public const string DeletedJob = "(deleted job)";
-        public const string DeletedChain = "(deleted chain)";
     }
 
     private static class Cron
@@ -48,12 +45,10 @@ public sealed class SchedulesViewModel : PageViewModel
     }
 
     public static IReadOnlyList<TriggerKind> EditableTriggerKinds { get; } =
-    [TriggerKind.Schedule, TriggerKind.Event, TriggerKind.Launchpad];
+    [TriggerKind.Schedule, TriggerKind.Event];
 
     public IReadOnlyList<TriggerView>? Triggers { get; private set; }
     public IReadOnlyList<JobView>? Jobs { get; private set; }
-    public IReadOnlyList<JobChainView>? Chains { get; private set; }
-    public IReadOnlyList<ProjectTableInfo>? Tables { get; private set; }
     public IReadOnlyList<EventTypeView>? EventTypes { get; private set; }
 
     public string? Message { get; private set; }
@@ -66,9 +61,6 @@ public sealed class SchedulesViewModel : PageViewModel
     public TriggerKind NewKind { get; set; } = TriggerKind.Schedule;
     public string NewCron { get; set; } = Cron.Default;
     public string NewEvent { get; set; } = string.Empty;
-    public Guid NewChainId { get; set; }
-    public string NewSourceTable { get; set; } = string.Empty;
-    public string NewPrompt { get; set; } = string.Empty;
 
     public bool AdvancedCron { get; set; }
     public ScheduleFrequency Frequency { get; set; } = ScheduleFrequency.Day;
@@ -88,8 +80,6 @@ public sealed class SchedulesViewModel : PageViewModel
         try
         {
             Jobs = await _service.ListJobsAsync(projectId);
-            Chains = await _service.ListJobChainsAsync(projectId);
-            Tables = await _service.ListProjectDataTablesAsync(projectId);
             Triggers = await _service.ListTriggersAsync(projectId);
             EventTypes = await _service.ListEventTypesAsync();
             NewEvent = EventTypes.FirstOrDefault()?.Name ?? string.Empty;
@@ -109,14 +99,6 @@ public sealed class SchedulesViewModel : PageViewModel
     {
         AdvancedCron = !AdvancedCron;
         NotifyStateChanged();
-    }
-
-    public Task OnKindChangedAsync()
-    {
-        if (NewKind == TriggerKind.Launchpad && Chains?.Count > 0 && NewChainId == Guid.Empty)
-            NewChainId = Chains[0].Id;
-
-        return Task.CompletedTask;
     }
 
     public static string ComposeCron(
@@ -146,16 +128,7 @@ public sealed class SchedulesViewModel : PageViewModel
             : "never";
 
     public string TargetLabel(TriggerView trigger) =>
-        ParseKind(trigger.Kind) switch
-        {
-            TriggerKind.Launchpad => ChainName(trigger.ChainId)
-                + (
-                    !string.IsNullOrEmpty(trigger.SourceTable)
-                        ? $" · {trigger.SourceTable}"
-                        : string.Empty
-                ),
-            _ => JobName(trigger.JobId ?? Guid.Empty),
-        };
+        JobName(trigger.JobId ?? Guid.Empty);
 
     public async Task AddTriggerAsync(Guid projectId)
     {
@@ -170,56 +143,24 @@ public sealed class SchedulesViewModel : PageViewModel
         Busy = true;
         try
         {
-            if (NewKind == TriggerKind.Launchpad)
+            if (NewJobId == Guid.Empty)
             {
-                if (NewChainId == Guid.Empty)
-                {
-                    Error = Copy.ChainRequired;
-                    return;
-                }
-
-                if (string.IsNullOrWhiteSpace(NewPrompt))
-                {
-                    Error = Copy.PromptRequired;
-                    return;
-                }
-
-                await _service.CreateTriggerAsync(
-                    new CreateTriggerCommand(
-                        null,
-                        NewName.Trim(),
-                        NewKind.ToString(),
-                        SelectedCron(),
-                        null,
-                        NewChainId,
-                        string.IsNullOrWhiteSpace(NewSourceTable) ? null : NewSourceTable,
-                        NewPrompt.Trim()
-                    )
-                );
+                Error = Copy.JobRequired;
+                return;
             }
-            else
-            {
-                if (NewJobId == Guid.Empty)
-                {
-                    Error = Copy.JobRequired;
-                    return;
-                }
 
-                await _service.CreateTriggerAsync(
-                    new CreateTriggerCommand(
-                        NewJobId,
-                        NewName.Trim(),
-                        NewKind.ToString(),
-                        NewKind == TriggerKind.Schedule ? SelectedCron() : null,
-                        NewKind == TriggerKind.Event ? NewEvent : null
-                    )
-                );
-            }
+            await _service.CreateTriggerAsync(
+                new CreateTriggerCommand(
+                    NewJobId,
+                    NewName.Trim(),
+                    NewKind.ToString(),
+                    NewKind == TriggerKind.Schedule ? SelectedCron() : null,
+                    NewKind == TriggerKind.Event ? NewEvent : null
+                )
+            );
 
             Triggers = await _service.ListTriggersAsync(projectId);
             NewName = string.Empty;
-            NewPrompt = string.Empty;
-            NewSourceTable = string.Empty;
         }
         catch (Exception ex)
         {
@@ -327,9 +268,6 @@ public sealed class SchedulesViewModel : PageViewModel
 
     private string JobName(Guid jobId) =>
         Jobs?.FirstOrDefault(job => job.Id == jobId)?.Name ?? Copy.DeletedJob;
-
-    private string ChainName(Guid? chainId) =>
-        Chains?.FirstOrDefault(chain => chain.Id == chainId)?.Name ?? Copy.DeletedChain;
 
     private static TriggerKind ParseKind(string kind) =>
         Enum.TryParse<TriggerKind>(kind, ignoreCase: true, out var parsed)

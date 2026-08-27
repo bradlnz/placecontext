@@ -87,7 +87,7 @@ verified recovery plan.
 - **Communications** connects email and SMS delivery for chain actions. Jobs and users see
   the generic Email or SMS channel rather than needing to choose a delivery provider.
 - **Connections** configures project-specific PostgreSQL and OpenSearch services.
-- **MCP servers** connects extra tools that approved agents and jobs may use.
+- **MCP servers** connects extra tools that jobs may use.
 - **Locality** sets the timezone used by schedules and displayed dates.
 - **Backup** exports or imports workspace configuration. It can also download all job source
   files as a ZIP arranged by project and job.

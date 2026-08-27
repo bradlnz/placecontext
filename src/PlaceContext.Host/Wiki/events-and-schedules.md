@@ -42,9 +42,7 @@ Open **Schedules** to manage every trigger in the current project. Select:
 
 - **Schedule** to run a Job hourly, daily, on weekdays, weekly, monthly, or with an advanced cron
   expression;
-- **Event** to choose an event type and the Job that should run when it is emitted;
-- **Launchpad** to run a chain as an autonomous agent session on a schedule, optionally using a
-  project table as source data.
+- **Event** to choose an event type and the Job that should run when it is emitted.
 
 Simple schedules use the workspace timezone shown on the screen. The table shows whether each
 trigger is on or paused, its target, its next run, and when it last fired. Use **Pause** when you

@@ -146,13 +146,12 @@ builder.Services.AddRateLimiter(options =>
 });
 builder.Services.AddHttpClient();
 
-// Log chat gateway config at startup
-var chatSection = builder.Configuration.GetSection("PlaceContext:ClusterChat");
-var chatEndpoint = chatSection["Endpoint"];
-var chatModel = chatSection["Model"];
-var shardEndpoints = chatSection.GetSection("ShardEndpoints").Get<List<string>>() ?? new();
-Console.WriteLine($"[startup] ClusterChat.Endpoint='{chatEndpoint}'  Model='{chatModel}'  ShardEndpoints=[{string.Join(", ", shardEndpoints)}]");
-Console.WriteLine($"[startup] Chat.Endpoint='{builder.Configuration["PlaceContext:Chat:Endpoint"]}'");
+// Log retained local-AI cluster configuration at startup.
+var localAiSection = builder.Configuration.GetSection("PlaceContext:ClusterChat");
+var localAiEndpoint = localAiSection["Endpoint"];
+var localAiModel = localAiSection["Model"];
+var shardEndpoints = localAiSection.GetSection("ShardEndpoints").Get<List<string>>() ?? new();
+Console.WriteLine($"[startup] LocalAI.Endpoint='{localAiEndpoint}'  Model='{localAiModel}'  ShardEndpoints=[{string.Join(", ", shardEndpoints)}]");
 // One shared in-memory cache for expensive read models (the per-project dependency graph above all).
 builder.Services.AddMemoryCache();
 builder.Services.AddCascadingAuthenticationState();

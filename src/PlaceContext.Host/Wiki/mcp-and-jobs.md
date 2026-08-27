@@ -1,4 +1,4 @@
-# MCP and agents
+# MCP and jobs
 
 *Connect an MCP client to PlaceContext.*
 
@@ -19,9 +19,9 @@ claude mcp add --transport http placecontext http://localhost:7700/mcp
 The first protected call opens the browser sign-in flow. Access tokens are scoped to the signed-in
 user, workspace, and permissions.
 
-## Common agent workflows
+## Common workflows
 
-An MCP agent can:
+An MCP client can:
 
 - onboard projects and read their overview;
 - record activity and decisions;
@@ -33,11 +33,11 @@ An MCP agent can:
 - inspect run history and artifacts;
 - search prior run output when embeddings are configured.
 
-Ask the agent to call `job_authoring_guide` before writing a job. The `setup_hermes` tool can add
-a reusable job-orchestration guide to a project.
+Call `job_authoring_guide` before writing a job. The `setup_hermes` tool can add a reusable
+job-orchestration guide to a project.
 
 ## Keep access safe
 
 Store secrets in the project Vault, not in prompts or source code. MCP tools enforce the caller's
-permissions and tenant boundary. Reconnect the MCP client if an old authorization no longer
-matches the user's current role.
+permissions and tenant boundary. Reconnect the MCP client if an old authorization no longer matches
+the user's current role.

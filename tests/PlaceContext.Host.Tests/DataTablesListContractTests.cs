@@ -125,6 +125,29 @@ public sealed class DataTablesListContractTests
         );
     }
 
+    [Fact]
+    public void Indexes_tab_keeps_a_load_failure_visible_instead_of_returning_to_a_skeleton()
+    {
+        var root = FindRepoRoot();
+        var page = File.ReadAllText(
+            Path.Combine(root, "src", "PlaceContext.Host", "Components", "Pages", "ProjectData.razor")
+        );
+        var viewModel = File.ReadAllText(
+            Path.Combine(root, "src", "PlaceContext.Host", "Components", "ViewModels", "ProjectData", "ProjectDataViewModel.Studio.cs")
+        );
+
+        Assert.True(
+            page.IndexOf("@if (Vm.OpenSearchSetupRequired)", StringComparison.Ordinal)
+            < page.IndexOf("else if (!Vm.IndicesReady)", StringComparison.Ordinal)
+        );
+        Assert.True(
+            page.IndexOf("else if (Vm.IndicesError is not null)", StringComparison.Ordinal)
+            < page.IndexOf("else if (!Vm.IndicesReady)", StringComparison.Ordinal)
+        );
+        Assert.Contains("if (!force && IndicesReady)", viewModel, StringComparison.Ordinal);
+        Assert.Contains("_ = LoadIndicesAsync();", viewModel, StringComparison.Ordinal);
+    }
+
     private static string FindRepoRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

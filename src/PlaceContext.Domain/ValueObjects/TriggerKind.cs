@@ -2,8 +2,7 @@ namespace PlaceContext.Domain.ValueObjects;
 
 /// <summary>
 /// How a <see cref="PlaceContext.Domain.Entities.JobTrigger"/> fires: on a recurring cron
-/// <see cref="Schedule"/>, in reaction to a named <see cref="Event"/>, or as a cron
-/// <see cref="Launchpad"/> that starts an autonomous agent session.
+/// <see cref="Schedule"/> or in reaction to a named <see cref="Event"/>.
 /// </summary>
 public enum TriggerKind
 {
@@ -11,16 +10,5 @@ public enum TriggerKind
     Schedule,
 
     /// <summary>Fires when an event with a matching name is emitted.</summary>
-    Event,
-
-    /// <summary>
-    /// Fires on a recurring cron schedule, but instead of enqueuing a job run it launches an
-    /// agent session (prompt + fetched table rows) that autonomously runs job chains.
-    /// </summary>
-    Launchpad,
-
-    /// <summary>
-    /// Fires on a recurring cron schedule and executes a predefined chat command (tool).
-    /// </summary>
-    Command
+    Event
 }

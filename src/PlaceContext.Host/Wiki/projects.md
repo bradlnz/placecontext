@@ -4,7 +4,7 @@
 
 ## Create a project
 
-Projects register through MCP. Connect an agent from **Onboarding**, then ask it to onboard the
+Projects register through MCP. Connect an MCP client from **Onboarding**, then ask it to onboard the
 current repository. The `onboard` tool registers the path, reads available project guidance,
 and imports useful context from git history.
 
@@ -18,15 +18,14 @@ A project owns:
 - jobs, chains, schedules, and events;
 - SQL tables, mappings, analytics, and entities;
 - encrypted vault secrets;
-- chat sessions and agent settings;
 - run history and artifacts.
 
-Select a project from the project switcher before using project pages or Agent Chat.
+Select a project from the project switcher before using project pages.
 
 ## Project overview
 
 The overview page shows status, recent activity, recorded decisions, graph statistics, and
-high-degree files. Agents can keep it current with `record_activity`, `add_decision`, and
+high-degree files. MCP clients can keep it current with `record_activity`, `add_decision`, and
 `rebuild_graph`.
 
 Projects and workspaces are tenant-scoped. Users only see the areas allowed by their effective

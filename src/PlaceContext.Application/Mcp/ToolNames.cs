@@ -1,10 +1,7 @@
-namespace PlaceContext.Application.Agents;
+namespace PlaceContext.Application.Mcp;
 
-/// <summary>
-/// Canonical names for agent/chat tools. Use these everywhere a tool is dispatched, catalogued,
-/// or matched in model output — never hardcode the string.
-/// </summary>
-public static class AgentToolNames
+/// <summary>Canonical names shared by the MCP surface and its infrastructure adapters.</summary>
+public static class ToolNames
 {
     public const string ListTables = "list_tables";
     public const string QueryTable = "query_table";
@@ -24,10 +21,4 @@ public static class AgentToolNames
     public const string CallMcp = "call_mcp";
     public const string ListMcpTools = "list_mcp_tools";
     public const string RenderMap = "render_map";
-
-    public const string ToolCallPrefix = "[[tool:";
-    public const string ToolCallSuffix = "]]";
-
-    public static string FormatCall(string name, string args = "")
-        => $"{ToolCallPrefix}{name}|{args}{ToolCallSuffix}";
 }

@@ -6,7 +6,6 @@ using PlaceContext.Infrastructure.Skills;
 using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Infrastructure.Workload;
 using Microsoft.EntityFrameworkCore;
-using System.Data;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -122,7 +121,6 @@ public static class DependencyInjection
 
         // Redis-backed distributed cache for job run shard results (keeps Postgres lean).
         var redisConn = configuration["PlaceContext:Redis:ConnectionString"];
-        Type? innerChatMemoryStoreType = null;
         if (!string.IsNullOrWhiteSpace(redisConn))
         {
             services.AddStackExchangeRedisCache(opts =>
@@ -132,47 +130,12 @@ public static class DependencyInjection
             });
             services.AddSingleton<Caching.IJobRunCache, Caching.RedisJobRunCache>();
             services.AddSingleton<IChainContextStore, Caching.RedisChainContextStore>();
-            services.AddSingleton<Caching.RedisChatMemoryStore>();
-            services.AddSingleton<Caching.IChatMemoryStore>(sp => sp.GetRequiredService<Caching.RedisChatMemoryStore>());
-            innerChatMemoryStoreType = typeof(Caching.RedisChatMemoryStore);
         }
         else
         {
             services.AddSingleton<Caching.IJobRunCache, Caching.NullJobRunCache>();
             services.AddSingleton<IChainContextStore, Caching.NullChainContextStore>();
-            services.AddSingleton<Caching.NullChatMemoryStore>();
-            services.AddSingleton<Caching.IChatMemoryStore>(sp => sp.GetRequiredService<Caching.NullChatMemoryStore>());
-            innerChatMemoryStoreType = typeof(Caching.NullChatMemoryStore);
         }
-
-        // Qdrant semantic search for cross-session chat memory (decorates Redis/Null store).
-        var qdrantUrl = configuration["PlaceContext:Qdrant:Endpoint"];
-        if (!string.IsNullOrWhiteSpace(qdrantUrl) && innerChatMemoryStoreType is not null)
-        {
-            var qdrantCollection = configuration["PlaceContext:Qdrant:Collection"] ?? "chat-memory";
-            services.AddSingleton<Caching.IChatMemoryStore>(sp =>
-            {
-                var fallback = (Caching.IChatMemoryStore)sp.GetRequiredService(innerChatMemoryStoreType);
-                var embeddings = sp.GetRequiredService<IEmbeddingGateway>();
-                var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
-                return new Caching.QdrantChatMemoryStore(fallback, embeddings, http, qdrantUrl, qdrantCollection);
-            });
-        }
-
-        // Launchpad agent sessions persist through the Application port onto the chat memory store.
-        services.AddScoped<IAgentSessionStore, Caching.ChatMemoryAgentSessionStore>();
-
-        // Slack Events API → agent → chat.postMessage (disabled when PlaceContext:Slack is incomplete).
-        services.Configure<Slack.SlackOptions>(configuration.GetSection(Slack.SlackOptions.SectionName));
-        var slackOpts = configuration.GetSection(Slack.SlackOptions.SectionName).Get<Slack.SlackOptions>() ?? new Slack.SlackOptions();
-        if (slackOpts.IsConfigured)
-            services.AddSingleton<ISlackClient, Slack.SlackApiClient>();
-        else
-            services.AddSingleton<ISlackClient, Slack.NullSlackClient>();
-        if (!string.IsNullOrWhiteSpace(redisConn))
-            services.AddSingleton<ISlackThreadSessionStore, Slack.DistributedCacheSlackThreadSessionStore>();
-        else
-            services.AddSingleton<ISlackThreadSessionStore, Slack.MemorySlackThreadSessionStore>();
 
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
@@ -233,33 +196,7 @@ public static class DependencyInjection
             services.AddScoped<IContentIndexer, Embeddings.ContentIndexer>();
         }
 
-        // Chat gateway: cluster (SafeTensors shard server) takes precedence,
-        // then Ollama, else a no-op.
-        var clusterEp = configuration["PlaceContext:ClusterChat:Endpoint"];
-        var ollamaEp = configuration["PlaceContext:Chat:Endpoint"];
-        if (!string.IsNullOrWhiteSpace(clusterEp))
-        {
-            services.AddSingleton<IChatGateway, Chat.ClusterChatGateway>();
-            Console.WriteLine($"[di] IChatGateway -> ClusterChatGateway (endpoint={clusterEp})");
-        }
-        else if (!string.IsNullOrWhiteSpace(ollamaEp))
-        {
-            services.AddSingleton<IChatGateway, Chat.OllamaChatGateway>();
-            Console.WriteLine($"[di] IChatGateway -> OllamaChatGateway (endpoint={ollamaEp})");
-        }
-        else
-        {
-            services.AddSingleton<IChatGateway, Chat.NullChatGateway>();
-            Console.WriteLine("[di] IChatGateway -> NullChatGateway (no endpoint configured)");
-        }
-        services.AddScoped<IProjectChatGateway, Chat.VaultProjectChatGateway>();
-
-        // Agent repositories.
-        services.AddScoped<IAgentConfigRepository, EfAgentConfigRepository>();
-        services.AddScoped<IAgentDefinitionRepository, EfAgentDefinitionRepository>();
-        services.AddScoped<IAgentChatSessionRepository, EfAgentChatSessionRepository>();
         services.AddScoped<Domain.Repositories.IMcpConnectionRepository, Persistence.EfMcpConnectionRepository>();
-        services.AddScoped<IChatCommandRepository, EfChatCommandRepository>();
 
         // Dependency-graph assembly is expensive (full ledger + decisions + O(n²) embedding weave);
         // wrap the Application provider in a short-TTL cache so page opens and brain rollups don't
@@ -338,7 +275,6 @@ public static class DependencyInjection
         using var scope = provider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
-        EnsureAgentHierarchySchema(db);
         EnsureRpcChainSubmissionSchema(db);
         // Additive columns for workspace UI customization (safe if already present).
         try
@@ -410,40 +346,6 @@ public static class DependencyInjection
             CREATE INDEX IF NOT EXISTS ix_rpc_chain_submissions_pending
                 ON rpc_chain_submissions ("Status", "NextAttemptAt", "SubmittedAt");
             """);
-    }
-
-    private static void EnsureAgentHierarchySchema(AppDbContext db)
-    {
-        var connection = db.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        try
-        {
-            if (shouldClose)
-                connection.Open();
-
-            using (var ensureColumns = connection.CreateCommand())
-            {
-                ensureColumns.CommandText =
-                    """
-                    ALTER TABLE agent_definitions ADD COLUMN IF NOT EXISTS "ParentAgentId" uuid;
-                    CREATE INDEX IF NOT EXISTS "IX_agent_definitions_ParentAgentId" ON agent_definitions ("ParentAgentId");
-                    ALTER TABLE agent_definitions ADD COLUMN IF NOT EXISTS "Schema" text;
-                    UPDATE agent_definitions SET "Schema" = '{}' WHERE "Schema" IS NULL OR btrim("Schema") = '';
-                    ALTER TABLE agent_definitions ALTER COLUMN "Schema" SET NOT NULL;
-                    """;
-                ensureColumns.ExecuteNonQuery();
-            }
-        }
-        catch
-        {
-            // Keep this best-effort for mixed environments (non-PostgreSQL, bootstrap ordering,
-            // or manually managed legacy schemas).
-        }
-        finally
-        {
-            if (shouldClose && connection.State == ConnectionState.Open)
-                connection.Close();
-        }
     }
 
     private static void BackfillShardCounts(AppDbContext db, IServiceProvider sp)

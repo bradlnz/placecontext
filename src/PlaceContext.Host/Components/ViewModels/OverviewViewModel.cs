@@ -41,7 +41,7 @@ public sealed class OverviewViewModel : PageViewModel
             new(
                 "Changes today",
                 stats.ChangesToday.ToString(CultureInfo.InvariantCulture),
-                $"{stats.AgentChangesToday} agent · {stats.HumanChangesToday} human",
+                $"{stats.AgentChangesToday} automated · {stats.HumanChangesToday} human",
                 "var(--text)"
             ),
             new(

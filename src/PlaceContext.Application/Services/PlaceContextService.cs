@@ -495,35 +495,6 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<Ports.ChainRunTelemetry>> ListRecentChainRunTelemetryAsync(int take = 50, CancellationToken ct = default)
         => _dispatcher.Query(new Observability.ListRecentChainRunTelemetryQuery(take), ct);
 
-    // ── Agent chat ─────────────────────────────────────────────────────────────────────────────────
-
-    public Task<AgentConfigView> GetAgentConfigAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new Features.GetAgentConfigQuery(projectId), ct);
-
-    public Task<AgentDefinitionView> EnsureCommandAgentAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Send(new Features.EnsureCommandAgentCommand(projectId), ct);
-
-    public Task<IReadOnlyList<AgentDefinitionView>> ListAgentDefinitionsAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new Features.ListAgentDefinitionsQuery(projectId), ct);
-
-    public Task<AgentDefinitionView> SaveAgentDefinitionAsync(Features.SaveAgentDefinitionCommand command, CancellationToken ct = default)
-        => _dispatcher.Send(command, ct);
-
-    public Task<bool> DeleteAgentDefinitionAsync(Guid agentId, CancellationToken ct = default)
-        => _dispatcher.Send(new Features.DeleteAgentDefinitionCommand(agentId), ct);
-
-    public Task<AgentConfigView> UpdateAgentConfigAsync(Features.UpdateAgentConfigCommand command, CancellationToken ct = default)
-        => _dispatcher.Send(command, ct);
-
-    public Task<AgentChatSessionView> SendAgentMessageAsync(Features.SendAgentMessageCommand command, CancellationToken ct = default)
-        => _dispatcher.Send(command, ct);
-
-    public Task<IReadOnlyList<AgentChatSessionView>> ListAgentChatSessionsAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new Features.ListAgentChatSessionsQuery(projectId), ct);
-
-    public Task<AgentChatSessionView?> GetAgentChatSessionAsync(Guid sessionId, CancellationToken ct = default)
-        => _dispatcher.Query(new Features.GetAgentChatSessionQuery(sessionId), ct);
-
     public Task<Dtos.McpConnectionView> CreateMcpConnectionAsync(Features.CreateMcpConnectionCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
     public Task<Dtos.McpConnectionView> UpdateMcpConnectionAsync(Features.UpdateMcpConnectionCommand command, CancellationToken ct = default)
@@ -535,14 +506,4 @@ public sealed class PlaceContextService : IPlaceContextService
     public Task<IReadOnlyList<Dtos.McpConnectionView>> ListMcpConnectionsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new Features.ListMcpConnectionsQuery(projectId), ct);
 
-    // ── Chat commands ──────────────────────────────────────────────────────────────────────────────
-
-    public Task<Dtos.ChatCommandView> CreateChatCommandAsync(Features.CreateChatCommandCommand command, CancellationToken ct = default)
-        => _dispatcher.Send(command, ct);
-    public Task<Dtos.ChatCommandView> UpdateChatCommandAsync(Features.UpdateChatCommandCommand command, CancellationToken ct = default)
-        => _dispatcher.Send(command, ct);
-    public Task<bool> DeleteChatCommandAsync(Guid commandId, CancellationToken ct = default)
-        => _dispatcher.Send(new Features.DeleteChatCommandCommand(commandId), ct);
-    public Task<IReadOnlyList<Dtos.ChatCommandView>> ListChatCommandsAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new Features.ListChatCommandsQuery(projectId), ct);
 }

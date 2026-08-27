@@ -37,7 +37,7 @@ public sealed class ClusterViewModel(
 
     public async Task InitializeAsync()
     {
-        ui.Set("Cluster", "nodes · agents · join workers");
+        ui.Set("Cluster", "nodes · local AI · join workers");
         await RefreshAsync();
     }
 

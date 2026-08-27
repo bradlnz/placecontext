@@ -5,7 +5,7 @@ namespace PlaceContext.Host.Components.ViewModels.Helpers;
 /// <summary>
 /// Shared formatting utilities used across multiple pages.
 /// Eliminates the FormatBytes / FormatDuration / FormatMs / PrettyJson / DataUri
-/// duplication across Jobs, JobChains, Dashboard, Observability, Chat, and Artifacts.
+/// duplication across Jobs, JobChains, Dashboard, Observability, and Artifacts.
 /// </summary>
 public static class FormatHelper
 {
