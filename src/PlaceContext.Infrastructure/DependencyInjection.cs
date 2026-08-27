@@ -421,41 +421,6 @@ public static class DependencyInjection
             if (shouldClose)
                 connection.Open();
 
-            bool hasParentAgentId;
-            using (var hasParentAgentIdCommand = connection.CreateCommand())
-            {
-                hasParentAgentIdCommand.CommandText =
-                    """
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM information_schema.columns
-                        WHERE table_schema = 'public'
-                          AND table_name = 'agent_definitions'
-                          AND lower(column_name) = 'parentagentid'
-                    );
-                    """;
-                hasParentAgentId = Convert.ToBoolean(hasParentAgentIdCommand.ExecuteScalar());
-            }
-
-            bool hasSchema;
-            using (var hasSchemaCommand = connection.CreateCommand())
-            {
-                hasSchemaCommand.CommandText =
-                    """
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM information_schema.columns
-                        WHERE table_schema = 'public'
-                          AND table_name = 'agent_definitions'
-                          AND lower(column_name) = 'schema'
-                    );
-                    """;
-                hasSchema = Convert.ToBoolean(hasSchemaCommand.ExecuteScalar());
-            }
-
-            if (hasParentAgentId && hasSchema)
-                return;
-
             using (var ensureColumns = connection.CreateCommand())
             {
                 ensureColumns.CommandText =
@@ -463,7 +428,7 @@ public static class DependencyInjection
                     ALTER TABLE agent_definitions ADD COLUMN IF NOT EXISTS "ParentAgentId" uuid;
                     CREATE INDEX IF NOT EXISTS "IX_agent_definitions_ParentAgentId" ON agent_definitions ("ParentAgentId");
                     ALTER TABLE agent_definitions ADD COLUMN IF NOT EXISTS "Schema" text;
-                    UPDATE agent_definitions SET "Schema" = '' WHERE "Schema" IS NULL;
+                    UPDATE agent_definitions SET "Schema" = '{}' WHERE "Schema" IS NULL OR btrim("Schema") = '';
                     ALTER TABLE agent_definitions ALTER COLUMN "Schema" SET NOT NULL;
                     """;
                 ensureColumns.ExecuteNonQuery();

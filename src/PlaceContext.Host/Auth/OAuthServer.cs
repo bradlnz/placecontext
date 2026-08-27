@@ -37,18 +37,6 @@ public static class OAuthServer
             });
         }).AllowAnonymous();
 
-        app.MapGet("/.well-known/oauth-protected-resource/desktop", (HttpContext ctx, IConfiguration config) =>
-        {
-            var b = PublicUrl.Base(ctx, config);
-            return Results.Json(new Dictionary<string, object?>
-            {
-                ["resource"] = $"{b}/api/desktop",
-                ["authorization_servers"] = new[] { b },
-                ["scopes_supported"] = new[] { "desktop" },
-                ["bearer_methods_supported"] = new[] { "header" },
-            });
-        }).AllowAnonymous();
-
         // Authorization Server Metadata (RFC 8414).
         app.MapGet("/.well-known/oauth-authorization-server", (HttpContext ctx, IConfiguration config) =>
         {
@@ -65,7 +53,7 @@ public static class OAuthServer
                 ["grant_types_supported"] = new[] { "authorization_code", "refresh_token" },
                 ["code_challenge_methods_supported"] = new[] { "S256" },
                 ["token_endpoint_auth_methods_supported"] = new[] { "none" },
-                ["scopes_supported"] = new[] { "mcp", "identity", "desktop" },
+                ["scopes_supported"] = new[] { "mcp", "identity" },
             });
         }).AllowAnonymous();
 
@@ -262,12 +250,9 @@ public static class OAuthServer
             Encoding.ASCII.GetBytes(computed), Encoding.ASCII.GetBytes(challenge));
     }
 
-    internal static bool IsSupportedScope(string scope) => scope is "mcp" or "identity" or "desktop";
+    internal static bool IsSupportedScope(string scope) => scope is "mcp" or "identity";
 
-    internal static string AudienceForScope(string issuer, string scope) =>
-        scope.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("desktop", StringComparer.Ordinal)
-            ? $"{issuer}/api/desktop"
-            : $"{issuer}/mcp";
+    internal static string AudienceForScope(string issuer, string scope) => $"{issuer}/mcp";
 
     internal static OAuthClient? TrustedWebClient(IConfiguration config, string clientId, string redirectUri)
     {

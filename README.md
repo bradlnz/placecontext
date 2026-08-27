@@ -142,12 +142,7 @@ flowchart LR
 dotnet build && dotnet test        # all suites green; architecture tests enforce the onion
 dotnet run --project src/PlaceContext.Host   # portal http://localhost:7700, MCP at /mcp
 make -C deploy/tui                 # build the TUI binary
-dotnet run --project desktop/PlaceContext.Desktop.csproj  # native desktop client
 ```
-
-The desktop client uses OAuth 2.1 authorization-code flow with PKCE. Enter the PlaceContext endpoint,
-complete sign-in in the browser, and the app loads user-authorized data from `/api/desktop/*`. Access
-and refresh tokens remain in memory; no API key or client secret is required.
 
 On a database without a human owner account, opening the portal redirects to the first-run setup.
 That flow creates the default workspace owner and signs them in; no shared default password is used.

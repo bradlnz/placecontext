@@ -2,10 +2,9 @@ using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Tests;
 
-public sealed class DesktopOAuthScopeTests
+public sealed class OAuthScopeTests
 {
     [Theory]
-    [InlineData("desktop")]
     [InlineData("mcp")]
     [InlineData("identity")]
     public void Recognizes_supported_oauth_scopes(string scope)
@@ -15,6 +14,7 @@ public sealed class DesktopOAuthScopeTests
 
     [Theory]
     [InlineData("")]
+    [InlineData("desktop")]
     [InlineData("coreapi.projects.read")]
     [InlineData("admin")]
     public void Rejects_unknown_oauth_scopes(string scope)
@@ -23,11 +23,11 @@ public sealed class DesktopOAuthScopeTests
     }
 
     [Theory]
-    [InlineData("desktop", "https://placecontext.example/api/desktop")]
-    [InlineData("desktop mcp", "https://placecontext.example/api/desktop")]
-    [InlineData("mcp", "https://placecontext.example/mcp")]
-    public void Selects_resource_audience_from_granted_scope(string scope, string expected)
+    [InlineData("mcp")]
+    [InlineData("mcp identity")]
+    public void Selects_mcp_resource_audience(string scope)
     {
-        Assert.Equal(expected, OAuthServer.AudienceForScope("https://placecontext.example", scope));
+        Assert.Equal("https://placecontext.example/mcp",
+            OAuthServer.AudienceForScope("https://placecontext.example", scope));
     }
 }

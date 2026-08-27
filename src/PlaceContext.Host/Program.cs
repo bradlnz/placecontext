@@ -266,12 +266,9 @@ builder.Services
             {
                 ctx.HandleResponse();
                 var b = PublicUrl.Base(ctx.HttpContext, ctx.HttpContext.RequestServices.GetRequiredService<IConfiguration>());
-                var metadataPath = ctx.HttpContext.Request.Path.StartsWithSegments("/api/desktop")
-                    ? "/.well-known/oauth-protected-resource/desktop"
-                    : "/.well-known/oauth-protected-resource";
                 ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 ctx.Response.Headers.WWWAuthenticate =
-                    $"Bearer resource_metadata=\"{b}{metadataPath}\"";
+                    $"Bearer resource_metadata=\"{b}/.well-known/oauth-protected-resource\"";
                 return Task.CompletedTask;
             },
             // The token's tenant must match the subdomain it's used on — no cross-tenant token reuse.
@@ -346,13 +343,6 @@ builder.Services.AddAuthorization(o =>
     o.AddPolicy("Member", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Member)));
     o.AddPolicy("Admin", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Admin)));
     o.AddPolicy("Owner", p => p.RequireAuthenticatedUser().RequireAssertion(c => RoleAtLeast(c.User, UserRole.Owner)));
-    o.AddPolicy("DesktopApi", p => p
-        .RequireAuthenticatedUser()
-        .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
-        .RequireAssertion(context =>
-            (context.User.FindFirst("scope")?.Value ?? string.Empty)
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Contains("desktop", StringComparer.Ordinal)));
     // Fine-grained permission policies — the policy name IS the permission string (see the Permission
     // catalog), so gating a new sensitive tool/endpoint/page is just [Authorize(Policy = Permission.X)].
     // Backed by PermissionAuthorizationHandler, which resolves role defaults + tenant-scoped overrides.

@@ -100,10 +100,13 @@ public sealed class AgentDefinition : AggregateRoot
         DateTimeOffset updatedAt)
         => new(id, projectId, kind, name, description, instructions,
             templateKey,
-            kind == AgentKind.Command ? "{}" : NormalizeSchema(schema),
+            kind == AgentKind.Command ? "{}" : NormalizePersistedSchema(schema),
             kind == AgentKind.Command ? Enum.GetValues<AgentCapability>() : NormalizeCapabilities(capabilities),
             kind == AgentKind.Command ? [] : NormalizeJobs(allowedJobIds),
             kind == AgentKind.Command || enabled, kind == AgentKind.Command ? null : parentAgentId, createdAt, updatedAt);
+
+    private static string NormalizePersistedSchema(string? value)
+        => NormalizeSchema(string.IsNullOrWhiteSpace(value) ? "{}" : value);
 
     public void Update(
         string name,

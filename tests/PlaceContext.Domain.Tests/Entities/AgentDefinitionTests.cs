@@ -59,4 +59,14 @@ public sealed class AgentDefinitionTests
         Assert.Equal([AgentCapability.GraphRead, AgentCapability.JobsRun], agent.Capabilities.Order());
         Assert.Equal([firstJob], agent.AllowedJobIds);
     }
+
+    [Fact]
+    public void Rehydrate_repairs_a_legacy_worker_with_an_empty_schema()
+    {
+        var agent = AgentDefinition.Rehydrate(
+            Guid.NewGuid(), Guid.NewGuid(), AgentKind.Worker, "Legacy worker", "", "", "custom", " ",
+            [AgentCapability.GraphRead], [], true, null, Now, Now);
+
+        Assert.Equal("{}", agent.Schema);
+    }
 }
