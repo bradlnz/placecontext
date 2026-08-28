@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a source-free PlaceContext release bundle for DigitalOcean Spaces.
+# Build source-free PlaceContext GitHub release assets.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

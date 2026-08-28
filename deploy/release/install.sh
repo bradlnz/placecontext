@@ -3,13 +3,13 @@
 #
 #   curl -fsSL https://get.placecontext.io/install.sh | bash
 #
-# The public bundle contains compiled runtime images only; the source repository
+# The GitHub release bundle contains compiled runtime images only; the source repository
 # can remain private. The installer provisions its tools and Python environment,
 # imports the packaged runtime into k3d, and applies the k3s manifests.
 set -euo pipefail
 
 VERSION="${PLACECONTEXT_VERSION:-latest}"
-BASE_URL="${PLACECONTEXT_BASE_URL:-https://placecontext.syd1.cdn.digitaloceanspaces.com}"
+BASE_URL="${PLACECONTEXT_BASE_URL:-https://github.com/bradlnz/placecontext/releases}"
 INSTALL_DIR="${PLACECONTEXT_HOME:-$HOME/.local/share/placecontext}"
 MODEL="${PLACECONTEXT_MODEL:-Qwen/Qwen3.5-4B}"
 SHARD_ENDPOINTS="${PLACECONTEXT_SHARD_ENDPOINTS:-}"
@@ -48,7 +48,7 @@ while [[ $# -gt 0 ]]; do
         '  install.sh [--version TAG] [--model ID] [--shard-endpoints URL,URL]' \
         '' \
         'Options:' \
-        '  --version TAG          Spaces release version (default: latest)' \
+        '  --version TAG          GitHub release version (default: latest)' \
         '  --install-dir DIR      Install location' \
         '  --model ID             Hugging Face model ID' \
         '  --shard-endpoints LIST Ordered comma-separated worker URLs' \
@@ -141,16 +141,18 @@ bootstrap_release() {
   local -a install_args
   BASE_URL="${BASE_URL%/}"
   if [[ "$VERSION" == "latest" ]]; then
+    release_base="$BASE_URL/latest/download"
     version_file="$(mktemp "${TMPDIR:-/tmp}/placecontext-version.XXXXXX")"
-    download "$BASE_URL/latest/VERSION" "$version_file"
+    download "$release_base/VERSION" "$version_file"
     VERSION="$(tr -d '[:space:]' < "$version_file")"
     rm -f "$version_file"
     [[ -n "$VERSION" ]] || die "latest release version is empty"
+  else
+    VERSION="${VERSION#v}"
+    release_base="$BASE_URL/download/v$VERSION"
   fi
-  VERSION="${VERSION#v}"
   arch="$(normalise_arch)"
   asset="placecontext-deploy-$arch.tar.gz"
-  release_base="$BASE_URL/releases/$VERSION"
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/placecontext.XXXXXX")"
   trap 'rm -rf "$tmp"' EXIT
 

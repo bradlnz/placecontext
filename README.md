@@ -1,17 +1,33 @@
-# PlaceContext
+<p align="center">
+  <img src="src/PlaceContext.Host/wwwroot/favicon.svg" width="112" alt="PlaceContext logo">
+</p>
 
-**An open-source, self-hosted job engine.** Built by Bradley Lietz.
+<h1 align="center">PlaceContext</h1>
 
-PlaceContext turns code and containers into reusable jobs that run across infrastructure you own. Trigger work
-on demand, on schedules, or from events; fan it out across a fleet; connect jobs into multi-step pipelines; and
-retain the resulting data, logs, traces, and artifacts. The web portal, schedules, events, and MCP endpoint all
-operate on the same durable job engine.
+<p align="center">
+  <strong>Turn code and containers into durable jobs that run anywhere you own.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/bradlnz/placecontext/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/bradlnz/placecontext?style=flat-square"></a>
+  <a href="https://github.com/bradlnz/placecontext/actions/workflows/release.yml"><img alt="Release build" src="https://img.shields.io/github/actions/workflow/status/bradlnz/placecontext/release.yml?style=flat-square&label=release"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-43d675?style=flat-square"></a>
+  <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512bd4?style=flat-square">
+</p>
+
+PlaceContext is an open-source, self-hosted job engine with a web portal and an MCP endpoint. Run work on
+demand, on schedules, or from events; fan it out across your fleet; connect jobs into pipelines; and keep the
+resulting data, logs, traces, and artifacts under your control.
+
+## Quick start
 
 ```bash
 # Download the verified release and create a local k3d cluster plus local AI
 curl -fsSL https://get.placecontext.io/install.sh | bash
 # portal http://localhost:7700 · MCP /mcp
 ```
+
+Requires Linux or macOS with `curl`; the installer provisions the remaining local runtime dependencies.
 
 ### Connect automation and AI clients
 
@@ -26,7 +42,7 @@ claude mcp add --transport http placecontext http://localhost:7700/mcp
 The first tool call opens a browser to sign in (OAuth 2.1 + PKCE, tenant-scoped tokens with
 automatic refresh). No API keys to paste.
 
-## Job engine capabilities
+## Why PlaceContext
 
 - **Project databases and entity models** — create project-scoped SQL tables, define linked entities, browse
   records, map job outputs into tables, and explore relationships without mixing tenant data.
@@ -78,7 +94,7 @@ From the portal's Cluster tab, each additional node has an explicit role:
 - **Standard worker** runs regular PlaceContext jobs and workload shards.
 - **AI shard** joins the fleet and runs one ordered MLX/Torch model layer slice.
 
-The generated command handles the k3s join and, for an AI shard, downloads the same verified Spaces
+The generated command handles the k3s join and, for an AI shard, downloads the same verified GitHub
 release and installs the worker service. The portal, MCP endpoint, and scheduler share one Host process.
 
 See [`deploy/release/README.md`](deploy/release/README.md) for installer and shard options.
@@ -140,7 +156,7 @@ EF migrations apply automatically on startup.
 
 ## Documentation
 
-- [Installation and fleet setup](docs/SETUP.md)
+- [Installation and fleet setup](deploy/release/README.md)
 - [OpenSearch integration](src/PlaceContext.Host/Wiki/opensearch-integration.md)
 - [SSO and OAuth integration](src/PlaceContext.Host/Wiki/sso-and-oauth.md)
 - [Security and sharing](src/PlaceContext.Host/Wiki/security-and-sharing.md)
@@ -150,7 +166,7 @@ operator-facing documentation shipped with each build.
 
 ## Upgrading
 
-- Re-run the installer to download and verify the newest compiled release from Spaces, then roll the deployment.
+- Re-run the installer to download and verify the newest compiled GitHub release, then roll the deployment.
 - Pass `--version v1.2.3` to install or retain a specific release.
 
 ## License

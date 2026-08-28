@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 concurrency:
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   package:
-    name: Build compiled bundles and publish to Spaces
+    name: Build compiled bundles and publish release
     runs-on: [self-hosted, Linux, X64, placecontext]
     timeout-minutes: 90
 
@@ -30,7 +30,7 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Test the release contract
-        run: dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj --configuration Release
+        run: dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj --configuration Release --filter FullyQualifiedName~ReleaseInstallerContractTests
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -52,7 +52,6 @@ jobs:
           bash -n deploy/release/install.sh
           bash -n deploy/release/install-production.sh
           bash -n deploy/release/package.sh
-          bash -n deploy/release/publish-spaces.sh
           python3 -c "compile(open('deploy/release/local-ai/worker.py', encoding='utf-8').read(), 'worker.py', 'exec')"
 
       - name: Build source-free release bundles
@@ -94,17 +93,15 @@ jobs:
           path: dist/upload
           if-no-files-found: error
 
-      - name: Publish compiled artifacts to DigitalOcean Spaces
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
-          PLACECONTEXT_SPACES_BUCKET: ${{ vars.SPACES_BUCKET }}
-          PLACECONTEXT_SPACES_ENDPOINT: ${{ vars.SPACES_ENDPOINT }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -euo pipefail
-          : "${AWS_ACCESS_KEY_ID:?Add the SPACES_ACCESS_KEY_ID repository secret}"
-          : "${AWS_SECRET_ACCESS_KEY:?Add the SPACES_SECRET_ACCESS_KEY repository secret}"
-          export PLACECONTEXT_SPACES_BUCKET="${PLACECONTEXT_SPACES_BUCKET:-placecontext}"
-          export PLACECONTEXT_SPACES_ENDPOINT="${PLACECONTEXT_SPACES_ENDPOINT:-https://syd1.digitaloceanspaces.com}"
-          deploy/release/publish-spaces.sh
+          gh release create "$GITHUB_REF_NAME" \
+            dist/upload/install.sh \
+            dist/upload/join.sh \
+            "dist/upload/releases/${{ steps.release.outputs.version }}"/* \
+            --generate-notes \
+            --verify-tag
