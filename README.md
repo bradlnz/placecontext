@@ -29,18 +29,43 @@ curl -fsSL https://get.placecontext.io/install.sh | bash
 
 Requires Linux or macOS with `curl`; the installer provisions the remaining local runtime dependencies.
 
-### Connect automation and AI clients
+## Connect your AI harness
 
-MCP is one interface to the job engine—not the product boundary. Claude Code and other MCP clients can query
-project data and context, submit jobs and pipelines, record decisions, and retrieve outputs through the same
-permission model as the portal:
+PlaceContext exposes the same tools at `<workspace-url>/mcp`. These examples connect to the local quick-start
+instance; replace `http://localhost:7700` with your workspace URL.
+
+### Codex
+
+```bash
+codex mcp add placecontext --url http://localhost:7700/mcp
+```
+
+### Claude Code
 
 ```bash
 claude mcp add --transport http placecontext http://localhost:7700/mcp
 ```
 
-The first tool call opens a browser to sign in (OAuth 2.1 + PKCE, tenant-scoped tokens with
-automatic refresh). No API keys to paste.
+### Gemini Antigravity
+
+Open **Agent → MCP Servers → Manage MCP Servers**, add a custom server named `placecontext`, and set its URL to:
+
+```text
+http://localhost:7700/mcp
+```
+
+### Hermes Agent
+
+```bash
+hermes mcp add placecontext --url http://localhost:7700/mcp --auth oauth
+hermes mcp test placecontext
+```
+
+The first tool call opens a browser to sign in with OAuth 2.1 + PKCE. Once connected, try:
+
+```text
+Onboard this repository into PlaceContext, then show me its recent activity and available jobs.
+```
 
 ## Why PlaceContext
 
@@ -59,81 +84,35 @@ automatic refresh). No API keys to paste.
 - **MCP and automation integration** — durable project context and MCP tools let AI and automation clients use
   the same governed data, jobs, pipelines, and artifacts as human operators.
 
-## How a job runs across your fleet
+## Example deployments
 
-Any authenticated client can submit work through the portal or MCP endpoint; execution lands on whichever node
-has capacity—including machines behind different NATs, joined over [Tailscale](https://tailscale.com):
+### Mac-led home or studio cluster
 
-```mermaid
-sequenceDiagram
-    participant A as Client / automation
-    participant M as PlaceContext Host<br/>(k3s · MCP + portal)
-    participant W as Worker nodes<br/>(k3s over Tailscale)
-    participant S as Off-cluster S3
+- Run the quick-start installer on an always-on Apple Silicon Mac mini.
+- Use the generated command in **Cluster → Add node** to join MacBooks or Linux workstations as workers.
+- Add another Apple Silicon Mac as an AI shard when you want local model capacity.
+- Tailscale lets machines participate from different networks without opening worker ports publicly.
 
-    A->>M: MCP run_job / run_job_chain (OAuth bearer)
-    M->>M: snapshot spec · inject vault secrets
-    M->>W: Kubernetes Jobs — one sandboxed container per shard
-    W->>W: stdin: JSON payload → stdout: JSON artifact
-    W-->>M: exit codes + artifacts + logs
-    M->>S: store HTML / charts / CSV outputs
-    M-->>A: run status + artifacts (and job.completed fires triggers)
-    Note over M: portal shows progress live
+### Single cloud server
+
+Run a small non-HA workspace on an Ubuntu server and keep AI inference elsewhere:
+
+```bash
+curl -fsSL https://get.placecontext.io/install.sh | bash -s -- --no-ai
 ```
 
-The same queue serves the portal's Run button, cron/event triggers, and MCP clients — runs are durable
-rows claimed with `FOR UPDATE SKIP LOCKED`, so any replica can execute them and nothing is lost on
-restart.
+Point DNS and TLS at the portal, then connect local workers from **Cluster → Add node**. This is a good fit for
+evaluation or a small team; production HA uses an existing multi-node k3s cluster, external PostgreSQL, and S3.
 
-## The fleet
+### All-local server fleet
 
-The local installer creates a lab [k3s](https://k3s.io) cluster through [k3d](https://k3d.io).
-Production deploys to an existing HA k3s cluster and keeps PostgreSQL, S3, and backups off-cluster.
-From the portal's Cluster tab, each additional node has an explicit role:
+- Install PlaceContext on one Linux server that stays online.
+- Join spare Linux servers as standard workers so jobs run wherever capacity is available.
+- Keep the portal private on the LAN, or use Tailscale for access and workers at other sites.
+- Add an AI shard only when a machine has the memory and accelerator needed by your chosen model.
 
-- **Standard worker** runs regular PlaceContext jobs and workload shards.
-- **AI shard** joins the fleet and runs one ordered MLX/Torch model layer slice.
-
-The generated command handles the k3s join and, for an AI shard, downloads the same verified GitHub
-release and installs the worker service. The portal, MCP endpoint, and scheduler share one Host process.
-
-See [`deploy/release/README.md`](deploy/release/README.md) for installer and shard options.
-
-## Architecture
-
-Onion architecture, DDD, tests-first, with a hand-rolled CQRS dispatcher — dependencies point
-inward only (enforced by `PlaceContext.Architecture.Tests`):
-
-```
-src/
-  PlaceContext.Domain          → entities/aggregates (Job, JobRun, JobChain, Project, …), no I/O
-  PlaceContext.Application     → command/query handlers, ports, the dispatcher, views
-  PlaceContext.Infrastructure  → EF Core/PostgreSQL, Kubernetes runner, S3, schedulers
-  PlaceContext.Host            → MCP tools (Streamable HTTP) + Blazor portal (composition root)
-                                 Razor views are MVVM-only: scoped ViewModels own state,
-                                 commands, validation, navigation, service access, and JS interop
-deploy/
-  release/                    → release installer, k3s manifests, local-AI runtime
-```
-
-```mermaid
-flowchart LR
-    subgraph clients [Clients]
-        CC[Claude Code / MCP clients]
-        B[Browser — portal]
-    end
-    subgraph cluster [k3s cluster — your machines]
-        H[PlaceContext Host<br/>MCP + portal + scheduler]
-        J[Job pods — sandboxed containers]
-    end
-    P[(External PostgreSQL)]
-    O[(Off-cluster S3)]
-    CC -- "MCP over HTTP + OAuth" --> H
-    B --> H
-    H --> P
-    H --> O
-    H -- Kubernetes API --> J
-```
+In every layout, the portal, schedules, events, and connected AI harnesses submit work to the same durable job
+queue. See [`deploy/release/README.md`](deploy/release/README.md) for production requirements and shard options.
 
 ## Developing
 
