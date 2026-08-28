@@ -11,14 +11,13 @@ Docker, Python 3.11+, curl, and OpenSSL are required. The release installer down
 curl -fsSL https://get.placecontext.io/install.sh | bash
 ```
 
-PostgreSQL and MinIO are installed with the managed cluster. The portal is available at
-`http://localhost:7700` until a reverse proxy is configured.
+PostgreSQL is installed for the local lab cluster; object storage is optional. The portal is
+available at `http://localhost:7700`.
 
 For a source checkout, install the .NET 10 SDK, Docker, and PostgreSQL, then run:
 
 ```bash
-./setup.sh
-./run.sh
+dotnet run --project src/PlaceContext.Host
 ```
 
 ## First boot
@@ -59,12 +58,12 @@ projects should share the same service.
 
 ## Storage and backups
 
-The managed deployment uses PostgreSQL for application and project data and MinIO for artifacts and
-warm dependency layers. A settings backup does not include run history, object-store files, database
+Production uses external HA PostgreSQL and off-cluster S3. A settings backup does not include run
+history, object-store files, database
 contents, or Vault plaintext. A recoverable deployment therefore needs all of the following:
 
 - PostgreSQL backups;
-- MinIO/object-store backups;
+- S3 versioning, lifecycle, and replication/backups;
 - the configuration export;
 - independently protected deployment secrets and encryption keys.
 

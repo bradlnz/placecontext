@@ -61,10 +61,12 @@ cp -R "$ROOT/deploy/release/local-ai" "$STAGE/local-ai"
 # Never ship interpreter cache files accidentally left by local validation.
 rm -rf "$STAGE/local-ai/__pycache__"
 cp "$ROOT/deploy/release/install.sh" "$STAGE/install.sh"
+cp "$ROOT/deploy/release/install-production.sh" "$STAGE/install-production.sh"
 cp "$ROOT/LICENSE" "$STAGE/LICENSE"
 cp "$RUNTIME_TAR" "$STAGE/placecontext-runtime.tar"
 printf '%s\n' "$VERSION" > "$STAGE/VERSION"
 chmod 0755 "$STAGE/install.sh"
+chmod 0755 "$STAGE/install-production.sh"
 
 sed -i \
   "s|__PLACECONTEXT_RUNTIME_IMAGE__|$IMAGE|g" \

@@ -6,6 +6,9 @@ namespace PlaceContext.Infrastructure.Workload;
 /// </summary>
 public sealed class WorkloadRunnerOptions
 {
+    /// <summary>Kubernetes namespace used for untrusted workload Jobs.</summary>
+    public string KubernetesNamespace { get; set; } = "placecontext-jobs";
+
     /// <summary>
     /// Docker CLI executable name or path. Default: "docker".
     /// Override to "podman" or a fully-qualified path in restricted environments.
@@ -114,10 +117,9 @@ public sealed class WorkloadRunnerOptions
     /// <summary>
     /// Bake the dependency layer once per manifest hash and reuse it from the object store on
     /// later runs (Kubernetes runner only): a bake Job installs the packages, tars them and PUTs
-    /// them to MinIO; warmed shard pods fetch + extract the tar in their init step and skip the
-    /// install. Requires a configured object store; silently off when there isn't one. Warmed pods
-    /// get scoped egress to MinIO + DNS instead of the usual deny-all. Any failure falls back to
-    /// the per-run install. Default: true.
+    /// them to S3; warmed shard pods fetch + extract the tar in their init step and skip the install.
+    /// Requires a configured object store and a job that opted into public network egress; silently
+    /// off otherwise. Any failure falls back to the per-run install. Default: true.
     /// </summary>
     public bool WarmDependencyCache { get; set; } = true;
 

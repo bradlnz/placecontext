@@ -1,12 +1,12 @@
 # PlaceContext Host deployment — portal + MCP + trigger scheduler.
 # __IMAGE__ is substituted by the release workflow with the immutable container image ref.
-# The deployment uses the `placecontext` namespace for all namespaced resources.
+# Platform resources live in `placecontext`; untrusted Jobs live in `placecontext-jobs`.
 # (Subscriptions/billing are handled by a separate web portal — no activation key here.)
 #
 # The scheduler is safe to scale: a Postgres advisory lock elects one replica to scan schedules, and the
 # durable run queue (pending_job_runs) is drained with FOR UPDATE SKIP LOCKED so any replica can execute
 # runs without duplication. Bump replicas freely.
-# ServiceAccount + RBAC so the Host can run jobs as Kubernetes Jobs in its namespace
+# ServiceAccount + RBAC so the Host can run jobs in the isolated workload namespace
 # (create/watch Jobs, read their pods + logs, manage the per-run ConfigMap + deny-egress NetworkPolicy).
 apiVersion: v1
 kind: ServiceAccount
@@ -18,7 +18,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: placecontext-jobs
-  namespace: placecontext
+  namespace: placecontext-jobs
 rules:
   - apiGroups: ["batch"]
     resources: ["jobs", "jobs/status"]
@@ -37,7 +37,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: placecontext-jobs
-  namespace: placecontext
+  namespace: placecontext-jobs
 subjects:
   - kind: ServiceAccount
     name: placecontext
@@ -112,49 +112,29 @@ metadata:
   name: placecontext
   namespace: placecontext
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels: { app: placecontext }
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 1
+      maxSurge: 1
+      maxUnavailable: 0
   template:
     metadata:
       labels: { app: placecontext }
     spec:
       serviceAccountName: placecontext
-      hostAliases:
-        - ip: "10.10.0.10"
-          hostnames: ["auth.lan"]
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
-      tolerations:
-        - key: node-role.kubernetes.io/control-plane
-          operator: Exists
-          effect: NoSchedule
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
-      # Wait for PostgreSQL to accept connections before starting the Host, so the
-      # first boot doesn't crash-loop while the DB is still coming up / migrating.
-      initContainers:
-        - name: wait-for-db
-          image: pgvector/pgvector:pg16
-          securityContext:
-            runAsNonRoot: false
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
-          command:
-            - sh
-            - -c
-            - |
-              until pg_isready -h placecontext-db -p 5432 -U postgres -d placecontext; do
-                echo "waiting for placecontext-db…"; sleep 2
-              done
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app: placecontext }
       containers:
         - name: host
           image: __IMAGE__
@@ -204,45 +184,37 @@ spec:
             # No in-cluster LLM: the jobs pipeline is fully deterministic.
             - name: PlaceContext__Llm__Provider
               value: "none"
-            - name: PlaceContext__Sso__Protocol
-              value: "OpenIdConnect"
-            - name: PlaceContext__Sso__Authority
-              value: "https://auth.lan/realms/homelab"
-            - name: PlaceContext__Sso__ClientId
-              value: "placecontext-native"
-            - name: PlaceContext__Sso__CallbackUrl
-              value: "https://placecontext.lan/auth/sso/callback"
-            - name: SSL_CERT_DIR
-              value: "/homelab-ca:/etc/ssl/certs"
-            # In-cluster MinIO stores post-job artifacts. The installer generates this secret.
+            # Optional locally; production requires an off-cluster HTTPS S3 secret.
             - name: PlaceContext__ObjectStore__Endpoint
-              value: "http://minio:9000"
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-object-store
+                  key: endpoint
+                  optional: true
             - name: PlaceContext__ObjectStore__AccessKey
               valueFrom:
                 secretKeyRef:
-                  name: placecontext-minio
+                  name: placecontext-object-store
                   key: ACCESS_KEY_ID
+                  optional: true
             - name: PlaceContext__ObjectStore__SecretKey
               valueFrom:
                 secretKeyRef:
-                  name: placecontext-minio
+                  name: placecontext-object-store
                   key: ACCESS_SECRET_KEY
+                  optional: true
             - name: PlaceContext__ObjectStore__Region
-              value: "us-east-1"
+              valueFrom:
+                secretKeyRef: { name: placecontext-object-store, key: region, optional: true }
             - name: PlaceContext__ObjectStore__ForcePathStyle
-              value: "true"
+              valueFrom:
+                secretKeyRef: { name: placecontext-object-store, key: force-path-style, optional: true }
             - name: PlaceContext__ObjectStore__ReportsBucket
-              value: "placecontext-reports"
+              valueFrom:
+                secretKeyRef: { name: placecontext-object-store, key: reports-bucket, optional: true }
             - name: PlaceContext__ObjectStore__DepsBucket
-              value: "placecontext-reports"
-            # Redis cache for job_runs ShardResultsJson (keeps Postgres lean).
-            - name: PlaceContext__Redis__ConnectionString
-              value: "redis:6379,abortConnect=false,connectRetry=5,keepAlive=60,syncTimeout=10000,connectTimeout=5000,responseTimeout=10000,"
-            # Qdrant vector DB (for future RAG enhancements)
-            - name: PlaceContext__Qdrant__Endpoint
-              value: "http://qdrant:6333"
-            - name: PlaceContext__Qdrant__Collection
-              value: "placecontext"
+              valueFrom:
+                secretKeyRef: { name: placecontext-object-store, key: deps-bucket, optional: true }
             # Internal CA cert for the /ca endpoint (client trust installation).
             - name: PLACECONTEXT_CA_CERT_PATH
               value: "/etc/placecontext/ca/tls.crt"
@@ -254,10 +226,12 @@ spec:
             # plane and queue until a standard worker is online.
             - name: PlaceContext__WorkloadRunner__RequireWorkerNodes
               value: "false"
+            - name: PlaceContext__WorkloadRunner__KubernetesNamespace
+              value: "placecontext-jobs"
             # Configure PlaceContext__ClusterChat__* or PlaceContext__Voyage__* only when an
             # operator has provisioned the corresponding local shards or external provider.
             - name: PlaceContext__ClusterChat__Endpoint
-              value: "http://placecontext-cluster-host:8081/api/cluster"
+              value: "__CLUSTER_ENDPOINT__"
             - name: PlaceContext__ClusterChat__ApiToken
               valueFrom:
                 secretKeyRef:
@@ -302,16 +276,10 @@ spec:
             - name: ca-cert
               mountPath: /etc/placecontext/ca
               readOnly: true
-            - name: homelab-ca
-              mountPath: /homelab-ca
-              readOnly: true
       volumes:
         - name: ca-cert
           secret:
             secretName: placecontext-ca
-        - name: homelab-ca
-          configMap:
-            name: homelab-ca-openssl
 ---
 apiVersion: v1
 kind: Service
@@ -331,101 +299,12 @@ spec:
     - port: 80
       targetPort: 7700
 ---
-# Vector DB for future advanced RAG (optional — content index uses pgvector today)
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: qdrant-storage
-  namespace: placecontext
-spec:
-  accessModes: [ReadWriteOnce]
-  storageClassName: local-path
-  resources:
-    requests:
-      storage: 5Gi
----
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: qdrant
-  namespace: placecontext
-spec:
-  serviceName: qdrant
-  replicas: 1
-  selector:
-    matchLabels: { app: qdrant }
-  template:
-    metadata:
-      labels: { app: qdrant }
-    spec:
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: "true"
-      tolerations:
-        - key: node-role.kubernetes.io/control-plane
-          operator: Exists
-          effect: NoSchedule
-      volumes:
-        - name: qdrant-storage
-          persistentVolumeClaim:
-            claimName: qdrant-storage
-      containers:
-        - name: qdrant
-          image: qdrant/qdrant:v1.12.1
-          ports:
-            - containerPort: 6333  # REST API
-            - containerPort: 6334  # gRPC
-          env:
-            - name: QDRANT__SERVICE__GRPC_PORT
-              value: "6334"
-          volumeMounts:
-            - name: qdrant-storage
-              mountPath: /qdrant/storage
-          readinessProbe:
-            httpGet: { path: /readyz, port: 6333 }
-            periodSeconds: 5
-          livenessProbe:
-            httpGet: { path: /readyz, port: 6333 }
-            periodSeconds: 15
-            failureThreshold: 3
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "100m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: qdrant
-  namespace: placecontext
-spec:
-  selector: { app: qdrant }
-  ports:
-    - name: http
-      port: 6333
-      targetPort: 6333
-    - name: grpc
-      port: 6334
-      targetPort: 6334
----
-# k3s ships Traefik — expose the portal/MCP on its configured HTTP entrypoint.
-# Operators can add a host and TLS block in an environment-specific overlay.
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: policy/v1
+kind: PodDisruptionBudget
 metadata:
   name: placecontext
   namespace: placecontext
 spec:
-  ingressClassName: traefik
-  rules:
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: placecontext
-            port:
-              number: 80
+  minAvailable: 1
+  selector:
+    matchLabels: { app: placecontext }

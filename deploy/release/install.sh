@@ -18,7 +18,7 @@ AI_TOKEN_PROVIDED=0
 [[ -z "$AI_TOKEN" ]] || AI_TOKEN_PROVIDED=1
 PORT="${PLACECONTEXT_PORT:-7700}"
 CLUSTER_NAME="${PLACECONTEXT_CLUSTER:-placecontext}"
-NAMESPACE="${PLACECONTEXT_NAMESPACE:-placecontext}"
+NAMESPACE="placecontext"
 INSTALL_AI=1
 AI_SHARD_ONLY=0
 SHARD_INDEX=0
@@ -317,7 +317,7 @@ random_hex() {
 configure_secrets() {
   say "Configuring local secrets"
   local pg_password connection rsa_key cert_dir
-  kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  kubectl apply -f "$ROOT/k3s/namespaces.yaml" >/dev/null
   ensure_secret placecontext-portal --from-literal="signing-key=$(random_hex 32)"
   ensure_secret placecontext-dp --from-literal="key=$(random_hex 32)"
 
@@ -334,10 +334,6 @@ configure_secrets() {
       --from-literal="password=$pg_password" \
       --from-literal="connection-string=$connection" >/dev/null
   fi
-  ensure_secret placecontext-minio \
-    --from-literal="ACCESS_KEY_ID=pc$(random_hex 4)" \
-    --from-literal="ACCESS_SECRET_KEY=$(random_hex 24)"
-
   if [[ "$INSTALL_AI" == 1 ]]; then
     if [[ "$AI_TOKEN_PROVIDED" == 1 ]]; then
       kubectl -n "$NAMESPACE" create secret generic placecontext-ai \
@@ -487,17 +483,16 @@ deploy_local() {
   start_worker
   say "Applying PlaceContext"
   kubectl -n "$NAMESPACE" apply -f "$ROOT/k3s/postgres.yaml" >/dev/null
-  kubectl -n "$NAMESPACE" apply -f "$ROOT/k3s/redis.yaml" >/dev/null
-  kubectl -n "$NAMESPACE" apply -f "$ROOT/k3s/minio.yaml" >/dev/null
-  kubectl -n "$NAMESPACE" apply -f "$ROOT/k3s/pg-backup.yaml" >/dev/null
+  kubectl apply -f "$ROOT/k3s/network-policies.yaml" >/dev/null
   local runtime_image cluster_endpoint
   runtime_image="$(awk -F'"' '/runtime_image:/ {print $2; exit}' "$ROOT/local-ai/config.yaml")"
   cluster_endpoint="http://placecontext-cluster-host:8081/api/cluster"
   [[ "$INSTALL_AI" == 1 ]] || cluster_endpoint=""
   sed -e "s|__IMAGE__|$runtime_image|g" \
       -e 's|__IMAGE_PULL_POLICY__|IfNotPresent|g' \
-      -e "s|value: \"http://placecontext-cluster-host:8081/api/cluster\"|value: \"$cluster_endpoint\"|g" \
+      -e "s|__CLUSTER_ENDPOINT__|$cluster_endpoint|g" \
       "$ROOT/k3s/placecontext.yaml" | kubectl -n "$NAMESPACE" apply -f - >/dev/null
+  kubectl apply -f "$ROOT/k3s/local-ingress.yaml" >/dev/null
   configure_cluster_ai
 
   if [[ "$WAIT" == 1 ]]; then

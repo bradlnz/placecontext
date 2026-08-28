@@ -18,19 +18,19 @@ namespace PlaceContext.Infrastructure.Workload;
 /// Per run it: writes the code file set + the shard payload into a ConfigMap, materialises them into an
 /// emptyDir at /work via a busybox init container, then runs the runtime image which pipes
 /// /work/input.json into the entrypoint on STDIN (preserving the same contract as the Docker runner).
-/// The pod's stdout is captured as the artifact; the container exit code is the result. When network
-/// egress is not allowed a deny-all-egress NetworkPolicy is attached to the pod (k3s enforces it).
+/// The pod's stdout is captured as the artifact; the container exit code is the result. Every pod gets
+/// an egress NetworkPolicy: deny-all by default, or DNS plus public internet when explicitly allowed.
 ///
 /// <para><b>Jobs never run as root.</b> The run container carries a restricted securityContext
 /// (nobody, no privilege escalation, all capabilities dropped), the pod a RuntimeDefault seccomp
-/// profile and an fsGroup that keeps /work and /out writable for it. The materialize init container
-/// stays root — it runs only our fixed copy script and opens /work up for the run container.</para>
+/// profile and an fsGroup that keeps /work and /out writable for it. The fixed materializer uses the
+/// same unprivileged identity, so workload pods satisfy Kubernetes Restricted Pod Security.</para>
 ///
 /// <para><b>Warm dependency cache.</b> A code workload shipping a dependency manifest no longer installs
 /// per pod: the first run bakes the layer once (a dedicated Job tars the installed deps and PUTs them to
 /// the object store — see <see cref="BakeAsync"/>) and every later pod fetches + extracts the tar in its
-/// init step, skipping the install via the <c>.baked</c> marker. Warmed pods get scoped egress to
-/// MinIO + DNS instead of deny-all. Any warm-path failure falls back to the cold per-pod install.</para>
+/// init step, skipping the install via the <c>.baked</c> marker. The cache is used only for jobs that
+/// already opted into public network egress. Any warm-path failure falls back to a cold run.</para>
 /// </summary>
 public sealed class KubernetesWorkloadRunner : IWorkloadRunner
 {
@@ -52,15 +52,15 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     {
         var name = MakeName(correlationId);
         var cfg = KubernetesClientConfiguration.InClusterConfig();
-        var ns = string.IsNullOrWhiteSpace(cfg.Namespace) ? "placecontext" : cfg.Namespace;
+        var ns = Namespace(cfg);
         using var client = new Kubernetes(cfg);
-        await CleanupAsync(client, ns, name, hadEgress: false);
+        await CleanupAsync(client, ns, name);
     }
 
     public async Task<WorkloadRunResult> RunAsync(WorkloadRunRequest request, CancellationToken ct = default)
     {
         var cfg = KubernetesClientConfiguration.InClusterConfig();
-        var ns = string.IsNullOrWhiteSpace(cfg.Namespace) ? "placecontext" : cfg.Namespace;
+        var ns = Namespace(cfg);
         using var client = new Kubernetes(cfg);
 
         var name = MakeName(request.CorrelationId);
@@ -72,7 +72,6 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         string image;
         string runShell; // shell run inside the pod (pipes the payload into the program on stdin)
         string? depsGetUrl = null;   // presigned GET for the baked dependency layer (warm cache)
-        var storeScopedEgress = false; // warm-cache pods get MinIO+DNS egress instead of deny-all
         RuntimeDefinition? runtime = null; // the code workload's runtime (its always-on sandbox profile)
         if (request.CodeFiles is not null)
         {
@@ -98,9 +97,8 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             {
                 depsPreamble += WorkloadDependencies.ShellPreamble(recipe);
                 if (recipe.InvokePrefix is not null) invoke = recipe.InvokePrefix + " " + invoke;
-                if (_options.WarmDependencyCache && _store is { IsEnabled: true })
+                if (request.AllowNetworkEgress && _options.WarmDependencyCache && _store is { IsEnabled: true })
                 {
-                    storeScopedEgress = false; // the fetch/upload needs MinIO + DNS even for no-egress jobs
                     depsGetUrl = await EnsureWarmCacheAsync(ns, client, runtimeId, image, recipe, request, ct);
                 }
             }
@@ -126,14 +124,13 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
 
         // The ConfigMap and the egress policy are independent — create them concurrently. Both must
         // exist before the Job below, so this is awaited before the Job create. Sandbox: deny-all
-        // egress unless the job opted in; a warm-cache pod instead gets SCOPED egress (MinIO + DNS
-        // only) so it can fetch its baked dependency layer.
+        // egress unless the job opted in; explicit egress reaches DNS + public networks but cannot
+        // pivot into cluster/private address space.
         var createConfigMap = client.CoreV1.CreateNamespacedConfigMapAsync(
             new V1ConfigMap { Metadata = new V1ObjectMeta { Name = name }, Data = data }, ns, cancellationToken: ct);
-        var createNetPolicy = request.AllowNetworkEgress
-            ? Task.CompletedTask
-            : client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(
-                BuildEgressPolicy(name, runLabel, storeScopedEgress), ns, cancellationToken: ct);
+        var createNetPolicy = client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(
+            BuildEgressPolicy(name, runLabel, request.AllowNetworkEgress), ns,
+            cancellationToken: ct);
         await Task.WhenAll(createConfigMap, createNetPolicy);
 
         // ── The Job ─────────────────────────────────────────────────────────────────────────────
@@ -186,8 +183,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                         // Jobs never run as root: pod-level seccomp + an fsGroup that keeps /work and
                         // /out writable for the unprivileged run container; the run container itself
                         // adds the uid/gid, no-new-privileges and dropped capabilities. The
-                        // materialize init container stays root — it runs only our fixed copy script
-                        // and must reach arbitrary artifact-mount paths.
+                        // materializer uses that same identity, satisfying Restricted Pod Security.
                         SecurityContext = BuildPodSecurityContext(_options),
                         // Keep execution on the operator's own machines: prefer (or require) worker/agent
                         // nodes so the control-plane node — typically a small cloud server whose only duty
@@ -225,7 +221,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                                     new V1VolumeMount { Name = "cm", MountPath = "/cm", ReadOnlyProperty = true },
                                     new V1VolumeMount { Name = "work", MountPath = "/work" },
                                 },
-                                SecurityContext = BuildRootInitContainerSecurityContext(),
+                                SecurityContext = BuildRestrictedContainerSecurityContext(_options),
                             },
                         },
                         Containers = new[] { runContainer },
@@ -248,7 +244,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         finally
         {
             _output?.Complete(request.CorrelationId);
-            await CleanupAsync(client, ns, name, request.AllowNetworkEgress);
+            await CleanupAsync(client, ns, name);
         }
     }
 
@@ -413,6 +409,12 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Conflict) { }
             try
             {
+                await client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(
+                    BuildEgressPolicy(name, name, allowInternet: true), ns, cancellationToken: ct);
+            }
+            catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Conflict) { }
+            try
+            {
                 await client.BatchV1.CreateNamespacedJobAsync(
                     BuildBakeJob(name, baseImage, BuildBakeScript(recipe, manifests), putUrl, _options, BakeResourceLimits()),
                     ns, cancellationToken: ct);
@@ -438,9 +440,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         }
         finally
         {
-            // No NetworkPolicy is created for bake jobs — the bake container needs full internet
-            // egress to install packages (pip install, npm install, etc.).
-            if (createdJob) await CleanupAsync(client, ns, name, hadEgress: true);
+            if (createdJob) await CleanupAsync(client, ns, name);
         }
     }
 
@@ -490,7 +490,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     /// the presigned URL. The pod carries the same worker-node placement, resource limits and
     /// non-root security context as job pods — the bake executes the same untrusted install recipes
     /// (its emptyDirs stay writable via the pod fsGroup); the upload sidecar only reads them. Its
-    /// NetworkPolicy (scoped MinIO+DNS egress) is created alongside.
+    /// NetworkPolicy (DNS + public internet, excluding internal ranges) is created alongside.
     /// </summary>
     internal static V1Job BuildBakeJob(string name, string image, string bakeScript, string putUrl,
         WorkloadRunnerOptions options, V1ResourceRequirements resources)
@@ -552,9 +552,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     /// <summary>
     /// The pod-level security context every workload pod carries: the default seccomp profile, plus
     /// an fsGroup matching <see cref="WorkloadRunnerOptions.RunAsGroup"/> so the emptyDir volumes
-    /// (/work, /out, the bake's /stage) are group-writable by the unprivileged containers. runAs*
-    /// deliberately live on the containers instead — the materialize init container must stay root
-    /// to reach arbitrary artifact-mount paths.
+    /// (/work, /out, the bake's /stage) are group-writable by the unprivileged containers.
     /// </summary>
     internal static V1PodSecurityContext BuildPodSecurityContext(WorkloadRunnerOptions options)
         => new()
@@ -579,46 +577,59 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             Capabilities = new V1Capabilities { Drop = new[] { "ALL" } },
         };
 
-    /// <summary>The fixed materializer needs uid 0 for arbitrary artifact paths, but no Linux powers.</summary>
-    internal static V1SecurityContext BuildRootInitContainerSecurityContext()
-        => new()
-        {
-            RunAsNonRoot = false,
-            RunAsUser = 0,
-            RunAsGroup = 0,
-            AllowPrivilegeEscalation = false,
-            Capabilities = new V1Capabilities { Drop = new[] { "ALL" } },
-        };
-
     /// <summary>
-    /// The egress policy for a workload pod. Default is deny-all (the sealed sandbox). Pods on the
-    /// warm-cache path instead get <em>scoped</em> egress — MinIO (to fetch/PUT the baked layer)
-    /// plus DNS (to resolve it): the minimum opening that lets the cache work. Pods whose job
-    /// opted into network egress get no policy at all.
+    /// The egress policy for a workload pod. Default is deny-all. Explicitly networked jobs get DNS
+    /// and public internet, excluding private, loopback, link-local and CGNAT ranges.
     /// </summary>
-    internal static V1NetworkPolicy BuildEgressPolicy(string name, string runLabel, bool storeScoped)
+    internal static V1NetworkPolicy BuildEgressPolicy(string name, string runLabel, bool allowInternet)
     {
-        var egress = storeScoped
-            ? new List<V1NetworkPolicyEgressRule>
+        var egress = new List<V1NetworkPolicyEgressRule>();
+        if (allowInternet)
+        {
+            egress.Add(new V1NetworkPolicyEgressRule
             {
-                new()
+                To = new List<V1NetworkPolicyPeer>
                 {
-                    To = new List<V1NetworkPolicyPeer>
+                    new()
                     {
-                        new() { PodSelector = new V1LabelSelector { MatchLabels = new Dictionary<string, string> { ["app"] = "minio" } } },
-                    },
-                    Ports = new List<V1NetworkPolicyPort> { new() { Port = 9000, Protocol = "TCP" } },
-                },
-                new()
-                {
-                    Ports = new List<V1NetworkPolicyPort>
-                    {
-                        new() { Port = 53, Protocol = "UDP" },
-                        new() { Port = 53, Protocol = "TCP" },
+                        NamespaceSelector = new V1LabelSelector
+                        {
+                            MatchLabels = new Dictionary<string, string> { ["kubernetes.io/metadata.name"] = "kube-system" },
+                        },
+                        PodSelector = new V1LabelSelector
+                        {
+                            MatchLabels = new Dictionary<string, string> { ["k8s-app"] = "kube-dns" },
+                        },
                     },
                 },
-            }
-            : new List<V1NetworkPolicyEgressRule>(); // empty ⇒ deny all egress
+                Ports = new List<V1NetworkPolicyPort>
+                {
+                    new() { Port = 53, Protocol = "UDP" },
+                    new() { Port = 53, Protocol = "TCP" },
+                },
+            });
+        }
+        if (allowInternet)
+        {
+            egress.Add(new V1NetworkPolicyEgressRule
+            {
+                To = new List<V1NetworkPolicyPeer>
+                {
+                    new()
+                    {
+                        IpBlock = new V1IPBlock
+                        {
+                            Cidr = "0.0.0.0/0",
+                            Except = new[]
+                            {
+                                "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16",
+                                "172.16.0.0/12", "192.168.0.0/16",
+                            },
+                        },
+                    },
+                },
+            });
+        }
         return new V1NetworkPolicy
         {
             Metadata = new V1ObjectMeta { Name = name },
@@ -699,16 +710,19 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
 
     // The three deletes are independent — issue them concurrently so cleanup costs one API
     // round-trip, not three, on every shard/reduce invocation.
-    private static Task CleanupAsync(Kubernetes client, string ns, string name, bool hadEgress)
+    private string Namespace(KubernetesClientConfiguration cfg)
+        => string.IsNullOrWhiteSpace(_options.KubernetesNamespace)
+            ? string.IsNullOrWhiteSpace(cfg.Namespace) ? "placecontext-jobs" : cfg.Namespace
+            : _options.KubernetesNamespace;
+
+    private static Task CleanupAsync(Kubernetes client, string ns, string name)
     {
         var bg = new V1DeleteOptions { PropagationPolicy = "Background" };
         static async Task Best(Func<Task> delete) { try { await delete(); } catch { } }
         return Task.WhenAll(
             Best(() => client.BatchV1.DeleteNamespacedJobAsync(name, ns, body: bg)),
             Best(() => client.CoreV1.DeleteNamespacedConfigMapAsync(name, ns)),
-            hadEgress
-                ? Task.CompletedTask
-                : Best(() => client.NetworkingV1.DeleteNamespacedNetworkPolicyAsync(name, ns)));
+            Best(() => client.NetworkingV1.DeleteNamespacedNetworkPolicyAsync(name, ns)));
     }
 
     /// <summary>

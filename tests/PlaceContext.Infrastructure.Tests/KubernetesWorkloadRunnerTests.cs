@@ -202,18 +202,21 @@ public class KubernetesWorkloadRunnerTests
     }
 
     [Fact]
-    public void Egress_policy_denies_all_by_default_and_scopes_to_minio_plus_dns_when_warm()
+    public void Egress_policy_denies_by_default_and_limits_opted_in_jobs_to_dns_and_public_ips()
     {
-        var deny = KubernetesWorkloadRunner.BuildEgressPolicy("n", "lbl", storeScoped: false);
+        var deny = KubernetesWorkloadRunner.BuildEgressPolicy("n", "lbl", allowInternet: false);
         Assert.Empty(deny.Spec.Egress);
 
-        var scoped = KubernetesWorkloadRunner.BuildEgressPolicy("n", "lbl", storeScoped: true);
-        Assert.Equal(2, scoped.Spec.Egress.Count);
-        var toMinio = scoped.Spec.Egress[0];
-        Assert.Equal("minio", toMinio.To.Single().PodSelector.MatchLabels["app"]);
-        Assert.Equal("9000", toMinio.Ports.Single().Port.Value);
-        Assert.Equal("TCP", toMinio.Ports.Single().Protocol);
-        Assert.Equal(2, scoped.Spec.Egress[1].Ports.Count); // DNS over UDP + TCP
+        var internet = KubernetesWorkloadRunner.BuildEgressPolicy("n", "lbl", allowInternet: true);
+        Assert.Equal(2, internet.Spec.Egress.Count);
+        var dns = internet.Spec.Egress[0];
+        Assert.Equal("kube-system", dns.To.Single().NamespaceSelector.MatchLabels["kubernetes.io/metadata.name"]);
+        Assert.Equal("kube-dns", dns.To.Single().PodSelector.MatchLabels["k8s-app"]);
+        Assert.Equal(2, dns.Ports.Count); // DNS over UDP + TCP
+        var publicCidr = internet.Spec.Egress[1].To.Single().IpBlock;
+        Assert.Equal("0.0.0.0/0", publicCidr.Cidr);
+        Assert.Contains("10.0.0.0/8", publicCidr.Except);
+        Assert.Contains("169.254.0.0/16", publicCidr.Except);
     }
 
     // ── non-root security context ───────────────────────────────────────────────────────────────
@@ -242,12 +245,12 @@ public class KubernetesWorkloadRunnerTests
     }
 
     [Fact]
-    public void Materializer_root_has_no_escalation_or_linux_capabilities()
+    public void Materializer_uses_the_same_restricted_non_root_context()
     {
-        var ctr = KubernetesWorkloadRunner.BuildRootInitContainerSecurityContext();
+        var ctr = KubernetesWorkloadRunner.BuildRestrictedContainerSecurityContext(new WorkloadRunnerOptions());
 
-        Assert.False(ctr.RunAsNonRoot);
-        Assert.Equal(0, ctr.RunAsUser);
+        Assert.True(ctr.RunAsNonRoot);
+        Assert.Equal(65534, ctr.RunAsUser);
         Assert.False(ctr.AllowPrivilegeEscalation);
         Assert.Equal("ALL", Assert.Single(ctr.Capabilities.Drop));
     }

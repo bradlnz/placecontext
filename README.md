@@ -51,9 +51,9 @@ has capacity—including machines behind different NATs, joined over [Tailscale]
 ```mermaid
 sequenceDiagram
     participant A as Client / automation
-    participant M as PlaceContext Host<br/>(k3s master · MCP + portal)
+    participant M as PlaceContext Host<br/>(k3s · MCP + portal)
     participant W as Worker nodes<br/>(k3s over Tailscale)
-    participant S as Object store (MinIO)
+    participant S as Off-cluster S3
 
     A->>M: MCP run_job / run_job_chain (OAuth bearer)
     M->>M: snapshot spec · inject vault secrets
@@ -71,16 +71,15 @@ restart.
 
 ## The fleet
 
-The release installer creates a real [k3s](https://k3s.io) cluster through
-[k3d](https://k3d.io), starts the platform-native local-AI worker, and deploys the Host plus the
-.NET shard coordinator. From the portal's Cluster tab, each additional node has an explicit role:
+The local installer creates a lab [k3s](https://k3s.io) cluster through [k3d](https://k3d.io).
+Production deploys to an existing HA k3s cluster and keeps PostgreSQL, S3, and backups off-cluster.
+From the portal's Cluster tab, each additional node has an explicit role:
 
 - **Standard worker** runs regular PlaceContext jobs and workload shards.
 - **AI shard** joins the fleet and runs one ordered MLX/Torch model layer slice.
 
 The generated command handles the k3s join and, for an AI shard, downloads the same verified Spaces
-release and installs the worker service. Postgres and MinIO run in-cluster; the portal, MCP endpoint,
-and job scheduler share one Host process.
+release and installs the worker service. The portal, MCP endpoint, and scheduler share one Host process.
 
 See [`deploy/release/README.md`](deploy/release/README.md) for installer and shard options.
 
@@ -93,7 +92,7 @@ inward only (enforced by `PlaceContext.Architecture.Tests`):
 src/
   PlaceContext.Domain          → entities/aggregates (Job, JobRun, JobChain, Project, …), no I/O
   PlaceContext.Application     → command/query handlers, ports, the dispatcher, views
-  PlaceContext.Infrastructure  → EF Core/PostgreSQL, Kubernetes runner, MinIO, schedulers
+  PlaceContext.Infrastructure  → EF Core/PostgreSQL, Kubernetes runner, S3, schedulers
   PlaceContext.Host            → MCP tools (Streamable HTTP) + Blazor portal (composition root)
                                  Razor views are MVVM-only: scoped ViewModels own state,
                                  commands, validation, navigation, service access, and JS interop
@@ -109,10 +108,10 @@ flowchart LR
     end
     subgraph cluster [k3s cluster — your machines]
         H[PlaceContext Host<br/>MCP + portal + scheduler]
-        P[(PostgreSQL)]
-        O[(MinIO)]
         J[Job pods — sandboxed containers]
     end
+    P[(External PostgreSQL)]
+    O[(Off-cluster S3)]
     CC -- "MCP over HTTP + OAuth" --> H
     B --> H
     H --> P

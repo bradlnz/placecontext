@@ -1,0 +1,12 @@
+# Local/k3d only. Production uses production-ingress.yaml and never exposes plain HTTP.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata: { name: placecontext, namespace: placecontext }
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: placecontext, port: { number: 80 } } }
