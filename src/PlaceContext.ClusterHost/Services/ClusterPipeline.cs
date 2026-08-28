@@ -6,6 +6,7 @@ namespace PlaceContext.ClusterHost;
 
 public sealed class ClusterPipeline
 {
+    private const int MaxGeneratedTokens = 4_096;
     private readonly IHttpClientFactory _http;
     private readonly ClusterProxyOptions _opts;
     private readonly ILogger<ClusterPipeline> _log;
@@ -44,11 +45,12 @@ public sealed class ClusterPipeline
             throw new InvalidOperationException("No shard endpoints are configured.");
 
         var client = _http.CreateClient();
+        AddAuthentication(client);
         client.Timeout = TimeSpan.FromMinutes(10);
 
         var temperature = Math.Max(0, req.Temperature ?? 0.7f);
         var topP = Math.Clamp(req.TopP ?? 0.9f, 0.0001f, 1f);
-        var maxTokens = Math.Clamp(req.MaxTokens ?? 2048, 1, 32768);
+        var maxTokens = Math.Clamp(req.MaxTokens ?? 2048, 1, MaxGeneratedTokens);
 
         if (shards.Length == 1)
         {
@@ -88,6 +90,7 @@ public sealed class ClusterPipeline
             throw new NotSupportedException("Embeddings require a full-model worker; pipeline shards only support chat generation.");
 
         var client = _http.CreateClient();
+        AddAuthentication(client);
         client.Timeout = TimeSpan.FromMinutes(2);
         var payload = new { model = _opts.Model, input = texts };
         using var response = await client.PostAsJsonAsync($"{shards[0]}/v1/embeddings", payload, J, ct);
@@ -105,6 +108,13 @@ public sealed class ClusterPipeline
         .Where(endpoint => !string.IsNullOrWhiteSpace(endpoint))
         .Select(endpoint => endpoint.TrimEnd('/'))
         .ToArray();
+
+    private void AddAuthentication(HttpClient client)
+    {
+        if (!string.IsNullOrWhiteSpace(_opts.ApiToken))
+            client.DefaultRequestHeaders.TryAddWithoutValidation(
+                ClusterApiAuthenticationMiddleware.HeaderName, _opts.ApiToken);
+    }
 
     private static async Task<TokenizationResult> TokenizeAsync(
         HttpClient client,

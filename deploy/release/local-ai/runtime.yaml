@@ -15,6 +15,7 @@ spec:
       labels:
         app: placecontext-cluster-host
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         seccompProfile:
@@ -30,6 +31,11 @@ spec:
           env:
             - name: CLUSTER
               value: "1"
+            - name: PlaceContext__ClusterChat__ApiToken
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-ai
+                  key: api-token
           envFrom:
             - configMapRef:
                 name: placecontext-local-ai

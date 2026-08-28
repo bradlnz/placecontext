@@ -1,4 +1,3 @@
-using PlaceContext.Domain.Common;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -10,7 +9,7 @@ namespace PlaceContext.Domain.Entities;
 /// requirements are the global document followed by the project's own (assembled in the Application
 /// layer). Appendless: the document is replaced wholesale from the portal.
 /// </summary>
-public sealed class Requirements : AggregateRoot
+public sealed class Requirements
 {
     private Requirements(ProjectId? projectId, string markdown, DateTimeOffset createdAt, DateTimeOffset updatedAt)
     {

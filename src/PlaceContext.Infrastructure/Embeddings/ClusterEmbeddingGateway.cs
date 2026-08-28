@@ -21,6 +21,7 @@ public sealed class ClusterEmbeddingGateway : IEmbeddingGateway
 
     private readonly IHttpClientFactory _http;
     private readonly string _endpoint;
+    private readonly string _apiToken;
     private readonly ILogger<ClusterEmbeddingGateway> _log;
 
     public ClusterEmbeddingGateway(IHttpClientFactory http, IConfiguration config, ILogger<ClusterEmbeddingGateway> log)
@@ -29,6 +30,7 @@ public sealed class ClusterEmbeddingGateway : IEmbeddingGateway
         _log = log;
         var section = config.GetSection("PlaceContext:ClusterChat");
         _endpoint = (section["Endpoint"] ?? "").TrimEnd('/');
+        _apiToken = section["ApiToken"] ?? "";
         // Must match the shard model's hidden size (Qwen3-4B: 2560). The pgvector tables are
         // created with vector(Dimensions), so a wrong value fails inserts — the gateway logs a
         // warning whenever the cluster reports a different size.
@@ -44,6 +46,9 @@ public sealed class ClusterEmbeddingGateway : IEmbeddingGateway
 
         var input = texts.Select(t => t.Length > MaxTextChars ? t[..MaxTextChars] : t).ToList();
         var client = _http.CreateClient();
+        if (!string.IsNullOrWhiteSpace(_apiToken))
+            client.DefaultRequestHeaders.TryAddWithoutValidation(
+                "X-PlaceContext-AI-Token", _apiToken);
         client.Timeout = TimeSpan.FromMinutes(2);
 
         using var resp = await client.PostAsJsonAsync($"{_endpoint}/embeddings", new { input }, ct);

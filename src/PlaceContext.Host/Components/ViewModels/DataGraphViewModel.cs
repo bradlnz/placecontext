@@ -6,10 +6,10 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class DataGraphViewModel : PageViewModel
 {
-    private readonly IPlaceContextService _service;
+    private readonly PlaceContextService _service;
     private readonly IJSRuntime _js;
 
-    public DataGraphViewModel(IPlaceContextService service, IJSRuntime js)
+    public DataGraphViewModel(PlaceContextService service, IJSRuntime js)
     {
         _service = service;
         _js = js;

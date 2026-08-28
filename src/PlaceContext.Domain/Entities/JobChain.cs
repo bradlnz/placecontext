@@ -1,4 +1,3 @@
-using PlaceContext.Domain.Common;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -15,7 +14,7 @@ namespace PlaceContext.Domain.Entities;
 /// The chain stores only job ids — steps are resolved at run time, so editing a job never touches the
 /// chains that reference it (a deleted job simply fails the chain at that stage).
 /// </summary>
-public sealed class JobChain : AggregateRoot
+public sealed class JobChain
 {
     private readonly List<ChainStage> _stages;
 

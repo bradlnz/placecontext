@@ -1,4 +1,3 @@
-using PlaceContext.Domain.Common;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -12,7 +11,7 @@ namespace PlaceContext.Domain.Entities;
 /// A <see cref="WorkloadSnapshot"/> is captured at run-start so the exact spec that was executed is
 /// preserved regardless of later edits to the parent Job.
 /// </summary>
-public sealed class JobRun : AggregateRoot
+public sealed class JobRun
 {
     private readonly List<ShardResult> _shardResults = new();
 

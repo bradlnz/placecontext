@@ -18,7 +18,7 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
     private const string DestroyFunction = "pcmonaco.destroy";
     private const string NotRunStatus = "NotRun";
 
-    private readonly IPlaceContextService _service;
+    private readonly PlaceContextService _service;
     private readonly PortalUiState _ui;
     private readonly NavigationManager _navigation;
     private readonly IJSRuntime _js;
@@ -33,7 +33,7 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
     private string? _message;
 
     public JobTestCodeEditorViewModel(
-        IPlaceContextService service,
+        PlaceContextService service,
         PortalUiState ui,
         NavigationManager navigation,
         IJSRuntime js

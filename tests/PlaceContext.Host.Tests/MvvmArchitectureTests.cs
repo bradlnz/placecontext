@@ -8,7 +8,7 @@ public sealed class MvvmArchitectureTests
         var page = ReadHostSource("Components/Pages/Schedules.razor");
 
         Assert.Contains("@inject SchedulesViewModel Vm", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("@inject IPlaceContextService", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("@inject PlaceContextService", page, StringComparison.Ordinal);
         Assert.DoesNotContain("@inject PortalUiState", page, StringComparison.Ordinal);
         Assert.DoesNotContain("@inject ICurrentTenant", page, StringComparison.Ordinal);
         Assert.DoesNotContain("private IReadOnlyList<", page, StringComparison.Ordinal);

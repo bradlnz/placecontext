@@ -1,5 +1,3 @@
-using PlaceContext.Domain.Common;
-using PlaceContext.Domain.Events;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -9,7 +7,7 @@ namespace PlaceContext.Domain.Entities;
 /// monotonic and contiguous from 1. The ledger is the only place a <see cref="ActivityRecord"/> is
 /// created, guaranteeing the append-only invariant. One ledger per project.
 /// </summary>
-public sealed class ActivityLog : AggregateRoot
+public sealed class ActivityLog
 {
     private readonly List<ActivityRecord> _records;
 
@@ -33,7 +31,7 @@ public sealed class ActivityLog : AggregateRoot
 
     /// <summary>
     /// Appends a new change. The next sequence number is assigned here, enforcing monotonicity and
-    /// the append-only invariant. Raises <see cref="ActivityRecorded"/>.
+    /// the append-only invariant.
     /// </summary>
     public ActivityRecord Append(
         string summary,
@@ -51,7 +49,6 @@ public sealed class ActivityLog : AggregateRoot
             touchedFiles, touchedNodes, recordedAt);
 
         _records.Add(record);
-        Raise(new ActivityRecorded(ProjectId, record.Id, author, recordedAt));
         return record;
     }
 

@@ -15,10 +15,10 @@ namespace PlaceContext.Host.Controllers;
 [EnableRateLimiting("public-ingestion")]
 public sealed class IngestController : ControllerBase
 {
-    private readonly IPlaceContextService _svc;
+    private readonly PlaceContextService _svc;
     private readonly IConfiguration _config;
 
-    public IngestController(IPlaceContextService svc, IConfiguration config)
+    public IngestController(PlaceContextService svc, IConfiguration config)
     {
         _svc = svc;
         _config = config;

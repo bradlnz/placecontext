@@ -2,6 +2,7 @@ using PlaceContext.ClusterHost;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 2 * 1024 * 1024);
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 
@@ -19,5 +20,6 @@ Console.WriteLine($"[ClusterHost] Starting on port {builder.Configuration["ASPNE
 Console.WriteLine($"[ClusterHost] Model: {model}");
 Console.WriteLine($"[ClusterHost] Shard endpoints: [{string.Join(", ", shardEndpoints)}]");
 
+app.UseMiddleware<ClusterApiAuthenticationMiddleware>();
 app.MapControllers();
 app.Run();

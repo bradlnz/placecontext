@@ -1,4 +1,3 @@
-using PlaceContext.Domain.Common;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -9,7 +8,7 @@ namespace PlaceContext.Domain.Entities;
 /// system events (see <see cref="BuiltInEvents"/>) are not stored as definitions — their names are
 /// reserved and cannot be redefined.
 /// </summary>
-public sealed class EventDefinition : AggregateRoot
+public sealed class EventDefinition
 {
     private EventDefinition(
         Guid id, string name, string? description, string? payloadSchema,

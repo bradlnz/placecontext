@@ -226,7 +226,7 @@ public sealed class RpcChainSubmissionWorker : BackgroundService
     private async Task<ChainRunView?> LoadRunAsync(Guid runId, CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IPlaceContextService>()
+        return await scope.ServiceProvider.GetRequiredService<PlaceContextService>()
             .GetChainRunAsync(runId, ct);
     }
 

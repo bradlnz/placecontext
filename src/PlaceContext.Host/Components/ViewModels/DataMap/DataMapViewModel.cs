@@ -8,11 +8,11 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class DataMapViewModel : PageViewModel
 {
-    private readonly IPlaceContextService _svc;
+    private readonly PlaceContextService _svc;
     private readonly IJSRuntime _js;
     private readonly PortalUiState _ui;
 
-    public DataMapViewModel(IPlaceContextService svc, IJSRuntime js, PortalUiState ui)
+    public DataMapViewModel(PlaceContextService svc, IJSRuntime js, PortalUiState ui)
     {
         _svc = svc;
         _js = js;

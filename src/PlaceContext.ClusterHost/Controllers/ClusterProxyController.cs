@@ -8,6 +8,13 @@ namespace PlaceContext.ClusterHost;
 [Route("api/cluster")]
 public sealed class ClusterProxyController : ControllerBase
 {
+    private const int MaxMessages = 64;
+    private const int MaxMessageChars = 32_768;
+    private const int MaxPromptChars = 131_072;
+    private const int MaxTokens = 4_096;
+    private const int MaxEmbeddingInputs = 32;
+    private const int MaxEmbeddingChars = 4_000;
+
     private readonly ClusterPipeline _pipeline;
     private readonly ClusterProxyService _svc;
     private readonly ClusterProxyOptions _opts;
@@ -30,13 +37,15 @@ public sealed class ClusterProxyController : ControllerBase
     public IActionResult Health()
     {
         var healthy = _svc.HealthyEndpoints;
-        return Ok(new { status = healthy.Count > 0 ? "ok" : "no_shards", healthy = healthy.Count, total = _opts.ShardEndpoints.Count, endpoints = healthy, model = _opts.Model });
+        return Ok(new { status = healthy.Count > 0 ? "ok" : "no_shards", healthy = healthy.Count, total = _opts.ShardEndpoints.Count, model = _opts.Model });
     }
 
     [HttpPost("chat")]
-    [AllowAnonymous]
     public async Task<IActionResult> Chat([FromBody] ClusterChatRequest req)
     {
+        if (Validate(req) is { } error)
+            return BadRequest(new { error });
+
         try
         {
             var text = await _pipeline.GenerateAsync(req, HttpContext.RequestAborted);
@@ -57,9 +66,17 @@ public sealed class ClusterProxyController : ControllerBase
     }
 
     [HttpPost("embeddings")]
-    [AllowAnonymous]
     public async Task<IActionResult> Embeddings([FromBody] ClusterEmbedRequest req)
     {
+        if (req.Input.Count is 0 or > MaxEmbeddingInputs
+            || req.Input.Any(text => string.IsNullOrWhiteSpace(text) || text.Length > MaxEmbeddingChars))
+        {
+            return BadRequest(new
+            {
+                error = $"input must contain 1-{MaxEmbeddingInputs} non-empty strings of at most {MaxEmbeddingChars} characters."
+            });
+        }
+
         try
         {
             var vectors = await _pipeline.EmbedAsync(req.Input, HttpContext.RequestAborted);
@@ -73,9 +90,15 @@ public sealed class ClusterProxyController : ControllerBase
     }
 
     [HttpPost("chat/stream")]
-    [AllowAnonymous]
     public async Task ChatStream([FromBody] ClusterChatRequest req)
     {
+        if (Validate(req) is { } validationError)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            await Response.WriteAsJsonAsync(new { error = validationError }, HttpContext.RequestAborted);
+            return;
+        }
+
         Response.Headers.ContentType = "text/event-stream";
         Response.Headers.CacheControl = "no-cache";
         Response.Headers.Connection = "keep-alive";
@@ -100,5 +123,27 @@ public sealed class ClusterProxyController : ControllerBase
             }
             catch { }
         }
+    }
+
+    private static string? Validate(ClusterChatRequest req)
+    {
+        if (req.Messages.Count is 0 or > MaxMessages)
+            return $"messages must contain 1-{MaxMessages} entries.";
+        if (req.Messages.Any(message =>
+                message.Role is not ("system" or "user" or "assistant")
+                || string.IsNullOrWhiteSpace(message.Content)
+                || message.Content.Length > MaxMessageChars))
+        {
+            return $"Each message must use a supported role and contain at most {MaxMessageChars} characters.";
+        }
+        if (req.Messages.Sum(message => (long)message.Content.Length) > MaxPromptChars)
+            return $"The combined message content must not exceed {MaxPromptChars} characters.";
+        if (req.MaxTokens is < 1 or > MaxTokens)
+            return $"max_tokens must be between 1 and {MaxTokens}.";
+        if (req.Temperature is < 0 or > 2)
+            return "temperature must be between 0 and 2.";
+        if (req.TopP is <= 0 or > 1)
+            return "top_p must be greater than 0 and at most 1.";
+        return null;
     }
 }

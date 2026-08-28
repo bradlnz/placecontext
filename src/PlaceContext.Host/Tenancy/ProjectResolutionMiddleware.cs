@@ -22,7 +22,7 @@ public sealed class ProjectResolutionMiddleware
     private readonly RequestDelegate _next;
     public ProjectResolutionMiddleware(RequestDelegate next) => _next = next;
 
-    public async Task Invoke(HttpContext context, IPlaceContextService svc)
+    public async Task Invoke(HttpContext context, PlaceContextService svc)
     {
         try
         {
@@ -61,7 +61,7 @@ public sealed class ProjectResolutionMiddleware
         => string.IsNullOrWhiteSpace(s) ? null : s;
 
     private static async Task<Application.Dtos.ProjectSummaryView?> ResolveAsync(
-        IPlaceContextService svc, string? idRaw, string? nameRaw, CancellationToken ct)
+        PlaceContextService svc, string? idRaw, string? nameRaw, CancellationToken ct)
     {
         if (idRaw is not null && Guid.TryParse(idRaw, out var id))
             return await svc.GetProjectByIdAsync(id, ct);

@@ -9,7 +9,7 @@ using PlaceContext.Host;
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class McpSettingsViewModel(
-    IPlaceContextService service,
+    PlaceContextService service,
     PortalUiState ui,
     IJSRuntime js
 ) : PageViewModel, IDisposable

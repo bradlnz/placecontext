@@ -19,9 +19,9 @@ namespace PlaceContext.Host.Controllers;
 [Route("backup")]
 public sealed class BackupController : ControllerBase
 {
-    private readonly IPlaceContextService _svc;
+    private readonly PlaceContextService _svc;
 
-    public BackupController(IPlaceContextService svc)
+    public BackupController(PlaceContextService svc)
     {
         _svc = svc;
     }

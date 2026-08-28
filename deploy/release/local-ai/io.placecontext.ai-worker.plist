@@ -7,6 +7,7 @@
   <array>
     <string>__PYTHON__</string><string>__WORKER__</string>
     <string>--model</string><string>__MODEL__</string>
+    <string>--host</string><string>0.0.0.0</string>
     <string>--port</string><string>8080</string>
   </array>
   <key>RunAtLoad</key><true/>
@@ -15,6 +16,7 @@
   <dict>
     <key>PYTHONUNBUFFERED</key><string>1</string>
     <key>SHARD_SPEC</key><string>__SHARD_SPEC__</string>
+    <key>PLACECONTEXT_AI_TOKEN</key><string>__AI_TOKEN__</string>
   </dict>
   <key>StandardOutPath</key><string>__LOG_DIR__/ai-worker.log</string>
   <key>StandardErrorPath</key><string>__LOG_DIR__/ai-worker.log</string>

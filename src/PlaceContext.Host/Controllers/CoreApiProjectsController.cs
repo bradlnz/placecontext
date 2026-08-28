@@ -13,10 +13,10 @@ namespace PlaceContext.Host.Controllers;
 [Produces("application/json")]
 public sealed class CoreApiProjectsController : ControllerBase
 {
-    private readonly IPlaceContextService _svc;
+    private readonly PlaceContextService _svc;
     private readonly ICoreApiResourceResolver _resource;
 
-    public CoreApiProjectsController(IPlaceContextService svc, ICoreApiResourceResolver resource)
+    public CoreApiProjectsController(PlaceContextService svc, ICoreApiResourceResolver resource)
     {
         _svc = svc;
         _resource = resource;

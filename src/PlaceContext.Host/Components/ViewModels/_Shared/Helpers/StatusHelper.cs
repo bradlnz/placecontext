@@ -8,22 +8,22 @@ namespace PlaceContext.Host.Components.ViewModels.Helpers;
 public static class StatusHelper
 {
     public static string Color(string? status) =>
-        status switch
+        status?.ToLowerInvariant() switch
         {
-            "Succeeded" => "var(--good)",
-            "Partial" => "var(--warn)",
-            "Failed" => "var(--bad)",
-            "Running" => "var(--brand-2)",
+            "succeeded" => "var(--good)",
+            "partial" => "var(--warn)",
+            "failed" => "var(--bad)",
+            "running" => "var(--brand-2)",
             _ => "var(--text-3)",
         };
 
     public static string Background(string? status) =>
-        status switch
+        status?.ToLowerInvariant() switch
         {
-            "Succeeded" => "var(--good-bg)",
-            "Partial" => "var(--warn-bg)",
-            "Failed" => "var(--bad-bg)",
-            "Running" => "var(--brand-bg)",
+            "succeeded" => "var(--good-bg)",
+            "partial" => "var(--warn-bg)",
+            "failed" => "var(--bad-bg)",
+            "running" => "var(--brand-bg)",
             _ => "var(--card-2)",
         };
 }

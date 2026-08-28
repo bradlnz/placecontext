@@ -14,7 +14,7 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed partial class JobsViewModel : PageViewModel
 {
     private static event EventHandler? McpOAuthCompleted;
-    private readonly IPlaceContextService _svc;
+    private readonly PlaceContextService _svc;
     private readonly OperationCenter _opCenter;
     private readonly BackgroundOperationRunner _ops;
     private readonly ParameterPromptState _runPrompt = new();
@@ -22,7 +22,7 @@ public sealed partial class JobsViewModel : PageViewModel
     private readonly NavigationManager _navigation;
 
     public JobsViewModel(
-        IPlaceContextService svc,
+        PlaceContextService svc,
         OperationCenter opCenter,
         IJSRuntime js,
         NavigationManager navigation

@@ -45,11 +45,11 @@ public sealed class AuthController : ControllerBase
     private readonly IConfiguration _config;
     private readonly IWebHostEnvironment _env;
     private readonly IDataEncryptor _encryptor;
-    private readonly IPlaceContextService _placeContext;
+    private readonly PlaceContextService _placeContext;
 
     public AuthController(IAuthService auth, PortalToken portal, IMembershipService members,
         IAntiforgery antiforgery, IConfiguration config, IWebHostEnvironment env, IDataEncryptor encryptor,
-        IPlaceContextService placeContext)
+        PlaceContextService placeContext)
     {
         _auth = auth;
         _portal = portal;

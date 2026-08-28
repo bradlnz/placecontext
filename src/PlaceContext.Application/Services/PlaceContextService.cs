@@ -5,7 +5,7 @@ using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Application;
 
-public sealed class PlaceContextService : IPlaceContextService
+public sealed class PlaceContextService
 {
     private readonly IDispatcher _dispatcher;
     private readonly IJobRunner _jobRunner;

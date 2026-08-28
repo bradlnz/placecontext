@@ -11,7 +11,7 @@ using PlaceContext.Infrastructure.Operations;
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class ObservabilityViewModel(
-    IPlaceContextService service,
+    PlaceContextService service,
     PortalUiState ui,
     NavigationManager navigation,
     OperationCenter operations,
@@ -315,7 +315,7 @@ public sealed class ObservabilityViewModel(
             $"/observability?run={newRunId}",
             async (sp, ct) =>
             {
-                var result = await sp.GetRequiredService<IPlaceContextService>()
+                var result = await sp.GetRequiredService<PlaceContextService>()
                     .ReplayRunAsync(runId, newRunId, ct);
                 return $"replay finished — {result.Status}";
             },

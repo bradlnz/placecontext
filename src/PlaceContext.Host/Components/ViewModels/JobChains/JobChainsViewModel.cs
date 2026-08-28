@@ -12,7 +12,7 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class JobChainsViewModel : PageViewModel
 {
-    private readonly IPlaceContextService _svc;
+    private readonly PlaceContextService _svc;
     private readonly OperationCenter _opCenter;
     private readonly BackgroundOperationRunner _ops;
     private readonly IWorkloadOutputBuffer _outputBuffer;
@@ -21,7 +21,7 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly ParameterPromptState _runPrompt = new();
 
     public JobChainsViewModel(
-        IPlaceContextService svc,
+        PlaceContextService svc,
         OperationCenter opCenter,
         IWorkloadOutputBuffer outputBuffer,
         IPermissionService permissions,

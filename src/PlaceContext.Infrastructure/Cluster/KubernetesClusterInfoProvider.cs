@@ -15,7 +15,6 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
 {
     public const string ClusterConfigMap = "placecontext-cluster";
     public const string JoinSecret = "placecontext-cluster-join";
-    public const string MasterAnnotation = "placecontext.io/designated-master";
     public const string NodeTypeLabel = "placecontext.io/node-type";
     private const string TailscaleIpAnnotation = "placecontext.io/tailscale-ip";
     private const string LegacyTailscaleIpAnnotation = "placecontext.ai/tailscale-ip";
@@ -82,7 +81,6 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
             var preferred = tsIp ?? internalIp;
 
             await WriteDesignatedMasterAsync(client, ns, nodeName, preferred, ct);
-            await AnnotateNodesAsync(client, nodeName, ct);
 
             if (isControlPlane)
             {
@@ -176,7 +174,7 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
                 ? $"""
                   On a new Linux machine (Mac masters hand this code to Linux workers):
                     1. Install Tailscale and join the same tailnet as the master ({master?.Name ?? "master"}).
-                    2. curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/join.sh | \
+                    2. curl -fsSL https://get.placecontext.io/join.sh | \
                          bash -s -- --code {code}
 
                   Server API (over Tailscale): {serverUrl}
@@ -185,7 +183,7 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
                   """
                 : $"""
                   On a new Linux machine:
-                    curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/join.sh | \
+                    curl -fsSL https://get.placecontext.io/join.sh | \
                       bash -s -- --code {code}
 
                   The code includes a Tailscale auth key and the master mesh address ({serverUrl}),
@@ -363,29 +361,6 @@ public sealed class KubernetesClusterInfoProvider : IClusterInfoProvider, IClust
                 Data = data
             };
             await client.CoreV1.CreateNamespacedConfigMapAsync(cm, ns, cancellationToken: ct);
-        }
-    }
-
-    private static async Task AnnotateNodesAsync(Kubernetes client, string masterName, CancellationToken ct)
-    {
-        V1NodeList list;
-        try { list = await client.CoreV1.ListNodeAsync(cancellationToken: ct); }
-        catch { return; }
-
-        foreach (var n in list.Items)
-        {
-            var name = n.Metadata?.Name;
-            if (name is null) continue;
-            n.Metadata!.Annotations ??= new Dictionary<string, string>();
-            var want = string.Equals(name, masterName, StringComparison.Ordinal) ? "true" : "false";
-            if (n.Metadata.Annotations.TryGetValue(MasterAnnotation, out var cur) && cur == want)
-                continue;
-            n.Metadata.Annotations[MasterAnnotation] = want;
-            try
-            {
-                await client.CoreV1.ReplaceNodeAsync(n, name, cancellationToken: ct);
-            }
-            catch { /* patch best-effort; ConfigMap is source of truth */ }
         }
     }
 

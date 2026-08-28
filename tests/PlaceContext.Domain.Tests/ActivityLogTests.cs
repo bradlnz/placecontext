@@ -33,14 +33,6 @@ public class ActivityLogTests
     }
 
     [Fact]
-    public void Append_raises_ActivityRecorded()
-    {
-        var ledger = ActivityLog.Start(Pid);
-        Append(ledger);
-        Assert.Contains(ledger.PullDomainEvents(), e => e is Events.ActivityRecorded);
-    }
-
-    [Fact]
     public void RecentWindow_returns_last_n_newest_last()
     {
         var ledger = ActivityLog.Start(Pid);

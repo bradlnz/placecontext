@@ -8,7 +8,7 @@ Docker, Python 3.11+, curl, and OpenSSL are required. The release installer down
 `k3d` and `kubectl`, creates the local cluster and secrets, starts local AI, and deploys the portal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh | bash
+curl -fsSL https://get.placecontext.io/install.sh | bash
 ```
 
 PostgreSQL and MinIO are installed with the managed cluster. The portal is available at

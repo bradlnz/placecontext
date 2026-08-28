@@ -15,8 +15,8 @@ public interface ICoreApiResourceResolver
 
 public sealed class CoreApiResourceResolver : ICoreApiResourceResolver
 {
-    private readonly IPlaceContextService _svc;
-    public CoreApiResourceResolver(IPlaceContextService svc) => _svc = svc;
+    private readonly PlaceContextService _svc;
+    public CoreApiResourceResolver(PlaceContextService svc) => _svc = svc;
 
     public Task<ProjectSummaryView?> GetProjectAsync(Guid projectId, CancellationToken ct = default)
         => _svc.GetProjectByIdAsync(projectId, ct);

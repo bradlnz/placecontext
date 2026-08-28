@@ -1,4 +1,3 @@
-using PlaceContext.Domain.Common;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -10,7 +9,7 @@ namespace PlaceContext.Domain.Entities;
 /// rows are extracted from its primary artifact (optionally at <see cref="RowsPath"/>) and each
 /// declared field lands in its target column. Generic — no domain knowledge of the data itself.
 /// </summary>
-public sealed class DataMapping : AggregateRoot
+public sealed class DataMapping
 {
     private DataMapping(
         Guid id,

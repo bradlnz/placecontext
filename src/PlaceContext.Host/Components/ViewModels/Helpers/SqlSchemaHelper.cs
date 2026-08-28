@@ -11,7 +11,7 @@ namespace PlaceContext.Host.Components.ViewModels.Helpers;
 public static class SqlSchemaHelper
 {
     public static async Task PushAsync(
-        IPlaceContextService svc,
+        PlaceContextService svc,
         IJSRuntime js,
         Guid projectId,
         bool includeIndexes = false)

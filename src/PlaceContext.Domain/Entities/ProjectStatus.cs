@@ -1,5 +1,3 @@
-using PlaceContext.Domain.Common;
-using PlaceContext.Domain.Events;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;

@@ -19,10 +19,9 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IDispatcher, Dispatcher>();
-        services.AddScoped<IPlaceContextService, PlaceContextService>();
+        services.AddScoped<PlaceContextService>();
 
         // Pure domain services (no I/O) used by handlers.
-        services.AddSingleton<ContextStalenessPolicy>();
         services.AddSingleton<DecisionTreeAssembler>();
         services.AddSingleton<TokenCostCalculator>();
         // Knowledge graph (replaces the graphify reader).

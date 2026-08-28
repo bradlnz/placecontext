@@ -180,6 +180,9 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                     Spec = new V1PodSpec
                     {
                         RestartPolicy = "Never",
+                        // User-authored code must never receive a Kubernetes API credential. The
+                        // Host creates and observes Jobs; workload pods need no API access.
+                        AutomountServiceAccountToken = false,
                         // Jobs never run as root: pod-level seccomp + an fsGroup that keeps /work and
                         // /out writable for the unprivileged run container; the run container itself
                         // adds the uid/gid, no-new-privileges and dropped capabilities. The
@@ -222,6 +225,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                                     new V1VolumeMount { Name = "cm", MountPath = "/cm", ReadOnlyProperty = true },
                                     new V1VolumeMount { Name = "work", MountPath = "/work" },
                                 },
+                                SecurityContext = BuildRootInitContainerSecurityContext(),
                             },
                         },
                         Containers = new[] { runContainer },
@@ -504,6 +508,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                     Spec = new V1PodSpec
                     {
                         RestartPolicy = "Never",
+                        AutomountServiceAccountToken = false,
                         SecurityContext = BuildPodSecurityContext(options),
                         Affinity = BuildWorkerAffinity(options),
                         NodeSelector = options.JobNodeSelector.Count > 0 ? options.JobNodeSelector : null,
@@ -530,6 +535,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                                 Command = new[] { "sh", "-c", WorkloadScriptLoader.Load("k8s/upload.sh") },
                                 Env = new[] { new V1EnvVar { Name = "PCDEPS_PUT_URL", Value = putUrl } },
                                 VolumeMounts = new[] { new V1VolumeMount { Name = "out", MountPath = "/out" } },
+                                SecurityContext = BuildRestrictedContainerSecurityContext(options),
                             },
                         },
                         Volumes = new[]
@@ -569,6 +575,17 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             RunAsNonRoot = options.RunAsUser != 0,
             RunAsUser = options.RunAsUser,
             RunAsGroup = options.RunAsGroup,
+            AllowPrivilegeEscalation = false,
+            Capabilities = new V1Capabilities { Drop = new[] { "ALL" } },
+        };
+
+    /// <summary>The fixed materializer needs uid 0 for arbitrary artifact paths, but no Linux powers.</summary>
+    internal static V1SecurityContext BuildRootInitContainerSecurityContext()
+        => new()
+        {
+            RunAsNonRoot = false,
+            RunAsUser = 0,
+            RunAsGroup = 0,
             AllowPrivilegeEscalation = false,
             Capabilities = new V1Capabilities { Drop = new[] { "ALL" } },
         };

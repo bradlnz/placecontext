@@ -1,6 +1,5 @@
 using System.Reflection;
 using PlaceContext.Domain.Entities;
-using NetArchTest.Rules;
 using Xunit;
 
 namespace PlaceContext.Architecture.Tests;
@@ -49,13 +48,8 @@ public class LayerDependencyTests
 
     private static void AssertNoDependency(Assembly assembly, params string[] forbidden)
     {
-        var result = Types.InAssembly(assembly)
-            .ShouldNot()
-            .HaveDependencyOnAny(forbidden)
-            .GetResult();
-
-        Assert.True(
-            result.IsSuccessful,
-            "offending types: " + string.Join(", ", result.FailingTypeNames ?? Array.Empty<string>()));
+        var references = assembly.GetReferencedAssemblies().Select(name => name.Name ?? "");
+        Assert.Empty(forbidden.Where(prefix =>
+            references.Any(reference => reference.StartsWith(prefix, StringComparison.Ordinal))));
     }
 }

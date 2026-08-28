@@ -1,4 +1,3 @@
-using PlaceContext.Domain.Common;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -10,7 +9,7 @@ namespace PlaceContext.Domain.Entities;
 /// there). Tagged entities surface as custom menu items rendering business-facing views.
 /// Generic — no domain knowledge of the data itself.
 /// </summary>
-public sealed class DataEntity : AggregateRoot
+public sealed class DataEntity
 {
     private DataEntity(Guid id, Guid projectId, string name, string tableName, string? labelColumn,
         IReadOnlyList<EntityRelation> relations, IReadOnlyList<string> tags,

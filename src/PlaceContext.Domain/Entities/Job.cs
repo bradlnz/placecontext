@@ -1,4 +1,3 @@
-using PlaceContext.Domain.Common;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -10,7 +9,7 @@ namespace PlaceContext.Domain.Entities;
 /// <see cref="JobRun"/> history.
 /// All fields are generic — no domain knowledge lives here.
 /// </summary>
-public sealed class Job : AggregateRoot
+public sealed class Job
 {
     private Job(
         Guid id,

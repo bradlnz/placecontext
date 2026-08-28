@@ -93,7 +93,6 @@ public static class DependencyInjection
         services.AddSingleton<IGitPort, CliGitAdapter>();
         services.AddSingleton<ISkillScaffolder, FileSkillScaffolder>();
         services.AddSingleton<IRepoFiles, Files.FileRepoFiles>();
-        services.AddHttpClient();
         services.AddSingleton<ICodeWorkspace, CodeWorkspace>();
 
         // Generic workload runner. In-cluster (the Host pod has KUBERNETES_SERVICE_HOST) we run jobs as
@@ -276,18 +275,6 @@ public static class DependencyInjection
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
         EnsureRpcChainSubmissionSchema(db);
-        // Additive columns for workspace UI customization (safe if already present).
-        try
-        {
-            db.Database.ExecuteSqlRaw(
-                """
-                ALTER TABLE jobs ADD COLUMN IF NOT EXISTS "AllowApiInvocation" boolean NOT NULL DEFAULT false;
-                ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "MenuJson" text NULL;
-                ALTER TABLE tenants ADD COLUMN IF NOT EXISTS "ArtifactViewJson" text NULL;
-                """);
-        }
-        catch { /* non-Postgres or already applied via migration */ }
-
         // Additive indexes for the hot run queries (safe if already present). The status watcher
         // scans job_runs/chain_runs for in-flight or recently-finished rows every 2 seconds — a
         // sequential scan of the whole run history without these. Partial indexes keep the active-

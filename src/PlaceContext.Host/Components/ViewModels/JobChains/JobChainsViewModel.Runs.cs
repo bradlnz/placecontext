@@ -135,7 +135,7 @@ public sealed partial class JobChainsViewModel
             $"/project/{ProjectId}/chains",
             async (sp, ct) =>
             {
-                var result = await sp.GetRequiredService<IPlaceContextService>()
+                var result = await sp.GetRequiredService<PlaceContextService>()
                     .RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
                 return $"chain finished — {result.Status}";
             },

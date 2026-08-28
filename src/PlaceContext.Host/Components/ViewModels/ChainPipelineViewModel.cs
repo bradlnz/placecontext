@@ -1,4 +1,5 @@
 using PlaceContext.Application.Dtos;
+using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -32,29 +33,9 @@ public sealed class ChainPipelineViewModel : PageViewModel, IComponentViewModel,
         return Color(status);
     }
 
-    public string Color(string status)
-    {
-        return ScopedPresentationCatalog.StepStatus(status) switch
-        {
-            ChainStepStatus.Succeeded => "var(--good)",
-            ChainStepStatus.Failed => "var(--bad)",
-            ChainStepStatus.Partial => "var(--warn)",
-            ChainStepStatus.Running => "var(--brand-2)",
-            _ => "var(--text-3)",
-        };
-    }
+    public string Color(string status) => StatusHelper.Color(status);
 
-    public string Background(string status)
-    {
-        return ScopedPresentationCatalog.StepStatus(status) switch
-        {
-            ChainStepStatus.Succeeded => "var(--good-bg)",
-            ChainStepStatus.Failed => "var(--bad-bg)",
-            ChainStepStatus.Partial => "var(--warn-bg)",
-            ChainStepStatus.Running => "var(--brand-bg)",
-            _ => "var(--card-2)",
-        };
-    }
+    public string Background(string status) => StatusHelper.Background(status);
 
     public string Summary(ChainStepRunView step)
     {

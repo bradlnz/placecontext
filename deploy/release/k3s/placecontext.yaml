@@ -29,15 +29,9 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["create", "get", "delete"]
-  - apiGroups: ["apps"]
-    resources: ["deployments"]
-    verbs: ["create", "get", "list", "watch", "delete", "update", "patch"]
-  - apiGroups: [""]
-    resources: ["services"]
-    verbs: ["create", "get", "list", "watch", "delete", "update", "patch"]
   - apiGroups: ["networking.k8s.io"]
-    resources: ["ingresses", "networkingpolicies"]
-    verbs: ["create", "get", "list", "watch", "delete", "update", "patch"]
+    resources: ["networkingpolicies"]
+    verbs: ["create", "get", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -65,8 +59,7 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["nodes"]
-    # patch/update: designate fleet master annotation from the Cluster page
-    verbs: ["get", "list", "patch", "update"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -265,6 +258,12 @@ spec:
             # operator has provisioned the corresponding local shards or external provider.
             - name: PlaceContext__ClusterChat__Endpoint
               value: "http://placecontext-cluster-host:8081/api/cluster"
+            - name: PlaceContext__ClusterChat__ApiToken
+              valueFrom:
+                secretKeyRef:
+                  name: placecontext-ai
+                  key: api-token
+                  optional: true
             # Kept for reference if Voyage is unset and cluster embeddings are used instead.
             - name: PlaceContext__ClusterChat__EmbeddingDimensions
               value: "2560"

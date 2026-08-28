@@ -33,10 +33,10 @@ public sealed class EntitiesController : ControllerBase
     private static readonly Regex EntityNameRe = new(
         @"^[A-Za-z][A-Za-z0-9_-]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    private readonly IPlaceContextService _svc;
+    private readonly PlaceContextService _svc;
     private readonly ICurrentProject _project;
 
-    public EntitiesController(IPlaceContextService svc, ICurrentProject project)
+    public EntitiesController(PlaceContextService svc, ICurrentProject project)
     {
         _svc = svc;
         _project = project;

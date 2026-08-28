@@ -20,8 +20,8 @@ namespace PlaceContext.Host.Controllers.Api;
 [Produces("application/json")]
 public sealed class JobsController : ControllerBase
 {
-    private readonly IPlaceContextService _svc;
-    public JobsController(IPlaceContextService svc) => _svc = svc;
+    private readonly PlaceContextService _svc;
+    public JobsController(PlaceContextService svc) => _svc = svc;
 
     /// <summary>GET /api/v1/projects/{projectId}/jobs — every job defined under the project, or 404 if
     /// the project itself doesn't exist.</summary>

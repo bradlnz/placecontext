@@ -6,7 +6,7 @@ using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class BackupSettingsViewModel(IPlaceContextService service, PortalUiState ui)
+public sealed class BackupSettingsViewModel(PlaceContextService service, PortalUiState ui)
     : PageViewModel
 {
     public const long MaxManifestBytes = 20 * 1024 * 1024;

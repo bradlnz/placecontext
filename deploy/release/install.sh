@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
 # PlaceContext local release installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh | bash
+#   curl -fsSL https://get.placecontext.io/install.sh | bash
 #
-# The installer downloads the release, kubectl and k3d, starts a local inference
-# worker, and applies the k3s manifests. Docker, Python 3.11+, curl, and OpenSSL
-# are system prerequisites.
+# The public bundle contains compiled runtime images only; the source repository
+# can remain private. The installer provisions its tools and Python environment,
+# imports the packaged runtime into k3d, and applies the k3s manifests.
 set -euo pipefail
 
-REPOSITORY="${PLACECONTEXT_REPOSITORY:-bradlnz/placecontext}"
 VERSION="${PLACECONTEXT_VERSION:-latest}"
+BASE_URL="${PLACECONTEXT_BASE_URL:-https://placecontext.syd1.cdn.digitaloceanspaces.com}"
 INSTALL_DIR="${PLACECONTEXT_HOME:-$HOME/.local/share/placecontext}"
 MODEL="${PLACECONTEXT_MODEL:-Qwen/Qwen3.5-4B}"
 SHARD_ENDPOINTS="${PLACECONTEXT_SHARD_ENDPOINTS:-}"
+AI_TOKEN="${PLACECONTEXT_AI_TOKEN:-}"
+AI_TOKEN_PROVIDED=0
+[[ -z "$AI_TOKEN" ]] || AI_TOKEN_PROVIDED=1
 PORT="${PLACECONTEXT_PORT:-7700}"
 CLUSTER_NAME="${PLACECONTEXT_CLUSTER:-placecontext}"
 NAMESPACE="${PLACECONTEXT_NAMESPACE:-placecontext}"
@@ -29,6 +32,7 @@ while [[ $# -gt 0 ]]; do
     --install-dir) INSTALL_DIR="$2"; shift 2 ;;
     --model) MODEL="$2"; shift 2 ;;
     --shard-endpoints) SHARD_ENDPOINTS="$2"; shift 2 ;;
+    --ai-token) AI_TOKEN="$2"; AI_TOKEN_PROVIDED=1; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --ai-shard) AI_SHARD_ONLY=1; shift ;;
     --shard-index) SHARD_INDEX="$2"; shift 2 ;;
@@ -44,10 +48,11 @@ while [[ $# -gt 0 ]]; do
         '  install.sh [--version TAG] [--model ID] [--shard-endpoints URL,URL]' \
         '' \
         'Options:' \
-        '  --version TAG          GitHub release tag (default: latest)' \
+        '  --version TAG          Spaces release version (default: latest)' \
         '  --install-dir DIR      Install location' \
         '  --model ID             Hugging Face model ID' \
         '  --shard-endpoints LIST Ordered comma-separated worker URLs' \
+        '  --ai-token TOKEN       Shared controller/worker token for remote shards' \
         '  --port PORT            Local portal port (default: 7700)' \
         '  --ai-shard            Install only an MLX/Torch AI shard worker' \
         '  --shard-index N       Zero-based shard index (default: 0)' \
@@ -63,6 +68,11 @@ done
 [[ "$SHARD_INDEX" =~ ^[0-9]+$ ]] || { printf 'Invalid --shard-index: %s\n' "$SHARD_INDEX" >&2; exit 2; }
 [[ "$TOTAL_SHARDS" =~ ^[1-9][0-9]*$ ]] || { printf 'Invalid --total-shards: %s\n' "$TOTAL_SHARDS" >&2; exit 2; }
 (( SHARD_INDEX < TOTAL_SHARDS )) || { printf '%s\n' '--shard-index must be less than --total-shards' >&2; exit 2; }
+[[ "$MODEL" =~ ^[A-Za-z0-9._/-]+$ ]] || { printf 'Invalid --model: %s\n' "$MODEL" >&2; exit 2; }
+if [[ "$AI_TOKEN_PROVIDED" == 1 && ! "$AI_TOKEN" =~ ^[A-Za-z0-9._~-]{32,256}$ ]]; then
+  printf '%s\n' 'Invalid --ai-token: expected 32-256 URL-safe characters' >&2
+  exit 2
+fi
 [[ "$AI_SHARD_ONLY" == 0 ]] || INSTALL_AI=1
 
 say() { printf '==> %s\n' "$*"; }
@@ -72,6 +82,14 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 download() {
   curl -fsSL --retry 3 --retry-delay 2 "$1" -o "$2"
+}
+
+normalise_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64) printf '%s\n' amd64 ;;
+    arm64|aarch64) printf '%s\n' arm64 ;;
+    *) die "unsupported CPU architecture: $(uname -m)" ;;
+  esac
 }
 
 sha256_file() {
@@ -85,34 +103,63 @@ sha256_file() {
 }
 
 verify_sha256() {
-  local archive="$1" sums="$2" expected actual
-  expected="$(awk '$2 == "placecontext-deploy.tar.gz" || $2 == "./placecontext-deploy.tar.gz" { print $1; exit }' "$sums")"
-  [[ -n "$expected" ]] || die "release checksum is missing placecontext-deploy.tar.gz"
+  local archive="$1" sums="$2" asset="$3" expected actual
+  expected="$(awk -v asset="$asset" '$2 == asset || $2 == "./" asset { print $1; exit }' "$sums")"
+  [[ -n "$expected" ]] || die "release checksum is missing $asset"
   actual="$(sha256_file "$archive")"
   [[ "$actual" == "$expected" ]] || die "release checksum verification failed"
+}
+
+validate_archive() {
+  local archive="$1" entry listing
+  listing="$(mktemp "${TMPDIR:-/tmp}/placecontext-tar.XXXXXX")"
+  tar -tzf "$archive" > "$listing" || { rm -f "$listing"; die "release archive is invalid"; }
+  while IFS= read -r entry; do
+    case "$entry" in
+      placecontext-deploy|placecontext-deploy/*) ;;
+      *) rm -f "$listing"; die "release archive contains an unsafe path: $entry" ;;
+    esac
+    case "/$entry/" in
+      */../*|*/./*) rm -f "$listing"; die "release archive contains traversal: $entry" ;;
+    esac
+  done < "$listing"
+  rm -f "$listing"
+
+  # Release bundles contain only directories and regular files. Reject links and special files so
+  # extraction cannot redirect a later member outside the temporary bundle directory.
+  if tar -tvzf "$archive" | awk 'substr($1,1,1) != "-" && substr($1,1,1) != "d" { exit 1 }'; then
+    return
+  fi
+  die "release archive contains links or special files"
 }
 
 bootstrap_release() {
   have curl || die "curl is required"
   have tar || die "tar is required"
 
-  local tag_path tmp base bundle
+  local tmp bundle arch asset release_base version_file
   local -a install_args
+  BASE_URL="${BASE_URL%/}"
   if [[ "$VERSION" == "latest" ]]; then
-    tag_path="latest/download"
-  else
-    [[ "$VERSION" == v* ]] || VERSION="v$VERSION"
-    tag_path="download/$VERSION"
+    version_file="$(mktemp "${TMPDIR:-/tmp}/placecontext-version.XXXXXX")"
+    download "$BASE_URL/latest/VERSION" "$version_file"
+    VERSION="$(tr -d '[:space:]' < "$version_file")"
+    rm -f "$version_file"
+    [[ -n "$VERSION" ]] || die "latest release version is empty"
   fi
-  base="https://github.com/$REPOSITORY/releases/$tag_path"
+  VERSION="${VERSION#v}"
+  arch="$(normalise_arch)"
+  asset="placecontext-deploy-$arch.tar.gz"
+  release_base="$BASE_URL/releases/$VERSION"
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/placecontext.XXXXXX")"
   trap 'rm -rf "$tmp"' EXIT
 
   say "Downloading PlaceContext ${VERSION}"
-  download "$base/placecontext-deploy.tar.gz" "$tmp/placecontext-deploy.tar.gz"
-  download "$base/SHA256SUMS" "$tmp/SHA256SUMS"
-  verify_sha256 "$tmp/placecontext-deploy.tar.gz" "$tmp/SHA256SUMS"
-  tar -xzf "$tmp/placecontext-deploy.tar.gz" -C "$tmp"
+  download "$release_base/$asset" "$tmp/$asset"
+  download "$release_base/SHA256SUMS" "$tmp/SHA256SUMS"
+  verify_sha256 "$tmp/$asset" "$tmp/SHA256SUMS" "$asset"
+  validate_archive "$tmp/$asset"
+  tar -xzf "$tmp/$asset" -C "$tmp"
   bundle="$tmp/placecontext-deploy"
   [[ -x "$bundle/install.sh" ]] || die "release does not contain install.sh"
   ok "release verified"
@@ -127,6 +174,7 @@ bootstrap_release() {
   [[ "$AI_SHARD_ONLY" == 0 ]] || install_args+=(--ai-shard --shard-index "$SHARD_INDEX" --total-shards "$TOTAL_SHARDS")
   [[ "$WAIT" == 1 ]] || install_args+=(--no-wait)
   [[ -z "$SHARD_ENDPOINTS" ]] || install_args+=(--shard-endpoints "$SHARD_ENDPOINTS")
+  [[ "$AI_TOKEN_PROVIDED" == 0 ]] || install_args+=(--ai-token "$AI_TOKEN")
   PLACECONTEXT_FROM_BUNDLE=1 bash "$bundle/install.sh" "${install_args[@]}"
 }
 
@@ -136,7 +184,8 @@ if [[ "$FROM_BUNDLE" != 1 ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[[ -d "$SCRIPT_DIR/k3s" && -f "$SCRIPT_DIR/local-ai/runtime.yaml" ]] \
+[[ -d "$SCRIPT_DIR/k3s" && -f "$SCRIPT_DIR/local-ai/runtime.yaml" \
+    && -f "$SCRIPT_DIR/placecontext-runtime.tar" ]] \
   || die "installer must run from a PlaceContext release bundle"
 
 mkdir -p "$INSTALL_DIR"
@@ -152,11 +201,78 @@ detect_platform() {
     Darwin) TOOL_OS=darwin ;;
     *) die "only Linux and macOS are supported" ;;
   esac
-  case "$(uname -m)" in
-    x86_64|amd64) TOOL_ARCH=amd64 ;;
-    arm64|aarch64) TOOL_ARCH=arm64 ;;
-    *) die "unsupported CPU architecture: $(uname -m)" ;;
-  esac
+  TOOL_ARCH="$(normalise_arch)"
+}
+
+as_root() {
+  if [[ "$(id -u)" == 0 ]]; then
+    "$@"
+  elif have sudo; then
+    sudo "$@"
+  else
+    die "sudo is required to install system packages"
+  fi
+}
+
+install_system_requirements() {
+  have curl || die "curl is required"
+  have tar || die "tar is required"
+
+  if [[ "$TOOL_OS" == darwin ]] && ! have docker; then
+    have brew || die "Homebrew is required to install Docker and Colima on macOS"
+    say "Installing Docker and Colima"
+    brew install docker colima
+    colima start
+  elif [[ "$TOOL_OS" == linux ]] && ! have docker; then
+    say "Installing Docker"
+    if have apt-get; then
+      as_root apt-get update
+      as_root apt-get install -y docker.io
+    elif have dnf; then
+      as_root dnf install -y docker
+    elif have pacman; then
+      as_root pacman -Sy --noconfirm docker
+    else
+      die "install Docker, then rerun this installer (supported package managers: apt, dnf, pacman)"
+    fi
+    if have systemctl; then
+      as_root systemctl enable --now docker
+    fi
+  fi
+
+  have docker || die "Docker could not be installed"
+  if ! docker info >/dev/null 2>&1; then
+    if [[ "$TOOL_OS" == linux ]] && have sudo && sudo docker info >/dev/null 2>&1; then
+      as_root usermod -aG docker "${USER:-$(id -un)}"
+      die "Docker was installed; sign out and back in for group access, then rerun the installer"
+    fi
+    die "Docker is installed but is not running"
+  fi
+  have openssl || die "openssl is required"
+}
+
+install_python() {
+  [[ "$INSTALL_AI" == 1 && -z "$SHARD_ENDPOINTS" ]] || return
+  if have python3 && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' 2>/dev/null; then
+    return
+  fi
+
+  say "Installing Python 3.11+"
+  if [[ "$TOOL_OS" == darwin ]]; then
+    have brew || die "Homebrew is required to install Python on macOS"
+    brew install python
+  elif have apt-get; then
+    as_root apt-get update
+    as_root apt-get install -y python3 python3-venv python3-pip
+  elif have dnf; then
+    as_root dnf install -y python3 python3-pip
+  elif have pacman; then
+    as_root pacman -Sy --noconfirm python python-pip
+  else
+    die "Python 3.11+ is required for the local inference worker"
+  fi
+  have python3 && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' \
+    || die "the operating system package manager did not provide Python 3.11+"
 }
 
 install_k3d() {
@@ -222,6 +338,21 @@ configure_secrets() {
     --from-literal="ACCESS_KEY_ID=pc$(random_hex 4)" \
     --from-literal="ACCESS_SECRET_KEY=$(random_hex 24)"
 
+  if [[ "$INSTALL_AI" == 1 ]]; then
+    if [[ "$AI_TOKEN_PROVIDED" == 1 ]]; then
+      kubectl -n "$NAMESPACE" create secret generic placecontext-ai \
+        --from-literal="api-token=$AI_TOKEN" \
+        --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+    elif kubectl -n "$NAMESPACE" get secret placecontext-ai >/dev/null 2>&1; then
+      AI_TOKEN="$(kubectl -n "$NAMESPACE" get secret placecontext-ai \
+        -o go-template='{{index .data "api-token" | base64decode}}')"
+    else
+      AI_TOKEN="$(random_hex 32)"
+      kubectl -n "$NAMESPACE" create secret generic placecontext-ai \
+        --from-literal="api-token=$AI_TOKEN" >/dev/null
+    fi
+  fi
+
   if ! kubectl -n "$NAMESPACE" get secret placecontext-ca >/dev/null 2>&1; then
     cert_dir="$(mktemp -d "${TMPDIR:-/tmp}/placecontext-ca.XXXXXX")"
     openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
@@ -238,9 +369,11 @@ start_worker() {
   [[ "$INSTALL_AI" == 1 ]] || return
   [[ -z "$SHARD_ENDPOINTS" ]] || return
   have python3 || die "Python 3.11+ is required for the local inference worker"
+  have openssl || die "openssl is required to generate the AI authentication token"
   python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' \
     || die "Python 3.11+ is required for the local inference worker"
 
+  [[ -n "$AI_TOKEN" ]] || AI_TOKEN="$(random_hex 32)"
   local venv="$ROOT/ai/venv" worker="$ROOT/local-ai/worker.py" shard_spec="$SHARD_INDEX/$TOTAL_SHARDS"
   [[ -f "$worker" ]] || die "release does not contain the inference worker"
   mkdir -p "$ROOT/ai"
@@ -264,6 +397,7 @@ start_worker() {
       -e "s|__WORKER__|$worker|g" \
       -e "s|__MODEL__|$MODEL|g" \
       -e "s|__SHARD_SPEC__|$shard_spec|g" \
+      -e "s|__AI_TOKEN__|$AI_TOKEN|g" \
       -e "s|__LOG_DIR__|$ROOT/logs|g" \
       "$ROOT/local-ai/io.placecontext.ai-worker.plist" > "$plist"
     launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1 || true
@@ -276,16 +410,24 @@ start_worker() {
       -e "s|__WORKER__|$worker|g" \
       -e "s|__MODEL__|$MODEL|g" \
       -e "s|__SHARD_SPEC__|$shard_spec|g" \
+      -e "s|__AI_TOKEN__|$AI_TOKEN|g" \
+      -e "s|__STATE_DIR__|$ROOT/ai|g" \
+      -e "s|__LOG_DIR__|$ROOT/logs|g" \
       "$ROOT/local-ai/placecontext-ai.service" > "$unit_dir/placecontext-ai.service"
     systemctl --user daemon-reload
     systemctl --user enable --now placecontext-ai.service
   else
-    SHARD_SPEC="$shard_spec" nohup "$venv/bin/python" "$worker" --model "$MODEL" --port 8080 \
+    SHARD_SPEC="$shard_spec" PLACECONTEXT_AI_TOKEN="$AI_TOKEN" \
+      nohup "$venv/bin/python" "$worker" --model "$MODEL" --host 0.0.0.0 --port 8080 \
       >"$ROOT/logs/ai-worker.log" 2>&1 &
     printf '%s\n' "$!" > "$ROOT/state/ai-worker.pid"
   fi
   SHARD_ENDPOINTS="http://host.k3d.internal:8080"
   ok "AI shard $shard_spec configured (model downloads on first start)"
+  if [[ "$AI_SHARD_ONLY" == 1 ]]; then
+    printf '    Controller token: %s\n' "$AI_TOKEN"
+    printf '    Keep this token private and configure the controller with --ai-token.\n'
+  fi
 }
 
 configure_cluster_ai() {
@@ -294,6 +436,7 @@ configure_cluster_ai() {
   local endpoint index=0 args=()
   IFS=',' read -r -a endpoints <<< "$SHARD_ENDPOINTS"
   [[ "${#endpoints[@]}" -gt 0 && -n "${endpoints[0]}" ]] || die "no shard endpoints were configured"
+  [[ -n "$AI_TOKEN" ]] || die "an AI token is required to configure shard endpoints"
   args+=(--from-literal="PlaceContext__ClusterChat__Model=$MODEL")
   for endpoint in "${endpoints[@]}"; do
     endpoint="${endpoint%/}"
@@ -309,6 +452,7 @@ configure_cluster_ai() {
 
 deploy_local() {
   detect_platform
+  install_python
   if [[ "$AI_SHARD_ONLY" == 1 ]]; then
     start_worker
     ok "AI shard is listening on port 8080"
@@ -316,12 +460,14 @@ deploy_local() {
     return
   fi
 
-  have docker || die "Docker must be installed and running"
-  docker info >/dev/null 2>&1 || die "Docker is installed but not running"
-  have openssl || die "openssl is required"
+  install_system_requirements
   export PATH="$ROOT/bin:$PATH"
   install_k3d
   install_kubectl
+
+  if [[ -n "$SHARD_ENDPOINTS" && "$AI_TOKEN_PROVIDED" == 0 ]]; then
+    die "--ai-token is required with --shard-endpoints (use the token printed by the shard installer)"
+  fi
 
   say "Starting local k3s cluster"
   if k3d cluster list 2>/dev/null | awk 'NR > 1 {print $1}' | grep -qx "$CLUSTER_NAME"; then
@@ -332,6 +478,10 @@ deploy_local() {
   fi
   export KUBECONFIG
   KUBECONFIG="$(k3d kubeconfig write "$CLUSTER_NAME")"
+
+  say "Loading the packaged PlaceContext runtime"
+  k3d image import "$ROOT/placecontext-runtime.tar" --cluster "$CLUSTER_NAME"
+  ok "compiled runtime loaded"
 
   configure_secrets
   start_worker

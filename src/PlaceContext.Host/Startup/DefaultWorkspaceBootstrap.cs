@@ -38,7 +38,7 @@ public static class DefaultWorkspaceBootstrap
             var admin = await auth.GetOrCreateOperatorAsync(ct);
             CurrentUser.Set(new UserIdentity(admin.Id, admin.Role));
 
-            var app = provider.GetRequiredService<IPlaceContextService>();
+            var app = provider.GetRequiredService<PlaceContextService>();
             var projects = await app.GetProjectsAsync(ct);
             var project = projects.FirstOrDefault(item =>
                 string.Equals(item.Name, "Default project", StringComparison.OrdinalIgnoreCase));
@@ -63,7 +63,7 @@ public static class DefaultWorkspaceBootstrap
         }
     }
 
-    private static async Task SeedDemoDataAsync(IPlaceContextService app, Guid projectId, CancellationToken ct)
+    private static async Task SeedDemoDataAsync(PlaceContextService app, Guid projectId, CancellationToken ct)
     {
         await SeedSecretsAsync(app, projectId, ct);
         var mcpIds = await SeedMcpConnectionsAsync(app, projectId, ct);
@@ -72,7 +72,7 @@ public static class DefaultWorkspaceBootstrap
         await SeedProjectDataAsync(app, projectId, jobs["Ingest customer activity"].Id, ct);
     }
 
-    private static async Task SeedSecretsAsync(IPlaceContextService app, Guid projectId, CancellationToken ct)
+    private static async Task SeedSecretsAsync(PlaceContextService app, Guid projectId, CancellationToken ct)
     {
         var existing = await app.ListProjectSecretsAsync(projectId, ct);
         if (!existing.Any(item => item.Name == "REPORT_SIGNING_KEY"))
@@ -80,7 +80,7 @@ public static class DefaultWorkspaceBootstrap
     }
 
     private static async Task<IReadOnlyList<Guid>> SeedMcpConnectionsAsync(
-        IPlaceContextService app,
+        PlaceContextService app,
         Guid projectId,
         CancellationToken ct)
     {
@@ -107,7 +107,7 @@ public static class DefaultWorkspaceBootstrap
     }
 
     private static async Task<IReadOnlyDictionary<string, JobView>> SeedJobsAsync(
-        IPlaceContextService app,
+        PlaceContextService app,
         Guid projectId,
         IReadOnlyList<Guid> mcpIds,
         CancellationToken ct)
@@ -252,7 +252,7 @@ public static class DefaultWorkspaceBootstrap
     }
 
     private static async Task<JobChainView> SeedChainAsync(
-        IPlaceContextService app,
+        PlaceContextService app,
         Guid projectId,
         IReadOnlyDictionary<string, JobView> jobs,
         CancellationToken ct)
@@ -276,7 +276,7 @@ public static class DefaultWorkspaceBootstrap
     }
 
     private static async Task SeedProjectDataAsync(
-        IPlaceContextService app,
+        PlaceContextService app,
         Guid projectId,
         Guid ingestJobId,
         CancellationToken ct)

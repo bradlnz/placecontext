@@ -37,7 +37,7 @@ public sealed class GetRootStatsHandler : IQueryHandler<GetRootStatsQuery, RootS
             }
 
             godTotal += p.LastGraph?.GodNodes.Count ?? 0;
-            if (RootRollup.IsStale(p, ledger)) stale++;
+            if (p.LastGraph is not null && ledger.Records.Any(r => r.RecordedAt > p.LastGraph.BuiltAt)) stale++;
         }
 
         return new RootStatsView(

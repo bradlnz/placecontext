@@ -4,7 +4,7 @@ using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class SecretsViewModel(IPlaceContextService service, PortalUiState ui) : PageViewModel
+public sealed class SecretsViewModel(PlaceContextService service, PortalUiState ui) : PageViewModel
 {
     public const string PageTitle = "Vault";
     public Guid ProjectId { get; set; }

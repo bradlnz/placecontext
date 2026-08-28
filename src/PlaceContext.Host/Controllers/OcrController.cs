@@ -26,8 +26,8 @@ namespace PlaceContext.Host.Controllers;
 [Produces("application/json")]
 public sealed class OcrController : ControllerBase
 {
-    private readonly IPlaceContextService _svc;
-    public OcrController(IPlaceContextService svc) => _svc = svc;
+    private readonly PlaceContextService _svc;
+    public OcrController(PlaceContextService svc) => _svc = svc;
 
     /// <summary>GET /api/ocr/pending — the oldest artifacts still needing OCR (default batch 10).</summary>
     [HttpGet("pending")]

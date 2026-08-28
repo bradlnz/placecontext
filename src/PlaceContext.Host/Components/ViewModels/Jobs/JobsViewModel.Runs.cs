@@ -90,7 +90,7 @@ public sealed partial class JobsViewModel
             $"/observability?run={runId}",
             async (sp, ct) =>
             {
-                var result = await sp.GetRequiredService<IPlaceContextService>()
+                var result = await sp.GetRequiredService<PlaceContextService>()
                     .RunJobAsync(jobId, payload, runId, ct);
                 return $"run finished — {result.Status}";
             },

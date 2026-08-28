@@ -31,7 +31,7 @@ public static class GraphCatalog
             : GraphLinkConfidence.Normal;
 }
 
-public sealed class GraphCanvasViewModel(IJSRuntime js, IPlaceContextService? service = null)
+public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? service = null)
     : PageViewModel,
         IComponentViewModel,
         IAsyncDisposable

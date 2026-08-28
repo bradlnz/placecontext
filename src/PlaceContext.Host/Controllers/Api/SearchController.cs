@@ -19,10 +19,10 @@ namespace PlaceContext.Host.Controllers.Api;
 public sealed class SearchController : ControllerBase
 {
     private const int SearchCandidateLimit = 100;
-    private readonly IPlaceContextService _svc;
+    private readonly PlaceContextService _svc;
     private readonly ICurrentProject _project;
 
-    public SearchController(IPlaceContextService svc, ICurrentProject project)
+    public SearchController(PlaceContextService svc, ICurrentProject project)
         => (_svc, _project) = (svc, project);
 
     /// <summary>

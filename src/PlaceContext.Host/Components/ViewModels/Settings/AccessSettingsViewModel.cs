@@ -91,7 +91,7 @@ public sealed class AccessSettingsViewModel(
             Members = await InScopeAsync<IMembershipService, IReadOnlyList<MemberView>>(service =>
                 service.ListMembersAsync()
             );
-            Roles = await InScopeAsync<IPlaceContextService, IReadOnlyList<RoleView>>(service =>
+            Roles = await InScopeAsync<PlaceContextService, IReadOnlyList<RoleView>>(service =>
                 service.ListRolesAsync()
             );
         }
@@ -107,7 +107,7 @@ public sealed class AccessSettingsViewModel(
         );
 
     public async Task LoadRolesAsync() =>
-        Roles = await InScopeAsync<IPlaceContextService, IReadOnlyList<RoleView>>(service =>
+        Roles = await InScopeAsync<PlaceContextService, IReadOnlyList<RoleView>>(service =>
             service.ListRolesAsync()
         );
 
@@ -225,7 +225,7 @@ public sealed class AccessSettingsViewModel(
         Matrix = null;
         try
         {
-            Matrix = await InScopeAsync<IPlaceContextService, UserPermissionsView>(service =>
+            Matrix = await InScopeAsync<PlaceContextService, UserPermissionsView>(service =>
                 service.GetUserPermissionsAsync(userId)
             );
         }
@@ -240,7 +240,7 @@ public sealed class AccessSettingsViewModel(
         Busy = true;
         try
         {
-            Matrix = await InScopeAsync<IPlaceContextService, UserPermissionsView>(service =>
+            Matrix = await InScopeAsync<PlaceContextService, UserPermissionsView>(service =>
                 service.SetUserPermissionOverrideAsync(userId, permission, allowed)
             );
         }
@@ -287,7 +287,7 @@ public sealed class AccessSettingsViewModel(
         Busy = true;
         try
         {
-            await InScopeAsync<IPlaceContextService>(service =>
+            await InScopeAsync<PlaceContextService>(service =>
                 service.UpdateRolePermissionsAsync(roleId, EditRolePerms.ToList())
             );
             EditRoleId = null;
@@ -309,7 +309,7 @@ public sealed class AccessSettingsViewModel(
         Busy = true;
         try
         {
-            await InScopeAsync<IPlaceContextService>(service => service.DeleteRoleAsync(roleId));
+            await InScopeAsync<PlaceContextService>(service => service.DeleteRoleAsync(roleId));
             ConfirmDeleteRoleId = null;
             await LoadRolesAsync();
             Message = "Role deleted.";
@@ -329,7 +329,7 @@ public sealed class AccessSettingsViewModel(
         Busy = true;
         try
         {
-            await InScopeAsync<IPlaceContextService>(service =>
+            await InScopeAsync<PlaceContextService>(service =>
                 service.CreateRoleAsync(NewRoleName.Trim(), NewRolePerms.ToList())
             );
             NewRoleName = "";

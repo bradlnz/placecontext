@@ -9,7 +9,7 @@ operate on the same durable job engine.
 
 ```bash
 # Download the verified release and create a local k3d cluster plus local AI
-curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh | bash
+curl -fsSL https://get.placecontext.io/install.sh | bash
 # portal http://localhost:7700 · MCP /mcp
 ```
 
@@ -78,7 +78,7 @@ The release installer creates a real [k3s](https://k3s.io) cluster through
 - **Standard worker** runs regular PlaceContext jobs and workload shards.
 - **AI shard** joins the fleet and runs one ordered MLX/Torch model layer slice.
 
-The generated command handles the k3s join and, for an AI shard, downloads the same verified GitHub
+The generated command handles the k3s join and, for an AI shard, downloads the same verified Spaces
 release and installs the worker service. Postgres and MinIO run in-cluster; the portal, MCP endpoint,
 and job scheduler share one Host process.
 
@@ -151,7 +151,7 @@ operator-facing documentation shipped with each build.
 
 ## Upgrading
 
-- Re-run the installer to download and verify the newest GitHub release, then roll the deployment.
+- Re-run the installer to download and verify the newest compiled release from Spaces, then roll the deployment.
 - Pass `--version v1.2.3` to install or retain a specific release.
 
 ## License

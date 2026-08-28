@@ -24,7 +24,7 @@ public sealed class SettingsMvvmArchitectureTests
             var viewModelName = $"{pageName}ViewModel";
 
             Assert.Contains($"@inject {viewModelName} Vm", page, StringComparison.Ordinal);
-            Assert.DoesNotContain("@inject IPlaceContextService", page, StringComparison.Ordinal);
+            Assert.DoesNotContain("@inject PlaceContextService", page, StringComparison.Ordinal);
             Assert.DoesNotContain("@inject PortalUiState", page, StringComparison.Ordinal);
             Assert.DoesNotContain("@inject NavigationManager", page, StringComparison.Ordinal);
             Assert.DoesNotContain("@inject IJSRuntime", page, StringComparison.Ordinal);

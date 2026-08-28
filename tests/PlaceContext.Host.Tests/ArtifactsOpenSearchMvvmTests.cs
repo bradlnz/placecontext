@@ -17,7 +17,7 @@ public sealed class ArtifactsOpenSearchMvvmTests
         Assert.Contains($"@inject {viewModelName} Vm", page, StringComparison.Ordinal);
         Assert.Contains("Vm.Attach", page, StringComparison.Ordinal);
         Assert.Contains("Vm.Detach", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("@inject IPlaceContextService", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("@inject PlaceContextService", page, StringComparison.Ordinal);
         Assert.DoesNotContain("@inject IJSRuntime", page, StringComparison.Ordinal);
         Assert.DoesNotContain("private async Task", page, StringComparison.Ordinal);
         Assert.DoesNotContain("private bool", page, StringComparison.Ordinal);

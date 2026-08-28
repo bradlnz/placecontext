@@ -25,7 +25,7 @@ public sealed record SetupDataSourceOption(
 /// another one, then treats OpenSearch as a separate optional deployment decision.
 /// </summary>
 public sealed class OnboardingViewModel(
-    IPlaceContextService service,
+    PlaceContextService service,
     IOpenSearchConnectionResolver openSearchConnections,
     IConfiguration configuration,
     NavigationManager navigation,

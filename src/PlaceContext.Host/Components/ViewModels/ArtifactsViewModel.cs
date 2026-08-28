@@ -11,7 +11,7 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class ArtifactsViewModel : PageViewModel, IDisposable
 {
-    private readonly IPlaceContextService Svc;
+    private readonly PlaceContextService Svc;
     private readonly PortalUiState Ui;
     private readonly NavigationManager Nav;
     private readonly IJSRuntime Js;
@@ -21,7 +21,7 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     private readonly IPermissionService Permissions;
 
     public ArtifactsViewModel(
-        IPlaceContextService svc,
+        PlaceContextService svc,
         PortalUiState ui,
         NavigationManager nav,
         IJSRuntime js,

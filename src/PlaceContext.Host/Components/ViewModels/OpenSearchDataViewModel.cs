@@ -13,13 +13,13 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
 {
-    private readonly IPlaceContextService Svc;
+    private readonly PlaceContextService Svc;
     private readonly PortalUiState Ui;
     private readonly IJSRuntime JS;
     private readonly IPermissionService Permissions;
 
     public OpenSearchDataViewModel(
-        IPlaceContextService svc,
+        PlaceContextService svc,
         PortalUiState ui,
         IJSRuntime jS,
         IPermissionService permissions

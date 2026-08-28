@@ -18,7 +18,7 @@ public sealed class PlaceContextPrompts
     [Authorize(Policy = "Member")]
     [McpServerPrompt(Name = "review_work"), Description("Review the project's current work against its requirements (global + project).")]
     public static async Task<string> ReviewWork(
-        IPlaceContextService svc,
+        PlaceContextService svc,
         [Description("The project's GUID id")] string projectId)
     {
         if (!Guid.TryParse(projectId, out var id))
@@ -41,7 +41,7 @@ public sealed class PlaceContextPrompts
     [Authorize(Policy = "Member")]
     [McpServerPrompt(Name = "create_skill"), Description("Guide creating a reusable skill/command for the project for an AI agent (Claude Code or Codex), in that agent's format and following the project's requirements.")]
     public static async Task<string> CreateSkill(
-        IPlaceContextService svc,
+        PlaceContextService svc,
         [Description("The project's GUID id")] string projectId,
         [Description("Short skill name, e.g. 'run-tests' or 'add-endpoint'")] string skillName,
         [Description("Target AI agent: 'claude' (Claude Code) or 'codex' (OpenAI Codex CLI). Defaults to claude.")] string agent = "claude",
@@ -98,7 +98,7 @@ public sealed class PlaceContextPrompts
     [Authorize(Policy = "Member")]
     [McpServerPrompt(Name = "record_activity_guidance"), Description("Walk through recording a change correctly into the activity log so it passes the process-trust gates.")]
     public static async Task<string> RecordActivityGuidance(
-        IPlaceContextService svc,
+        PlaceContextService svc,
         [Description("The project's GUID id")] string projectId)
     {
         if (!Guid.TryParse(projectId, out var id))
@@ -128,7 +128,7 @@ public sealed class PlaceContextPrompts
     [Authorize(Policy = "Member")]
     [McpServerPrompt(Name = "onboard"), Description("Load the project's requirements and overview to start a session well-grounded.")]
     public static async Task<string> Onboard(
-        IPlaceContextService svc,
+        PlaceContextService svc,
         [Description("The project's GUID id")] string projectId)
     {
         if (!Guid.TryParse(projectId, out var id))
@@ -150,7 +150,7 @@ public sealed class PlaceContextPrompts
 
     /// <summary>Fetches the project header and effective requirements — with friendly fallbacks.</summary>
     private static async Task<(string Header, string Requirements)> GatherAsync(
-        IPlaceContextService svc, Guid projectId)
+        PlaceContextService svc, Guid projectId)
     {
         var overview = await svc.GetProjectOverviewAsync(projectId);
         var reqs = await svc.GetEffectiveRequirementsAsync(projectId);

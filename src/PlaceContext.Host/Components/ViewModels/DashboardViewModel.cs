@@ -15,7 +15,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     private const string AllFilter = "all";
     private const string RunningFilter = "running";
     private const string FailedFilter = "failed";
-    private readonly IPlaceContextService _service;
+    private readonly PlaceContextService _service;
     private readonly PortalUiState _ui;
     private readonly NavigationManager _navigation;
     private readonly IJSRuntime _js;
@@ -27,7 +27,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     private bool _refreshScheduled;
 
     public DashboardViewModel(
-        IPlaceContextService service,
+        PlaceContextService service,
         PortalUiState ui,
         NavigationManager navigation,
         IJSRuntime js,
@@ -271,7 +271,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
             async (sp, ct) =>
             {
                 var result = await sp
-                    .GetRequiredService<IPlaceContextService>()
+                    .GetRequiredService<PlaceContextService>()
                     .RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
                 return $"chain finished — {result.Status}";
             },

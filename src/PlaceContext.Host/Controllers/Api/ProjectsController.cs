@@ -26,8 +26,8 @@ namespace PlaceContext.Host.Controllers.Api;
 [Produces("application/json")]
 public sealed class ProjectsController : ControllerBase
 {
-    private readonly IPlaceContextService _svc;
-    public ProjectsController(IPlaceContextService svc) => _svc = svc;
+    private readonly PlaceContextService _svc;
+    public ProjectsController(PlaceContextService svc) => _svc = svc;
 
     /// <summary>GET /api/v1/projects — every project known to this workspace.</summary>
     [HttpGet]

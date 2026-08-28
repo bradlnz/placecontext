@@ -8,11 +8,11 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class InspectorViewModel : PageViewModel, IDisposable
 {
-    private readonly IPlaceContextService _service;
+    private readonly PlaceContextService _service;
     private readonly PortalUiState _ui;
     private Timer? _poll;
 
-    public InspectorViewModel(IPlaceContextService service, PortalUiState ui) =>
+    public InspectorViewModel(PlaceContextService service, PortalUiState ui) =>
         (_service, _ui) = (service, ui);
 
     public IReadOnlyList<ToolCallView>? Calls { get; private set; }

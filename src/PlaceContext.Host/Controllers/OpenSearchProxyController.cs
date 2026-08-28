@@ -15,8 +15,8 @@ namespace PlaceContext.Host.Controllers;
 [Route("api/v1/projects/{projectId:guid}/opensearch")]
 public sealed class OpenSearchProxyController : ControllerBase
 {
-    private readonly IPlaceContextService _service;
-    public OpenSearchProxyController(IPlaceContextService service) => _service = service;
+    private readonly PlaceContextService _service;
+    public OpenSearchProxyController(PlaceContextService service) => _service = service;
 
     [HttpGet("indices")]
     public Task<IReadOnlyList<OpenSearchIndexView>> Indices(

@@ -99,7 +99,7 @@ public sealed class CommunicationsSettingsViewModel(
                 CommunicationProviderService,
                 IReadOnlyList<CommunicationProviderView>
             >(service => service.ListAsync());
-            Projects = await InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSummaryView>>(
+            Projects = await InScopeAsync<PlaceContextService, IReadOnlyList<ProjectSummaryView>>(
                 service => service.GetProjectsAsync()
             );
         }
@@ -172,7 +172,7 @@ public sealed class CommunicationsSettingsViewModel(
     public async Task LoadSecretsAsync()
     {
         Secrets = VaultProjectId is { } id
-            ? await InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSecretView>>(service =>
+            ? await InScopeAsync<PlaceContextService, IReadOnlyList<ProjectSecretView>>(service =>
                 service.ListProjectSecretsAsync(id)
             )
             : Array.Empty<ProjectSecretView>();

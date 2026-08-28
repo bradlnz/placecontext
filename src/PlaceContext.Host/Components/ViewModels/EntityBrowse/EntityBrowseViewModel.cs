@@ -48,10 +48,10 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
 
     public string ArtifactDate(DateTimeOffset value) => Presentation.ShortDateTime(value);
 
-    private readonly IPlaceContextService _svc;
+    private readonly PlaceContextService _svc;
     private readonly IJSRuntime _js;
 
-    public EntityBrowseViewModel(IPlaceContextService svc, IJSRuntime js)
+    public EntityBrowseViewModel(PlaceContextService svc, IJSRuntime js)
     {
         _svc = svc;
         _js = js;

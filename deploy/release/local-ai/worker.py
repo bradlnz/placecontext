@@ -16,6 +16,7 @@ Layer mapping for Qwen3.5-4B (36 layers, 0-indexed):
 """
 
 import argparse
+import hmac
 import json
 import logging
 import math
@@ -28,10 +29,9 @@ from typing import Optional, List, Tuple
 
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger("shard-server")
 
@@ -43,6 +43,15 @@ tokenizer = None
 shard_config = None
 backend = None  # "mlx" or "torch"
 total_layers = 0  # total transformer layers in the model
+
+AUTH_HEADER = "X-PlaceContext-AI-Token"
+MAX_GENERATED_TOKENS = 4096
+MAX_MESSAGES = 64
+MAX_MESSAGE_CHARS = 32_768
+MAX_PROMPT_CHARS = 131_072
+MAX_SEQUENCE_TOKENS = 8192
+MAX_EMBEDDING_INPUTS = 32
+MAX_EMBEDDING_CHARS = 4000
 
 
 def is_apple_silicon():
@@ -172,12 +181,12 @@ def load_model_torch(model_path: str):
     logger.info("Loading model %s on %s (dtype=%s) via transformers ...", model_path, device, dtype)
     t0 = time.time()
 
-    tok = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    tok = AutoTokenizer.from_pretrained(model_path, trust_remote_code=False)
     mdl = AutoModelForCausalLM.from_pretrained(
         model_path,
         torch_dtype=dtype,
         device_map="auto" if device.type == "cuda" else None,
-        trust_remote_code=True,
+        trust_remote_code=False,
     )
     if device.type == "cpu":
         mdl = mdl.to(device)
@@ -449,21 +458,21 @@ def chat_stream_torch(messages, temperature=0.7, top_p=0.9, max_tokens=2048):
 # ---------------------------------------------------------------------------
 
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: str = Field(min_length=1, max_length=16)
+    content: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 
 class ChatRequest(BaseModel):
     model: str = "qwen3.5-4b"
-    messages: List[ChatMessage]
+    messages: List[ChatMessage] = Field(min_length=1, max_length=MAX_MESSAGES)
     stream: bool = False
-    temperature: Optional[float] = 0.7
-    top_p: Optional[float] = 0.9
-    max_tokens: Optional[int] = 2048
+    temperature: Optional[float] = Field(default=0.7, ge=0, le=2)
+    top_p: Optional[float] = Field(default=0.9, gt=0, le=1)
+    max_tokens: Optional[int] = Field(default=2048, ge=1, le=MAX_GENERATED_TOKENS)
 
 
 class TokenizeRequest(BaseModel):
-    messages: List[ChatMessage]
+    messages: List[ChatMessage] = Field(min_length=1, max_length=MAX_MESSAGES)
 
 
 class ForwardRequest(BaseModel):
@@ -472,13 +481,13 @@ class ForwardRequest(BaseModel):
     First shard: provide prompt (raw text, shard tokenizes) OR token_ids.
     Subsequent shards: provide hidden_states.
     """
-    prompt: Optional[str] = None                       # first shard: raw text, shard tokenizes
-    token_ids: Optional[List[int]] = None              # first shard: pre-tokenized
+    prompt: Optional[str] = Field(default=None, max_length=MAX_PROMPT_CHARS)  # first shard: raw text
+    token_ids: Optional[List[int]] = Field(default=None, max_length=MAX_SEQUENCE_TOKENS)
     hidden_states: Optional[List[List[List[float]]]] = None  # subsequent shards: (batch, seq, hidden)
     attention_mask: Optional[List[int]] = None
-    temperature: Optional[float] = 0.7
-    top_p: Optional[float] = 0.9
-    max_tokens: Optional[int] = 2048
+    temperature: Optional[float] = Field(default=0.7, ge=0, le=2)
+    top_p: Optional[float] = Field(default=0.9, gt=0, le=1)
+    max_tokens: Optional[int] = Field(default=2048, ge=1, le=MAX_GENERATED_TOKENS)
     generate: bool = False  # if True, sample tokens and return logits + generated token
 
 
@@ -489,6 +498,7 @@ async def lifespan(app: FastAPI):
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=os.environ.get("MODEL_PATH", "Qwen/Qwen3.5-4B"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8080")))
+    parser.add_argument("--host", default=os.environ.get("PLACECONTEXT_AI_BIND", "127.0.0.1"))
     parser.add_argument("--shard", default=os.environ.get("SHARD_SPEC"), help="Shard spec: index/total, e.g. 0/2")
     args = parser.parse_args()
 
@@ -518,12 +528,31 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Cluster Shard Server", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+
+@app.middleware("http")
+async def authenticate_compute_requests(request: Request, call_next):
+    """Keep probes public, but fail closed for every model or tokenizer operation."""
+    if request.url.path == "/health":
+        return await call_next(request)
+
+    configured = os.environ.get("PLACECONTEXT_AI_TOKEN", "")
+    supplied = request.headers.get(AUTH_HEADER, "")
+    if not configured:
+        return JSONResponse(
+            status_code=503,
+            content={"error": "AI worker authentication is not configured."},
+        )
+    if not hmac.compare_digest(supplied, configured):
+        return JSONResponse(status_code=401, content={"error": "Unauthorized."})
+    return await call_next(request)
+
+
+def validated_messages(messages):
+    if any(message.role not in ("system", "user", "assistant") for message in messages):
+        raise HTTPException(400, "Unsupported message role")
+    if sum(len(message.content) for message in messages) > MAX_PROMPT_CHARS:
+        raise HTTPException(400, f"Combined message content exceeds {MAX_PROMPT_CHARS} characters")
 
 
 @app.get("/health")
@@ -548,6 +577,7 @@ async def chat(req: ChatRequest):
     if shard_config.total_shards > 1:
         raise HTTPException(400, "Use /v1/forward in pipeline mode")
 
+    validated_messages(req.messages)
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
     temp = req.temperature or 0.7
     top = req.top_p or 0.9
@@ -577,7 +607,7 @@ async def chat(req: ChatRequest):
 
 class EmbeddingRequest(BaseModel):
     model: str = "qwen3.5-4b"
-    input: List[str]
+    input: List[str] = Field(min_length=1, max_length=MAX_EMBEDDING_INPUTS)
 
 
 @app.post("/v1/embeddings")
@@ -593,11 +623,14 @@ async def embeddings(req: EmbeddingRequest):
         raise HTTPException(503, "Model not loaded")
     if shard_config.total_shards > 1:
         raise HTTPException(400, "Embeddings are only supported in single-node mode")
-    if not req.input:
-        raise HTTPException(400, "input must be a non-empty list of strings")
+    if any(not text or len(text) > MAX_EMBEDDING_CHARS for text in req.input):
+        raise HTTPException(
+            400,
+            f"input strings must be non-empty and at most {MAX_EMBEDDING_CHARS} characters",
+        )
 
     # Cap batch + per-text size defensively (the chat context window is shared).
-    texts = [t[:4000] for t in req.input[:32]]
+    texts = req.input
     vectors = embed_texts_mlx(texts) if backend == "mlx" else embed_texts_torch(texts)
 
     return {
@@ -616,6 +649,7 @@ async def chat_stream(req: ChatRequest):
     if shard_config.total_shards > 1:
         raise HTTPException(400, "Use /v1/forward in pipeline mode")
 
+    validated_messages(req.messages)
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
     temp = req.temperature or 0.7
     top = req.top_p or 0.9
@@ -650,6 +684,7 @@ async def tokenize(req: TokenizeRequest):
     if tokenizer is None:
         raise HTTPException(503, "Tokenizer not loaded")
 
+    validated_messages(req.messages)
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
     prompt = render_chat_prompt(messages)
     token_ids = tokenizer.encode(prompt, add_special_tokens=False)
@@ -671,6 +706,12 @@ async def forward(req: ForwardRequest):
         raise HTTPException(503, "Model not loaded")
 
     sc = shard_config
+
+    if req.hidden_states is not None:
+        if len(req.hidden_states) != 1 or len(req.hidden_states[0]) > MAX_SEQUENCE_TOKENS:
+            raise HTTPException(400, "hidden_states must contain one bounded sequence")
+    if req.attention_mask is not None and len(req.attention_mask) > MAX_SEQUENCE_TOKENS:
+        raise HTTPException(400, "attention_mask is too long")
 
     if backend == "mlx":
         import mlx.core as mx
@@ -844,6 +885,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=os.environ.get("MODEL_PATH", "Qwen/Qwen3.5-4B"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT", "8080")))
+    parser.add_argument("--host", default=os.environ.get("PLACECONTEXT_AI_BIND", "127.0.0.1"))
     parser.add_argument("--shard", default=os.environ.get("SHARD_SPEC"), help="Shard spec: index/total, e.g. 0/2")
     args, _ = parser.parse_known_args()
-    uvicorn.run(app, host="0.0.0.0", port=args.port)
+    uvicorn.run(app, host=args.host, port=args.port, limit_concurrency=8)

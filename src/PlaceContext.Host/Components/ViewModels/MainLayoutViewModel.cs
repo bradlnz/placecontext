@@ -133,7 +133,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         var brandTask = InScopeAsync<BrandingService, TenantBranding>(service =>
             service.GetAsync()
         );
-        var projectsTask = InScopeAsync<IPlaceContextService, IReadOnlyList<ProjectSummaryView>>(
+        var projectsTask = InScopeAsync<PlaceContextService, IReadOnlyList<ProjectSummaryView>>(
             service => service.GetProjectsAsync()
         );
         try
@@ -279,7 +279,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         Searching = true;
         try
         {
-            SearchResults = await InScopeAsync<IPlaceContextService, SearchResultsView>(service =>
+            SearchResults = await InScopeAsync<PlaceContextService, SearchResultsView>(service =>
                 service.SearchAsync(term, _ui.CurrentProjectId)
             );
         }
@@ -376,7 +376,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         try
         {
             _entities = (
-                await InScopeAsync<IPlaceContextService, IReadOnlyList<DataEntityView>>(service =>
+                await InScopeAsync<PlaceContextService, IReadOnlyList<DataEntityView>>(service =>
                     service.ListDataEntitiesAsync(projectId.Value)
                 )
             )

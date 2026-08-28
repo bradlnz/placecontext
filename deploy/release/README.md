@@ -3,12 +3,12 @@
 Install the latest release and configure a local k3d cluster plus local AI:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh | bash
+curl -fsSL https://get.placecontext.io/install.sh | bash
 ```
 
-Docker, Python 3.11+, curl, and OpenSSL are the system prerequisites. The
-installer downloads and verifies the GitHub release, installs `k3d` and
-`kubectl` into its private install directory,
+The installer installs or configures Docker, Python 3.11+, `k3d`, `kubectl`,
+and the AI Python environment. It downloads and verifies a compiled release
+from DigitalOcean Spaces, imports the packaged runtime image into k3d,
 creates the cluster and secrets, starts the platform-native inference worker,
 and deploys the PlaceContext Host and .NET shard coordinator.
 
@@ -25,7 +25,7 @@ worker-only installation. To install a shard directly, choose its zero-based
 index and the total number of shards:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh | \
+curl -fsSL https://get.placecontext.io/install.sh | \
   bash -s -- --ai-shard --shard-index 0 --total-shards 2
 ```
 
@@ -33,16 +33,21 @@ Run the corresponding command with index `1` on the second machine. The worker
 list configured on the controller must use the same order.
 
 Configure an existing ordered shard topology instead of starting a full local
-worker with:
+worker with the shared token printed by the shard installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh | \
-  bash -s -- --shard-endpoints http://100.64.0.10:8080,http://100.64.0.11:8080
+curl -fsSL https://get.placecontext.io/install.sh | \
+  bash -s -- --shard-endpoints http://100.64.0.10:8080,http://100.64.0.11:8080 \
+  --ai-token YOUR_SHARED_TOKEN
 ```
+
+Inference and embedding routes require this token at both the worker and coordinator layers. Keep
+it private; only health probes are unauthenticated. A standalone `--ai-shard` install generates and
+prints a token. Use the same token for every worker in one ordered pipeline.
 
 Use `--version v1.2.3` to pin a release, `--model owner/model` to select a
 Hugging Face model, or `--no-ai` to deploy PlaceContext without local inference.
 
-Release archives contain only the installer, k3s manifests, and local-AI
-runtime files. Source builds use the same layout, so the release path remains
-the single deployment contract.
+Release archives contain only the installer, k3s manifests, local-AI runtime
+files, and the compiled PlaceContext container image. No repository checkout or
+registry login is required on the target machine.

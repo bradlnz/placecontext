@@ -21,8 +21,8 @@ namespace PlaceContext.Host.Controllers.Api;
 [Produces("application/json")]
 public sealed class SchedulesController : ControllerBase
 {
-    private readonly IPlaceContextService _svc;
-    public SchedulesController(IPlaceContextService svc) => _svc = svc;
+    private readonly PlaceContextService _svc;
+    public SchedulesController(PlaceContextService svc) => _svc = svc;
 
     /// <summary>GET /api/v1/projects/{projectId}/schedules — every schedule/event trigger under the
     /// project, or 404 if the project itself doesn't exist.</summary>

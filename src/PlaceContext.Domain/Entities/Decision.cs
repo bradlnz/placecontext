@@ -1,5 +1,3 @@
-using PlaceContext.Domain.Common;
-using PlaceContext.Domain.Events;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -8,7 +6,7 @@ namespace PlaceContext.Domain.Entities;
 /// Aggregate Root: a lightweight Architecture Decision Record. Captures the question faced, the
 /// choice made, and the rationale — and which prior decisions it supersedes.
 /// </summary>
-public sealed class Decision : AggregateRoot
+public sealed class Decision
 {
     private readonly List<DecisionId> _supersedes;
 
@@ -52,11 +50,9 @@ public sealed class Decision : AggregateRoot
             throw new ArgumentException("Decision choice must not be empty.", nameof(choice));
         ArgumentNullException.ThrowIfNull(rationale);
 
-        var decision = new Decision(
+        return new Decision(
             DecisionId.New(), projectId, question.Trim(), choice.Trim(),
             rationale, supersedes ?? Array.Empty<DecisionId>(), decidedAt);
-        decision.Raise(new DecisionRecorded(projectId, decision.Id, decidedAt));
-        return decision;
     }
 
     public static Decision Rehydrate(

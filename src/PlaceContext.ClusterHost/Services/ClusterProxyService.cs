@@ -57,6 +57,9 @@ public sealed class ClusterProxyService : BackgroundService
             try
             {
                 var client = _http.CreateClient();
+                if (!string.IsNullOrWhiteSpace(_opts.ApiToken))
+                    client.DefaultRequestHeaders.TryAddWithoutValidation(
+                        ClusterApiAuthenticationMiddleware.HeaderName, _opts.ApiToken);
                 client.Timeout = TimeSpan.FromSeconds(5);
                 var resp = await client.GetAsync($"{ep}/health", ct);
                 if (resp.IsSuccessStatusCode)

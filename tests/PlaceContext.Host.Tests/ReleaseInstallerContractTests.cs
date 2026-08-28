@@ -3,23 +3,28 @@ namespace PlaceContext.Host.Tests;
 public sealed class ReleaseInstallerContractTests
 {
     [Fact]
-    public void Web_host_ships_the_github_release_installer()
+    public void Web_host_ships_the_verified_spaces_release_installer()
     {
         var installerPath = Path.Combine(AppContext.BaseDirectory, "wwwroot", "install.sh");
 
         Assert.True(File.Exists(installerPath), "The published web host must include /install.sh.");
         var installer = File.ReadAllText(installerPath);
         Assert.Contains(
-            "github.com/$REPOSITORY/releases/$tag_path",
+            "placecontext.syd1.cdn.digitaloceanspaces.com",
             installer,
             StringComparison.Ordinal
         );
         Assert.Contains(
-            "placecontext-deploy.tar.gz",
+            "placecontext-deploy-$arch.tar.gz",
             installer,
             StringComparison.Ordinal
         );
         Assert.Contains("verify_sha256", installer, StringComparison.Ordinal);
+        Assert.Contains("validate_archive", installer, StringComparison.Ordinal);
+        Assert.Contains("placecontext-ai", installer, StringComparison.Ordinal);
+        Assert.Contains("--ai-token", installer, StringComparison.Ordinal);
+        Assert.Contains("placecontext-runtime.tar", installer, StringComparison.Ordinal);
+        Assert.Contains("k3d image import", installer, StringComparison.Ordinal);
         Assert.Contains("deploy_local", installer, StringComparison.Ordinal);
     }
 }

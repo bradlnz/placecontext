@@ -17,7 +17,7 @@ public sealed class DashboardObservabilityClusterAnalyticsMvvmTests
         Assert.Contains($"@inject {viewModelName} Vm", page, StringComparison.Ordinal);
         Assert.Contains("Vm.Attach", page, StringComparison.Ordinal);
         Assert.Contains("@implements IDisposable", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("@inject IPlaceContextService", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("@inject PlaceContextService", page, StringComparison.Ordinal);
         Assert.DoesNotContain("@inject NavigationManager", page, StringComparison.Ordinal);
         Assert.DoesNotContain("@inject IJSRuntime", page, StringComparison.Ordinal);
         Assert.DoesNotContain("@inject OperationCenter", page, StringComparison.Ordinal);

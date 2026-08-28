@@ -1,5 +1,3 @@
-using PlaceContext.Domain.Common;
-using PlaceContext.Domain.Events;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -10,7 +8,7 @@ namespace PlaceContext.Domain.Entities;
 /// protect the lifecycle (<see cref="ProjectStatus"/>). Construction is via <see cref="Discover"/>
 /// (a freshly-scanned candidate) or <see cref="Rehydrate"/> (loading from the store).
 /// </summary>
-public sealed class Project : AggregateRoot
+public sealed class Project
 {
     private Project(
         ProjectId id,
@@ -72,7 +70,6 @@ public sealed class Project : AggregateRoot
 
         Status = ProjectStatus.Registered;
         RegisteredAt = registeredAt;
-        Raise(new ProjectRegistered(Id, Name, registeredAt));
     }
 
     /// <summary>Renames the project (e.g. the user overrides the directory-derived default).</summary>
@@ -93,7 +90,6 @@ public sealed class Project : AggregateRoot
 
         LastGraph = snapshot;
         Status = ProjectStatus.Graphified;
-        Raise(new GraphRebuilt(Id, snapshot, snapshot.BuiltAt));
     }
 
     /// <summary>Stops tracking the project. Terminal state.</summary>

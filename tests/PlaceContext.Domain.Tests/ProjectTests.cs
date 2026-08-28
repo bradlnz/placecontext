@@ -25,14 +25,13 @@ public class ProjectTests
     }
 
     [Fact]
-    public void Register_promotes_and_raises_event()
+    public void Register_promotes_project()
     {
         var p = Discovered();
         p.Register(T0);
 
         Assert.Equal(ProjectStatus.Registered, p.Status);
         Assert.Equal(T0, p.RegisteredAt);
-        Assert.Contains(p.PullDomainEvents(), e => e is Events.ProjectRegistered);
     }
 
     [Fact]
@@ -40,7 +39,6 @@ public class ProjectTests
     {
         var p = Discovered();
         p.Register(T0);
-        p.PullDomainEvents();
         p.Register(T0.AddMinutes(1));
 
         Assert.Equal(ProjectStatus.Registered, p.Status);

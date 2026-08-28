@@ -13,7 +13,7 @@ namespace PlaceContext.Host.Components.ViewModels;
 /// Values are never displayed after save — the Vault stores ciphertext only.
 /// </summary>
 public sealed class ConnectionsSettingsViewModel(
-    IPlaceContextService service,
+    PlaceContextService service,
     PortalUiState ui
 ) : PageViewModel
 {

@@ -8,12 +8,12 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class EventsViewModel : PageViewModel
 {
-    private readonly IPlaceContextService _service;
+    private readonly PlaceContextService _service;
     private readonly PortalUiState _ui;
     private readonly NavigationManager _navigation;
 
     public EventsViewModel(
-        IPlaceContextService service,
+        PlaceContextService service,
         PortalUiState ui,
         NavigationManager navigation
     ) => (_service, _ui, _navigation) = (service, ui, navigation);

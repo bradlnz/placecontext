@@ -11,7 +11,7 @@ using PlaceContext.Infrastructure.Scheduling;
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class ProjectAnalyticsViewModel(
-    IPlaceContextService service,
+    PlaceContextService service,
     PortalUiState ui,
     IJSRuntime js,
     AnalyticsRefreshQueue queue

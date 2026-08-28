@@ -7,7 +7,6 @@ TOKEN="${TOKEN:-}"
 K3S_IMAGE="${K3S_IMAGE:-rancher/k3s:v1.31.5-k3s1}"
 TS_CONTAINER="${TS_CONTAINER:-placecontext-tailscale}"
 AGENT_CONTAINER="${AGENT_CONTAINER:-placecontext-agent}"
-APP_IMAGE="${APP_IMAGE:-ghcr.io/bradlnz/placecontext:latest}"
 NODE_TYPE="${NODE_TYPE:-standard-worker}"
 DOCKER="${DOCKER:-docker}"
 
@@ -198,11 +197,6 @@ $DOCKER run -d --name "$AGENT_CONTAINER" --privileged --restart unless-stopped \
   -v placecontext-agent-k3s:/var/lib/rancher/k3s \
   -v placecontext-agent-kubelet:/var/lib/kubelet \
   "$K3S_IMAGE" agent "${AGENT_ARGS[@]}" >/dev/null
-
-# ─── App image ───────────────────────────────────────────────────────────────
-log "Pulling app image in the agent (background)..."
-$DOCKER exec -d "$AGENT_CONTAINER" \
-  k3s ctr images pull "$APP_IMAGE" 2>/dev/null || true
 
 # ─── Verify ──────────────────────────────────────────────────────────────────
 log "Waiting for agent to register..."

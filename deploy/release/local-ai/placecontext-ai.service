@@ -4,11 +4,20 @@ After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=__PYTHON__ __WORKER__ --model __MODEL__ --port 8080
+ExecStart=__PYTHON__ __WORKER__ --model __MODEL__ --host 0.0.0.0 --port 8080
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 Environment=SHARD_SPEC=__SHARD_SPEC__
+Environment=PLACECONTEXT_AI_TOKEN=__AI_TOKEN__
+Environment=HF_HOME=__STATE_DIR__/huggingface
+
+# The model process does not need privilege escalation or broad write access.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=__STATE_DIR__ __LOG_DIR__
 
 [Install]
 WantedBy=default.target

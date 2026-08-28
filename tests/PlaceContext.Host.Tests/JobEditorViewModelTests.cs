@@ -12,7 +12,7 @@ public sealed class JobEditorViewModelTests
         Assert.Contains("@inject JobEditorViewModel Vm", page, StringComparison.Ordinal);
         Assert.Contains("Vm.Attach", page, StringComparison.Ordinal);
         Assert.Contains("Vm.Detach", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("@inject IPlaceContextService", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("@inject PlaceContextService", page, StringComparison.Ordinal);
         Assert.DoesNotContain("@inject IJSRuntime", page, StringComparison.Ordinal);
         Assert.DoesNotContain("private async Task SaveCoreAsync", page, StringComparison.Ordinal);
     }
@@ -25,7 +25,7 @@ public sealed class JobEditorViewModelTests
         Assert.Contains("@inject JobTestCodeEditorViewModel Vm", page, StringComparison.Ordinal);
         Assert.Contains("Vm.Attach", page, StringComparison.Ordinal);
         Assert.Contains("Vm.Detach", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("@inject IPlaceContextService", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("@inject PlaceContextService", page, StringComparison.Ordinal);
         Assert.DoesNotContain("@inject IJSRuntime", page, StringComparison.Ordinal);
         Assert.DoesNotContain("private async Task SaveCoreAsync", page, StringComparison.Ordinal);
     }

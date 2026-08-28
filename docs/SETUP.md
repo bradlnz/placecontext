@@ -5,20 +5,18 @@ manifests, the .NET AI shard coordinator, and the platform-native inference work
 
 ## Prerequisites
 
-- Docker, running locally
-- Python 3.11 or newer
-- `curl`, `tar`, and OpenSSL
-
-The installer downloads private copies of `k3d` and `kubectl`; they do not need to be installed
-system-wide.
+Start the installer with `curl` and a shell. It installs Docker through the host package manager
+when necessary, installs Python 3.11+ for local AI, and downloads private copies of `k3d` and
+`kubectl`. System package installation may prompt for `sudo`; on Linux, a newly-added Docker group
+membership requires signing out and back in before rerunning the installer.
 
 ## Install locally
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh | bash
+curl -fsSL https://get.placecontext.io/install.sh | bash
 ```
 
-This command verifies the latest GitHub release checksum, creates a local k3s cluster in Docker,
+This command verifies the latest compiled release from Spaces, creates a local k3s cluster in Docker,
 generates deployment secrets, starts a full-model local AI worker, and deploys PlaceContext at
 <http://localhost:7700>.
 
@@ -50,9 +48,13 @@ machine runs only the hardware inference boundary: MLX on Apple Silicon or Torch
 To install only an AI worker without the portal-generated join command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh | \
+curl -fsSL https://get.placecontext.io/install.sh | \
   bash -s -- --ai-shard --shard-index 0 --total-shards 2
 ```
+
+The shard installer prints a controller token. Keep it private and pass the same value as
+`--ai-token` when configuring the controller with `--shard-endpoints`; model APIs reject requests
+without it, while health probes remain available for monitoring.
 
 Then configure the controller with the worker URLs in shard order.
 
@@ -78,9 +80,9 @@ docker buildx build --check --platform linux/amd64,linux/arm64 .
 Push a `v*` tag. The release workflow:
 
 1. tests the .NET shard coordinator;
-2. builds and pushes the multi-architecture runtime image to GHCR;
-3. substitutes the immutable image digest into the deployment configuration;
-4. publishes stable and versioned archives plus `SHA256SUMS` to GitHub Releases.
+2. builds architecture-specific runtime images from the private source;
+3. packages each compiled image with the deployment files and checksums;
+4. uploads the versioned bundles to DigitalOcean Spaces and updates `latest` last.
 
 The release source lives under [`deploy/release`](../deploy/release/).
 

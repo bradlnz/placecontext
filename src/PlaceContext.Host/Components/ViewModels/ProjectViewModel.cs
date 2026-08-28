@@ -8,13 +8,13 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class ProjectViewModel : PageViewModel
 {
-    private readonly IPlaceContextService _service;
+    private readonly PlaceContextService _service;
     private readonly PortalUiState _ui;
     private readonly NavigationManager _navigation;
     private readonly IJSRuntime _js;
 
     public ProjectViewModel(
-        IPlaceContextService service,
+        PlaceContextService service,
         PortalUiState ui,
         NavigationManager navigation,
         IJSRuntime js

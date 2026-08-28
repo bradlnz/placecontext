@@ -33,11 +33,11 @@ public sealed class SchedulesViewModel : PageViewModel
         public const string Weekdays = "1-5";
     }
 
-    private readonly IPlaceContextService _service;
+    private readonly PlaceContextService _service;
     private readonly PortalUiState _ui;
     private readonly ICurrentTenant _tenant;
 
-    public SchedulesViewModel(IPlaceContextService service, PortalUiState ui, ICurrentTenant tenant)
+    public SchedulesViewModel(PlaceContextService service, PortalUiState ui, ICurrentTenant tenant)
     {
         _service = service;
         _ui = ui;

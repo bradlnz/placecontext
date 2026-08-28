@@ -19,6 +19,7 @@ public sealed class ClusterPipelineTests
             {
                 Model = "test-model",
                 ShardEndpoints = ["http://first", "http://last"],
+                ApiToken = "test-cluster-token",
             }),
             NullLogger<ClusterPipeline>.Instance);
         var request = new ClusterChatRequest
@@ -45,6 +46,7 @@ public sealed class ClusterPipelineTests
             handler.Calls);
         Assert.Equal([10], handler.FirstShardTokenIds[0]);
         Assert.Equal([10, 1], handler.FirstShardTokenIds[1]);
+        Assert.All(handler.ApiTokens, token => Assert.Equal("test-cluster-token", token));
     }
 
     [Fact]
@@ -68,6 +70,7 @@ public sealed class ClusterPipelineTests
 
         public List<string> Calls { get; } = [];
         public List<int[]> FirstShardTokenIds { get; } = [];
+        public List<string?> ApiTokens { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -75,6 +78,10 @@ public sealed class ClusterPipelineTests
         {
             var call = $"{request.RequestUri!.Host}{request.RequestUri.AbsolutePath}";
             Calls.Add(call);
+            ApiTokens.Add(request.Headers.TryGetValues(
+                ClusterApiAuthenticationMiddleware.HeaderName, out var values)
+                ? values.Single()
+                : null);
             var body = request.Content is null
                 ? ""
                 : await request.Content.ReadAsStringAsync(cancellationToken);

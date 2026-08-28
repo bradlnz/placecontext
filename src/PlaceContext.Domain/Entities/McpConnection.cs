@@ -1,4 +1,3 @@
-using PlaceContext.Domain.Common;
 using PlaceContext.Domain.Mcp;
 
 namespace PlaceContext.Domain.Entities;
@@ -7,7 +6,7 @@ namespace PlaceContext.Domain.Entities;
 /// Aggregate Root: an external MCP server connection. Each project can connect to multiple
 /// MCP servers (HTTP, SSE, or stdio) to extend the agent's tool capabilities.
 /// </summary>
-public sealed class McpConnection : AggregateRoot
+public sealed class McpConnection
 {
     private McpConnection(Guid id, Guid projectId, string name, string transport,
         string? endpointUrl, string? command, string? args, string? authType,

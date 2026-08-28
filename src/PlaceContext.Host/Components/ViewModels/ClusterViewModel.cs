@@ -12,7 +12,7 @@ public enum WorkerTarget
 }
 
 public sealed class ClusterViewModel(
-    IPlaceContextService service,
+    PlaceContextService service,
     PortalUiState ui,
     NavigationManager navigation,
     IJSRuntime js
@@ -165,7 +165,7 @@ public sealed class ClusterViewModel(
     {
         var host = baseUri.TrimEnd('/');
         var join = $"curl -fsSL {host}/join.sh | bash -s -- --portal {host} --token {token} --node-type ai-shard";
-        var worker = "curl -fsSL https://raw.githubusercontent.com/bradlnz/placecontext/main/deploy/release/install.sh"
+        var worker = "curl -fsSL https://get.placecontext.io/install.sh"
             + $" | bash -s -- --ai-shard --shard-index {shardIndex} --total-shards {totalShards}";
         return $"{join} && {worker}";
     }

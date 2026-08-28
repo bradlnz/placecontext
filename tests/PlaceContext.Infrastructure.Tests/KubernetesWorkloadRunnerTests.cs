@@ -187,6 +187,7 @@ public class KubernetesWorkloadRunnerTests
 
         Assert.Equal("pcbake-abc", job.Metadata.Name);
         Assert.Equal(600, job.Spec.TtlSecondsAfterFinished);
+        Assert.False(job.Spec.Template.Spec.AutomountServiceAccountToken);
         var containers = job.Spec.Template.Spec.Containers;
         Assert.Equal(2, containers.Count);
         Assert.Equal("bake", containers[0].Name);
@@ -195,6 +196,8 @@ public class KubernetesWorkloadRunnerTests
         Assert.Equal("upload", upload.Name);
         Assert.Contains("--upload-file /out/deps.tar.gz", upload.Command[2]);
         Assert.Equal("http://minio:9000/signed-put", Assert.Single(upload.Env).Value);
+        Assert.True(upload.SecurityContext.RunAsNonRoot);
+        Assert.False(upload.SecurityContext.AllowPrivilegeEscalation);
         Assert.Equal(3, job.Spec.Template.Spec.Volumes.Count); // cm + stage + out
     }
 
@@ -234,6 +237,17 @@ public class KubernetesWorkloadRunnerTests
         Assert.True(ctr.RunAsNonRoot);
         Assert.Equal(65534, ctr.RunAsUser);
         Assert.Equal(65534, ctr.RunAsGroup);
+        Assert.False(ctr.AllowPrivilegeEscalation);
+        Assert.Equal("ALL", Assert.Single(ctr.Capabilities.Drop));
+    }
+
+    [Fact]
+    public void Materializer_root_has_no_escalation_or_linux_capabilities()
+    {
+        var ctr = KubernetesWorkloadRunner.BuildRootInitContainerSecurityContext();
+
+        Assert.False(ctr.RunAsNonRoot);
+        Assert.Equal(0, ctr.RunAsUser);
         Assert.False(ctr.AllowPrivilegeEscalation);
         Assert.Equal("ALL", Assert.Single(ctr.Capabilities.Drop));
     }

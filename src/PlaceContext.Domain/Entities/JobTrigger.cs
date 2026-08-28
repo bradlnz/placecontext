@@ -1,4 +1,3 @@
-using PlaceContext.Domain.Common;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -12,7 +11,7 @@ namespace PlaceContext.Domain.Entities;
 /// Application/Infrastructure supplies the computed <see cref="NextRunAt"/> via <see cref="MarkFired"/>
 /// and <see cref="Reschedule"/>.
 /// </summary>
-public sealed class JobTrigger : AggregateRoot
+public sealed class JobTrigger
 {
     private JobTrigger(
         Guid id,

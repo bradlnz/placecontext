@@ -18,7 +18,7 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
     private const string CloseFileFunction = "pcmonaco.closeFile";
     private const string DestroyFunction = "pcmonaco.destroy";
 
-    private readonly IPlaceContextService _service;
+    private readonly PlaceContextService _service;
     private readonly PortalUiState _ui;
     private readonly NavigationManager _navigation;
     private readonly IJSRuntime _js;
@@ -35,7 +35,7 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
     private string _renameValue = string.Empty;
 
     public JobEditorViewModel(
-        IPlaceContextService service,
+        PlaceContextService service,
         PortalUiState ui,
         NavigationManager navigation,
         IJSRuntime js

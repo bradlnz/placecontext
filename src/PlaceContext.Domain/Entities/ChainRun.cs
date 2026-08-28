@@ -1,4 +1,3 @@
-using PlaceContext.Domain.Common;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Domain.Entities;
@@ -17,7 +16,7 @@ namespace PlaceContext.Domain.Entities;
 /// stage halts the whole chain, and steps in every later stage (including the join) are left Pending
 /// so <see cref="Complete"/> turns them into Skipped.
 /// </summary>
-public sealed class ChainRun : AggregateRoot
+public sealed class ChainRun
 {
     private readonly List<ChainStepRun> _steps;
 
