@@ -19,6 +19,8 @@ jobs:
     name: Build compiled bundles and publish release
     runs-on: [self-hosted, Linux, X64, placecontext]
     timeout-minutes: 90
+    env:
+      DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
 
     steps:
       - name: Check out private source
