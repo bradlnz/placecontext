@@ -19,12 +19,13 @@ jobs:
     name: Build compiled bundles and publish release
     runs-on: [self-hosted, Linux, X64, placecontext]
     timeout-minutes: 90
-    env:
-      DOTNET_INSTALL_DIR: ${{ runner.temp }}/dotnet
 
     steps:
       - name: Check out private source
         uses: actions/checkout@v7
+
+      - name: Use writable .NET install directory
+        run: echo "DOTNET_INSTALL_DIR=$RUNNER_TEMP/dotnet" >> "$GITHUB_ENV"
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v6
