@@ -145,6 +145,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             VolumeMounts = new[]
             {
                 new V1VolumeMount { Name = "work", MountPath = "/work" },
+                new V1VolumeMount { Name = "in", MountPath = "/in", ReadOnlyProperty = true },
                 // /out must be a volume: running as nobody, the job could never mkdir /out on the
                 // root-owned image rootfs. The pod fsGroup makes the emptyDir group-writable.
                 new V1VolumeMount { Name = "out", MountPath = "/out" },
@@ -220,6 +221,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                                 {
                                     new V1VolumeMount { Name = "cm", MountPath = "/cm", ReadOnlyProperty = true },
                                     new V1VolumeMount { Name = "work", MountPath = "/work" },
+                                    new V1VolumeMount { Name = "in", MountPath = "/in" },
                                 },
                                 SecurityContext = BuildRestrictedContainerSecurityContext(_options),
                             },
@@ -229,6 +231,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                         {
                             new V1Volume { Name = "cm", ConfigMap = new V1ConfigMapVolumeSource { Name = name } },
                             new V1Volume { Name = "work", EmptyDir = new V1EmptyDirVolumeSource() },
+                            new V1Volume { Name = "in", EmptyDir = new V1EmptyDirVolumeSource() },
                             new V1Volume { Name = "out", EmptyDir = new V1EmptyDirVolumeSource() },
                         },
                     },
@@ -344,6 +347,9 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             var key = $"am{i}";
             data[key] = request.ArtifactMounts[i].Content;
             var p = request.ArtifactMounts[i].ContainerPath;
+            if (!p.StartsWith("/in/", StringComparison.Ordinal)
+                || p.Split('/', StringSplitOptions.RemoveEmptyEntries).Contains("..", StringComparer.Ordinal))
+                throw new InvalidOperationException("Kubernetes artifact mounts must be under /in.");
             script.Append($"mkdir -p \"$(dirname {ShQuote(p)})\"\ncp /cm/{key} {ShQuote(p)}\n");
         }
         var fetchLine = fetchDeps ? "wget -q -O- \"$PCDEPS_GET_URL\" | tar xz -C /work || true\n" : "";

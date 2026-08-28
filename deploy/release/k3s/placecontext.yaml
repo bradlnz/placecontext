@@ -86,6 +86,9 @@ rules:
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["get", "list", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
   # Join token for portal-minted PC2 join codes (seeded by installer on the k3s server).
   - apiGroups: [""]
     resources: ["secrets"]
@@ -132,7 +135,7 @@ spec:
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels: { app: placecontext }
       containers:

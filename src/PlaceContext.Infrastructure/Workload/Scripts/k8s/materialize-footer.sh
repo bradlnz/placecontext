@@ -1,1 +1,1 @@
-{{FETCH_DEPS}}chmod -R a+rwX /work
+{{FETCH_DEPS}}

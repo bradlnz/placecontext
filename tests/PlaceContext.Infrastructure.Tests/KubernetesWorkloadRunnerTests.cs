@@ -288,9 +288,22 @@ public class KubernetesWorkloadRunnerTests
         var files = new[] { ("main.py", "x") };
         var (_, script) = KubernetesWorkloadRunner.BuildMaterialize(CodeRequest(files), files, fetchDeps: false);
 
-        // The init container's copies are root-owned; the job (nobody) must be able to write beside
-        // the code — node_modules, .bundle, an npm-rewritten lockfile, the .pcdeps deps root.
-        Assert.EndsWith("chmod -R a+rwX /work\n", script);
+        // Materializer and workload use the same uid; no root chmod should be needed.
+        Assert.DoesNotContain("chmod", script);
+    }
+
+    [Fact]
+    public void Materializer_rejects_artifact_paths_outside_the_shared_input_volume()
+    {
+        var request = CodeRequest(("main.py", "x")) with
+        {
+            ArtifactMounts = new[] { ("content", "/tmp/result.json") },
+        };
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            KubernetesWorkloadRunner.BuildMaterialize(request, Array.Empty<(string, string)>(), fetchDeps: false));
+
+        Assert.Contains("under /in", error.Message);
     }
 
     // ── always-on runtime sandbox profiles (dotnet, go) ──────────────────────────────────────────
