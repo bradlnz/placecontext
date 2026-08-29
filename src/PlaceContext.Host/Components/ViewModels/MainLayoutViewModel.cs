@@ -88,7 +88,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         string.IsNullOrEmpty(_tenant.Slug) ? "organisation" : _tenant.Slug;
     public string RootPath =>
         _configuration["PlaceContext:RootPath"] ?? Directory.GetCurrentDirectory();
-    public string Title => _ui.Title;
+    public string Title => ActiveNavigationTitle() ?? _ui.Title;
     public string Subtitle => _ui.Sub;
     public Guid? CurrentProjectId => _ui.CurrentProjectId;
     public string? CurrentProjectName => _ui.CurrentProjectName;
@@ -427,6 +427,34 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         RunningCount = _tenant.IsResolved ? _operations.ActiveCount(_tenant.TenantId) : 0;
 
     private string GetCurrentPath() => new Uri(_navigation.Uri).AbsolutePath.TrimEnd('/');
+
+    private string? ActiveNavigationTitle()
+    {
+        var path = GetCurrentPath();
+        if (IsOnEntityPath(path))
+        {
+            var decodedPath = Uri.UnescapeDataString(path);
+            var markerIndex = decodedPath.IndexOf(
+                Routes.Entity,
+                StringComparison.OrdinalIgnoreCase
+            );
+            if (markerIndex >= 0)
+            {
+                var entityName = decodedPath[(markerIndex + Routes.Entity.Length)..].TrimEnd('/');
+                var slashIndex = entityName.IndexOf('/');
+                if (slashIndex >= 0)
+                    entityName = entityName[..slashIndex];
+                if (!string.IsNullOrWhiteSpace(entityName))
+                    return entityName;
+            }
+        }
+
+        return _menu
+            .Where(item => !IsSection(item) && PathMatches(path, AbsoluteHref(item.Href)))
+            .OrderByDescending(item => AbsoluteHref(item.Href)?.Length ?? 0)
+            .Select(item => item.Label)
+            .FirstOrDefault();
+    }
 
     private static bool IsOnEntityPath(string path) =>
         path.Contains(Routes.Entity, StringComparison.OrdinalIgnoreCase)
