@@ -722,18 +722,15 @@
 
 @media (max-width: 600px) {
     .topbar {
-        height: 104px;
-        padding-top: 8px;
-        padding-bottom: 8px;
-        align-content: center;
+        height: 56px;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 8px 6px;
+        flex-wrap: nowrap;
+        gap: 8px;
     }
 
     .topbar-left {
-        flex: 1 0 100%;
-        width: 100%;
+        flex: 1;
+        width: auto;
         height: 40px;
         gap: 8px;
         overflow: hidden;
@@ -752,7 +749,7 @@
     }
 
     .topbar-right {
-        width: 100%;
+        width: auto;
         height: 40px;
         justify-content: flex-end;
         gap: 6px;
@@ -775,8 +772,7 @@
     }
 
     .topbar-switcher-wrap {
-        flex: 1;
-        min-width: 0;
+        display: none;
     }
 
     .topbar-switcher-name {
@@ -794,7 +790,7 @@
 
     .topbar-switcher-wrap .switcher-menu {
         position: fixed;
-        top: 104px;
+        top: 56px;
         left: 10px;
         right: 10px;
         width: auto;
