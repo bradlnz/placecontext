@@ -24,7 +24,9 @@ SHARD_INDEX=0
 TOTAL_SHARDS=1
 WAIT=1
 FROM_BUNDLE="${PLACECONTEXT_FROM_BUNDLE:-0}"
-ROOTLESS_DOCKER_INSTALLER_SHA256="d1354bfb421f14791128eecc3fcb47f534e5501f6078efee94678d9b8e298704"
+ROOTLESS_DOCKER_INSTALLER_COMMIT="42dcae692436f34526524ed46d3b32885c9355f5"
+ROOTLESS_DOCKER_INSTALLER_SHA256="519165a123f9924c530c64bdba3019124555eb311a671e149e2d1c1f79a6a92d"
+ROOTLESS_DOCKER_VERSION="29.7.2"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -243,10 +245,15 @@ install_rootless_docker() {
   if [[ ! -x "$ROOT/bin/dockerd-rootless.sh" ]]; then
     installer="$(mktemp "${TMPDIR:-/tmp}/placecontext-docker.XXXXXX")"
     say "Installing rootless Docker"
-    download https://get.docker.com/rootless "$installer"
+    download "https://raw.githubusercontent.com/docker/docker-install/$ROOTLESS_DOCKER_INSTALLER_COMMIT/rootless-install.sh" "$installer"
     actual="$(sha256_file "$installer")"
     [[ "$actual" == "$ROOTLESS_DOCKER_INSTALLER_SHA256" ]] \
       || { rm -f "$installer"; die "rootless Docker installer verification failed"; }
+    sed -i \
+      -e "s|\$LOAD_SCRIPT_COMMIT_SHA|$ROOTLESS_DOCKER_INSTALLER_COMMIT|g" \
+      -e "s|\$LOAD_SCRIPT_STABLE_LATEST|$ROOTLESS_DOCKER_VERSION|g" \
+      -e "s|\$LOAD_SCRIPT_TEST_LATEST|$ROOTLESS_DOCKER_VERSION|g" \
+      "$installer"
     DOCKER_BIN="$ROOT/bin" sh "$installer" \
       || { rm -f "$installer"; die "rootless Docker setup failed; check the prerequisite message above"; }
     rm -f "$installer"
