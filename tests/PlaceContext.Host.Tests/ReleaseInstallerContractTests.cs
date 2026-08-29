@@ -37,6 +37,21 @@ public sealed class ReleaseInstallerContractTests
     }
 
     [Fact]
+    public void Postgres_meets_the_restricted_pod_security_standard()
+    {
+        var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+        var manifest = File.ReadAllText(Path.Combine(repositoryRoot, "deploy/release/k3s/postgres.yaml"));
+
+        Assert.Contains("runAsNonRoot: true", manifest, StringComparison.Ordinal);
+        Assert.Contains("runAsUser: 999", manifest, StringComparison.Ordinal);
+        Assert.Contains("runAsGroup: 999", manifest, StringComparison.Ordinal);
+        Assert.Contains("fsGroup: 999", manifest, StringComparison.Ordinal);
+        Assert.Contains("allowPrivilegeEscalation: false", manifest, StringComparison.Ordinal);
+        Assert.Contains("drop: [\"ALL\"]", manifest, StringComparison.Ordinal);
+        Assert.Contains("type: RuntimeDefault", manifest, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Web_host_ships_the_verified_github_release_installer()
     {
         var installerPath = Path.Combine(AppContext.BaseDirectory, "wwwroot", "install.sh");
