@@ -58,6 +58,9 @@ public sealed class ReleaseInstallerContractTests
         Assert.Contains("verify_sha256", installer, StringComparison.Ordinal);
         Assert.Contains("validate_archive", installer, StringComparison.Ordinal);
         Assert.Contains("placecontext-ai", installer, StringComparison.Ordinal);
+        Assert.Contains("INSTALL_AI=0", installer, StringComparison.Ordinal);
+        Assert.Contains("--ai) INSTALL_AI=1", installer, StringComparison.Ordinal);
+        Assert.Contains("INSTALL_ARGS+=(--ai)", installer, StringComparison.Ordinal);
         Assert.Contains("--ai-token", installer, StringComparison.Ordinal);
         Assert.DoesNotContain("k3d image import", installer, StringComparison.Ordinal);
         Assert.Contains("PLACECONTEXT_CLUSTER:-placecontext-local", installer, StringComparison.Ordinal);
@@ -65,11 +68,19 @@ public sealed class ReleaseInstallerContractTests
         Assert.Contains("docker port \"k3d-$CLUSTER_NAME-serverlb\" 6443/tcp", installer, StringComparison.Ordinal);
         Assert.Contains("https://127.0.0.1:", installer, StringComparison.Ordinal);
         Assert.Contains("deploy_local", installer, StringComparison.Ordinal);
-        Assert.Contains("raw.githubusercontent.com/docker/docker-install", installer, StringComparison.Ordinal);
-        Assert.Contains("ROOTLESS_DOCKER_INSTALLER_COMMIT", installer, StringComparison.Ordinal);
-        Assert.Contains("ROOTLESS_DOCKER_INSTALLER_SHA256", installer, StringComparison.Ordinal);
-        Assert.DoesNotContain("as_root", installer, StringComparison.Ordinal);
-        Assert.DoesNotContain("sudo ", installer, StringComparison.Ordinal);
+        Assert.Contains("install_linux_docker", installer, StringComparison.Ordinal);
+        Assert.Contains("apt-get install -y docker.io", installer, StringComparison.Ordinal);
+        Assert.Contains("systemctl enable --now docker", installer, StringComparison.Ordinal);
+        Assert.Contains("usermod -aG docker", installer, StringComparison.Ordinal);
+        Assert.Contains("newgrp docker", installer, StringComparison.Ordinal);
+        Assert.Contains("DOCKER_HOST=unix:///var/run/docker.sock", installer, StringComparison.Ordinal);
+        Assert.Contains("python3 -m ensurepip --version", installer, StringComparison.Ordinal);
+        Assert.Contains("python3 python3-venv", installer, StringComparison.Ordinal);
+        Assert.Contains("! \"$venv/bin/python\" -m pip --version", installer, StringComparison.Ordinal);
+        Assert.Contains("sub(/^.*\\//", installer, StringComparison.Ordinal);
+        Assert.Contains("placecontext.yaml\" | kubectl apply -f -", installer, StringComparison.Ordinal);
+        Assert.DoesNotContain("placecontext.yaml\" | kubectl -n", installer, StringComparison.Ordinal);
+        Assert.Contains("rollout status deployment/placecontext-db --timeout=10m", installer, StringComparison.Ordinal);
         Assert.DoesNotContain("]] || return\n", installer, StringComparison.Ordinal);
         Assert.Contains("printf '%q' \"$tmp\"", installer, StringComparison.Ordinal);
     }

@@ -7,6 +7,9 @@
 # The installer provisions its tools and Python environment, creates k3d, and applies the manifests.
 set -euo pipefail
 
+# Non-interactive SSH sessions on minimal Linux images often omit sbin directories.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
 VERSION="${PLACECONTEXT_VERSION:-latest}"
 BASE_URL="${PLACECONTEXT_BASE_URL:-https://github.com/bradlnz/placecontext/releases}"
 INSTALL_DIR="${PLACECONTEXT_HOME:-$HOME/.local/share/placecontext}"
@@ -18,15 +21,12 @@ AI_TOKEN_PROVIDED=0
 PORT="${PLACECONTEXT_PORT:-7700}"
 CLUSTER_NAME="${PLACECONTEXT_CLUSTER:-placecontext-local}"
 NAMESPACE="placecontext"
-INSTALL_AI=1
+INSTALL_AI=0
 AI_SHARD_ONLY=0
 SHARD_INDEX=0
 TOTAL_SHARDS=1
 WAIT=1
 FROM_BUNDLE="${PLACECONTEXT_FROM_BUNDLE:-0}"
-ROOTLESS_DOCKER_INSTALLER_COMMIT="42dcae692436f34526524ed46d3b32885c9355f5"
-ROOTLESS_DOCKER_INSTALLER_SHA256="519165a123f9924c530c64bdba3019124555eb311a671e149e2d1c1f79a6a92d"
-ROOTLESS_DOCKER_VERSION="29.7.2"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -36,6 +36,7 @@ while [[ $# -gt 0 ]]; do
     --shard-endpoints) SHARD_ENDPOINTS="$2"; shift 2 ;;
     --ai-token) AI_TOKEN="$2"; AI_TOKEN_PROVIDED=1; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
+    --ai) INSTALL_AI=1; shift ;;
     --ai-shard) AI_SHARD_ONLY=1; shift ;;
     --shard-index) SHARD_INDEX="$2"; shift 2 ;;
     --total-shards) TOTAL_SHARDS="$2"; shift 2 ;;
@@ -45,10 +46,10 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       printf '%s\n' \
         'PlaceContext local release installer' \
-        'Installs without sudo; Linux uses Docker rootless mode when needed.' \
+        'Linux may use sudo to install and start Docker for the local k3s cluster.' \
         '' \
         'Usage:' \
-        '  install.sh [--version TAG] [--model ID] [--shard-endpoints URL,URL]' \
+        '  install.sh [--version TAG] [--ai] [--model ID] [--shard-endpoints URL,URL]' \
         '' \
         'Options:' \
         '  --version TAG          GitHub release version (default: latest)' \
@@ -57,10 +58,11 @@ while [[ $# -gt 0 ]]; do
         '  --shard-endpoints LIST Ordered comma-separated worker URLs' \
         '  --ai-token TOKEN       Shared controller/worker token for remote shards' \
         '  --port PORT            Local portal port (default: 7700)' \
+        '  --ai                   Install the local AI worker and coordinator' \
         '  --ai-shard            Install only an MLX/Torch AI shard worker' \
         '  --shard-index N       Zero-based shard index (default: 0)' \
         '  --total-shards N      Number of ordered shards (default: 1)' \
-        '  --no-ai                Do not install the AI worker or coordinator' \
+        '  --no-ai                Do not install AI (default; retained for compatibility)' \
         '  --no-wait              Return before the Host rollout completes'
       exit 0
       ;;
@@ -83,6 +85,16 @@ ok() { printf '  ✓ %s\n' "$*"; }
 die() { printf '  ✗ %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+as_root() {
+  if [[ "$(id -u)" == 0 ]]; then
+    "$@"
+  elif have sudo && sudo -n true 2>/dev/null; then
+    sudo -n "$@"
+  else
+    die "passwordless sudo is required to provision Docker on Linux"
+  fi
+}
+
 INSTALL_ARGS=()
 build_install_args() {
   INSTALL_ARGS=(
@@ -91,7 +103,11 @@ build_install_args() {
     --model "$MODEL"
     --port "$PORT"
   )
-  [[ "$INSTALL_AI" == 1 ]] || INSTALL_ARGS+=(--no-ai)
+  if [[ "$INSTALL_AI" == 1 ]]; then
+    INSTALL_ARGS+=(--ai)
+  else
+    INSTALL_ARGS+=(--no-ai)
+  fi
   [[ "$AI_SHARD_ONLY" == 0 ]] || INSTALL_ARGS+=(--ai-shard --shard-index "$SHARD_INDEX" --total-shards "$TOTAL_SHARDS")
   [[ "$WAIT" == 1 ]] || INSTALL_ARGS+=(--no-wait)
   [[ -z "$SHARD_ENDPOINTS" ]] || INSTALL_ARGS+=(--shard-endpoints "$SHARD_ENDPOINTS")
@@ -214,62 +230,40 @@ detect_platform() {
 activate_docker_group() {
   have docker && have newgrp || return 1
   id -nG "$(id -un)" | tr ' ' '\n' | grep -qx docker || return 1
-  newgrp docker -c 'docker info >/dev/null 2>&1' || return 1
+  DOCKER_HOST=unix:///var/run/docker.sock newgrp docker -c 'docker info >/dev/null 2>&1' || return 1
 
   local command
   build_install_args
-  printf -v command '%q ' env PLACECONTEXT_FROM_BUNDLE=1 bash "$ROOT/install.sh" "${INSTALL_ARGS[@]}"
+  printf -v command '%q ' env \
+    PLACECONTEXT_FROM_BUNDLE=1 \
+    DOCKER_HOST=unix:///var/run/docker.sock \
+    bash "$ROOT/install.sh" "${INSTALL_ARGS[@]}"
   say "Activating Docker group access"
   exec newgrp docker -c "$command"
 }
 
-install_rootless_docker() {
-  local installer actual docker_log socket
-  have newuidmap && have newgidmap \
-    || die "rootless Docker needs newuidmap and newgidmap configured by the host"
-  { grep -q "^$(id -un):" /etc/subuid || grep -q "^$(id -u):" /etc/subuid; } \
-    || die "rootless Docker needs a subordinate UID range for $(id -un) in /etc/subuid"
-  { grep -q "^$(id -un):" /etc/subgid || grep -q "^$(id -u):" /etc/subgid; } \
-    || die "rootless Docker needs a subordinate GID range for $(id -un) in /etc/subgid"
-  if [[ -r /proc/sys/kernel/unprivileged_userns_clone ]] \
-    && [[ "$(< /proc/sys/kernel/unprivileged_userns_clone)" != 1 ]]; then
-    die "rootless Docker needs kernel.unprivileged_userns_clone=1"
+install_linux_docker() {
+  if DOCKER_HOST=unix:///var/run/docker.sock docker info >/dev/null 2>&1; then
+    export DOCKER_HOST=unix:///var/run/docker.sock
+    return
   fi
 
-  XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$HOME/.docker/run}"
-  mkdir -p "$XDG_RUNTIME_DIR"
-  chmod 0700 "$XDG_RUNTIME_DIR"
-  socket="$XDG_RUNTIME_DIR/docker.sock"
-  export XDG_RUNTIME_DIR DOCKER_HOST="unix://$socket" PATH="$ROOT/bin:$PATH"
-
-  if [[ ! -x "$ROOT/bin/dockerd-rootless.sh" ]]; then
-    installer="$(mktemp "${TMPDIR:-/tmp}/placecontext-docker.XXXXXX")"
-    say "Installing rootless Docker"
-    download "https://raw.githubusercontent.com/docker/docker-install/$ROOTLESS_DOCKER_INSTALLER_COMMIT/rootless-install.sh" "$installer"
-    actual="$(sha256_file "$installer")"
-    [[ "$actual" == "$ROOTLESS_DOCKER_INSTALLER_SHA256" ]] \
-      || { rm -f "$installer"; die "rootless Docker installer verification failed"; }
-    sed -i \
-      -e "s|\$LOAD_SCRIPT_COMMIT_SHA|$ROOTLESS_DOCKER_INSTALLER_COMMIT|g" \
-      -e "s|\$LOAD_SCRIPT_STABLE_LATEST|$ROOTLESS_DOCKER_VERSION|g" \
-      -e "s|\$LOAD_SCRIPT_TEST_LATEST|$ROOTLESS_DOCKER_VERSION|g" \
-      "$installer"
-    DOCKER_BIN="$ROOT/bin" sh "$installer" \
-      || { rm -f "$installer"; die "rootless Docker setup failed; check the prerequisite message above"; }
-    rm -f "$installer"
+  say "Installing Docker"
+  if have apt-get; then
+    as_root apt-get update
+    as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io
+  elif have dnf; then
+    as_root dnf install -y docker
+  elif have pacman; then
+    as_root pacman -Sy --noconfirm docker
+  else
+    die "install Docker, then rerun (supported package managers: apt, dnf, pacman)"
   fi
-
-  if ! docker info >/dev/null 2>&1; then
-    say "Starting rootless Docker"
-    docker_log="$ROOT/logs/docker.log"
-    nohup "$ROOT/bin/dockerd-rootless.sh" >"$docker_log" 2>&1 &
-    printf '%s\n' "$!" > "$ROOT/state/docker.pid"
-    for _ in {1..30}; do
-      docker info >/dev/null 2>&1 && break
-      sleep 1
-    done
-    docker info >/dev/null 2>&1 || die "rootless Docker did not start; see $docker_log"
-  fi
+  have systemctl || die "systemd is required to start Docker on Linux"
+  as_root systemctl enable --now docker
+  as_root usermod -aG docker "$(id -un)"
+  activate_docker_group \
+    || die "Docker was installed but group access could not be activated; sign out and rerun"
 }
 
 install_system_requirements() {
@@ -283,30 +277,39 @@ install_system_requirements() {
     colima start
   fi
 
-  if ! docker info >/dev/null 2>&1; then
-    if [[ "$TOOL_OS" == linux ]]; then
-      activate_docker_group || install_rootless_docker
-    else
-      die "Docker is installed but is not running"
-    fi
+  if [[ "$TOOL_OS" == linux ]]; then
+    install_linux_docker
+  elif ! docker info >/dev/null 2>&1; then
+    die "Docker is installed but is not running"
   fi
   have openssl || die "openssl is required"
 }
 
 install_python() {
   [[ "$INSTALL_AI" == 1 && -z "$SHARD_ENDPOINTS" ]] || return 0
-  if have python3 && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' 2>/dev/null; then
+  if have python3 \
+    && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' 2>/dev/null \
+    && python3 -m ensurepip --version >/dev/null 2>&1; then
     return
   fi
 
-  say "Installing Python 3.11+"
+  say "Installing Python 3.11+ with venv support"
   if [[ "$TOOL_OS" == darwin ]]; then
     have brew || die "Homebrew is required to install Python on macOS"
     brew install python
+  elif have apt-get; then
+    as_root apt-get update
+    as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
+      python3 python3-venv
+  elif have dnf; then
+    as_root dnf install -y python3 python3-pip
+  elif have pacman; then
+    as_root pacman -Sy --noconfirm python python-pip
   else
-    die "Python 3.11+ with venv is required for local AI; install it as your user or rerun with --no-ai"
+    die "Python 3.11+ with venv is required for local AI"
   fi
   have python3 && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' \
+    && python3 -m ensurepip --version >/dev/null 2>&1 \
     || die "Python 3.11+ with venv is unavailable"
 }
 
@@ -318,7 +321,7 @@ install_k3d() {
   say "Installing k3d $release"
   download "https://github.com/k3d-io/k3d/releases/download/$release/$name" "$ROOT/bin/k3d"
   download "https://github.com/k3d-io/k3d/releases/download/$release/checksums.txt" "$sums"
-  expected="$(awk -v name="$name" '$2 == name {print $1; exit}' "$sums")"
+  expected="$(awk -v name="$name" '{ path=$2; sub(/^.*\//, "", path); if (path == name) { print $1; exit } }' "$sums")"
   actual="$(sha256_file "$ROOT/bin/k3d")"
   rm -f "$sums"
   [[ -n "$expected" && "$actual" == "$expected" ]] || die "k3d checksum verification failed"
@@ -408,8 +411,10 @@ start_worker() {
   local venv="$ROOT/ai/venv" worker="$ROOT/local-ai/worker.py" shard_spec="$SHARD_INDEX/$TOTAL_SHARDS"
   [[ -f "$worker" ]] || die "release does not contain the inference worker"
   mkdir -p "$ROOT/ai"
-  if [[ ! -x "$venv/bin/python" ]]; then
+  if [[ ! -x "$venv/bin/python" ]] \
+    || ! "$venv/bin/python" -m pip --version >/dev/null 2>&1; then
     say "Creating local AI environment"
+    rm -rf "$venv"
     python3 -m venv "$venv"
   fi
   "$venv/bin/python" -m pip install --quiet --upgrade pip
@@ -528,13 +533,15 @@ deploy_local() {
   start_worker
   say "Applying PlaceContext"
   kubectl -n "$NAMESPACE" apply -f "$ROOT/k3s/postgres.yaml" >/dev/null
+  say "Waiting for PostgreSQL"
+  kubectl -n "$NAMESPACE" rollout status deployment/placecontext-db --timeout=10m
   kubectl apply -f "$ROOT/k3s/network-policies.yaml" >/dev/null
   cluster_endpoint="http://placecontext-cluster-host:8081/api/cluster"
   [[ "$INSTALL_AI" == 1 ]] || cluster_endpoint=""
   sed -e "s|__IMAGE__|$runtime_image|g" \
       -e 's|__IMAGE_PULL_POLICY__|IfNotPresent|g' \
       -e "s|__CLUSTER_ENDPOINT__|$cluster_endpoint|g" \
-      "$ROOT/k3s/placecontext.yaml" | kubectl -n "$NAMESPACE" apply -f - >/dev/null
+      "$ROOT/k3s/placecontext.yaml" | kubectl apply -f - >/dev/null
   kubectl apply -f "$ROOT/k3s/local-ingress.yaml" >/dev/null
   configure_cluster_ai
 

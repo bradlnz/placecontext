@@ -10,10 +10,12 @@ inside Docker for a simple local installation:
 curl -fsSL https://get.placecontext.io/install.sh | bash
 ```
 
-It verifies a source-free release bundle, installs user-space tools without `sudo`, creates a local
+It verifies a source-free release bundle, provisions Docker with passwordless `sudo` when needed on
+Linux, installs the remaining tools in user space, creates a local
 k3d cluster, pulls the versioned multi-architecture
 [PlaceContext image from GHCR](https://github.com/bradlnz/placecontext/pkgs/container/placecontext),
-and starts the portal and optional local AI worker. This path is deliberately not HA and is not the
+and starts the portal. Local AI is disabled by default and can be enabled from the portal after
+installation; scripted installs can opt in with `--ai`. This path is deliberately not HA and is not the
 production path. Object storage is disabled unless an operator supplies the optional
 `placecontext-object-store` secret.
 

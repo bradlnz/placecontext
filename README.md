@@ -27,9 +27,11 @@ curl -fsSL https://get.placecontext.io/install.sh | bash
 # portal http://localhost:7700 · MCP /mcp
 ```
 
-Requires Linux or macOS with `curl`. The installer never invokes `sudo`: on Linux it uses an
-accessible Docker daemon or installs verified rootless Docker when the account has subordinate
-UID/GID ranges; on macOS it uses Docker/Colima through Homebrew. Local AI also requires Python 3.11+.
+Requires Linux or macOS with `curl`. On Linux it uses an accessible system Docker daemon or uses
+passwordless `sudo` to install and start Docker, then activates Docker-group access for the invoking
+user. On macOS it uses Docker/Colima through Homebrew. Local AI is disabled by default and can be
+enabled from the portal after installation. Scripted installs can opt in with `--ai`; local AI also
+requires Python 3.11+.
 PlaceContext uses [k3s](https://k3s.io), a lightweight Kubernetes distribution, to schedule isolated jobs
 across the fleet. For the quick start, [k3d](https://k3d.io) runs k3s inside Docker so no existing Kubernetes
 cluster is required. The installer pulls the versioned multi-architecture
@@ -111,10 +113,11 @@ them. k3s schedules the work; Tailscale can privately connect nodes that are on 
 
 ### Single cloud server
 
-Run a small non-HA workspace on an Ubuntu server and keep AI inference elsewhere:
+Run a small non-HA workspace on an Ubuntu server and keep AI inference disabled until it is configured
+from the portal:
 
 ```bash
-curl -fsSL https://get.placecontext.io/install.sh | bash -s -- --no-ai
+curl -fsSL https://get.placecontext.io/install.sh | bash
 ```
 
 Point DNS and TLS at the portal, then connect local workers from **Cluster → Add node**. This is a good fit for
