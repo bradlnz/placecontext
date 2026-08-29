@@ -1,10 +1,14 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using PlaceContext.Infrastructure.Persistence;
 
 #nullable disable
 
 namespace PlaceContext.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260805070000_AddJobAllowApiInvocation")]
     public partial class AddJobAllowApiInvocation : Migration
     {
         /// <inheritdoc />
