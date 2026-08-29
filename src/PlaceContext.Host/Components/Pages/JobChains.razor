@@ -537,16 +537,34 @@ else
         @if (Vm.ShowStageNodePicker)
         {
             <div class="dcmodal-overlay" @onclick="() => Vm.CloseStageNodePicker()">
-                <div class="dcmodal gate-modal" @onclick:stopPropagation="true">
+                <div class="dcmodal pipeline-step-modal" @onclick:stopPropagation="true">
                     <div class="dcmodal-head">
                         <div>
                             <div class="title-14">Add pipeline step</div>
-                            <div class="sub-115">Insert an action or control before stage @(Vm.StageNodePickerIndex + 1).</div>
+                            <div class="sub-115">Select a job to insert before stage @(Vm.StageNodePickerIndex + 1).</div>
                         </div>
                         <button class="dcslide-x pipeline-modal-close" aria-label="Close add pipeline step"
                                 @onclick="() => Vm.CloseStageNodePicker()">×</button>
                     </div>
-                    <div class="dcmodal-body node-picker-grid">
+                    <div class="dcmodal-body pipeline-step-body">
+                        <div class="job-picker-grid">
+                            @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>())
+                            {
+                                <button class="job-picker-tile" @onclick="@(() => Vm.ChooseStageJob(job.Id))">
+                                    <span class="job-picker-icon">◆</span>
+                                    <span>
+                                        <strong>@job.Name</strong>
+                                        <small>@(string.IsNullOrWhiteSpace(job.Description) ? "Reusable job" : job.Description)</small>
+                                    </span>
+                                </button>
+                            }
+                        </div>
+                        @if (Vm.Jobs is null or { Count: 0 })
+                        {
+                            <div class="job-picker-empty">No jobs yet. Create a job before adding it to a chain.</div>
+                        }
+                        <div class="node-picker-divider">Actions and control</div>
+                        <div class="node-picker-grid">
                         <button class="node-picker-tile" disabled="@(!Vm.CanSendEmailAction)" @onclick="@(() => Vm.ChooseStageNode("email"))">
                             <span class="node-picker-icon" aria-hidden="true">
                                 <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
@@ -571,6 +589,7 @@ else
                             </span>
                             <strong>Delay / gate</strong><small>Wait before the next stage</small>
                         </button>
+                        </div>
                     </div>
                 </div>
             </div>

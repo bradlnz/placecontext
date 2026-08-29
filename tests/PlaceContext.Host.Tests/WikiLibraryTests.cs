@@ -29,7 +29,7 @@ public sealed class WikiLibraryTests
         Assert.Contains("/api/ingest/{eventName}", WikiLibrary.Find("webhook-ingestion")!.Html);
         Assert.Contains("TrustedClients", WikiLibrary.Find("sso-and-oauth")!.Html);
         Assert.Contains(
-            "src=\"/images/cluster-proxmox.svg\"",
+            "src=\"/images/cluster-layout.svg\"",
             WikiLibrary.Find("cluster-and-nodes")!.Html
         );
         Assert.Contains(

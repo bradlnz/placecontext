@@ -690,6 +690,18 @@ public sealed partial class JobChainsViewModel
         NotifyStateChanged();
     }
 
+    public void ChooseStageJob(Guid jobId)
+    {
+        if (jobId == Guid.Empty)
+            return;
+        var stageIndex = Math.Clamp(StageNodePickerIndex, 0, EdStages.Count);
+        ShiftGatesForInsert(stageIndex);
+        ShiftActionsForInsert(stageIndex);
+        EdStages.Insert(stageIndex, new List<Guid> { jobId });
+        ShowStageNodePicker = false;
+        NotifyStateChanged();
+    }
+
     public async Task ChooseStageNode(string type)
     {
         ShowStageNodePicker = false;

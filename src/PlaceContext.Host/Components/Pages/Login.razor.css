@@ -22,10 +22,6 @@
     width: 30px;
     height: 30px;
     border-radius: 8px;
-    background: var(--brand);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     flex: none;
 }
 

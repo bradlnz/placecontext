@@ -20,13 +20,13 @@
     <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
     <style>
         #dcshell {
-            --bg:var(--tenant-bg,#171717); --panel:var(--tenant-panel,#1c1c1c); --card:var(--tenant-panel,#1c1c1c); --card-2:#242424; --hover:#2a2a2a;
-            --bg-tilt:#171717;
-            --border:#2e2e2e; --border-2:#3e3e3e;
-            --text:var(--tenant-text,#ededed); --text-2:#c7c7c7; --text-3:#929292; --text-4:#737373;
-            --brand:var(--tenant-accent,#d6d6d6); --brand-2:var(--tenant-accent,#f0f0f0); --brand-bg:rgba(255,255,255,0.08); --brand-fg:#171717;
-            --button-bg:#292929; --button-hover:#333333; --button-border:#454545; --button-text:#ededed;
-            --good:#3ecf8e; --good-bg:rgba(62,207,142,0.13);
+            --bg:var(--tenant-bg,#000000); --panel:var(--tenant-panel,#0d1013); --card:var(--tenant-panel,#0d1013); --card-2:#151a1f; --hover:#1b232b;
+            --bg-tilt:#000000;
+            --border:#202830; --border-2:#34414c;
+            --text:var(--tenant-text,#f4f7f5); --text-2:#c5cec9; --text-3:#8b9991; --text-4:#68756e;
+            --brand:var(--tenant-accent,#43d675); --brand-2:var(--tenant-accent,#55e98a); --brand-bg:rgba(67,214,117,0.12); --brand-fg:#071009;
+            --button-bg:#151a1f; --button-hover:#1b232b; --button-border:#34414c; --button-text:#f4f7f5;
+            --good:#43d675; --good-bg:rgba(67,214,117,0.13);
             --warn:#d9822b; --warn-bg:rgba(217,130,43,0.16);
             --bad:#db3737; --bad-bg:rgba(219,55,55,0.15);
             --human:#a8a8a8; --human-bg:rgba(255,255,255,0.08);
@@ -39,7 +39,7 @@
             --bg-tilt:linear-gradient(150deg, #f5f8fb, #edf3f8, #f7fbff);
             --border:#d8e1e8; --border-2:#bfccd6;
             --text:#182026; --text-2:#5c7080; --text-3:#738694; --text-4:#8a9ba8;
-            --brand:var(--tenant-accent,#137cbd); --brand-2:var(--tenant-accent,#106ba3); --brand-bg:rgba(19,124,189,0.11); --brand-fg:#ffffff;
+            --brand:var(--tenant-accent,#168f46); --brand-2:var(--tenant-accent,#11783a); --brand-bg:rgba(67,214,117,0.13); --brand-fg:#ffffff;
             --button-bg:#e5e7eb; --button-hover:#d8dadd; --button-border:#c5c7ca; --button-text:#171717;
             --good:#0d8050; --good-bg:rgba(15,153,96,0.11);
             --warn:#bf7326; --warn-bg:rgba(217,130,43,0.12);
@@ -50,7 +50,7 @@
         * { box-sizing:border-box; }
         html, body { margin:0; padding:0; height:100%; }
         html.pc-focus-layer-open, html.pc-focus-layer-open body { overflow:hidden; overscroll-behavior:none; }
-        body { font-family:var(--font-sans); background:#171717; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+        body { font-family:var(--font-sans); background:#000; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
         #dcshell { font-family:var(--font-sans); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-0.005em; background:var(--bg-tilt); min-height:100vh; border-radius:0; }
         a { color:inherit; text-decoration:none; }
         button, a, [role="button"] { touch-action: manipulation; }
@@ -72,7 +72,7 @@
         /* Match the Monaco host to the editor theme before its CDN bundle initializes, avoiding
            a blue/default-theme flash and keeping every editor surface neutral. */
         #dcshell :where(.editor-host, .monaco-box, .sql-monaco, .source-editor-monaco) {
-            background:#171717;
+            background:#000;
         }
         ::selection { background:var(--brand-bg); }
         ::-webkit-scrollbar { width:10px; height:10px; }
@@ -116,8 +116,8 @@
         .dcbtn:active { transform:translateY(0); }
         .dcbtn:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--brand) 24%, transparent); }
         .dcbtn[disabled], .dcbtn[disabled]:hover { transform:none; filter:none; cursor:not-allowed; opacity:0.65; }
-        .dcbtn.primary { background:var(--button-bg); border-color:#5a5a5a; color:var(--button-text); }
-        .dcbtn.primary:hover { border-color:#707070; color:var(--text); background:var(--button-hover); }
+        .dcbtn.primary { background:var(--brand); border-color:var(--brand); color:var(--brand-fg); }
+        .dcbtn.primary:hover { border-color:var(--brand-2); color:var(--brand-fg); background:var(--brand-2); }
         .dcbtn.danger { background:var(--bad); border-color:var(--bad); color:#fff; font-weight:700; }
         .dcbtn.danger:hover { filter:brightness(1.04); }
         .dccard { background:var(--card); border:1px solid var(--border); border-radius:3px; }
@@ -214,22 +214,20 @@
             .dcbtn.sm { min-height:40px; }
         }
 
-        /* yellow-style console palette: flat, high-contrast dark surfaces with a
-           bright yellow action accent. This replaces the previous -style rounded
-           card override across the portal. */
+        /* Flat, high-contrast console palette using the PlaceContext green accent. */
         #dcshell {
-            --ch-bg:#171717;
-            --ch-panel:#1c1c1c;
-            --ch-panel-2:#242424;
-            --ch-border:#2e2e2e;
-            --ch-border-2:#3e3e3e;
-            --ch-text:#ededed;
-            --ch-text-2:#c7c7c7;
-            --ch-text-3:#929292;
-            --ch-yellow:#d6d6d6;
-            --ch-yellow-hover:#f0f0f0;
+            --ch-bg:#000000;
+            --ch-panel:#0d1013;
+            --ch-panel-2:#151a1f;
+            --ch-border:#202830;
+            --ch-border-2:#34414c;
+            --ch-text:#f4f7f5;
+            --ch-text-2:#c5cec9;
+            --ch-text-3:#8b9991;
+            --ch-yellow:#43d675;
+            --ch-yellow-hover:#55e98a;
             --ch-run-shadow:0 1px 0 rgba(0,0,0,.35);
-            --bg-tilt:#171717;
+            --bg-tilt:#000000;
         }
         #dcshell[data-theme="light"] {
             --ch-bg:#ffffff;

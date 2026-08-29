@@ -6,7 +6,7 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    background: #141414;
+    background: #000;
     padding: 56px 32px 72px;
 }
 
@@ -38,7 +38,7 @@
     left: 50%;
     transform: translateX(-50%);
     border-radius: 50%;
-    background: rgba(255,255,255,.055);
+    background: rgba(67,214,117,.10);
     filter: blur(80px);
 }
 

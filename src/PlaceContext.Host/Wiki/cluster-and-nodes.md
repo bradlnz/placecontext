@@ -19,12 +19,15 @@ Use **Refresh** to update the view.
 
 ## Common cluster layouts
 
+PlaceContext does not require one kind of infrastructure. The control plane and workers can run on bare
+metal, VMs, Macs, Linux servers, cloud hosts, or any mixture of them.
+
+![PlaceContext spanning local and remote Mac, Linux, VM, and cloud workers](/images/cluster-layout.svg)
+
 ### Proxmox homelab
 
 Run the portal on one always-on Linux VM, then add worker VMs sized for the jobs they run. A Mac or
 another machine can join over Tailscale when it is outside the Proxmox LAN.
-
-![Proxmox homelab with local workers and a Tailscale-connected Mac AI shard](/images/cluster-proxmox.svg)
 
 This is a useful homelab layout, but one physical Proxmox host is one failure domain. Production HA
 uses three k3s server VMs spread across independent Proxmox hosts and separate worker VMs.

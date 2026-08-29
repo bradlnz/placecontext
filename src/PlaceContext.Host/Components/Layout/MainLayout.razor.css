@@ -100,21 +100,8 @@
     width: 26px;
     height: 26px;
     flex: none;
-    border-radius: 3px;
+    border-radius: 6px;
     object-fit: contain;
-    background: var(--card-2);
-}
-
-.brand-mark {
-    width: 26px;
-    height: 26px;
-    flex: none;
-    border-radius: 3px;
-    background: var(--brand);
-    color: var(--brand-fg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .brand-text {
@@ -488,19 +475,13 @@
 }
 
 .icon-btn svg,
-.nav-toggle svg,
-.brand-mark svg {
+.nav-toggle svg {
     flex: none;
 }
 
 .shell-control-icon {
     width: 16px;
     height: 16px;
-}
-
-.shell-brand-icon {
-    width: 17px;
-    height: 17px;
 }
 
 .search-icon {

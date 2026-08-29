@@ -50,9 +50,9 @@ codex mcp add placecontext --url http://localhost:7700/mcp
 claude mcp add --transport http placecontext http://localhost:7700/mcp
 ```
 
-### Gemini Antigravity
+### Google Antigravity
 
-Open **Agent → MCP Servers → Manage MCP Servers**, add a custom server named `placecontext`, and set its URL to:
+Open **MCP Servers → Manage MCP Servers**, add a custom server named `placecontext`, and set its URL to:
 
 ```text
 http://localhost:7700/mcp
@@ -95,6 +95,11 @@ document chain can receive a file, run OCR, extract structured fields in paralle
 PDF report, and send a completion message. Each stage receives the previous stage's primary output, while runs,
 logs, retries, and artifacts remain visible in one place.
 
+![PlaceContext spanning local and remote Mac, Linux, VM, and cloud workers](src/PlaceContext.Host/wwwroot/images/cluster-layout.svg)
+
+The control plane and workers can run on bare metal, VMs, Macs, Linux servers, cloud hosts, or a mixture of
+them. k3s schedules the work; Tailscale can privately connect nodes that are on different networks.
+
 ### Mac-led home or studio cluster
 
 - Run the quick-start installer on an always-on Apple Silicon Mac mini.
@@ -120,8 +125,6 @@ evaluation or a small team; production HA uses an existing multi-node k3s cluste
 - Use schedules for backup checks, media processing, document indexing, sensor rollups, or nightly reports.
 - Keep the portal private on the LAN, or use [Tailscale](https://tailscale.com/kb/1017/install) to add workers
   from another site.
-
-![Proxmox homelab with local workers and a Tailscale-connected Mac AI shard](src/PlaceContext.Host/wwwroot/images/cluster-proxmox.svg)
 
 A single Proxmox host is an excellent homelab but not HA. A production deployment uses three k3s server VMs
 spread across independent Proxmox hosts, separate worker VMs, external PostgreSQL, and off-cluster S3.

@@ -88,6 +88,14 @@ public sealed class RemainingShellMvvmTests
     }
 
     [Fact]
+    public void Chain_connector_picker_lists_jobs_and_routes_the_selection()
+    {
+        var page = ReadHostSource("Components/Pages/JobChains.razor");
+        Assert.Contains("job-picker-grid", page, StringComparison.Ordinal);
+        Assert.Contains("Vm.ChooseStageJob(job.Id)", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Target_razor_surface_does_not_contain_component_state_logic()
     {
         foreach (

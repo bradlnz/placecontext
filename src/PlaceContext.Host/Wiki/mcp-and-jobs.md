@@ -25,10 +25,11 @@ codex mcp add placecontext --url http://localhost:7700/mcp
 claude mcp add --transport http placecontext http://localhost:7700/mcp
 ```
 
-### Gemini Antigravity
+### Google Antigravity
 
-Open **Agent → MCP Servers → Manage MCP Servers**, add a custom server named `placecontext`, and
-set its URL to `http://localhost:7700/mcp`.
+Open **MCP Servers → Manage MCP Servers**, add a custom server named `placecontext`, and set its
+URL to `http://localhost:7700/mcp`. Google documents the current MCP flow in its
+[Antigravity guide](https://codelabs.developers.google.com/getting-started-google-antigravity#6).
 
 ### Hermes Agent
 
