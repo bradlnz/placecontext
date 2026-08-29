@@ -3,6 +3,19 @@ namespace PlaceContext.Host.Tests;
 public sealed class ReleaseInstallerContractTests
 {
     [Fact]
+    public void Production_http_preserves_mcp_posts_when_redirecting_to_https()
+    {
+        var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+        var ingress = File.ReadAllText(Path.Combine(repositoryRoot, "deploy/release/k3s/production-ingress.yaml"));
+        var program = File.ReadAllText(Path.Combine(repositoryRoot, "src/PlaceContext.Host/Program.cs"));
+
+        Assert.Contains("name: placecontext-http", ingress, StringComparison.Ordinal);
+        Assert.Contains("router.entrypoints: web", ingress, StringComparison.Ordinal);
+        Assert.Contains("Status308PermanentRedirect", program, StringComparison.Ordinal);
+        Assert.Contains("app.UseHttpsRedirection()", program, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Web_host_ships_the_verified_github_release_installer()
     {
         var installerPath = Path.Combine(AppContext.BaseDirectory, "wwwroot", "install.sh");

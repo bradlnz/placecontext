@@ -104,6 +104,11 @@ builder.Services.AddResponseCompression(o =>
     o.Providers.Add<BrotliCompressionProvider>();
     o.Providers.Add<GzipCompressionProvider>();
 });
+builder.Services.AddHttpsRedirection(o =>
+{
+    o.HttpsPort = 443;
+    o.RedirectStatusCode = StatusCodes.Status308PermanentRedirect;
+});
 // The former minimal-API endpoints (ingest, backup, auth, artifacts, health) now live as controllers
 // under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
 builder.Services.AddControllers();
@@ -408,6 +413,8 @@ app.Use(async (ctx, next) =>
     }
     await next();
 });
+if (app.Configuration["PlaceContext:PublicBaseUrl"]?.StartsWith("https://", StringComparison.OrdinalIgnoreCase) == true)
+    app.UseHttpsRedirection();
 
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
 await DefaultWorkspaceBootstrap.RunAsync(
