@@ -97,6 +97,10 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
 
 ![SQL Studio with a query and populated results](docs/images/sql-studio.png)
 
+![Mapped job output in a project table](docs/images/mapped-table.png)
+
+![Project data graph](docs/images/data-graph.png)
+
 ## Example deployments
 
 The same setup works for homelab automation, project workflows, and local batch processing. For example, a
