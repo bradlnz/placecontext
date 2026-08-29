@@ -24,6 +24,7 @@ SHARD_INDEX=0
 TOTAL_SHARDS=1
 WAIT=1
 FROM_BUNDLE="${PLACECONTEXT_FROM_BUNDLE:-0}"
+ROOTLESS_DOCKER_INSTALLER_SHA256="d1354bfb421f14791128eecc3fcb47f534e5501f6078efee94678d9b8e298704"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,6 +43,7 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       printf '%s\n' \
         'PlaceContext local release installer' \
+        'Installs without sudo; Linux uses Docker rootless mode when needed.' \
         '' \
         'Usage:' \
         '  install.sh [--version TAG] [--model ID] [--shard-endpoints URL,URL]' \
@@ -78,6 +80,21 @@ say() { printf '==> %s\n' "$*"; }
 ok() { printf '  ✓ %s\n' "$*"; }
 die() { printf '  ✗ %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+
+INSTALL_ARGS=()
+build_install_args() {
+  INSTALL_ARGS=(
+    --version "$VERSION"
+    --install-dir "$INSTALL_DIR"
+    --model "$MODEL"
+    --port "$PORT"
+  )
+  [[ "$INSTALL_AI" == 1 ]] || INSTALL_ARGS+=(--no-ai)
+  [[ "$AI_SHARD_ONLY" == 0 ]] || INSTALL_ARGS+=(--ai-shard --shard-index "$SHARD_INDEX" --total-shards "$TOTAL_SHARDS")
+  [[ "$WAIT" == 1 ]] || INSTALL_ARGS+=(--no-wait)
+  [[ -z "$SHARD_ENDPOINTS" ]] || INSTALL_ARGS+=(--shard-endpoints "$SHARD_ENDPOINTS")
+  [[ "$AI_TOKEN_PROVIDED" == 0 ]] || INSTALL_ARGS+=(--ai-token "$AI_TOKEN")
+}
 
 download() {
   curl -fsSL --retry 3 --retry-delay 2 "$1" -o "$2"
@@ -137,7 +154,6 @@ bootstrap_release() {
   have tar || die "tar is required"
 
   local tmp bundle asset release_base version_file
-  local -a install_args
   BASE_URL="${BASE_URL%/}"
   if [[ "$VERSION" == "latest" ]]; then
     release_base="$BASE_URL/latest/download"
@@ -152,7 +168,7 @@ bootstrap_release() {
   fi
   asset="placecontext-deploy.tar.gz"
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/placecontext.XXXXXX")"
-  trap 'rm -rf "$tmp"' EXIT
+  trap "rm -rf -- $(printf '%q' "$tmp")" EXIT
 
   say "Downloading PlaceContext ${VERSION}"
   download "$release_base/$asset" "$tmp/$asset"
@@ -164,18 +180,8 @@ bootstrap_release() {
   [[ -x "$bundle/install.sh" ]] || die "release does not contain install.sh"
   ok "release verified"
 
-  install_args=(
-    --version "$VERSION"
-    --install-dir "$INSTALL_DIR"
-    --model "$MODEL"
-    --port "$PORT"
-  )
-  [[ "$INSTALL_AI" == 1 ]] || install_args+=(--no-ai)
-  [[ "$AI_SHARD_ONLY" == 0 ]] || install_args+=(--ai-shard --shard-index "$SHARD_INDEX" --total-shards "$TOTAL_SHARDS")
-  [[ "$WAIT" == 1 ]] || install_args+=(--no-wait)
-  [[ -z "$SHARD_ENDPOINTS" ]] || install_args+=(--shard-endpoints "$SHARD_ENDPOINTS")
-  [[ "$AI_TOKEN_PROVIDED" == 0 ]] || install_args+=(--ai-token "$AI_TOKEN")
-  PLACECONTEXT_FROM_BUNDLE=1 bash "$bundle/install.sh" "${install_args[@]}"
+  build_install_args
+  PLACECONTEXT_FROM_BUNDLE=1 bash "$bundle/install.sh" "${INSTALL_ARGS[@]}"
 }
 
 if [[ "$FROM_BUNDLE" != 1 ]]; then
@@ -203,13 +209,59 @@ detect_platform() {
   TOOL_ARCH="$(normalise_arch)"
 }
 
-as_root() {
-  if [[ "$(id -u)" == 0 ]]; then
-    "$@"
-  elif have sudo; then
-    sudo "$@"
-  else
-    die "sudo is required to install system packages"
+activate_docker_group() {
+  have docker && have newgrp || return 1
+  id -nG "$(id -un)" | tr ' ' '\n' | grep -qx docker || return 1
+  newgrp docker -c 'docker info >/dev/null 2>&1' || return 1
+
+  local command
+  build_install_args
+  printf -v command '%q ' env PLACECONTEXT_FROM_BUNDLE=1 bash "$ROOT/install.sh" "${INSTALL_ARGS[@]}"
+  say "Activating Docker group access"
+  exec newgrp docker -c "$command"
+}
+
+install_rootless_docker() {
+  local installer actual docker_log socket
+  have newuidmap && have newgidmap \
+    || die "rootless Docker needs newuidmap and newgidmap configured by the host"
+  { grep -q "^$(id -un):" /etc/subuid || grep -q "^$(id -u):" /etc/subuid; } \
+    || die "rootless Docker needs a subordinate UID range for $(id -un) in /etc/subuid"
+  { grep -q "^$(id -un):" /etc/subgid || grep -q "^$(id -u):" /etc/subgid; } \
+    || die "rootless Docker needs a subordinate GID range for $(id -un) in /etc/subgid"
+  if [[ -r /proc/sys/kernel/unprivileged_userns_clone ]] \
+    && [[ "$(< /proc/sys/kernel/unprivileged_userns_clone)" != 1 ]]; then
+    die "rootless Docker needs kernel.unprivileged_userns_clone=1"
+  fi
+
+  XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$HOME/.docker/run}"
+  mkdir -p "$XDG_RUNTIME_DIR"
+  chmod 0700 "$XDG_RUNTIME_DIR"
+  socket="$XDG_RUNTIME_DIR/docker.sock"
+  export XDG_RUNTIME_DIR DOCKER_HOST="unix://$socket" PATH="$ROOT/bin:$PATH"
+
+  if [[ ! -x "$ROOT/bin/dockerd-rootless.sh" ]]; then
+    installer="$(mktemp "${TMPDIR:-/tmp}/placecontext-docker.XXXXXX")"
+    say "Installing rootless Docker"
+    download https://get.docker.com/rootless "$installer"
+    actual="$(sha256_file "$installer")"
+    [[ "$actual" == "$ROOTLESS_DOCKER_INSTALLER_SHA256" ]] \
+      || { rm -f "$installer"; die "rootless Docker installer verification failed"; }
+    DOCKER_BIN="$ROOT/bin" sh "$installer" \
+      || { rm -f "$installer"; die "rootless Docker setup failed; check the prerequisite message above"; }
+    rm -f "$installer"
+  fi
+
+  if ! docker info >/dev/null 2>&1; then
+    say "Starting rootless Docker"
+    docker_log="$ROOT/logs/docker.log"
+    nohup "$ROOT/bin/dockerd-rootless.sh" >"$docker_log" 2>&1 &
+    printf '%s\n' "$!" > "$ROOT/state/docker.pid"
+    for _ in {1..30}; do
+      docker info >/dev/null 2>&1 && break
+      sleep 1
+    done
+    docker info >/dev/null 2>&1 || die "rootless Docker did not start; see $docker_log"
   fi
 }
 
@@ -222,36 +274,20 @@ install_system_requirements() {
     say "Installing Docker and Colima"
     brew install docker colima
     colima start
-  elif [[ "$TOOL_OS" == linux ]] && ! have docker; then
-    say "Installing Docker"
-    if have apt-get; then
-      as_root apt-get update
-      as_root apt-get install -y docker.io
-    elif have dnf; then
-      as_root dnf install -y docker
-    elif have pacman; then
-      as_root pacman -Sy --noconfirm docker
-    else
-      die "install Docker, then rerun this installer (supported package managers: apt, dnf, pacman)"
-    fi
-    if have systemctl; then
-      as_root systemctl enable --now docker
-    fi
   fi
 
-  have docker || die "Docker could not be installed"
   if ! docker info >/dev/null 2>&1; then
-    if [[ "$TOOL_OS" == linux ]] && have sudo && sudo docker info >/dev/null 2>&1; then
-      as_root usermod -aG docker "${USER:-$(id -un)}"
-      die "Docker was installed; sign out and back in for group access, then rerun the installer"
+    if [[ "$TOOL_OS" == linux ]]; then
+      activate_docker_group || install_rootless_docker
+    else
+      die "Docker is installed but is not running"
     fi
-    die "Docker is installed but is not running"
   fi
   have openssl || die "openssl is required"
 }
 
 install_python() {
-  [[ "$INSTALL_AI" == 1 && -z "$SHARD_ENDPOINTS" ]] || return
+  [[ "$INSTALL_AI" == 1 && -z "$SHARD_ENDPOINTS" ]] || return 0
   if have python3 && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' 2>/dev/null; then
     return
   fi
@@ -260,18 +296,11 @@ install_python() {
   if [[ "$TOOL_OS" == darwin ]]; then
     have brew || die "Homebrew is required to install Python on macOS"
     brew install python
-  elif have apt-get; then
-    as_root apt-get update
-    as_root apt-get install -y python3 python3-venv python3-pip
-  elif have dnf; then
-    as_root dnf install -y python3 python3-pip
-  elif have pacman; then
-    as_root pacman -Sy --noconfirm python python-pip
   else
-    die "Python 3.11+ is required for the local inference worker"
+    die "Python 3.11+ with venv is required for local AI; install it as your user or rerun with --no-ai"
   fi
   have python3 && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' \
-    || die "the operating system package manager did not provide Python 3.11+"
+    || die "Python 3.11+ with venv is unavailable"
 }
 
 install_k3d() {
@@ -361,8 +390,8 @@ configure_secrets() {
 }
 
 start_worker() {
-  [[ "$INSTALL_AI" == 1 ]] || return
-  [[ -z "$SHARD_ENDPOINTS" ]] || return
+  [[ "$INSTALL_AI" == 1 ]] || return 0
+  [[ -z "$SHARD_ENDPOINTS" ]] || return 0
   have python3 || die "Python 3.11+ is required for the local inference worker"
   have openssl || die "openssl is required to generate the AI authentication token"
   python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' \
@@ -426,7 +455,7 @@ start_worker() {
 }
 
 configure_cluster_ai() {
-  [[ "$INSTALL_AI" == 1 ]] || return
+  [[ "$INSTALL_AI" == 1 ]] || return 0
   local -a endpoints=()
   local endpoint index=0 args=()
   IFS=',' read -r -a endpoints <<< "$SHARD_ENDPOINTS"

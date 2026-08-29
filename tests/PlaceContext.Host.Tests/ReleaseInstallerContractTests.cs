@@ -41,5 +41,11 @@ public sealed class ReleaseInstallerContractTests
         Assert.Contains("docker pull \"$runtime_image\"", installer, StringComparison.Ordinal);
         Assert.Contains("k3d image import \"$runtime_image\"", installer, StringComparison.Ordinal);
         Assert.Contains("deploy_local", installer, StringComparison.Ordinal);
+        Assert.Contains("https://get.docker.com/rootless", installer, StringComparison.Ordinal);
+        Assert.Contains("ROOTLESS_DOCKER_INSTALLER_SHA256", installer, StringComparison.Ordinal);
+        Assert.DoesNotContain("as_root", installer, StringComparison.Ordinal);
+        Assert.DoesNotContain("sudo ", installer, StringComparison.Ordinal);
+        Assert.DoesNotContain("]] || return\n", installer, StringComparison.Ordinal);
+        Assert.Contains("printf '%q' \"$tmp\"", installer, StringComparison.Ordinal);
     }
 }

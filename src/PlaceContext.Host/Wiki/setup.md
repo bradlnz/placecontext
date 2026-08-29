@@ -4,8 +4,9 @@
 
 ## Install locally
 
-Docker, Python 3.11+, curl, and OpenSSL are required. The release installer downloads its own
-`k3d` and `kubectl`, creates the local cluster and secrets, starts local AI, and deploys the portal:
+Python 3.11+, curl, and OpenSSL are required. The release installer never invokes `sudo`; it uses an
+accessible Docker daemon or verified rootless Docker, downloads its own `k3d` and `kubectl`, creates
+the local cluster and secrets, starts local AI, and deploys the portal:
 
 ```bash
 curl -fsSL https://get.placecontext.io/install.sh | bash
