@@ -7,8 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 concurrency:
   group: deploy-release-${{ github.ref }}
@@ -17,6 +16,10 @@ concurrency:
 jobs:
   package:
     name: Publish image and release
+    if: github.repository == 'bradlnz/placecontext' && github.actor == 'bradlnz'
+    permissions:
+      contents: write
+      packages: write
     runs-on: [self-hosted, Linux, X64, placecontext]
     timeout-minutes: 90
 

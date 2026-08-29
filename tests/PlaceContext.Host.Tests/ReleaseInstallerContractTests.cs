@@ -13,6 +13,17 @@ public sealed class ReleaseInstallerContractTests
     }
 
     [Fact]
+    public void Release_push_is_limited_to_the_owner_workflow()
+    {
+        var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+        var workflow = File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/release.yml"));
+
+        Assert.Contains("github.actor == 'bradlnz'", workflow, StringComparison.Ordinal);
+        Assert.Contains("      packages: write", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("  packages: write\n\nconcurrency:", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Production_http_preserves_mcp_posts_when_redirecting_to_https()
     {
         var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
