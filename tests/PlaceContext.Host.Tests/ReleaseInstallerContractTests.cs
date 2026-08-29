@@ -3,6 +3,16 @@ namespace PlaceContext.Host.Tests;
 public sealed class ReleaseInstallerContractTests
 {
     [Fact]
+    public void Public_installer_runs_the_latest_github_release()
+    {
+        var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+        var installer = File.ReadAllText(Path.Combine(repositoryRoot, "install.sh"));
+
+        Assert.Contains("releases/latest/download/install.sh", installer, StringComparison.Ordinal);
+        Assert.Contains("bash -s -- \"$@\"", installer, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Production_http_preserves_mcp_posts_when_redirecting_to_https()
     {
         var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
