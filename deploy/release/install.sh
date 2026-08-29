@@ -16,7 +16,7 @@ AI_TOKEN="${PLACECONTEXT_AI_TOKEN:-}"
 AI_TOKEN_PROVIDED=0
 [[ -z "$AI_TOKEN" ]] || AI_TOKEN_PROVIDED=1
 PORT="${PLACECONTEXT_PORT:-7700}"
-CLUSTER_NAME="${PLACECONTEXT_CLUSTER:-placecontext}"
+CLUSTER_NAME="${PLACECONTEXT_CLUSTER:-placecontext-local}"
 NAMESPACE="placecontext"
 INSTALL_AI=1
 AI_SHARD_ONLY=0
@@ -510,10 +510,17 @@ deploy_local() {
   fi
   export KUBECONFIG
   KUBECONFIG="$(k3d kubeconfig write "$CLUSTER_NAME")"
-  sed 's#server: https://0\.0\.0\.0:#server: https://127.0.0.1:#' "$KUBECONFIG" > "$KUBECONFIG.tmp"
+
+  local api_binding api_port runtime_image cluster_endpoint
+  api_binding="$(docker port "k3d-$CLUSTER_NAME-serverlb" 6443/tcp 2>/dev/null | head -n1 || true)"
+  [[ "$api_binding" == 127.0.0.1:* ]] \
+    || die "cluster API port is unavailable; rerun with a new PLACECONTEXT_CLUSTER name"
+  api_port="${api_binding##*:}"
+  [[ "$api_port" =~ ^[1-9][0-9]*$ ]] || die "cluster API port is invalid: $api_binding"
+  sed -E "s#server: https://[^:]+:[0-9]+#server: https://127.0.0.1:$api_port#" \
+    "$KUBECONFIG" > "$KUBECONFIG.tmp"
   mv "$KUBECONFIG.tmp" "$KUBECONFIG"
 
-  local runtime_image cluster_endpoint
   runtime_image="$(awk -F'"' '/runtime_image:/ {print $2; exit}' "$ROOT/local-ai/config.yaml")"
   [[ "$runtime_image" == ghcr.io/* ]] || die "release does not contain a valid GHCR runtime image"
 

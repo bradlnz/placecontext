@@ -60,7 +60,9 @@ public sealed class ReleaseInstallerContractTests
         Assert.Contains("placecontext-ai", installer, StringComparison.Ordinal);
         Assert.Contains("--ai-token", installer, StringComparison.Ordinal);
         Assert.DoesNotContain("k3d image import", installer, StringComparison.Ordinal);
+        Assert.Contains("PLACECONTEXT_CLUSTER:-placecontext-local", installer, StringComparison.Ordinal);
         Assert.Contains("--api-port 127.0.0.1:0", installer, StringComparison.Ordinal);
+        Assert.Contains("docker port \"k3d-$CLUSTER_NAME-serverlb\" 6443/tcp", installer, StringComparison.Ordinal);
         Assert.Contains("https://127.0.0.1:", installer, StringComparison.Ordinal);
         Assert.Contains("deploy_local", installer, StringComparison.Ordinal);
         Assert.Contains("raw.githubusercontent.com/docker/docker-install", installer, StringComparison.Ordinal);
