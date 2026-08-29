@@ -91,29 +91,11 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
 - **MCP and automation integration** — durable project context and MCP tools let AI and automation clients use
   the same governed data, jobs, pipelines, and artifacts as human operators.
 
-## From MCP job to queryable data
+## Screenshots
 
-This live example was created through PlaceContext's MCP endpoint on a fresh installation. Three dependency-free
-Python jobs collect Brisbane weather, air-quality, and City Council open-data catalogue information, then emit
-structured JSON and CSV artifacts. Their run output is automatically available in the project database, where the
-same data can be queried in SQL Studio and turned into a saved dashboard chart.
+![PlaceContext dashboard with populated charts](docs/images/dashboard-charts.png)
 
-![Dashboard showing successful Brisbane jobs and a saved SQL chart](docs/images/brisbane-dashboard.png)
-
-The chart above was saved through MCP from this project SQL query:
-
-```sql
-SELECT job_name, COUNT(*)::int AS successful_runs
-FROM job_run_data
-WHERE job_name LIKE 'Brisbane %' AND outcome = 'Succeeded'
-GROUP BY job_name
-ORDER BY job_name;
-```
-
-![SQL Studio showing the Brisbane job query and populated results](docs/images/brisbane-sql-studio.png)
-
-The runnable sources are in [`examples/brisbane-jobs`](examples/brisbane-jobs). Because these jobs call public
-APIs, enable network egress on each job after reviewing the code. PlaceContext keeps egress disabled by default.
+![SQL Studio with a query and populated results](docs/images/sql-studio.png)
 
 ## Example deployments
 
