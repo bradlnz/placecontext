@@ -38,8 +38,9 @@ public sealed class ReleaseInstallerContractTests
         Assert.Contains("validate_archive", installer, StringComparison.Ordinal);
         Assert.Contains("placecontext-ai", installer, StringComparison.Ordinal);
         Assert.Contains("--ai-token", installer, StringComparison.Ordinal);
-        Assert.Contains("docker pull \"$runtime_image\"", installer, StringComparison.Ordinal);
-        Assert.Contains("k3d image import \"$runtime_image\"", installer, StringComparison.Ordinal);
+        Assert.DoesNotContain("k3d image import", installer, StringComparison.Ordinal);
+        Assert.Contains("--api-port 127.0.0.1:0", installer, StringComparison.Ordinal);
+        Assert.Contains("https://127.0.0.1:", installer, StringComparison.Ordinal);
         Assert.Contains("deploy_local", installer, StringComparison.Ordinal);
         Assert.Contains("raw.githubusercontent.com/docker/docker-install", installer, StringComparison.Ordinal);
         Assert.Contains("ROOTLESS_DOCKER_INSTALLER_COMMIT", installer, StringComparison.Ordinal);

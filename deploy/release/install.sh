@@ -505,18 +505,17 @@ deploy_local() {
     k3d cluster start "$CLUSTER_NAME" >/dev/null 2>&1 || true
   else
     k3d cluster create "$CLUSTER_NAME" --agents 1 \
+      --api-port 127.0.0.1:0 \
       --port "$PORT:80@loadbalancer" --wait
   fi
   export KUBECONFIG
   KUBECONFIG="$(k3d kubeconfig write "$CLUSTER_NAME")"
+  sed 's#server: https://0\.0\.0\.0:#server: https://127.0.0.1:#' "$KUBECONFIG" > "$KUBECONFIG.tmp"
+  mv "$KUBECONFIG.tmp" "$KUBECONFIG"
 
   local runtime_image cluster_endpoint
   runtime_image="$(awk -F'"' '/runtime_image:/ {print $2; exit}' "$ROOT/local-ai/config.yaml")"
   [[ "$runtime_image" == ghcr.io/* ]] || die "release does not contain a valid GHCR runtime image"
-  say "Pulling $runtime_image"
-  docker pull "$runtime_image"
-  k3d image import "$runtime_image" --cluster "$CLUSTER_NAME"
-  ok "runtime image loaded"
 
   configure_secrets
   start_worker
