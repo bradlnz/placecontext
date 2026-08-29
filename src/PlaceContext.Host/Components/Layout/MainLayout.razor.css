@@ -4,6 +4,7 @@
     --menu-hover-hit: 20px;
     display: flex;
     height: 100vh;
+    height: 100dvh;
     width: 100%;
     overflow: hidden;
     background: var(--bg);
@@ -686,12 +687,14 @@
 
     .nav-toggle {
         display: flex;
+        width: 40px;
+        height: 40px;
     }
 
     /* Sidebar is out of flow, so .main already spans full width; just keep the
        topbar contents from overflowing narrow screens. */
     .topbar {
-        padding: 0 14px;
+        padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
     }
 
     .topbar-right {
@@ -714,6 +717,68 @@
 
     .running-badge {
         display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .topbar {
+        height: 56px;
+        gap: 8px;
+    }
+
+    .topbar-left {
+        flex: 1;
+        gap: 8px;
+        overflow: hidden;
+    }
+
+    .topbar-left > .title-14 {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .topbar-sub,
+    .topbar-user-actions {
+        display: none;
+    }
+
+    .topbar-right {
+        gap: 4px;
+    }
+
+    .dcsearch-trigger,
+    .icon-btn {
+        width: 40px;
+        height: 40px;
+        min-width: 40px;
+        padding: 0;
+        justify-content: center;
+    }
+
+    .topbar-switcher-pill {
+        max-width: 108px;
+        height: 40px;
+        padding-inline: 9px;
+    }
+
+    .topbar-switcher-name {
+        max-width: 66px;
+    }
+
+    .topbar-switcher-wrap .switcher-menu {
+        position: fixed;
+        top: 56px;
+        left: 10px;
+        right: 10px;
+        width: auto;
+        max-height: calc(100dvh - 68px);
+        overflow-y: auto;
+    }
+
+    .body-scroll {
+        padding-bottom: env(safe-area-inset-bottom);
     }
 }
 

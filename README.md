@@ -10,7 +10,6 @@
 
 <p align="center">
   <a href="https://github.com/bradlnz/placecontext/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/bradlnz/placecontext?style=flat-square"></a>
-  <a href="https://github.com/bradlnz/placecontext/actions/workflows/release.yml"><img alt="Release build" src="https://img.shields.io/github/actions/workflow/status/bradlnz/placecontext/release.yml?style=flat-square&label=release"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-43d675?style=flat-square"></a>
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512bd4?style=flat-square">
 </p>
@@ -136,25 +135,6 @@ spread across independent Proxmox hosts, separate worker VMs, external PostgreSQ
 
 In every layout, the portal, schedules, events, and connected AI harnesses submit work to the same durable job
 queue. See [`deploy/release/README.md`](deploy/release/README.md) for production requirements and shard options.
-
-## Developing
-
-```bash
-./setup.sh                          # install source-development prerequisites
-./run.sh                            # database, build, migrations, app
-./run.sh --fresh                    # destructive: recreate the local database, then start
-./start.sh                          # later runs: build and start the prepared app
-./start.sh --no-build --port 7710   # fast restart on a different port
-dotnet build && dotnet test        # all suites green; architecture tests enforce the onion
-dotnet run --project src/PlaceContext.Host   # portal http://localhost:7700, MCP at /mcp
-```
-
-On a database without a human owner account, opening the portal redirects to the first-run setup.
-That flow creates the default workspace owner and signs them in; no shared default password is used.
-
-You'll need the .NET 10 SDK and PostgreSQL (the release cluster provides one, or:
-`docker run -d -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=placecontext -p 5433:5432 postgres:16`).
-EF migrations apply automatically on startup.
 
 ## Documentation
 

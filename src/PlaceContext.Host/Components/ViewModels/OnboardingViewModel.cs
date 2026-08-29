@@ -187,7 +187,7 @@ public sealed class OnboardingViewModel(
         "postgresql" or "opensearch" => PageRoutes.ConnectionsSettings,
         "mcp" => PageRoutes.McpSettings,
         "webhook" => PageRoutes.WebhookIngestionWiki,
-        "job" when projectId is { } id => PageRoutes.ProjectDataJobs(id),
+        "job" when projectId is { } id => PageRoutes.ProjectJobs(id),
         _ when projectId is { } id => PageRoutes.ProjectData(id),
         _ => "/",
     };

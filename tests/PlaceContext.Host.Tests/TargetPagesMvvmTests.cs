@@ -78,7 +78,7 @@ public sealed class TargetPageViewModelTests
             OnboardingViewModel.DataSourceRoute("mcp", projectId));
         Assert.Equal(PageRoutes.WebhookIngestionWiki,
             OnboardingViewModel.DataSourceRoute("webhook", projectId));
-        Assert.Equal(PageRoutes.ProjectDataJobs(projectId),
+        Assert.Equal(PageRoutes.ProjectJobs(projectId),
             OnboardingViewModel.DataSourceRoute("job", projectId));
     }
 

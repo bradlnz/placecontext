@@ -13,22 +13,31 @@
             </div>
             <div>
                 <div class="product">PlaceContext</div>
-                <div class="tagline">a full-scale data platform</div>
+                <div class="tagline">self-hosted data operations</div>
             </div>
         </div>
 
         <p class="lead">
-            PlaceContext is a self-hosted job engine for defining, scheduling, and running durable workloads
-            across infrastructure you own. It brings code and container jobs, pipelines, project data,
-            observability, and artifacts into one workspace.
+            PlaceContext is a self-hosted workspace for operational data and durable workloads. Define jobs,
+            schedule or trigger them, work with project data, and inspect every run without handing control of
+            your infrastructure to a hosted platform.
         </p>
 
         <div class="section">
             <div class="section-title">Platform</div>
             <p class="section-body">
-                Build project-scoped tables and entity models, run scheduled or event-driven jobs and pipelines,
-                inspect lineage and execution traces, and create reports and charts. Use the web workspace directly
-                or connect automation and AI clients through MCP.
+                Build project-scoped tables and entity models, run code, container, and PostgreSQL jobs, compose
+                pipelines, inspect execution traces, and retain outputs as versioned artifacts. Use the web workspace
+                directly or connect trusted automation and AI clients through authenticated APIs and MCP.
+            </p>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Deployment</div>
+            <p class="section-body">
+                Run a local evaluation cluster with Docker and k3d, or deploy the stateless application to an existing
+                hardened k3s cluster with external PostgreSQL and object storage. PlaceContext keeps deployment choices
+                explicit so evaluation defaults are not mistaken for a production architecture.
             </p>
         </div>
 
@@ -52,13 +61,19 @@
         <div class="section">
             <div class="section-title">Built on</div>
             <p class="section-note">
-                ASP.NET Core &amp; EF Core (MIT) · PostgreSQL (PostgreSQL License) · ModelContextProtocol SDK (MIT) ·
-                k3s/k3d (Apache-2.0) · MinIO (AGPL-3.0, unmodified service) ·
-                Bubble Tea &amp; Lip Gloss (MIT) · Monaco Editor (MIT) · Markdig (BSD-2-Clause) ·
-                Cronos (MIT) · Npgsql (PostgreSQL License) · Geist typeface (SIL OFL 1.1).
+                .NET 10, ASP.NET Core &amp; EF Core (MIT) · PostgreSQL and pgvector (PostgreSQL License) ·
+                Model Context Protocol SDK (MIT) · k3s/k3d and Traefik (Apache-2.0) · OpenTelemetry (Apache-2.0) ·
+                Monaco Editor (MIT) · Markdig (BSD-2-Clause) · Cronos (MIT) · Npgsql (PostgreSQL License) ·
+                Inter typeface (SIL OFL 1.1).
                 Full attributions ship in <code>THIRD-PARTY-NOTICES.md</code>.
             </p>
         </div>
+
+        <nav class="resources" aria-label="PlaceContext resources">
+            <a href="/wiki/getting-started">Getting started</a>
+            <a href="/wiki">Documentation</a>
+            <a href="https://github.com/bradlnz/placecontext" target="_blank" rel="noopener noreferrer">Source and releases</a>
+        </nav>
 
         <div class="footer">
             Created by <strong>Bradley Lietz</strong>.<br />

@@ -10,5 +10,21 @@
 .section-body { font-size:12.5px; color:var(--text-2); line-height:1.8; margin:0; }
 .section-note { font-size:12px; color:var(--text-3); line-height:1.8; margin:0; }
 .link { color:var(--brand-2); }
+.resources { display:flex; flex-wrap:wrap; gap:8px; padding:2px 0 16px; }
+.resources a { min-height:36px; display:inline-flex; align-items:center; padding:7px 10px; border:1px solid var(--border); border-radius:7px; color:var(--brand-2); font-size:12px; }
+.resources a:hover { border-color:var(--brand-2); background:var(--brand-bg); }
 .footer { border-top:1px solid var(--border); padding-top:14px; font-size:12.5px; color:var(--text-2); line-height:1.8; }
 .muted { color:var(--text-3); }
+
+@media (max-width: 600px) {
+    .page { max-width:none; padding:14px 10px calc(28px + env(safe-area-inset-bottom)); }
+    .card { padding:20px 16px; }
+    .brand-row { align-items:flex-start; }
+    .logo { width:40px; height:40px; }
+    .product { font-size:18px; }
+    .lead { font-size:13px; line-height:1.6; }
+    .section { padding-top:16px; margin-bottom:16px; }
+    .section-body, .section-note { line-height:1.65; overflow-wrap:anywhere; }
+    .resources { display:grid; grid-template-columns:1fr; }
+    .resources a { min-height:44px; justify-content:center; }
+}

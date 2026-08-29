@@ -1,5 +1,4 @@
 @page "/project/{ProjectId:guid}/jobs"
-@page "/project/{ProjectId:guid}/data-jobs"
 @attribute [Authorize(Policy = Permission.JobsView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IDisposable
@@ -9,7 +8,7 @@
 @using PlaceContext.Host.Components.ViewModels
 @using PlaceContext.Host.Components.ViewModels.Helpers
 
-<PageTitle>@(IsDataJobsPage ? "PlaceContext — Data jobs" : "PlaceContext — Jobs")</PageTitle>
+<PageTitle>PlaceContext — Jobs</PageTitle>
 
 @if (Vm.Loading)
 {
@@ -17,9 +16,7 @@
 }
 else
 {
-    var jobs = (Vm.Jobs ?? Array.Empty<JobView>())
-        .Where(job => !IsDataJobsPage || JobsViewModel.IsPostgresQueryJob(job))
-        .ToList();
+    var jobs = (Vm.Jobs ?? Array.Empty<JobView>()).ToList();
 
     var jobsCount = jobs.Count;
     var shardCount = jobs.Sum(job => job.ShardCount);
@@ -31,27 +28,11 @@ else
 
         <header class="jobs-head">
             <div>
-                <h2>@(IsDataJobsPage ? "PostgreSQL calculations" : "Jobs")</h2>
-                <p>
-                    @(IsDataJobsPage
-                        ? "Run project data calculations directly in PostgreSQL with a managed schedule and reusable workload definition."
-                        : "Build reusable workloads, run them on demand, and connect them to automated triggers.")
-                </p>
+                <h2>Jobs</h2>
+                <p>Build reusable workloads, run them on demand, and connect them to automated triggers.</p>
             </div>
             <div class="head-actions">
-                @if (IsDataJobsPage)
-                {
-                    <button class="dcbtn" @onclick="@(() => Navigation.NavigateTo(PageRoutes.ProjectJobs(ProjectId)))">All jobs</button>
-                }
-                else
-                {
-                    <button class="dcbtn" @onclick="@(() => Navigation.NavigateTo(PageRoutes.ProjectDataJobs(ProjectId)))">Data jobs</button>
-                }
                 <button class="dcbtn" @onclick="Vm.NavigateToTests">View tests</button>
-                @if (IsDataJobsPage)
-                {
-                    <button class="dcbtn" @onclick="Vm.OpenPostgresTemplate">+ PostgreSQL calculation</button>
-                }
                 <button class="dcbtn primary" @onclick="() => Vm.OpenTemplateModal()">+ New job</button>
             </div>
         </header>
@@ -65,14 +46,10 @@ else
         {
             <div class="dccard empty-state">
                 <div class="empty-icon">⌁</div>
-                <strong>@(IsDataJobsPage ? "No PostgreSQL calculations yet" : "No jobs yet")</strong>
-                <span>
-                    @(IsDataJobsPage
-                        ? "Create a PostgreSQL calculation first, then schedule it like any other job."
-                        : "Create a reusable workload, then run it manually or connect it to a schedule or event.")
-                </span>
-                <button class="dcbtn primary" @onclick="@(IsDataJobsPage ? (() => Vm.OpenPostgresTemplate()) : (() => Vm.OpenTemplateModal()))">
-                    @(IsDataJobsPage ? "Create first calculation" : "Create first job")
+                <strong>No jobs yet</strong>
+                <span>Create a reusable workload, then run it manually or connect it to a schedule or event.</span>
+                <button class="dcbtn primary" @onclick="() => Vm.OpenTemplateModal()">
+                    Create first job
                 </button>
             </div>
         }
@@ -1078,7 +1055,6 @@ else
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
-    private bool IsDataJobsPage { get; set; }
 
     protected override void OnInitialized()
     {
@@ -1096,10 +1072,6 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
-        IsDataJobsPage = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').EndsWith(
-            "/data-jobs",
-            StringComparison.OrdinalIgnoreCase
-        );
         Vm.Initialize(ProjectId);
         await Vm.LoadAsync();
     }

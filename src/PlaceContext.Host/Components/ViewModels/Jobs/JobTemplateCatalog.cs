@@ -42,10 +42,6 @@ public static class JobTemplateCatalog
 {
     public static IReadOnlyList<JobTemplate> All { get; } = new List<JobTemplate>
     {
-        HubSpotContacts(),
-        XeroInvoices(),
-        ShopifyOrders(),
-        PostgresQuery(),
         MySqlQuery(),
         SqlServerQuery(),
         MongoDbExport(),
