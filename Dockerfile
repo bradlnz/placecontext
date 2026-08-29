@@ -10,6 +10,9 @@ RUN arch="$TARGETARCH"; [ "$arch" != amd64 ] || arch=x64; \
     dotnet publish src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -c Release -o /app/cluster -a "$arch" --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+LABEL org.opencontainers.image.source="https://github.com/bradlnz/placecontext" \
+      org.opencontainers.image.description="Self-hosted job engine for local and distributed infrastructure" \
+      org.opencontainers.image.licenses="MIT"
 RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/host ./host/

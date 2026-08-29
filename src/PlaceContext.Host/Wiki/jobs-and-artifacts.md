@@ -69,6 +69,20 @@ Communications** and your send permission.
 Open a chain's **Runs** tab to watch the pipeline update in real time. Select a step to see its
 live output and logs. Failed chains can be replayed from a failed step.
 
+### Example: local backup verification
+
+A homelab chain might:
+
+1. discover the newest backups on a NAS;
+2. run checksums and sample restores in parallel on local workers;
+3. wait for every path, then use a condition gate to detect failures;
+4. reduce the results into an HTML or PDF report; and
+5. store the artifact and send an email or SMS summary.
+
+The same pattern works for OCR and document indexing, media processing, sensor aggregation, or
+nightly project reports. A failed stage can be fixed and replayed without rerunning successful
+earlier work.
+
 ## Submit chains from another service
 
 For service-to-service ingestion, use the MCP JSON-RPC tools instead of keeping `run_job_chain`

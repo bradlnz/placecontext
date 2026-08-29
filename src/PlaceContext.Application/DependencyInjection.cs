@@ -37,7 +37,6 @@ public static class DependencyInjection
         services.AddScoped<EntityTagService>();
         services.AddScoped<RecordLinkService>();
         services.AddScoped<ProjectChartService>();
-        services.AddScoped<ObsidianVaultImporter>();
 
         // Commands.
         services.AddScoped<ICommandHandler<CreateProjectCommand, ProjectSummaryView>, CreateProjectHandler>();

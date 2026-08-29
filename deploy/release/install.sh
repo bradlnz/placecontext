@@ -3,9 +3,8 @@
 #
 #   curl -fsSL https://get.placecontext.io/install.sh | bash
 #
-# The GitHub release bundle contains compiled runtime images only; the source repository
-# can remain private. The installer provisions its tools and Python environment,
-# imports the packaged runtime into k3d, and applies the k3s manifests.
+# The GitHub release bundle contains deployment files only; the runtime is pulled from GHCR.
+# The installer provisions its tools and Python environment, creates k3d, and applies the manifests.
 set -euo pipefail
 
 VERSION="${PLACECONTEXT_VERSION:-latest}"
@@ -137,7 +136,7 @@ bootstrap_release() {
   have curl || die "curl is required"
   have tar || die "tar is required"
 
-  local tmp bundle arch asset release_base version_file
+  local tmp bundle asset release_base version_file
   local -a install_args
   BASE_URL="${BASE_URL%/}"
   if [[ "$VERSION" == "latest" ]]; then
@@ -151,8 +150,7 @@ bootstrap_release() {
     VERSION="${VERSION#v}"
     release_base="$BASE_URL/download/v$VERSION"
   fi
-  arch="$(normalise_arch)"
-  asset="placecontext-deploy-$arch.tar.gz"
+  asset="placecontext-deploy.tar.gz"
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/placecontext.XXXXXX")"
   trap 'rm -rf "$tmp"' EXIT
 
@@ -186,8 +184,7 @@ if [[ "$FROM_BUNDLE" != 1 ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[[ -d "$SCRIPT_DIR/k3s" && -f "$SCRIPT_DIR/local-ai/runtime.yaml" \
-    && -f "$SCRIPT_DIR/placecontext-runtime.tar" ]] \
+[[ -d "$SCRIPT_DIR/k3s" && -f "$SCRIPT_DIR/local-ai/runtime.yaml" ]] \
   || die "installer must run from a PlaceContext release bundle"
 
 mkdir -p "$INSTALL_DIR"
@@ -477,17 +474,19 @@ deploy_local() {
   export KUBECONFIG
   KUBECONFIG="$(k3d kubeconfig write "$CLUSTER_NAME")"
 
-  say "Loading the packaged PlaceContext runtime"
-  k3d image import "$ROOT/placecontext-runtime.tar" --cluster "$CLUSTER_NAME"
-  ok "compiled runtime loaded"
+  local runtime_image cluster_endpoint
+  runtime_image="$(awk -F'"' '/runtime_image:/ {print $2; exit}' "$ROOT/local-ai/config.yaml")"
+  [[ "$runtime_image" == ghcr.io/* ]] || die "release does not contain a valid GHCR runtime image"
+  say "Pulling $runtime_image"
+  docker pull "$runtime_image"
+  k3d image import "$runtime_image" --cluster "$CLUSTER_NAME"
+  ok "runtime image loaded"
 
   configure_secrets
   start_worker
   say "Applying PlaceContext"
   kubectl -n "$NAMESPACE" apply -f "$ROOT/k3s/postgres.yaml" >/dev/null
   kubectl apply -f "$ROOT/k3s/network-policies.yaml" >/dev/null
-  local runtime_image cluster_endpoint
-  runtime_image="$(awk -F'"' '/runtime_image:/ {print $2; exit}' "$ROOT/local-ai/config.yaml")"
   cluster_endpoint="http://placecontext-cluster-host:8081/api/cluster"
   [[ "$INSTALL_AI" == 1 ]] || cluster_endpoint=""
   sed -e "s|__IMAGE__|$runtime_image|g" \

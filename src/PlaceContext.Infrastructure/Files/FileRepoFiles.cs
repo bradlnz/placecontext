@@ -22,7 +22,7 @@ public sealed class FileRepoFiles : IRepoFiles
         var root = Path.GetFullPath(repo.Value);
         var files = Directory.EnumerateFiles(root, "*" + extension, SearchOption.AllDirectories)
             .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
-            // Hidden dirs (.git, .obsidian, …) are tool state, not content.
+            // Hidden directories are tool state, not project content.
             .Where(rel => !rel.Split('/').Any(seg => seg.StartsWith('.')))
             .OrderBy(rel => rel, StringComparer.OrdinalIgnoreCase)
             .ToList();

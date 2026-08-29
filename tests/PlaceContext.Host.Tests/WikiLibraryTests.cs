@@ -28,5 +28,13 @@ public sealed class WikiLibraryTests
         Assert.Contains("OPENSEARCH_URL", WikiLibrary.Find("opensearch-integration")!.Html);
         Assert.Contains("/api/ingest/{eventName}", WikiLibrary.Find("webhook-ingestion")!.Html);
         Assert.Contains("TrustedClients", WikiLibrary.Find("sso-and-oauth")!.Html);
+        Assert.Contains(
+            "src=\"/images/cluster-proxmox.svg\"",
+            WikiLibrary.Find("cluster-and-nodes")!.Html
+        );
+        Assert.Contains(
+            "src=\"/images/cluster-tailscale.svg\"",
+            WikiLibrary.Find("cluster-and-nodes")!.Html
+        );
     }
 }

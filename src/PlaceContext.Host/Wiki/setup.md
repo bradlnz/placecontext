@@ -14,11 +14,37 @@ curl -fsSL https://get.placecontext.io/install.sh | bash
 PostgreSQL is installed for the local lab cluster; object storage is optional. The portal is
 available at `http://localhost:7700`.
 
+PlaceContext uses [k3s](https://k3s.io), a lightweight Kubernetes distribution, to schedule jobs
+across its workers. The local installer uses [k3d](https://k3d.io) to run k3s inside Docker, so a
+separate Kubernetes installation is not required. Production connects the same manifests to an
+existing multi-node k3s cluster instead.
+
 For a source checkout, install the .NET 10 SDK, Docker, and PostgreSQL, then run:
 
 ```bash
 dotnet run --project src/PlaceContext.Host
 ```
+
+## Homelab and Proxmox
+
+For a simple homelab, run PlaceContext on one always-on Linux VM and use **Cluster → Add node** to
+join separate worker VMs. Jobs then run on whichever worker has capacity, while the portal keeps
+their inputs, logs, retries, and artifacts together.
+
+A practical Proxmox layout is:
+
+- one VM for the PlaceContext portal and local lab cluster;
+- separate worker VMs for CPU-heavy, memory-heavy, or GPU-backed local jobs;
+- optional Apple Silicon machines joined as AI shards; and
+- [Tailscale](https://tailscale.com/kb/1017/install) when a worker or operator is outside the home LAN.
+
+This works well for backup verification, media processing, document indexing, sensor rollups, and
+scheduled reports. Job chains can coordinate those tasks across machines and pass each stage's
+output to the next stage.
+
+A single Proxmox host is not HA. Production uses three k3s server VMs spread across independent
+Proxmox hosts, separate worker VMs, external PostgreSQL, off-cluster S3, TLS, and tested backups.
+See [Cluster and nodes](/wiki/cluster-and-nodes) for local and Tailscale topology diagrams.
 
 ## First boot
 

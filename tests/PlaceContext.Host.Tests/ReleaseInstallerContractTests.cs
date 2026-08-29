@@ -17,7 +17,7 @@ public sealed class ReleaseInstallerContractTests
         Assert.Contains("latest/download", installer, StringComparison.Ordinal);
         Assert.Contains("download/v$VERSION", installer, StringComparison.Ordinal);
         Assert.Contains(
-            "placecontext-deploy-$arch.tar.gz",
+            "placecontext-deploy.tar.gz",
             installer,
             StringComparison.Ordinal
         );
@@ -25,8 +25,8 @@ public sealed class ReleaseInstallerContractTests
         Assert.Contains("validate_archive", installer, StringComparison.Ordinal);
         Assert.Contains("placecontext-ai", installer, StringComparison.Ordinal);
         Assert.Contains("--ai-token", installer, StringComparison.Ordinal);
-        Assert.Contains("placecontext-runtime.tar", installer, StringComparison.Ordinal);
-        Assert.Contains("k3d image import", installer, StringComparison.Ordinal);
+        Assert.Contains("docker pull \"$runtime_image\"", installer, StringComparison.Ordinal);
+        Assert.Contains("k3d image import \"$runtime_image\"", installer, StringComparison.Ordinal);
         Assert.Contains("deploy_local", installer, StringComparison.Ordinal);
     }
 }

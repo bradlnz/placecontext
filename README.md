@@ -22,12 +22,16 @@ resulting data, logs, traces, and artifacts under your control.
 ## Quick start
 
 ```bash
-# Download the verified release and create a local k3d cluster plus local AI
+# Install prerequisites, create local k3d, and pull the verified GHCR image
 curl -fsSL https://get.placecontext.io/install.sh | bash
 # portal http://localhost:7700 · MCP /mcp
 ```
 
 Requires Linux or macOS with `curl`; the installer provisions the remaining local runtime dependencies.
+PlaceContext uses [k3s](https://k3s.io), a lightweight Kubernetes distribution, to schedule isolated jobs
+across the fleet. For the quick start, [k3d](https://k3d.io) runs k3s inside Docker so no existing Kubernetes
+cluster is required. The installer pulls the versioned multi-architecture
+[PlaceContext image from GHCR](https://github.com/bradlnz/placecontext/pkgs/container/placecontext).
 
 ## Connect your AI harness
 
@@ -73,8 +77,8 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
   records, map job outputs into tables, and explore relationships without mixing tenant data.
 - **Containerised compute** — upload code (`python`, `node`, `go`, `ruby`, `dotnet`) or use a container image;
   PlaceContext fans out sandboxed shards across your fleet, collects results and logs, and persists outputs.
-- **Pipelines and automation** — chain jobs into multi-step flows, declare run parameters, and trigger work on
-  demand, on schedules, or from events while operators are offline.
+- **Job chains and automation** — pass output through ordered stages, fan out parallel work, add wait or condition
+  gates, replay from a failed step, and trigger the whole chain on demand, on a schedule, or from an event.
 - **Analytics and artifacts** — query project data, create charts and reports, and retain HTML, chart, CSV, and
   structured run artifacts in object storage.
 - **Lineage and observability** — inspect job-to-table mappings, run and chain history, shard outcomes, logs,
@@ -85,6 +89,11 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
   the same governed data, jobs, pipelines, and artifacts as human operators.
 
 ## Example deployments
+
+The same setup works for homelab automation, project workflows, and local batch processing. For example, a
+document chain can receive a file, run OCR, extract structured fields in parallel, store the records, generate a
+PDF report, and send a completion message. Each stage receives the previous stage's primary output, while runs,
+logs, retries, and artifacts remain visible in one place.
 
 ### Mac-led home or studio cluster
 
@@ -104,12 +113,18 @@ curl -fsSL https://get.placecontext.io/install.sh | bash -s -- --no-ai
 Point DNS and TLS at the portal, then connect local workers from **Cluster → Add node**. This is a good fit for
 evaluation or a small team; production HA uses an existing multi-node k3s cluster, external PostgreSQL, and S3.
 
-### All-local server fleet
+### Proxmox homelab
 
-- Install PlaceContext on one Linux server that stays online.
-- Join spare Linux servers as standard workers so jobs run wherever capacity is available.
-- Keep the portal private on the LAN, or use Tailscale for access and workers at other sites.
-- Add an AI shard only when a machine has the memory and accelerator needed by your chosen model.
+- Run the PlaceContext portal on an always-on Linux VM and create separate worker VMs for local jobs.
+- Give CPU-heavy, memory-heavy, or GPU-backed workloads their own workers, then let job chains coordinate them.
+- Use schedules for backup checks, media processing, document indexing, sensor rollups, or nightly reports.
+- Keep the portal private on the LAN, or use [Tailscale](https://tailscale.com/kb/1017/install) to add workers
+  from another site.
+
+![Proxmox homelab with local workers and a Tailscale-connected Mac AI shard](src/PlaceContext.Host/wwwroot/images/cluster-proxmox.svg)
+
+A single Proxmox host is an excellent homelab but not HA. A production deployment uses three k3s server VMs
+spread across independent Proxmox hosts, separate worker VMs, external PostgreSQL, and off-cluster S3.
 
 In every layout, the portal, schedules, events, and connected AI harnesses submit work to the same durable job
 queue. See [`deploy/release/README.md`](deploy/release/README.md) for production requirements and shard options.

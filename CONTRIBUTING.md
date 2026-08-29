@@ -38,3 +38,7 @@ Add regression coverage for behavior changes. Update the embedded wiki under
 Explain the problem and outcome, list the checks you ran, and call out migrations, configuration
 changes, or compatibility concerns. By contributing, you agree that your contribution is licensed
 under the repository's MIT License.
+
+Pull requests require approval from a code owner before merge. Maintainers decide whether and when
+a contribution is accepted; opening an issue or pull request does not guarantee inclusion. Direct
+pushes, force pushes, and branch deletion are disabled on `main`.
