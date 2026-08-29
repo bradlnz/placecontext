@@ -21,3 +21,16 @@
 .op-view { padding:2px 8px; font-size:10.5px; flex:none; }
 
 @keyframes dcspin { to { transform: rotate(360deg); } }
+
+@media (max-width: 600px) {
+    .pane {
+        top: 104px;
+        left: 8px;
+        right: 8px;
+        width: auto;
+        max-height: calc(100dvh - 112px - env(safe-area-inset-bottom));
+    }
+
+    .op { min-height: 44px; }
+    .op-view { min-height: 36px; }
+}

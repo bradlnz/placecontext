@@ -11,6 +11,7 @@ window.placecontext = {
     const sh = document.getElementById('dcshell');
     if (sh) sh.dataset.theme = t;
     const bg = t === 'light' ? '#f5f6f8' : '#0a0b0d';
+    document.documentElement.dataset.pcTheme = t;
     document.body.style.background = bg;
     document.documentElement.style.background = bg;
     document.documentElement.style.colorScheme = t;

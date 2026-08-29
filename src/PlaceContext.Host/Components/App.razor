@@ -3,6 +3,18 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <style>
+        html, body { margin:0; min-height:100%; background:#000; color-scheme:dark; }
+        html[data-pc-theme="light"], html[data-pc-theme="light"] body { background:#f5f8fa; color-scheme:light; }
+    </style>
+    <script>
+        (() => {
+            let theme = 'dark';
+            try { theme = localStorage.getItem('placecontext-theme') === 'light' ? 'light' : 'dark'; } catch { }
+            document.documentElement.dataset.pcTheme = theme;
+        })();
+    </script>
     <base href="/" />
     <title>PlaceContext — codebase visibility</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
@@ -14,7 +26,7 @@
     <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" /></noscript>
     @* Blazor scoped-CSS bundle: per-component <Name>.razor.css files compile into this. Component
        classes resolve --var() values from the #dcshell ancestor's cascade below. *@
-    <link rel="stylesheet" href="PlaceContext.Host.styles.css?v=2" />
+    <link rel="stylesheet" href="PlaceContext.Host.styles.css?v=3" />
     @* prerender:false — with prerender on, every page ran its whole data load twice (once for
        the throwaway static render, again when the circuit connects). One load, one render. *@
     <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
@@ -34,7 +46,7 @@
             --font-sans:'Inter',system-ui,-apple-system,sans-serif;
             --font-mono:'Inter',system-ui,-apple-system,sans-serif;
         }
-        #dcshell[data-theme="light"] {
+        #dcshell[data-theme="light"], html[data-pc-theme="light"] #dcshell {
             --bg:#f5f8fa; --panel:#ffffff; --card:#ffffff; --card-2:#ebf1f5; --hover:#e1e8ed;
             --bg-tilt:linear-gradient(150deg, #f5f8fb, #edf3f8, #f7fbff);
             --border:#d8e1e8; --border-2:#bfccd6;
@@ -229,7 +241,7 @@
             --ch-run-shadow:0 1px 0 rgba(0,0,0,.35);
             --bg-tilt:#000000;
         }
-        #dcshell[data-theme="light"] {
+        #dcshell[data-theme="light"], html[data-pc-theme="light"] #dcshell {
             --ch-bg:#ffffff;
             --ch-panel:#f3f4f6;
             --ch-panel-2:#e5e7eb;
@@ -309,7 +321,7 @@
 </head>
 <body>
     <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
-    <script defer src="placecontext.js?v=7"></script>
+    <script defer src="placecontext.js?v=8"></script>
     <script defer src="pcgraph.js?v=4"></script>
     <script defer src="pcmonaco.js?v=5"></script>
     <script defer src="pcchart.js?v=6"></script>
