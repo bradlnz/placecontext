@@ -95,6 +95,10 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
 
 ![PlaceContext dashboard with populated charts](docs/images/dashboard-charts.png)
 
+![Job code editor](docs/images/job-code-editor.png)
+
+![Job chain with parallel collection and report publishing stages](docs/images/job-chain.png)
+
 ![SQL Studio with a query and populated results](docs/images/sql-studio.png)
 
 ![Mapped job output in a project table](docs/images/mapped-table.png)
