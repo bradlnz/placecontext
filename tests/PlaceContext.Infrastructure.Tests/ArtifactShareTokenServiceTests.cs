@@ -82,7 +82,7 @@ public sealed class ArtifactShareTokenServiceTests
         }
     }
 
-    private static async Task<(AppDbContext Db, ArtifactShareTokenService Service, MutableClock Clock, RunArtifactLinkRow Artifact)>
+    private static async Task<(AppDbContext Db, ArtifactShareTokenService Service, FakeClock Clock, RunArtifactLinkRow Artifact)>
         CreateAsync()
     {
         var tenantId = Guid.NewGuid();
