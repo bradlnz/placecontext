@@ -3,6 +3,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.TestSupport;
 using Xunit;
 
 namespace PlaceContext.Application.Tests;
@@ -23,7 +24,7 @@ public class DataMappingIngestionTests
 
     private static DataMappingIngestionService Service(Job job, DataMapping mapping, FakeDataStore store,
         FakeNotifier? notifier = null)
-        => new(new FakeMappings(mapping), store, new FakeClock(), indexer: null, notifier: notifier);
+        => new(new FakeMappings(mapping), store, new FakeClock(T0), indexer: null, notifier: notifier);
 
     [Fact]
     public async Task Ingests_each_record_of_the_rows_path_array_with_provenance()
@@ -371,17 +372,5 @@ public class DataMappingIngestionTests
         public List<RunStatusUpdate> Updates { get; } = new();
         public void Sync(RunStatusUpdate update) => Updates.Add(update);
     }
-
-    private sealed class FakeClock : IClock
-    {
-        public DateTimeOffset UtcNow => T0;
-    }
-        public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
-            => Task.CompletedTask;
-        public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
-            IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
-            => Task.FromResult(0);
-        public Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
-            => Task.FromResult(0);
 
 }

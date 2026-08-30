@@ -73,26 +73,13 @@ public class JobRunDataRecorderTests
             => throw new NotSupportedException();
     }
 
-    private sealed class FakeClock : IClock
-    {
-        public DateTimeOffset UtcNow => T0.AddSeconds(3);
-    }
-        public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
-            => Task.CompletedTask;
-        public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
-            IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
-            => Task.FromResult(0);
-        public Task<int> DeleteRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys, CancellationToken ct = default)
-            => Task.FromResult(0);
-
-
     [Fact]
     public async Task Records_one_row_per_shard_into_job_run_data()
     {
         var (job, run) = Sample();
         var store = new CapturingStore();
 
-        await new JobRunDataRecorder(store, new FakeClock()).RecordAsync(job, run);
+        await new JobRunDataRecorder(store, new FakeClock(T0.AddSeconds(3))).RecordAsync(job, run);
 
         Assert.Equal(run.ProjectId, store.SawProject);
         Assert.Equal("job_run_data", store.Table);
@@ -122,7 +109,7 @@ public class JobRunDataRecorderTests
         var (job, run) = Sample(new ReduceResult(0, true, "{\"total\":10}", null));
         var store = new CapturingStore();
 
-        await new JobRunDataRecorder(store, new FakeClock()).RecordAsync(job, run);
+        await new JobRunDataRecorder(store, new FakeClock(T0.AddSeconds(3))).RecordAsync(job, run);
 
         var byName = store.Columns!.Select((c, i) => (c.Name, i)).ToDictionary(x => x.Name, x => x.i);
         var reduceRow = Assert.Single(store.Rows!, r => r[byName["step"]] == "reduce");
@@ -138,7 +125,7 @@ public class JobRunDataRecorderTests
         var store = new ThrowingStore();
 
         // Best-effort: the run must never fail because run-data recording did.
-        await new JobRunDataRecorder(store, new FakeClock()).RecordAsync(job, run);
+        await new JobRunDataRecorder(store, new FakeClock(T0.AddSeconds(3))).RecordAsync(job, run);
     }
 
     [Fact]
@@ -148,7 +135,7 @@ public class JobRunDataRecorderTests
         var store = new CapturingStore();
         var indexer = new FakeContentIndexer();
 
-        await new JobRunDataRecorder(store, new FakeClock(), indexer).RecordAsync(job, run);
+        await new JobRunDataRecorder(store, new FakeClock(T0.AddSeconds(3)), indexer).RecordAsync(job, run);
 
         Assert.Equal(2, indexer.Indexed.Count);
         Assert.All(indexer.Indexed, i => Assert.Equal(ContentKind.ProjectData, i.Kind));

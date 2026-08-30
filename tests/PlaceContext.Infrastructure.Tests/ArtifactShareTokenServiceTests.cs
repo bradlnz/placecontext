@@ -62,7 +62,7 @@ public sealed class ArtifactShareTokenServiceTests
         var options = new DbContextOptionsBuilder<AppDbContext>()
             .UseInMemoryDatabase(databaseName, databaseRoot)
             .Options;
-        var clock = new MutableClock { UtcNow = DateTimeOffset.Parse("2026-08-01T01:00:00Z") };
+        var clock = new FakeClock(DateTimeOffset.Parse("2026-08-01T01:00:00Z"));
         string token;
         var artifact = MakeArtifact(tenantId);
         await using (var ownerDb = new AppDbContext(options, new FakeCurrentTenant(tenantId)))
@@ -93,7 +93,7 @@ public sealed class ArtifactShareTokenServiceTests
         var artifact = MakeArtifact(tenantId);
         await db.RunArtifacts.AddAsync(artifact);
         await db.SaveChangesAsync();
-        var clock = new MutableClock { UtcNow = DateTimeOffset.Parse("2026-08-01T01:00:00Z") };
+        var clock = new FakeClock(DateTimeOffset.Parse("2026-08-01T01:00:00Z"));
         return (db, new ArtifactShareTokenService(db, clock), clock, artifact);
     }
 
@@ -113,8 +113,4 @@ public sealed class ArtifactShareTokenServiceTests
         CreatedAt = DateTimeOffset.Parse("2026-08-01T00:00:00Z"),
     };
 
-    private sealed class MutableClock : IClock
-    {
-        public DateTimeOffset UtcNow { get; set; }
-    }
 }

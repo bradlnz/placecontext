@@ -4,6 +4,7 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.TestSupport;
 using Xunit;
 
 namespace PlaceContext.Application.Tests;
@@ -28,7 +29,7 @@ public class PostJobActionServiceTests
     }
 
     private static PostJobActionService Service(FakeStore store, FakeLinks? links = null) =>
-        new(store, links ?? new FakeLinks(), new FakeUow(), new FakeClock());
+        new(store, links ?? new FakeLinks(), new FakeUow(), new FakeClock(T0));
 
     // ── The return type drives the mandatory primary artifact ────────────────────────────────────────
 
@@ -379,8 +380,4 @@ public class PostJobActionServiceTests
         public Task<int> SaveChangesAsync(CancellationToken ct = default) => Task.FromResult(0);
     }
 
-    private sealed class FakeClock : IClock
-    {
-        public DateTimeOffset UtcNow => T0;
-    }
 }
