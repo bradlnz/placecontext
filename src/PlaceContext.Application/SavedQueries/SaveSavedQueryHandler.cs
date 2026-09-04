@@ -3,17 +3,6 @@ using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Application.Features;
 
-public sealed class ListSavedQueriesHandler
-    : IQueryHandler<ListSavedQueriesQuery, IReadOnlyList<SavedQueryRecord>>
-{
-    private readonly ISavedQueryStore _store;
-    public ListSavedQueriesHandler(ISavedQueryStore store) => _store = store;
-
-    public Task<IReadOnlyList<SavedQueryRecord>> HandleAsync(
-        ListSavedQueriesQuery query, CancellationToken ct = default)
-        => _store.ListAsync(query.ProjectId, ct);
-}
-
 public sealed class SaveSavedQueryHandler
     : ICommandHandler<SaveSavedQueryCommand, SavedQueryRecord>
 {
@@ -44,15 +33,4 @@ public sealed class SaveSavedQueryHandler
         await _store.SaveAsync(item, ct);
         return item;
     }
-}
-
-public sealed class DeleteSavedQueryHandler
-    : ICommandHandler<DeleteSavedQueryCommand, bool>
-{
-    private readonly ISavedQueryStore _store;
-    public DeleteSavedQueryHandler(ISavedQueryStore store) => _store = store;
-
-    public Task<bool> HandleAsync(
-        DeleteSavedQueryCommand command, CancellationToken ct = default)
-        => _store.DeleteAsync(command.QueryId, ct);
 }
