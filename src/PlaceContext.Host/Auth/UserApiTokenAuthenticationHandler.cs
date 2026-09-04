@@ -6,8 +6,6 @@ using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Host.Auth;
 
-public sealed class UserApiTokenAuthenticationOptions : AuthenticationSchemeOptions { }
-
 /// <summary>
 /// Authenticates personal API tokens minted from Settings (prefix <c>pct_</c>). Accepts
 /// <c>Authorization: Bearer pct_…</c> or <c>X-Api-Key: pct_…</c>. Establishes the owning user's

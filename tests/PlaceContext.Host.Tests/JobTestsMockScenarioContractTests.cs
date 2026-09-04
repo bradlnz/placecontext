@@ -10,7 +10,7 @@ public sealed class JobTestsMockScenarioContractTests
         var viewModel = Source(
             "src/PlaceContext.Host/Components/ViewModels/JobTestCodeEditorViewModel.cs"
         );
-        var handler = Source("src/PlaceContext.Application/Jobs/Handlers/JobTestHandlers.cs");
+        var handler = Source("src/PlaceContext.Application/Jobs/Handlers/RunJobTestCaseHandler.cs");
         var framework = Source("src/PlaceContext.Application/Jobs/Services/JobTestFramework.cs");
 
         Assert.Contains("Mock scenario JSON", testsPage, StringComparison.Ordinal);

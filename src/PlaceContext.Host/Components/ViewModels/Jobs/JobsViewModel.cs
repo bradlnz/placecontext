@@ -267,9 +267,3 @@ public sealed partial class JobsViewModel : PageViewModel
 
     public string GetOAuthUrl(Guid connectionId) => $"/mcp-oauth/start?connectionId={connectionId}";
 }
-
-public static class JobSourceCatalog
-{
-    public const string Code = "code";
-    public const string Container = "container";
-}
