@@ -1,8 +1,10 @@
-<p align="center">
-  <img src="src/PlaceContext.Host/wwwroot/favicon.svg" width="112" alt="PlaceContext logo">
-</p>
-
-<h1 align="center">PlaceContext</h1>
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/placecontext-logo-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/placecontext-logo-light.svg">
+    <img src="docs/brand/placecontext-logo-light.svg" width="600" alt="PlaceContext — a Kiwi-inspired job engine with connected context">
+  </picture>
+</h1>
 
 <p align="center">
   <strong>Turn code and containers into durable jobs that run anywhere you own.</strong>
@@ -12,6 +14,14 @@
   <a href="https://github.com/bradlnz/placecontext/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/bradlnz/placecontext?style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-43d675?style=flat-square"></a>
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512bd4?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#connect-your-ai-harness">AI clients</a> ·
+  <a href="#screenshots">Screenshots</a> ·
+  <a href="#architecture-and-repository-map">Architecture</a> ·
+  <a href="#development">Development</a>
 </p>
 
 PlaceContext is an open-source, self-hosted job engine with a web portal and an MCP endpoint. Run work on
@@ -95,6 +105,9 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
 
 ![PlaceContext dashboard with populated charts](docs/images/dashboard-charts.png)
 
+<details>
+<summary>Explore the editor, job chains, SQL Studio, and project data</summary>
+
 ![Job code editor](docs/images/job-code-editor.png)
 
 ![Job chain with parallel collection and report publishing stages](docs/images/job-chain.png)
@@ -106,6 +119,30 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
 ![Mapped job output in a project table](docs/images/mapped-table.png)
 
 ![Project data graph](docs/images/data-graph.png)
+
+</details>
+
+## Architecture and repository map
+
+The current platform is built on .NET 10. The main Host serves the Blazor portal, controllers, and MCP;
+Application coordinates use cases; Domain defines the core model; Infrastructure supplies external
+adapters. ClusterHost is a separate HTTP service for local-AI cluster requests.
+
+| Location | Responsibility |
+| --- | --- |
+| [`src/PlaceContext.Domain/`](src/PlaceContext.Domain/) | Core model and domain rules. |
+| [`src/PlaceContext.Application/`](src/PlaceContext.Application/) | Commands, queries, ports, and feature orchestration. |
+| [`src/PlaceContext.Infrastructure/`](src/PlaceContext.Infrastructure/) | Persistence and external-service adapters. |
+| [`src/PlaceContext.Host/`](src/PlaceContext.Host/) | Web portal, HTTP/MCP surfaces, authentication, and composition. |
+| [`src/PlaceContext.ClusterHost/`](src/PlaceContext.ClusterHost/) | Local-AI cluster HTTP service. |
+| [`tests/`](tests/) | Domain, application, infrastructure, host, cluster, and architecture tests. |
+| [`deploy/release/`](deploy/release/) | Release packaging, installers, k3s manifests, and optional local-AI worker. |
+| [`docs/brand/`](docs/brand/) | Kiwi mark, light/dark wordmarks, and usage guidance. |
+
+**Cleanup and Go exploration:** the [architecture assessment](docs/architecture/cleanup-and-go-assessment.md)
+proposes stronger PR verification, clearer feature ownership, and a smaller Host composition root.
+It recommends evaluating ClusterHost as an isolated Go experiment before considering a larger migration.
+This is a proposal: the deployed platform remains .NET, and no Go rewrite or performance improvement is claimed.
 
 ## Example deployments
 
@@ -152,15 +189,36 @@ spread across independent Proxmox hosts, separate worker VMs, external PostgreSQ
 In every layout, the portal, schedules, events, and connected AI harnesses submit work to the same durable job
 queue. See [`deploy/release/README.md`](deploy/release/README.md) for production requirements and shard options.
 
+## Development
+
+Install the .NET 10 SDK, Docker, and PostgreSQL, then use the repository's development scripts:
+
+```bash
+./setup.sh
+./run.sh
+```
+
+Run the solution checks before opening a code change:
+
+```bash
+dotnet build PlaceContext.slnx
+dotnet test PlaceContext.slnx
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the review workflow. Keep behavior changes, namespace cleanup,
+and runtime experiments in separate pull requests.
+
 ## Documentation
 
 - [Installation and fleet setup](deploy/release/README.md)
+- [Repository cleanup and Go assessment](docs/architecture/cleanup-and-go-assessment.md)
+- [Brand assets and usage](docs/brand/README.md)
 - [OpenSearch integration](src/PlaceContext.Host/Wiki/opensearch-integration.md)
 - [SSO and OAuth integration](src/PlaceContext.Host/Wiki/sso-and-oauth.md)
 - [Security and sharing](src/PlaceContext.Host/Wiki/security-and-sharing.md)
 
 The Markdown files under `src/PlaceContext.Host/Wiki/` are embedded into the portal and are the
-operator-facing documentation shipped with each build.
+operator-facing documentation shipped with each build. Contributor-facing architecture notes live in `docs/`.
 
 ## Upgrading
 

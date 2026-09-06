@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">PlaceContext Kiwi mark</title>
+  <desc id="desc">A long-beaked kiwi bird with three connected nodes, in fern green and pale lime.</desc>
+  <rect width="256" height="256" rx="56" fill="#143A2D"/>
+  <g fill="#D2EAA1">
+    <path d="M55 154C41 134 44 108 61 88C78 68 104 63 128 70C146 75 158 85 165 99C172 100 175 96 175 92C170 86 169 79 173 72C177 64 185 60 194 63C205 66 210 77 206 87C204 94 199 100 192 104C190 129 178 148 160 162C133 183 79 183 55 154Z"/>
+    <path d="M203 77L241 127L199 92Z"/>
+  </g>
+  <g fill="none" stroke="#D2EAA1" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M95 170L89 202H75M128 174L137 202H151"/>
+  </g>
+  <g fill="none" stroke="#143A2D" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M77 132L108 108L141 134"/>
+  </g>
+  <g fill="#143A2D">
+    <circle cx="77" cy="132" r="7"/>
+    <circle cx="108" cy="108" r="7"/>
+    <circle cx="141" cy="134" r="7"/>
+    <circle cx="194" cy="77" r="3.5"/>
+  </g>
+</svg>
