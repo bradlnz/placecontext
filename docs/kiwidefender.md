@@ -72,4 +72,6 @@ contracts for Chat, ProjectData, Jobs, Observability, settings and shared
 components, all untouched by this integration. The test build also reports an
 existing EF Core Relational 10.0.4/10.0.11 version conflict warning.
 
-This source change has not been deployed or enabled in the running application.
+The integration is optional and disabled by default, including the placecontext.lan
+rollout. Deploying the package does not activate policy checks; activation requires
+KiwiDefender__PolicyFile as described above.
