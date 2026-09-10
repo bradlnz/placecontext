@@ -1,6 +1,6 @@
 # KiwiDefender .NET integration
 
-The Host references the actual `KiwiDefender` 0.1.0-preview.1 NuGet package
+The Host references the actual `KiwiDefender` 0.1.0-preview.2 NuGet package
 from `vendor/nuget`; normal restore and Docker builds include it. No external
 KiwiDefender service is required to evaluate a local policy.
 
@@ -59,8 +59,8 @@ invalid identity and unavailable/expired policy still fail closed. Rates and
 policy generation tracking are process-local, not shared across replicas/restarts.
 
 Structured Host logs contain resource, method, outcome, reason, generation and
-rule ID. They omit tokens, request bodies and arguments. SDK decisions are not
-automatically exported into the KiwiDefender portal by this integration.
+rule ID. They omit tokens, request bodies and arguments. Runtime admission decisions remain in Host logs. Static analysis reports are
+automatically published through the separate SDK scan-reporting connection.
 
 Verify: `dotnet test tests/PlaceContext.Host.Tests --filter FullyQualifiedName~KiwiDefenderMiddlewareTests`.
 
@@ -75,3 +75,21 @@ existing EF Core Relational 10.0.4/10.0.11 version conflict warning.
 The integration is optional and disabled by default, including the placecontext.lan
 rollout. Deploying the package does not activate policy checks; activation requires
 KiwiDefender__PolicyFile as described above.
+
+## Automatic static analysis
+
+The installed SDK runs C# compiler/.NET analyzers on build/publish and bundles
+`kiwidefender.scan.json`. Set `KIWIDEFENDER_SCAN_ENDPOINT` to the portal's HTTPS
+`/v1/scans` endpoint, `KIWIDEFENDER_SCAN_TOKEN_FILE` to a mounted dedicated ingest
+token, and optionally `KIWIDEFENDER_SCAN_CA_FILE` to the private CA certificate.
+The application uploads its build report in the background on startup. Credentials
+can instead be supplied during builds for immediate CI upload. They are never
+embedded in the image. This is independent of optional request enforcement.
+
+The PlaceContext LAN deployment uses the `placecontext-sdk` reporting identity.
+Code scans lists `dotnet:PlaceContext.Host`, linked into the dependency graph.
+For fresh analysis run `dotnet build -t:Rebuild` and deploy the resulting output;
+restarting an unchanged image resubmits the original report, preserving its time.
+`-p:KiwiDefenderScan=false` disables the build integration. Coverage includes the
+Host project's non-generated C# sources and configured analyzers; dependency
+vulnerability matching and other referenced projects are outside this report.
