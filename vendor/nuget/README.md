@@ -13,3 +13,5 @@ checksum and Host PackageReference together when taking a new SDK version.
 Preview 2 adds automatic build-time C# analysis and background publication of the
 bundled report. Its source is in `sdks/dotnet/{ScanReporter.cs,scan,buildTransitive}`
 in the KiwiDefender repository. Preview 1 is retained for existing restores.
+
+Preview 3 supports bounded source snippets when `KIWIDEFENDER_SCAN_SNIPPETS=true` is set during the build. The LAN release enables this to show source context in KiwiDefender finding details. Runtime scan credentials and request policy remain separate.
