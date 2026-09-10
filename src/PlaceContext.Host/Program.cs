@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.SignalR;
 using PlaceContext.Host;
+using PlaceContext.Host.Security;
 using PlaceContext.Host.Auth;
 using PlaceContext.Application;
 using PlaceContext.Application.Ports;
@@ -400,6 +401,15 @@ builder.Services
 var bindUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
 builder.WebHost.UseUrls(string.IsNullOrWhiteSpace(bindUrls) ? "http://0.0.0.0:7700" : bindUrls);
 
+// Trusted local policy: invalid configuration fails startup instead of silently disabling protection.
+var kiwiPolicyPath = builder.Configuration["KiwiDefender:PolicyFile"];
+if (!string.IsNullOrWhiteSpace(kiwiPolicyPath))
+{
+    var defender = new KiwiDefender.Defender("placecontext");
+    defender.Activate(File.ReadAllBytes(Path.GetFullPath(kiwiPolicyPath, builder.Environment.ContentRootPath)));
+    builder.Services.AddSingleton(defender);
+}
+
 var app = builder.Build();
 
 // UseForwardedHeaders is deprecated in .NET 10 and no longer sets Request.Scheme.
@@ -475,6 +485,8 @@ app.UseAuthorization();
 app.UseRateLimiter();
 // After UseAuthorization deliberately — see UserResolutionMiddleware for why.
 app.UseMiddleware<UserResolutionMiddleware>();
+if (!string.IsNullOrWhiteSpace(kiwiPolicyPath))
+    app.UseMiddleware<KiwiDefenderMiddleware>();
 app.UseAntiforgery();
 
 app.MapRazorComponents<App>()

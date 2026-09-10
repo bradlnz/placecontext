@@ -177,6 +177,8 @@ knowledge, job definitions, runs, or artifacts you create or import. Details are
 Third-party components used by PlaceContext are listed in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
+Optional [KiwiDefender .NET policy checks](docs/kiwidefender.md) protect authenticated HTTP endpoints.
+
 ## Contributing and security
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and
