@@ -132,7 +132,9 @@ public sealed class ChainContinuationWorker : BackgroundService
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var row = await db.ChainRuns.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == runId, ct);
-        if (row is null || row.Status != "Waiting") return;
+        // Dispatch can fail after Resume has marked the run Running. Keep its checkpoint
+        // retryable, without reviving cancellation, completion, or a new input request.
+        if (row is null || row.Status is not ("Waiting" or "Running")) return;
         row.Status = "Waiting";
         row.ContinuationClaimedAt = null;
         row.ContinuationClaimedBy = null;

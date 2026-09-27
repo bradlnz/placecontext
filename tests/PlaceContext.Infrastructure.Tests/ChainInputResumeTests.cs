@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
@@ -88,6 +90,31 @@ public sealed class ChainInputResumeTests
                 Assert.Contains("client_cash", loaded.ContinuationOverridesJson);
                 var queue = new DbJobChainSubmissionQueue(db, tenant, new CurrentUser(), encryptor, new Permissions());
                 await Assert.ThrowsAsync<InvalidOperationException>(() => queue.ResumeAsync(run.Id, request.Id, values.Replace(":0", ":1")));
+            }
+            await using var services = new ServiceCollection()
+                .AddScoped(_ => new AppDbContext(options, tenant)).BuildServiceProvider();
+            using var worker = new ChainContinuationWorker(services.GetRequiredService<IServiceScopeFactory>(),
+                NullLogger<ChainContinuationWorker>.Instance);
+            var release = typeof(ChainContinuationWorker).GetMethod("ReleaseAsync",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            foreach (var (before, after) in new[] { ("Running", "Waiting"), ("Waiting", "Waiting"),
+                ("AwaitingInput", "AwaitingInput"), ("Cancelled", "Cancelled"), ("Succeeded", "Succeeded") })
+            {
+                await using (var db = new AppDbContext(options, tenant))
+                {
+                    var row = await db.ChainRuns.SingleAsync();
+                    row.Status = before;
+                    row.ContinuationClaimedBy = "failed-dispatch";
+                    row.ContinuationClaimedAt = DateTimeOffset.UtcNow;
+                    await db.SaveChangesAsync();
+                }
+                await (Task)release.Invoke(worker, new object[] { run.Id, CancellationToken.None })!;
+                await using var check = new AppDbContext(options, tenant);
+                var released = await check.ChainRuns.SingleAsync();
+                Assert.Equal(after, released.Status);
+                Assert.Equal(after == "Waiting" ? null : "failed-dispatch", released.ContinuationClaimedBy);
+                Assert.Equal(0, released.ResumeStageIndex);
+                Assert.NotNull(released.InputRequest);
             }
         }
         finally
