@@ -468,7 +468,8 @@ public sealed class PlaceContextTools
                     chainRunId = receipt.ChainRunId,
                     status,
                     terminal,
-                    inputRequest = run?.InputRequest,
+                    inputRequest = run?.InputRequest is { } request
+                        ? JsonSerializer.SerializeToElement(request, JsonSerializerOptions.Web) : (JsonElement?)null,
                     attempts = receipt.Attempts,
                     error = receipt.Error,
                     submittedAt = receipt.SubmittedAt,

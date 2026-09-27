@@ -19,6 +19,7 @@ public sealed class RpcChainIngestionContractTests
         Assert.Contains("trackingId = receipt.TrackingId", tools);
         Assert.Contains("jobName = step.JobName", tools);
         Assert.Contains("contentType = artifact.ContentType", tools);
+        Assert.Contains("JsonSerializer.SerializeToElement(request, JsonSerializerOptions.Web)", tools);
         Assert.Contains("IJobChainSubmissionQueue", tools);
         Assert.Contains("ListRunArtifactsAsync", tools);
     }
