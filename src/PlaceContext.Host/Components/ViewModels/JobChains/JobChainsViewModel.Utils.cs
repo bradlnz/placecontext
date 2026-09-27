@@ -24,7 +24,7 @@ public sealed partial class JobChainsViewModel
         GateEditorOperator.Equals("in", StringComparison.OrdinalIgnoreCase);
 
     public bool IsChainRunActive(string? status) =>
-        ScopedPresentationCatalog.IsQueuedOrRunning(status);
+        status is "AwaitingInput" or "Waiting" || ScopedPresentationCatalog.IsQueuedOrRunning(status);
 
     public bool IsRunning(string? status) => ScopedPresentationCatalog.IsRunning(status);
 

@@ -19,16 +19,19 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly IPermissionService _permissions;
     private readonly NavigationManager _navigation;
     private readonly ParameterPromptState _runPrompt = new();
+    private readonly IJobChainSubmissionQueue? _submissions;
 
     public JobChainsViewModel(
         PlaceContextService svc,
         OperationCenter opCenter,
         IWorkloadOutputBuffer outputBuffer,
         IPermissionService permissions,
-        NavigationManager navigation
+        NavigationManager navigation,
+        IJobChainSubmissionQueue? submissions = null
     )
     {
         _svc = svc;
+        _submissions = submissions;
         _opCenter = opCenter;
         _outputBuffer = outputBuffer;
         _permissions = permissions;

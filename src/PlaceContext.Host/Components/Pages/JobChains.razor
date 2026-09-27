@@ -246,6 +246,28 @@ else
                         }
                     </div>
 
+                    @if (Vm.OpenRun.InputRequest is { } inputRequest)
+                    {
+                        <section aria-label="Required chain inputs">
+                            <h3>Input required</h3>
+                            <p>This chain is paused. Complete the required fields to continue from this stage.</p>
+                            @foreach (var step in inputRequest.Steps)
+                            {
+                                <h4>@step.JobName</h4>
+                                @foreach (var field in step.Parameters)
+                                {
+                                    <div class="dcfield">
+                                        <label>@(field.Label ?? field.Name) @(field.Required ? "*" : "")</label>
+                                        <ParamInput Parameter="field" ProjectId="@ProjectId" Value="@Vm.GetResumeArg(step.Index, field.Name)"
+                                                    ValueChanged="@(value => Vm.SetResumeArg(step.Index, field.Name, value))" />
+                                    </div>
+                                }
+                            }
+                            @if (Vm.ResumeError is not null) { <p role="alert">@Vm.ResumeError</p> }
+                            <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="Vm.ResumeWithInputsAsync">Save inputs and resume</button>
+                        </section>
+                    }
+
                     <div class="running-steps-panel">
                         <div class="running-steps-head">
                             <span>Running steps</span>

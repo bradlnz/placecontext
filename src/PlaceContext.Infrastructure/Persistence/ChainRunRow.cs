@@ -19,4 +19,5 @@ public sealed class ChainRunRow : ITenantOwned
     public string? ContinuationClaimedBy { get; set; }
     public DateTimeOffset? ContinuationClaimedAt { get; set; }
     public string? ContinuationOverrides { get; set; }
+    public string? InputRequest { get; set; }
 }

@@ -1,4 +1,8 @@
 using System.Data;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Features;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using PlaceContext.Application.Ports;
@@ -17,13 +21,14 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
     private readonly ICurrentTenant _tenant;
     private readonly ICurrentUser _user;
     private readonly IDataEncryptor _encryptor;
+    private readonly IPermissionService _permissions;
 
     public DbJobChainSubmissionQueue(
         AppDbContext db,
         ICurrentTenant tenant,
         ICurrentUser user,
-        IDataEncryptor encryptor)
-        => (_db, _tenant, _user, _encryptor) = (db, tenant, user, encryptor);
+        IDataEncryptor encryptor, IPermissionService permissions)
+        => (_db, _tenant, _user, _encryptor, _permissions) = (db, tenant, user, encryptor, permissions);
 
     public async Task<JobChainSubmission> EnqueueAsync(
         Guid projectId,
@@ -132,6 +137,42 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
 
         await using var reader = await command.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? Read(reader) : null;
+    }
+
+    public async Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default)
+    {
+        if (!_tenant.IsResolved || !_user.IsAuthenticated || !await _permissions.HasAsync(Permission.JobsRun, ct))
+            throw new UnauthorizedAccessException("Permission to run jobs is required.");
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        var rows = await _db.ChainRuns.FromSqlInterpolated($"""
+            SELECT * FROM chain_runs WHERE "Id" = {chainRunId} AND "TenantId" = {_tenant.TenantId} FOR UPDATE
+            """).ToListAsync(ct);
+        var row = rows.SingleOrDefault() ?? throw new ArgumentException("Chain run not found.");
+        var purpose = IDataEncryptor.Purpose.ChainRun;
+        var request = row.InputRequest is null ? null : JsonSerializer.Deserialize<ChainInputRequest>(
+            _encryptor.Unprotect(row.InputRequest, purpose));
+        if (request is null || request.Id != inputRequestId)
+            throw new InvalidOperationException("This input request is no longer current.");
+        if (request.SubmittedValues is not null)
+        {
+            if (!JsonNode.DeepEquals(JsonNode.Parse(request.SubmittedValues), JsonNode.Parse(valuesJson)))
+                throw new InvalidOperationException("Different values were already submitted for this input request.");
+            return row.Status;
+        }
+        if (row.Status != "AwaitingInput") throw new InvalidOperationException("Chain run is not waiting for input.");
+        var overrides = ChainInputPayload.Apply(request, valuesJson,
+            row.ContinuationOverrides is null ? null : _encryptor.Unprotect(row.ContinuationOverrides, purpose),
+            row.FinalOutput is null ? null : _encryptor.Unprotect(row.FinalOutput, purpose));
+        row.ContinuationOverrides = _encryptor.Protect(JsonSerializer.Serialize(overrides), purpose);
+        row.InputRequest = _encryptor.Protect(JsonSerializer.Serialize(request with
+            { SubmittedBy = _user.UserId, SubmittedValues = valuesJson }), purpose);
+        row.Status = "Waiting";
+        row.ResumeAt = DateTimeOffset.UtcNow;
+        row.ContinuationClaimedAt = null;
+        row.ContinuationClaimedBy = null;
+        await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return row.Status;
     }
 
     private JobChainSubmission Read(NpgsqlDataReader reader)

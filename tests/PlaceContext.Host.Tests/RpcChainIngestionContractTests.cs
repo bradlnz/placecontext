@@ -23,10 +23,12 @@ public sealed class RpcChainIngestionContractTests
         Assert.Contains("ListRunArtifactsAsync", tools);
     }
 
-    [Fact]
-    public void Submission_polling_uses_the_same_fine_grained_permission_as_submission()
+    [Theory]
+    [InlineData(nameof(PlaceContextTools.GetJobChainSubmission))]
+    [InlineData(nameof(PlaceContextTools.ResumeJobChain))]
+    public void Submission_polling_and_resume_require_job_run_permission(string methodName)
     {
-        var method = typeof(PlaceContextTools).GetMethod(nameof(PlaceContextTools.GetJobChainSubmission));
+        var method = typeof(PlaceContextTools).GetMethod(methodName);
         var policies = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
             .Cast<AuthorizeAttribute>()
             .Select(attribute => attribute.Policy);

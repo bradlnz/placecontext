@@ -139,9 +139,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         using var progressLock = new SemaphoreSlim(1, 1);
         using var dispatchGate = new SemaphoreSlim(MaxConcurrentBranches, MaxConcurrentBranches);
 
-        var status = ChainRunStatus.Succeeded;
+        var status = chainRun.Steps.Any(step => step.Status == ChainStepStatus.Partial)
+            ? ChainRunStatus.Partial : ChainRunStatus.Succeeded;
         string? payload = command.ResumeFromStageIndex is not null
-            ? await LoadContextAsync(chainRun, ct)
+            ? chainRun.FinalOutput
             : command.InputPayload; // first/resumed stage input
         await SaveContextAsync(chainRun, payload, ct);
         var flatIndex = chain.Stages.Take(startStageIndex).Sum(stage => stage.ExecutionCount);
@@ -205,6 +206,28 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     await SaveProgressAsync(chainRun, ct);
                     continue;
                 }
+            }
+
+            var requiredSteps = new List<ChainInputStep>();
+            for (var branch = 0; branch < stage.JobIds.Count; branch++)
+            {
+                var index = flatIndex + branch;
+                var job = stepJobs[index];
+                if (job is null || job.Parameters.Count == 0) continue;
+                var input = ChainInputPayload.Object(command.StepPayloadOverrides is { } supplied
+                    && supplied.TryGetValue(index, out var args) ? MergePayload(payload, args) : payload);
+                if (job.Parameters.Any(field => field.Required && ChainInputPayload.Missing(ChainInputPayload.Get(input, field.Name))))
+                    requiredSteps.Add(new ChainInputStep(index, job.Name, job.Parameters.Select(field =>
+                        new JobParameterDto(field.Name, field.Label, field.Required, field.Type, field.Options)).ToList(),
+                        job.Parameters.ToDictionary(field => field.Name, field => ChainInputPayload.Get(input, field.Name)?.DeepClone())));
+            }
+            if (requiredSteps.Count > 0)
+            {
+                chainRun.AwaitInput(stageIndex, payload,
+                    JsonSerializer.Serialize(new ChainInputRequest(Guid.NewGuid(), requiredSteps)),
+                    command.StepPayloadOverrides is null ? null : JsonSerializer.Serialize(command.StepPayloadOverrides));
+                await SaveProgressAsync(chainRun, ct);
+                return ChainRunMapper.ToView(chainRun);
             }
 
             if (stage.Action is SendEmailChainAction email)
@@ -331,6 +354,12 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 var stepPayload = command.StepPayloadOverrides is { } overrides && overrides.TryGetValue(flat, out var args)
                     ? MergePayload(stagePayload, args)
                     : stagePayload;
+
+                var normalizedInput = ChainInputPayload.Object(stepPayload);
+                foreach (var field in job.Parameters.Where(field => field.Name.Contains('.')))
+                    ChainInputPayload.Set(normalizedInput, field.Name, ChainInputPayload.Get(normalizedInput, field.Name));
+                if (job.Parameters.Any(field => field.Name.Contains('.')))
+                    stepPayload = normalizedInput.ToJsonString();
 
                 JobRunDetailView run;
                 await dispatchGate.WaitAsync(ct);
@@ -656,8 +685,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 ?? throw new JsonException();
             if (System.Text.Json.Nodes.JsonNode.Parse(chained) is System.Text.Json.Nodes.JsonObject prevObj)
             {
-                foreach (var (k, v) in argsNode.ToList())
-                    prevObj[k] = v?.DeepClone();
+                DeepMerge(prevObj, argsNode);
                 return prevObj.ToJsonString();
             }
             argsNode["previous"] = System.Text.Json.Nodes.JsonNode.Parse(chained);
@@ -673,20 +701,6 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     {
         await _runs.UpdateAsync(run, ct);
         await _uow.SaveChangesAsync(ct);
-    }
-
-    private async Task<string?> LoadContextAsync(ChainRun run, CancellationToken ct)
-    {
-        if (_contextStore is not null)
-        {
-            try
-            {
-                var cached = await _contextStore.GetAsync(run.Id, ct);
-                if (cached is not null) return cached;
-            }
-            catch (Exception ex) { _log?.LogWarning(ex, "Could not read chain context {ChainRunId} from Redis; using checkpoint.", run.Id); }
-        }
-        return run.FinalOutput;
     }
 
     private async Task SaveContextAsync(ChainRun run, string? payload, CancellationToken ct)

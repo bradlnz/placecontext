@@ -33,6 +33,7 @@ public sealed class EfChainRunRepository : IChainRunRepository
         existing.ResumeAt = run.ResumeAt;
         existing.ResumeStageIndex = run.ResumeStageIndex;
         existing.ContinuationOverrides = EncryptNullable(run.ContinuationOverridesJson);
+        existing.InputRequest = EncryptNullable(run.InputRequestJson);
         if (run.Status != ChainRunStatus.Running)
         {
             existing.ContinuationClaimedAt = null;
@@ -79,6 +80,7 @@ public sealed class EfChainRunRepository : IChainRunRepository
         ResumeAt = r.ResumeAt,
         ResumeStageIndex = r.ResumeStageIndex,
         ContinuationOverrides = EncryptNullable(r.ContinuationOverridesJson),
+        InputRequest = EncryptNullable(r.InputRequestJson),
     };
 
     private ChainRun ToDomain(ChainRunRow r)
@@ -89,7 +91,7 @@ public sealed class EfChainRunRepository : IChainRunRepository
         return ChainRun.Rehydrate(r.Id, r.ChainId, r.ProjectId, r.ChainName,
             Enum.Parse<ChainRunStatus>(r.Status), steps, DecryptNullable(r.FinalOutput),
             r.StartedAt, r.FinishedAt, r.ResumeAt, r.ResumeStageIndex,
-            DecryptNullable(r.ContinuationOverrides));
+            DecryptNullable(r.ContinuationOverrides), DecryptNullable(r.InputRequest));
     }
 
     private string Encrypt(string value) => _encryptor.Protect(value, Purpose);

@@ -30,5 +30,7 @@ public interface IJobChainSubmissionQueue
         string? idempotencyKey = null,
         CancellationToken ct = default);
 
+    Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default);
+
     Task<JobChainSubmission?> GetAsync(Guid trackingId, CancellationToken ct = default);
 }

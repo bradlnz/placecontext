@@ -645,6 +645,52 @@ public class JobChainTests
         Assert.Null(RunJobChainHandler.PrimaryOutput(run));
     }
 
+    [Fact]
+    public async Task Missing_stage_input_pauses_durably_and_resumes_without_replaying_prior_steps()
+    {
+        var jobs = new InMemoryJobRepository();
+        var first = MakeJob("property-analysis");
+        var funding = Job.Create(ProjectId, "funding-position", null,
+            new MapSpec("img", new[] { "{}" }, new Dictionary<string, string>()), null, 1,
+            new ExitCodePolicy(new[] { 0 }, Array.Empty<int>()), T0,
+            parameters: new[] { new JobParameter("funding_inputs.client_cash", type: "number"),
+                new JobParameter("funding_inputs.purchase_price", type: "number") });
+        var renderer = MakeJob("renderer");
+        foreach (var job in new[] { first, funding, renderer }) await jobs.AddAsync(job);
+        var chain = JobChain.Create(ProjectId, "report", null, new[] { first.Id, funding.Id, renderer.Id }, T0);
+        var chains = new InMemoryJobChainRepository();
+        await chains.AddAsync(chain);
+        var runs = new InMemoryChainRunRepository();
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[first.Id] = Run(first.Id, "Succeeded", shardArtifacts: new[] { "{\"site\":{\"address\":\"retained\"},\"funding_inputs\":{\"purchase_price\":100}}" });
+        dispatcher.Results[funding.Id] = Run(funding.Id, "Succeeded", shardArtifacts: new[] { "{\"funding\":true}" });
+        dispatcher.Results[renderer.Id] = Run(renderer.Id, "Succeeded", shardArtifacts: new[] { "{\"pdf\":true}" });
+        var paused = await RunHandler(chains, jobs, dispatcher, runs).HandleAsync(new RunJobChainCommand(chain.Id));
+        Assert.Equal("AwaitingInput", paused.Status);
+        Assert.Null(paused.FinishedAt);
+        Assert.Equal(new[] { first.Id }, dispatcher.DispatchedJobIds);
+        Assert.Equal(new[] { "Succeeded", "Pending", "Pending" }, paused.Steps.Select(step => step.Status));
+        var request = Assert.IsType<ChainInputRequest>(paused.InputRequest);
+        var stored = (await runs.GetByIdAsync(paused.Id))!;
+        Assert.Null(stored.ResumeAt);
+        Assert.Equal(1, stored.ResumeStageIndex);
+        Assert.Throws<ArgumentException>(() => ChainInputPayload.Apply(request, "{\"1\":{}}", null, stored.FinalOutput));
+        Assert.Throws<ArgumentException>(() => ChainInputPayload.Apply(request, "{\"1\":{\"unrelated\":1}}", null, stored.FinalOutput));
+        Assert.Throws<ArgumentException>(() => ChainInputPayload.Apply(request, "{\"1\":{\"funding_inputs.client_cash\":\"NaN\"}}", null, stored.FinalOutput));
+        var overrides = ChainInputPayload.Apply(request, "{\"1\":{\"funding_inputs.client_cash\":0}}", null, stored.FinalOutput);
+        // Simulate the durable queue scheduling the checkpoint after validated input submission.
+        stored.Pause(1, stored.FinalOutput, T0, System.Text.Json.JsonSerializer.Serialize(overrides));
+        var resumed = await RunHandler(chains, jobs, dispatcher, runs).HandleAsync(
+            new RunJobChainCommand(chain.Id, ChainRunId: stored.Id, StepPayloadOverrides: overrides, ResumeFromStageIndex: 1));
+        Assert.Equal(paused.Id, resumed.Id);
+        Assert.Equal("Succeeded", resumed.Status);
+        Assert.Equal(new[] { first.Id, funding.Id, renderer.Id }, dispatcher.DispatchedJobIds);
+        using var input = System.Text.Json.JsonDocument.Parse(dispatcher.Payloads[1]!);
+        Assert.Equal(0, input.RootElement.GetProperty("funding_inputs").GetProperty("client_cash").GetInt32());
+        Assert.Equal(100, input.RootElement.GetProperty("funding_inputs").GetProperty("purchase_price").GetInt32());
+        Assert.Equal("retained", input.RootElement.GetProperty("site").GetProperty("address").GetString());
+    }
+
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────
 
     private static JobRunDetailView Run(Guid jobId, string status,

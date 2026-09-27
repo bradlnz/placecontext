@@ -12,6 +12,8 @@ public enum ChainRunStatus
     Failed,
     /// <summary>The chain run was cancelled by a user.</summary>
     Cancelled,
+    /// <summary>Paused indefinitely until the required stage inputs are submitted.</summary>
+    AwaitingInput,
 }
 
 /// <summary>Lifecycle of one stage within a chain run.</summary>

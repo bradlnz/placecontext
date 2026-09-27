@@ -468,6 +468,7 @@ public sealed class PlaceContextTools
                     chainRunId = receipt.ChainRunId,
                     status,
                     terminal,
+                    inputRequest = run?.InputRequest,
                     attempts = receipt.Attempts,
                     error = receipt.Error,
                     submittedAt = receipt.SubmittedAt,
@@ -475,6 +476,17 @@ public sealed class PlaceContextTools
                     finishedAt = run?.FinishedAt ?? receipt.FinishedAt,
                     steps,
                 };
+            });
+
+    [Authorize(Policy = Permission.JobsRun)]
+    [McpServerTool(Name = "resume_job_chain"), Description("Supply missing inputs and durably resume the same paused chain run. Use inputRequest from get_job_chain_submission or get_chain_run. valuesJson is an object keyed by step index, containing declared field names and values. Repeating the same request id and values is idempotent; earlier stages never rerun.")]
+    public static Task<string> ResumeJobChain(IJobChainSubmissionQueue submissions, IToolCallLog log,
+        Guid chainRunId, Guid inputRequestId, string valuesJson)
+        => Traced(log, "resume_job_chain", chainRunId.ToString(), "resume chain with input",
+            new { chainRunId, inputRequestId }, async () => new
+            {
+                chainRunId,
+                status = await submissions.ResumeAsync(chainRunId, inputRequestId, valuesJson)
             });
 
     [Authorize(Policy = "Member")]

@@ -23,7 +23,7 @@ public sealed class ChainRun
     private ChainRun(Guid id, Guid chainId, Guid projectId, string chainName, ChainRunStatus status,
         List<ChainStepRun> steps, string? finalOutput, DateTimeOffset startedAt, DateTimeOffset? finishedAt,
         DateTimeOffset? resumeAt = null, int? resumeStageIndex = null,
-        string? continuationOverridesJson = null)
+        string? continuationOverridesJson = null, string? inputRequestJson = null)
     {
         Id = id;
         ChainId = chainId;
@@ -37,6 +37,7 @@ public sealed class ChainRun
         ResumeAt = resumeAt;
         ResumeStageIndex = resumeStageIndex;
         ContinuationOverridesJson = continuationOverridesJson;
+        InputRequestJson = inputRequestJson;
     }
 
     public Guid Id { get; }
@@ -67,6 +68,7 @@ public sealed class ChainRun
     public DateTimeOffset? ResumeAt { get; private set; }
     public int? ResumeStageIndex { get; private set; }
     public string? ContinuationOverridesJson { get; private set; }
+    public string? InputRequestJson { get; private set; }
 
     /// <summary>Starts a run: every step pending, the run itself Running. Callers may pre-allocate
     /// <paramref name="id"/> so the run is addressable before the handler returns. One job name is
@@ -115,6 +117,14 @@ public sealed class ChainRun
         ResumeStageIndex = resumeStageIndex;
         FinishedAt = null;
         ContinuationOverridesJson = continuationOverridesJson;
+    }
+
+    public void AwaitInput(int stageIndex, string? payload, string requestJson, string? overridesJson)
+    {
+        Pause(stageIndex, payload, DateTimeOffset.MaxValue, overridesJson);
+        Status = ChainRunStatus.AwaitingInput;
+        ResumeAt = null;
+        InputRequestJson = requestJson;
     }
 
     public void Resume()
@@ -187,7 +197,7 @@ public sealed class ChainRun
     /// when the run was Cancelled, pending steps become Cancelled instead.</summary>
     public void Complete(ChainRunStatus status, string? finalOutput, DateTimeOffset now)
     {
-        if (status is ChainRunStatus.Running or ChainRunStatus.Waiting)
+        if (status is ChainRunStatus.Running or ChainRunStatus.Waiting or ChainRunStatus.AwaitingInput)
             throw new ArgumentException("A completed run needs a terminal status.", nameof(status));
         var cancelled = status == ChainRunStatus.Cancelled;
         for (var i = 0; i < _steps.Count; i++)
@@ -204,9 +214,9 @@ public sealed class ChainRun
     public static ChainRun Rehydrate(Guid id, Guid chainId, Guid projectId, string chainName,
         ChainRunStatus status, IReadOnlyList<ChainStepRun> steps, string? finalOutput,
         DateTimeOffset startedAt, DateTimeOffset? finishedAt, DateTimeOffset? resumeAt = null,
-        int? resumeStageIndex = null, string? continuationOverridesJson = null)
+        int? resumeStageIndex = null, string? continuationOverridesJson = null, string? inputRequestJson = null)
         => new(id, chainId, projectId, chainName, status, steps.ToList(), finalOutput, startedAt,
-            finishedAt, resumeAt, resumeStageIndex, continuationOverridesJson);
+            finishedAt, resumeAt, resumeStageIndex, continuationOverridesJson, inputRequestJson);
 }
 
 /// <summary>One step of a chain run: which job, which stage/branch position it occupies, the run it

@@ -73,6 +73,44 @@ public sealed partial class JobChainsViewModel
     public string? RunPromptError => _runPrompt.Error;
     public string RunAttachment { get; private set; } = "";
 
+    private readonly ParameterPromptState _resumePrompt = new();
+    private Guid? _resumeRequestId;
+    public string? ResumeError { get; private set; }
+    public bool Resuming { get; private set; }
+
+    public string GetResumeArg(int index, string name)
+    {
+        if (_resumeRequestId != OpenRun?.InputRequest?.Id)
+        {
+            _resumePrompt.Clear();
+            _resumeRequestId = OpenRun?.InputRequest?.Id;
+            ResumeError = null;
+            foreach (var step in OpenRun?.InputRequest?.Steps ?? [])
+                foreach (var field in step.Parameters)
+                    _resumePrompt.Set(ArgKey(step.Index, field.Name), step.Values?.GetValueOrDefault(field.Name)?.ToString() ?? "");
+        }
+        return _resumePrompt.Get(ArgKey(index, name));
+    }
+
+    public void SetResumeArg(int index, string name, string value) => _resumePrompt.Set(ArgKey(index, name), value);
+
+    public async Task ResumeWithInputsAsync()
+    {
+        if (OpenRun?.InputRequest is not { } request || _submissions is null || Resuming) return;
+        Resuming = true;
+        ResumeError = null;
+        try
+        {
+            var values = request.Steps.ToDictionary(step => step.Index.ToString(), step =>
+                JsonSerializer.Deserialize<JsonElement>(ParameterPromptState.ToJsonPayload(step.Parameters,
+                    name => GetResumeArg(step.Index, name))));
+            await _submissions.ResumeAsync(OpenRun.Id, request.Id, JsonSerializer.Serialize(values));
+            await RefreshRunsAsync(OpenRun.ChainId);
+        }
+        catch (Exception ex) { ResumeError = ex.Message; }
+        finally { Resuming = false; NotifyStateChanged(); }
+    }
+
     // ── Run chain ─────────────────────────────────────────────────────────────────────────────
     public Task RunChainAsync(JobChainView chain)
     {

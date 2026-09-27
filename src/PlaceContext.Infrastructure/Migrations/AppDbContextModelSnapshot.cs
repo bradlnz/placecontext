@@ -367,6 +367,9 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<string>("ContinuationOverrides")
                         .HasColumnType("text");
 
+                    b.Property<string>("InputRequest")
+                        .HasColumnType("text");
+
                     b.Property<string>("FinalOutput")
                         .HasColumnType("text");
 

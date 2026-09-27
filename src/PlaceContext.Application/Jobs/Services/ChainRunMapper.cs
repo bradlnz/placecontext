@@ -19,5 +19,10 @@ internal static class ChainRunMapper
             .ToList(),
         FinalOutput: run.FinalOutput,
         StartedAt: run.StartedAt,
-        FinishedAt: run.FinishedAt);
+        FinishedAt: run.FinishedAt)
+    {
+        InputRequest = run.Status == PlaceContext.Domain.ValueObjects.ChainRunStatus.AwaitingInput
+            && run.InputRequestJson is not null
+            ? System.Text.Json.JsonSerializer.Deserialize<ChainInputRequest>(run.InputRequestJson) : null
+    };
 }

@@ -82,6 +82,18 @@ public sealed class ChainContinuationWorker : BackgroundService
                 var persisted = await db.ChainRuns.AsNoTracking()
                     .FirstAsync(row => row.Id == value.RunId, ct);
                 var encryptor = scope.ServiceProvider.GetRequiredService<Application.Ports.IDataEncryptor>();
+                if (persisted.Status != "Waiting") return;
+                if (persisted.InputRequest is { } protectedRequest)
+                {
+                    var inputRequest = System.Text.Json.JsonSerializer.Deserialize<ChainInputRequest>(
+                        encryptor.Unprotect(protectedRequest, Application.Ports.IDataEncryptor.Purpose.ChainRun));
+                    if (inputRequest?.SubmittedBy is { } userId)
+                    {
+                        var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(row => row.Id == userId, ct)
+                            ?? throw new InvalidOperationException("The input submitter no longer exists.");
+                        CurrentUser.Set(new UserIdentity(user.Id, user.Role));
+                    }
+                }
                 var payload = persisted.FinalOutput is null ? null : encryptor.Unprotect(
                     persisted.FinalOutput, Application.Ports.IDataEncryptor.Purpose.ChainRun);
                 IReadOnlyDictionary<int, string>? overrides = null;
@@ -97,7 +109,7 @@ public sealed class ChainContinuationWorker : BackgroundService
                     value.ChainId, payload, value.RunId, overrides,
                     ResumeFromStageIndex: value.StageIndex), ct);
             }
-            finally { CurrentTenant.Clear(); }
+            finally { CurrentUser.Clear(); CurrentTenant.Clear(); }
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -120,7 +132,7 @@ public sealed class ChainContinuationWorker : BackgroundService
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var row = await db.ChainRuns.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == runId, ct);
-        if (row is null) return;
+        if (row is null || row.Status != "Waiting") return;
         row.Status = "Waiting";
         row.ContinuationClaimedAt = null;
         row.ContinuationClaimedBy = null;
