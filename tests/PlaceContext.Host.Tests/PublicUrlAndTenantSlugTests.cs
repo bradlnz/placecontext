@@ -5,6 +5,19 @@ namespace PlaceContext.Host.Tests;
 public class PublicUrlAndTenantSlugTests
 {
     [Theory]
+    [InlineData("feasibility.example.com", "https://feasibility.example.com", true)]
+    [InlineData("FEASIBILITY.EXAMPLE.COM", "https://feasibility.example.com", true)]
+    [InlineData("tenant.example.com", "https://example.com", true)]
+    [InlineData("10.42.0.58", "https://feasibility.example.com", false)]
+    [InlineData("placecontext.placecontext.svc.cluster.local", "https://feasibility.example.com", false)]
+    [InlineData("localhost", "https://feasibility.example.com", false)]
+    [InlineData("feasibility.example.com", "http://feasibility.example.com", false)]
+    [InlineData("feasibility.example.com", null, false)]
+    [InlineData("example.com.attacker.test", "https://example.com", false)]
+    public void Https_redirect_applies_to_public_hosts_not_internal_service_calls(string host, string? origin, bool expected)
+        => Assert.Equal(expected, PublicUrl.RequiresHttps(host, origin));
+
+    [Theory]
     [InlineData("localhost", true)]
     [InlineData("127.0.0.1", true)]
     [InlineData("brad.localhost", true)]

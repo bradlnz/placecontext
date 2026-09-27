@@ -7,6 +7,12 @@ namespace PlaceContext.Host.Tenancy;
 /// </summary>
 public static class PublicUrl
 {
+    public static bool RequiresHttps(string host, string? configuredBaseUrl)
+        => Uri.TryCreate(configuredBaseUrl, UriKind.Absolute, out var origin)
+            && origin.Scheme == Uri.UriSchemeHttps
+            && (host.Equals(origin.Host, StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith("." + origin.Host, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Base domains whose subdomains identify tenants (product apex + dev loopback).</summary>
     internal static readonly string[] TenantBaseDomains = [".placecontext.io", ".localhost"];
 

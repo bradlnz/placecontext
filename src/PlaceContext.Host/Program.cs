@@ -413,8 +413,9 @@ app.Use(async (ctx, next) =>
     }
     await next();
 });
-if (app.Configuration["PlaceContext:PublicBaseUrl"]?.StartsWith("https://", StringComparison.OrdinalIgnoreCase) == true)
-    app.UseHttpsRedirection();
+// Internal pod/service calls use HTTP; only the configured public host requires HTTPS.
+app.UseWhen(ctx => PublicUrl.RequiresHttps(ctx.Request.Host.Host, app.Configuration["PlaceContext:PublicBaseUrl"]),
+    branch => branch.UseHttpsRedirection());
 
 PlaceContext.Infrastructure.DependencyInjection.MigrateDatabase(app.Services);
 await DefaultWorkspaceBootstrap.RunAsync(

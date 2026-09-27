@@ -33,7 +33,8 @@ public sealed class ReleaseInstallerContractTests
         Assert.Contains("name: placecontext-http", ingress, StringComparison.Ordinal);
         Assert.Contains("router.entrypoints: web", ingress, StringComparison.Ordinal);
         Assert.Contains("Status308PermanentRedirect", program, StringComparison.Ordinal);
-        Assert.Contains("app.UseHttpsRedirection()", program, StringComparison.Ordinal);
+        Assert.Contains("branch.UseHttpsRedirection()", program, StringComparison.Ordinal);
+        Assert.Contains("PublicUrl.RequiresHttps", program, StringComparison.Ordinal);
     }
 
     [Fact]
