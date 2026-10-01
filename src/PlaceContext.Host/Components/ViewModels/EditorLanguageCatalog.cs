@@ -13,6 +13,7 @@ public static class EditorLanguageCatalog
         [".ts"] = "typescript",
         [".py"] = "python",
         [".go"] = "go",
+        [".rs"] = "rust",
         [".rb"] = "ruby",
         [".cs"] = "csharp",
         [".json"] = "json",

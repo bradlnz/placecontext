@@ -6,6 +6,12 @@ namespace PlaceContext.Infrastructure.Workload;
 /// </summary>
 public sealed class WorkloadRunnerOptions
 {
+    /// <summary>Exact trusted image references routed to permanent native workers; no fallback on failure.</summary>
+    public string[] PersistentRunnerImages { get; set; } = [];
+    /// <summary>Stable per-pod URLs, so cancellation reaches the worker that owns the run.</summary>
+    public string[] PersistentRunnerUrls { get; set; } = [];
+    public string PersistentRunnerToken { get; set; } = "";
+
     /// <summary>Kubernetes namespace used for untrusted workload Jobs.</summary>
     public string KubernetesNamespace { get; set; } = "placecontext-jobs";
 

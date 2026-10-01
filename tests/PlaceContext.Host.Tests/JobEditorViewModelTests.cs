@@ -65,6 +65,8 @@ public sealed class JobEditorViewModelTests
 
     [Theory]
     [InlineData("main.py", "python")]
+    [InlineData("rust_jobs/src/main.rs", "rust")]
+    [InlineData("MAIN.RS", "rust")]
     [InlineData("script.mjs", "javascript")]
     [InlineData("go.mod", "plaintext")]
     [InlineData("README.md", "markdown")]

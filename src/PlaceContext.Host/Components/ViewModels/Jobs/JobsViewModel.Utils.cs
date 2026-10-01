@@ -60,6 +60,7 @@ public sealed partial class JobsViewModel
         {
             "python" => "main.py",
             "go" => "main.go",
+            "rust" => "rust_jobs/src/main.rs",
             "ruby" => "main.rb",
             "dotnet" => "main.cs",
             _ => "index.js",

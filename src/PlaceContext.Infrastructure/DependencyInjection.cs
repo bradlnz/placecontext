@@ -100,10 +100,15 @@ public static class DependencyInjection
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));
         services.AddSingleton<IWorkloadOutputBuffer, InMemoryWorkloadOutputBuffer>();
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
-            services.AddSingleton<IWorkloadRunner, KubernetesWorkloadRunner>();
-        else
-            services.AddSingleton<IWorkloadRunner, DockerWorkloadRunner>();
+        services.AddSingleton<KubernetesWorkloadRunner>();
+        services.AddSingleton<DockerWorkloadRunner>();
+        services.AddHttpClient("persistent-workloads", client => client.Timeout = Timeout.InfiniteTimeSpan);
+        services.AddSingleton<IWorkloadRunner>(sp => new PersistentWorkloadRunner(
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkloadRunnerOptions>>(),
+            sp.GetRequiredService<IHttpClientFactory>(),
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"))
+                ? sp.GetRequiredService<KubernetesWorkloadRunner>()
+                : sp.GetRequiredService<DockerWorkloadRunner>()));
 
         // Field encryption at rest (AES via Data Protection). Portal/jobs decrypt in-process;
         // raw Postgres/MinIO without the DP key ring only see ciphertext.
