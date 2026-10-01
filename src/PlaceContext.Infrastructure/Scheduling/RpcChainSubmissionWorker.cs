@@ -1,6 +1,7 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
@@ -19,11 +20,11 @@ namespace PlaceContext.Infrastructure.Scheduling;
 /// heartbeated, and a stale claim is only dispatched again when its pre-allocated chain run does not
 /// exist. That closes the crash-before-start window without ever duplicating an established run.
 /// </summary>
-public sealed class RpcChainSubmissionWorker : BackgroundService
+public class RpcChainSubmissionWorker : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(20);
-    private const int BatchSize = 2;
+    private readonly int _maxConcurrentChains;
     private const int MaxAttempts = 3;
     private static readonly TimeSpan TrackingRetention = TimeSpan.FromDays(30);
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(1);
@@ -34,28 +35,56 @@ public sealed class RpcChainSubmissionWorker : BackgroundService
 
     public RpcChainSubmissionWorker(
         IServiceScopeFactory scopes,
-        ILogger<RpcChainSubmissionWorker> log)
-        => (_scopes, _log) = (scopes, log);
+        ILogger<RpcChainSubmissionWorker> log,
+        IConfiguration configuration)
+    {
+        (_scopes, _log) = (scopes, log);
+        _maxConcurrentChains = configuration.GetValue<int?>(
+            "PlaceContext:Scheduling:MaxConcurrentChains") ?? 2;
+        if (_maxConcurrentChains < 1)
+            throw new ArgumentOutOfRangeException(nameof(configuration),
+                "PlaceContext:Scheduling:MaxConcurrentChains must be positive.");
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var active = new List<Task>();
         using var timer = new PeriodicTimer(Interval);
-        do
+        try
         {
-            try
+            do
             {
-                var submissions = await ClaimAsync(stoppingToken);
-                await Task.WhenAll(submissions.Select(value => ProcessAsync(value, stoppingToken)));
-                if (DateTimeOffset.UtcNow >= _nextCleanupAt)
-                    await CleanupTrackingAsync(stoppingToken);
+                try
+                {
+                    foreach (var completed in active.Where(task => task.IsCompleted).ToArray())
+                    {
+                        active.Remove(completed);
+                        await completed;
+                    }
+                    var available = _maxConcurrentChains - active.Count;
+                    if (available > 0)
+                    {
+                        var submissions = await ClaimAsync(available, stoppingToken);
+                        active.AddRange(submissions.Select(value => ProcessAsync(value, stoppingToken)));
+                    }
+                    if (DateTimeOffset.UtcNow >= _nextCleanupAt)
+                        await CleanupTrackingAsync(stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+                catch (Exception ex) { _log.LogError(ex, "RPC chain submission drain failed."); }
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
-            catch (Exception ex) { _log.LogError(ex, "RPC chain submission drain failed."); }
+            while (await timer.WaitForNextTickAsync(stoppingToken));
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+        finally
+        {
+            // Keep every claimed submission owned until it completes or observes shutdown.
+            try { await Task.WhenAll(active); }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+        }
     }
 
-    private async Task<IReadOnlyList<ClaimedSubmission>> ClaimAsync(CancellationToken ct)
+    protected virtual async Task<IReadOnlyList<ClaimedSubmission>> ClaimAsync(int available, CancellationToken ct)
     {
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -85,7 +114,7 @@ public sealed class RpcChainSubmissionWorker : BackgroundService
                       submission."SubmitterUserId", submission."SubmitterRole"
             """;
         command.Parameters.AddWithValue("worker", _instanceId);
-        command.Parameters.AddWithValue("batch", BatchSize);
+        command.Parameters.AddWithValue("batch", available);
 
         var values = new List<ClaimedSubmission>();
         await using var reader = await command.ExecuteReaderAsync(ct);
@@ -99,7 +128,7 @@ public sealed class RpcChainSubmissionWorker : BackgroundService
         return values;
     }
 
-    private async Task ProcessAsync(ClaimedSubmission submission, CancellationToken ct)
+    protected virtual async Task ProcessAsync(ClaimedSubmission submission, CancellationToken ct)
     {
         try
         {
@@ -246,7 +275,7 @@ public sealed class RpcChainSubmissionWorker : BackgroundService
             """, ct);
     }
 
-    private async Task CleanupTrackingAsync(CancellationToken ct)
+    protected virtual async Task CleanupTrackingAsync(CancellationToken ct)
     {
         var cutoff = DateTimeOffset.UtcNow.Subtract(TrackingRetention);
         await using var scope = _scopes.CreateAsyncScope();
@@ -287,7 +316,7 @@ public sealed class RpcChainSubmissionWorker : BackgroundService
             """, ct);
     }
 
-    private sealed record ClaimedSubmission(
+    protected sealed record ClaimedSubmission(
         Guid Id,
         Guid TenantId,
         Guid ProjectId,
