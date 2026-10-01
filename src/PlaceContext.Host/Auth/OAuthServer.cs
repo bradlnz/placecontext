@@ -47,6 +47,7 @@ public static class OAuthServer
                 ["authorization_endpoint"] = $"{b}/connect/authorize",
                 ["token_endpoint"] = $"{b}/connect/token",
                 ["registration_endpoint"] = $"{b}/connect/register",
+                ["client_id_metadata_document_supported"] = true,
                 ["userinfo_endpoint"] = $"{b}/connect/userinfo",
                 ["jwks_uri"] = $"{b}/.well-known/jwks.json",
                 ["response_types_supported"] = new[] { "code" },
@@ -60,7 +61,7 @@ public static class OAuthServer
         app.MapGet("/.well-known/jwks.json", () => Results.Json(OAuthKeys.Jwks())).AllowAnonymous();
 
         // Dynamic Client Registration (RFC 7591) — public PKCE clients. Redirect URIs are validated
-        // (https or loopback only) so an open DCR cannot register arbitrary phishing callbacks.
+        // (loopback only) so an open DCR cannot register arbitrary phishing callbacks.
         app.MapPost("/connect/register", async (HttpContext ctx, IOAuthClientStore clients) =>
         {
             var req = await ctx.Request.ReadFromJsonAsync<RegisterRequest>();
@@ -102,13 +103,20 @@ public static class OAuthServer
                 return Results.BadRequest("Missing client_id or redirect_uri.");
             // Public dynamically registered MCP clients remain loopback-only. Browser clients may
             // use remote callbacks only when their client id and redirect URI exactly match an
-            // operator-controlled trusted-client entry.
+            // operator-controlled trusted-client entry or ChatGPT's verified CIMD document.
             OAuthClient client;
             var config = ctx.RequestServices.GetRequiredService<IConfiguration>();
             var trustedWebClient = TrustedWebClient(config, client_id, redirect_uri);
             if (trustedWebClient is not null)
             {
                 client = trustedWebClient;
+            }
+            else if (Uri.TryCreate(client_id, UriKind.Absolute, out _))
+            {
+                var metadataClient = await ChatGptClientMetadata.ResolveAsync(client_id, redirect_uri, ctx.RequestAborted);
+                if (metadataClient is null)
+                    return Results.BadRequest(new { error = "invalid_client", error_description = "Untrusted client metadata or redirect_uri." });
+                client = metadataClient;
             }
             else
             {
@@ -136,6 +144,9 @@ public static class OAuthServer
                 && trustedWebClient is null)
                 return Results.BadRequest("The identity scope is restricted to trusted web clients.");
 
+            if (!ValidResource(ctx.Request.Query["resource"].ToString(), PublicUrl.Base(ctx, config)))
+                return Results.BadRequest(new { error = "invalid_target" });
+
             var userId = Guid.Parse(ctx.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             var role = ctx.User.FindFirstValue(ClaimTypes.Role) ?? "Viewer";
             var code = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
@@ -155,6 +166,9 @@ public static class OAuthServer
         {
             var form = await ctx.Request.ReadFormAsync(ctx.RequestAborted);
             string F(string key) => form.TryGetValue(key, out var v) ? v.ToString() : "";
+
+            if (!ValidResource(F("resource"), PublicUrl.Base(ctx, ctx.RequestServices.GetRequiredService<IConfiguration>())))
+                return Results.BadRequest(new { error = "invalid_target" });
 
             switch (F("grant_type"))
             {
@@ -249,6 +263,9 @@ public static class OAuthServer
         return CryptographicOperations.FixedTimeEquals(
             Encoding.ASCII.GetBytes(computed), Encoding.ASCII.GetBytes(challenge));
     }
+
+    internal static bool ValidResource(string resource, string issuer) =>
+        string.IsNullOrEmpty(resource) || string.Equals(resource, $"{issuer}/mcp", StringComparison.Ordinal);
 
     internal static bool IsSupportedScope(string scope) => scope is "mcp" or "identity";
 
