@@ -30,6 +30,10 @@ public sealed class ChainStage
         if (_jobIds.Any(id => id == Guid.Empty))
             throw new ArgumentException("Chain stage jobs must be real job ids.", nameof(jobIds));
         _elseBranch = elseBranch?.ToList();
+        // shortcut: durable input resumes top-level stages; add a branch cursor before allowing nested hand-offs.
+        if ((_elseBranch ?? []).Concat((gate as ConditionGate)?.ElseBranch ?? [])
+            .Any(stage => stage.Action is LoopChainAction))
+            throw new ArgumentException("Human and agent steps must be top-level stages. Use a condition gate on the step instead.");
         Gate = gate;
         Action = action;
     }
