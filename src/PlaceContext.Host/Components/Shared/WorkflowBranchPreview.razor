@@ -1,0 +1,53 @@
+@using PlaceContext.Application.Dtos
+
+<ol class="branch-steps">
+    @foreach (var (stage, index) in Stages.Select((stage, index) => (stage, index)))
+    {
+        var path = $"{PathPrefix}/{index}";
+        <li>
+            @if (stage.Gate is ConditionGateView condition)
+            {
+                <div class="branch-condition"><AppIcon Kind="split" /> If <code>@condition.Expression</code></div>
+            }
+            else if (stage.Gate is WaitGateView wait)
+            {
+                <div><AppIcon Kind="clock" /> Wait @wait.DurationSeconds seconds</div>
+            }
+            @if (RunSteps is not null)
+            {
+                @foreach (var step in RunSteps.GetValueOrDefault(path) ?? [])
+                {
+                    <WorkflowRunStep Step="step" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+                }
+            }
+            else
+            {
+            @if (stage.Action is { } action)
+            {
+                <span><AppIcon Kind="@ChainCanvasViewModel.StageIcon(stage)" /> @action.DisplayName</span>
+            }
+            @foreach (var job in stage.Jobs)
+            {
+                <div class="branch-job"><AppIcon Kind="code" /> @job.JobName</div>
+            }
+            }
+            @if (stage.IsParallel)
+            {
+                <small><AppIcon Kind="parallel" /> Run together</small>
+            }
+            @if ((stage.ElseBranch ?? (stage.Gate as ConditionGateView)?.ElseBranch) is { Count: > 0 } other)
+            {
+                <div class="branch-condition">If false</div>
+                <WorkflowBranchPreview Stages="other" RunSteps="RunSteps" PathPrefix="@($"{path}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+            }
+        </li>
+    }
+</ol>
+
+@code {
+    [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps { get; set; }
+    [Parameter] public string PathPrefix { get; set; } = "";
+    [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
+    [Parameter] public EventCallback<ChainStepRunView> OnStepCancel { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<JobChainStageView> Stages { get; set; } = [];
+}

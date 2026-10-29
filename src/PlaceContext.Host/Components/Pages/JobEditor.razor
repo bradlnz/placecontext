@@ -2,6 +2,7 @@
 @attribute [Authorize(Policy = Permission.JobsEdit)]
 @using PlaceContext.Host.Components.ViewModels
 @inject JobEditorViewModel Vm
+@implements IAsyncDisposable
 
 <PageTitle>PlaceContext — @(Vm.Job?.Name ?? "Job editor")</PageTitle>
 
@@ -25,7 +26,7 @@ else
     <div class="page">
     @* ── Toolbar ─────────────────────────────────────────────────────────────────────────── *@
     <div class="toolbar">
-        <button class="dcbtn toolbar-back" @onclick="Vm.NavigateBack">←</button>
+        <button aria-label="Go back" class="dcbtn toolbar-back" @onclick="Vm.NavigateBack"><AppIcon Kind="arrow-left" /></button>
         <span class="job-name">@Vm.Job.Name</span>
         <span class="runtime-badge">@Vm.RuntimeId</span>
         @if (Vm.MonacoLite)
@@ -41,20 +42,27 @@ else
             <span class="text-12-3">@Vm.Message</span>
         }
         <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RunAsync">
-            @(Vm.Running ? "Testing…" : "▶ Test")
+            <AppIcon Kind="play" /> @(Vm.Running ? "Running…" : "Run")
         </button>
         <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.DeployAsync">
             @(Vm.Saving ? "Deploying…" : "Deploy")
         </button>
     </div>
 
-    <div class="workspace">
+    <div class="view-tabs" role="group" aria-label="Editor views">
+        <button type="button" aria-pressed="@(!Vm.PanelOpen)" class="dcbtn @(!Vm.PanelOpen ? "primary" : "")"
+                disabled="@(!Vm.PanelOpen)" @onclick="Vm.TogglePanel">Code</button>
+        <button type="button" aria-pressed="@Vm.PanelOpen" class="dcbtn @(Vm.PanelOpen ? "primary" : "")"
+                disabled="@Vm.PanelOpen" @onclick="Vm.TogglePanel">Execution results</button>
+    </div>
+
+    <div class="workspace" style="@(Vm.PanelOpen ? "display:none" : null)">
 
         @* ── File tree ───────────────────────────────────────────────────────────────────── *@
         <div class="file-tree">
             <div class="file-tree-head">
                 <span>Files</span>
-                <button class="dcbtn add-file-btn" @onclick="Vm.StartAddFile" title="Add file">+</button>
+                <button class="dcbtn add-file-btn" @onclick="Vm.StartAddFile" title="Add file" aria-label="Add"><AppIcon Kind="plus" /></button>
             </div>
 
             @if (Vm.AddingFile)
@@ -62,7 +70,7 @@ else
                 <div class="add-file-row">
                     <input class="dcinput add-file-input" placeholder="path/name.js"
                            @bind="Vm.NewFileName" @bind:event="oninput" @onkeydown="Vm.AddFileKey" @ref="Vm.NewFileInput" />
-                    <button class="dcbtn add-file-confirm" @onclick="Vm.ConfirmAddFile">✓</button>
+                    <button aria-label="Confirm" class="dcbtn add-file-confirm" @onclick="Vm.ConfirmAddFile"><AppIcon Kind="check" /></button>
                 </div>
             }
 
@@ -82,13 +90,13 @@ else
                                    @bind="Vm.RenameValue" @bind:event="oninput" @onkeydown="Vm.RenameKey"
                                    @onclick:stopPropagation="true" @ref="Vm.RenameInput" />
                             <button class="dcfile-act file-act-confirm" title="Confirm rename"
-                                    @onclick:stopPropagation="true" @onclick="Vm.ConfirmRenameAsync">✓</button>
+                                    @onclick:stopPropagation="true" @onclick="Vm.ConfirmRenameAsync"><AppIcon Kind="check" /></button>
                         }
                         else
                         {
                             <span class="file-name" title="@file.Path">@file.Path</span>
                             <button class="dcfile-act file-act" title="Rename file"
-                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.StartRenameAsync(idx))">✎</button>
+                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.StartRenameAsync(idx))"><AppIcon Kind="edit" /></button>
                         }
                         @if (isEntry)
                         {
@@ -102,7 +110,7 @@ else
                         @if (Vm.Files.Count > 1)
                         {
                             <button class="dcfile-act file-act-del" title="Delete file"
-                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteFileAsync(idx))">×</button>
+                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteFileAsync(idx))"><AppIcon Kind="close" /></button>
                         }
                     </div>
                 }
@@ -117,54 +125,79 @@ else
         <div class="editor-pane">
             <div id="@Vm.EditorId" class="editor-host"></div>
 
-            @* Results panel *@
-            <div class="results-panel" style="height:@(Vm.PanelOpen ? "240px" : "34px")">
-                <div class="results-bar" @onclick="Vm.TogglePanel">
-                    <span class="section-label">Execution results</span>
-                    @if (Vm.LastRun is not null)
-                    {
-                        <span class="status-badge" style="color:@Vm.StatusTextColor(Vm.LastRun.Status); background:@Vm.StatusTextBackground(Vm.LastRun.Status)">@Vm.StatusLabelText(Vm.LastRun.Status)</span>
-                    }
-                    <span class="flex-spacer"></span>
-                    <span class="text-12-3">@(Vm.PanelOpen ? "▾" : "▴")</span>
-                </div>
-
-                @if (Vm.PanelOpen)
-                {
-                    <div class="results-body">
-                        @if (Vm.LastRun is null)
-                        {
-                            <div class="text-12-3">Click <strong>Test</strong> to deploy and run this job. Shard artifacts and logs appear here.</div>
-                        }
-                        else
-                        {
-                            @foreach (var shard in Vm.LastRun.ShardResults)
-                            {
-                                <div class="shard">
-                                    <div class="shard-head">
-                                        <span>Shard @shard.Index</span>
-                                        <span class="shard-badge" style="color:@Vm.StatusTextColor(shard.Outcome); background:@Vm.StatusTextBackground(shard.Outcome)">@Vm.StatusLabelText(shard.Outcome)</span>
-                                        <span class="shard-exit">exit @shard.ExitCode</span>
-                                    </div>
-                                    @if (shard.Artifact is not null)
-                                    {
-                                        <pre class="shard-artifact">@Vm.JsonText(shard.Artifact)</pre>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(shard.Log))
-                                    {
-                                        <details class="shard-log-details">
-                                            <summary class="shard-log-summary">Log</summary>
-                                            <pre class="shard-log">@shard.Log</pre>
-                                        </details>
-                                    }
-                                </div>
-                            }
-                        }
-                    </div>
-                }
-            </div>
         </div>
     </div>
+
+    @if (Vm.PanelOpen)
+    {
+        <section class="results-panel" aria-label="Execution results">
+            <div class="results-bar">
+                <span class="section-label">Execution results</span>
+                @if (Vm.ExecutionError is not null)
+                {
+                    <span class="status-badge" style="color:var(--bad)">Execution error</span>
+                }
+                else if (Vm.LastRun is not null)
+                {
+                    <span class="status-badge" style="color:@Vm.StatusTextColor(Vm.LastRun.Status); background:@Vm.StatusTextBackground(Vm.LastRun.Status)">@Vm.StatusLabelText(Vm.LastRun.Status)</span>
+                }
+                else if (Vm.Running)
+                {
+                    <span role="status">Starting container…</span>
+                }
+                @if (Vm.LastRun is { } run)
+                {
+                    <a class="dcbtn" href="/observability?run=@run.Id">Run details</a>
+                }
+            </div>
+            <div class="results-body">
+                @if (Vm.ExecutionError is not null)
+                {
+                    <div role="alert" class="execution-error">@Vm.ExecutionError</div>
+                }
+                @if (Vm.LastRun is null)
+                {
+                    <p class="text-12-3">@(Vm.Running ? "Saving the current files and preparing container execution…" : "Run saves the current files and executes them in a container using this job's configured inputs.")</p>
+                }
+                else
+                {
+                    <JobRunLogs Run="Vm.LastRun" />
+                    @foreach (var shard in Vm.LastRun.ShardResults)
+                    {
+                        <div class="shard">
+                            <div class="shard-head">
+                                <span>Shard @shard.Index</span>
+                                <span class="shard-badge" style="color:@Vm.StatusTextColor(shard.Outcome); background:@Vm.StatusTextBackground(shard.Outcome)">@Vm.StatusLabelText(shard.Outcome)</span>
+                                <span class="shard-exit">exit @shard.ExitCode</span>
+                            </div>
+                            @if (shard.Artifact is not null)
+                            {
+                                <RunOutput Value="@Vm.JsonText(shard.Artifact)" />
+                            }
+                            @foreach (var artifact in shard.Artifacts)
+                            {
+                                <ArtifactDownload Label="@artifact.Name" GetArtifact="@(() => artifact)" />
+                            }
+                        </div>
+                    }
+                    @if (Vm.LastRun.ReduceResult is { } reduce)
+                    {
+                        <div class="shard">
+                            <div class="shard-head">Reduce <span class="shard-exit">exit @reduce.ExitCode</span></div>
+                            @if (reduce.Artifact is not null)
+                            {
+                                <RunOutput Value="@Vm.JsonText(reduce.Artifact)" />
+                            }
+                            @foreach (var artifact in reduce.Artifacts)
+                            {
+                                <ArtifactDownload Label="@artifact.Name" GetArtifact="@(() => artifact)" />
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </section>
+    }
     </div>
 }
 
@@ -183,8 +216,9 @@ else
 
     protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync();
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         Vm.Detach();
+        await Vm.DisposeAsync();
     }
 }

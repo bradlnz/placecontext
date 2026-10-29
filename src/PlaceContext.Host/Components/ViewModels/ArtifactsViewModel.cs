@@ -86,11 +86,12 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public int FilesPage = 1;
     public CancellationTokenSource? SearchDebounce;
 
-    // The per-project/recent load is capped — this flags when the returned count hit that cap, so
-    // the UI can say "there may be more" instead of silently acting as if the list is complete.
-    public const int ProjectArtifactsCap = 2000;
-    public const int RecentArtifactsCap = 1000;
+    public const int FilesBatchSize = 100;
     public bool LoadMayBeIncomplete;
+    public bool FilesLoading { get; private set; }
+    public string? FilesError { get; private set; }
+    private int _filesVersion;
+    private int _filesOffset;
 
     public async Task AttachAndInitializeAsync(Func<Task> stateChanged)
     {
@@ -133,29 +134,44 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
         }
     }
 
-    // Loads the file list for the current filter: project-scoped (complete, and search-widened —
-    // the ILIKE runs server-side on Title/Kind) when a project is selected, else the recent feed
-    // across all projects (client-filtered only, since the recent feed has no project to scope to).
-    public async Task LoadFilesAsync()
+    public Task LoadFilesAsync() => LoadFilesBatchAsync(reset: true);
+
+    public Task LoadMoreFilesAsync() => FilesLoading || !LoadMayBeIncomplete
+        ? Task.CompletedTask : LoadFilesBatchAsync(reset: false);
+
+    private async Task LoadFilesBatchAsync(bool reset)
     {
+        if (reset)
+        {
+            _filesVersion++;
+            _filesOffset = 0;
+            Files = Array.Empty<ArtifactFileView>();
+            FilesPage = 1;
+            LoadMayBeIncomplete = false;
+        }
+        var version = _filesVersion;
+        var project = ProjectFilter;
+        var search = string.IsNullOrWhiteSpace(Filter) ? null : Filter;
+        FilesLoading = true;
+        FilesError = null;
+        NotifyStateChanged();
         try
         {
-            if (Guid.TryParse(ProjectFilter, out var pid))
-            {
-                var search = string.IsNullOrWhiteSpace(Filter) ? null : Filter;
-                Files = await Svc.ListProjectArtifactsAsync(pid, ProjectArtifactsCap, search);
-                LoadMayBeIncomplete = Files.Count >= ProjectArtifactsCap;
-            }
-            else
-            {
-                Files = await Svc.ListRecentArtifactsAsync(RecentArtifactsCap);
-                LoadMayBeIncomplete = Files.Count >= RecentArtifactsCap;
-            }
+            var batch = Guid.TryParse(project, out var pid)
+                ? await Svc.ListProjectArtifactsAsync(pid, FilesBatchSize + 1, search, skip: _filesOffset)
+                : await Svc.ListRecentArtifactsAsync(FilesBatchSize + 1, skip: _filesOffset, search: search);
+            if (version != _filesVersion) return;
+            Files = Files.Concat(batch.Take(FilesBatchSize)).DistinctBy(file => file.Id).ToArray();
+            _filesOffset += Math.Min(batch.Count, FilesBatchSize);
+            LoadMayBeIncomplete = batch.Count > FilesBatchSize;
         }
-        catch
+        catch (Exception ex)
         {
-            Files = Array.Empty<ArtifactFileView>();
-            LoadMayBeIncomplete = false;
+            if (version == _filesVersion) FilesError = ex.Message;
+        }
+        finally
+        {
+            if (version == _filesVersion) { FilesLoading = false; NotifyStateChanged(); }
         }
     }
 
@@ -171,20 +187,7 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
         var target = Files.FirstOrDefault(f => f.Id == artifactId);
         if (target is null)
         {
-            // The deep-linked artifact may belong to a different project than the current filter —
-            // fall back to the recent global feed to locate it.
-            try
-            {
-                Files = await Svc.ListRecentArtifactsAsync(RecentArtifactsCap);
-            }
-            catch { }
-            target = Files.FirstOrDefault(f => f.Id == artifactId);
-        }
-        if (target is null)
-        {
-            // Still not found — the artifact may be older than both the project-scoped and recent
-            // caps (e.g. linked directly from an entity row via EntityBrowse). Rather than give up,
-            // resolve it directly by id through the same tenant-scoped repository ReadTextAsync uses.
+            // Resolve older links directly without loading intervening pages.
             LoadError = null;
             try
             {
@@ -217,6 +220,8 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
             ProjectFilter = target.ProjectId.ToString(); // make sure it's visible in the list
             await LoadFilesAsync();
             target = Files.FirstOrDefault(f => f.Id == artifactId) ?? target;
+            if (!Files.Any(file => file.Id == artifactId))
+                Files = Files.Prepend(target).ToArray();
             await OpenAsync(target);
         }
     }
@@ -232,12 +237,12 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
         await LoadFilesAsync();
     }
 
-    // Debounced so a search widens the server-side query only once typing pauses (~300ms), not on
-    // every keystroke; the client-side group+paginate step re-runs immediately for instant feedback
-    // on the "All projects" feed, which is filtered client-side only.
+    // Search all matching files on the server after typing pauses.
     public async Task OnFilterInputAsync(ChangeEventArgs e)
     {
         Filter = e.Value?.ToString() ?? "";
+        _filesVersion++;
+        FilesLoading = false;
         FilesPage = 1;
         SearchDebounce?.Cancel();
         SearchDebounce?.Dispose();
@@ -269,6 +274,7 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
 
     public void Dispose()
     {
+        _filesVersion++;
         SearchDebounce?.Cancel();
         SearchDebounce?.Dispose();
     }

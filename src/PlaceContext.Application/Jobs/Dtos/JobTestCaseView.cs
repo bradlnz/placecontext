@@ -9,13 +9,6 @@ public enum JobTestAssertionType
     JsonSubset,
 }
 
-/// <summary>The latest framework result for one method inside a test block.</summary>
-public sealed record JobTestMethodResult(
-    string Name,
-    string Status,
-    long? DurationMs = null,
-    string? Message = null);
-
 /// <summary>A persisted unit-test-style case for a job definition.</summary>
 public sealed record JobTestCaseView(
     Guid Id,

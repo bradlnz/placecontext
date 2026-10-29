@@ -96,6 +96,21 @@ public sealed class DefaultAdminAuthorizationHandlerTests
     }
 
     [Fact]
+    public async Task Crm_admin_is_allowed_only_in_its_tenant_and_until_downgraded()
+    {
+        var (handler, db) = NewHandler();
+        var id = await AddUser(db, isDefaultAdmin: false);
+        var row = await db.Users.IgnoreQueryFilters().SingleAsync(u => u.Id == id);
+        row.IsExternalAdmin = true;
+        await db.SaveChangesAsync();
+        Assert.True(await Succeeds(handler, Principal(id)));
+        Assert.False(await Succeeds(handler, Principal(id, Guid.NewGuid())));
+        row.IsExternalAdmin = false;
+        await db.SaveChangesAsync();
+        Assert.False(await Succeeds(handler, Principal(id)));
+    }
+
+    [Fact]
     public async Task An_unknown_user_is_denied()
     {
         var (handler, _) = NewHandler();

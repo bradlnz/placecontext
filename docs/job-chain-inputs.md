@@ -34,6 +34,51 @@ A successful submission schedules the existing durable continuation worker.
 It resumes the same run at the paused stage, without rerunning earlier stages.
 The funding calculator still validates ranges and financial constraints.
 
+## Jev verification in an agent step
+
+In **Agent in the loop**, choose **Jev (TypeSafe)** under **Responding agent**.
+Existing steps default to **External agent** and continue to pause for a submitted
+response. The selection is preserved when editing, exporting, and importing workflows.
+
+Configure the question-generating model through `PlaceContext:Qemu:Agent`, then set
+`PlaceContext__TypeSafe__ApiKey` or `TYPESAFE_API_KEY` on the application server.
+Keep the key in deployment secrets rather than a workflow definition. The default
+model is pinned to `jev-1.14.0`; `PlaceContext__TypeSafe__Model` can select another
+model available to the account. The key is shared by Jev steps on that server.
+
+The model generates one yes/no verification question from the instructions and
+preceding output. The runner sends that question and output to
+`https://api.typesafe.ai/v1/systemone`, using a `noul` question. Jev's result is
+saved under the configured response field, for example:
+
+```json
+{
+  "agent_response": {
+    "type": "noul",
+    "noul": 0.95,
+    "model": "jev-1.14.0",
+    "question": "Does the reported total match the line items?"
+  }
+}
+```
+
+`noul` is the probability of Yes, not a boolean or a separate confidence score.
+A completed verification step means the result was obtained; it does not mean
+the output was approved. Set a condition on subsequent stages, such as
+`gte:agent_response.noul:0.9`, and choose an appropriate alternate path for other
+results. The threshold is a workflow decision, not an integration default.
+
+The request uses the preceding workflow output as remote model input. It is
+limited to 65,536 characters and rejected rather than truncated. API errors,
+missing credentials, invalid probabilities, and timeouts fail the step before
+later stages run. The HTTP call has a 90-second deadline and does not retry
+automatically; retry a failed step after correcting the cause. Cancellation is
+passed to the HTTP request. No database migration is needed for this selection.
+
+API contract: [TypeSafe System One](https://docs.typesafe.ai/api/system-one),
+[Noul](https://docs.typesafe.ai/primitives/noul), and
+[model versions](https://docs.typesafe.ai/models).
+
 Deploy the `AddChainInputRequest` migration before starting the updated host.
 To run the database regression against an isolated PostgreSQL database:
 

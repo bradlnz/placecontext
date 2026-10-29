@@ -3,7 +3,7 @@
 @if (IsAddress)
 {
     <a class="dclink" href="@SearchUrl" title="Search this address in OpenSearch"
-       @onclick:stopPropagation="true">@(Value ?? "") <span aria-hidden="true">↗</span></a>
+       @onclick:stopPropagation="true">@(Value ?? "") <span aria-hidden="true"><AppIcon Kind="external-link" /></span></a>
 }
 else
 {

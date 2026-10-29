@@ -36,16 +36,16 @@ public sealed class OperationCenter
     /// <summary>Raised on every status change; the bell + pane re-render on it.</summary>
     public event Action? Changed;
 
-    public IReadOnlyList<PortalOperation> ListForTenant(Guid tenantId)
+    public IReadOnlyList<PortalOperation> ListForTenant(Guid tenantId, Guid? userId = null)
     {
         lock (_gate)
-            return _ops.Where(o => o.TenantId == tenantId).OrderByDescending(o => o.QueuedAt).ToList();
+            return _ops.Where(o => o.TenantId == tenantId && (o.UserId is null || o.UserId == userId)).OrderByDescending(o => o.QueuedAt).ToList();
     }
 
-    public int ActiveCount(Guid tenantId)
+    public int ActiveCount(Guid tenantId, Guid? userId = null)
     {
         lock (_gate)
-            return _ops.Count(o => o.TenantId == tenantId
+            return _ops.Count(o => o.TenantId == tenantId && (o.UserId is null || o.UserId == userId)
                 && o.Status is PortalOperationStatus.Queued or PortalOperationStatus.Running);
     }
 
@@ -79,12 +79,12 @@ public sealed class OperationCenter
 
     /// <summary>Register an operation whose lifecycle an external worker drives (e.g. the analytics sweep).</summary>
     public PortalOperation Track(TenantInfo tenant, Guid? projectId, string title, string? link,
-        string? correlationKey = null)
+        string? correlationKey = null, Guid? userId = null)
     {
         var op = new PortalOperation
         {
             TenantId = tenant.Id, ProjectId = projectId, Title = title, Link = link,
-            CorrelationKey = correlationKey,
+            CorrelationKey = correlationKey, UserId = userId,
         };
         lock (_gate) { AddAndTrim(op); }
         Notify();

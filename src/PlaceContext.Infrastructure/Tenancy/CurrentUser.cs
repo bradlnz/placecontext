@@ -23,6 +23,3 @@ public sealed class CurrentUser : ICurrentUser
     public string Role => _current.Value?.Role ?? nameof(UserRole.Viewer);
     public bool IsAuthenticated => _current.Value is not null;
 }
-
-/// <summary>The id + role name resolved off a request's authenticated principal.</summary>
-public sealed record UserIdentity(Guid Id, string Role);

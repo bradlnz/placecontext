@@ -280,10 +280,10 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
     public static string MethodIcon(string status) =>
         status switch
         {
-            "Passed" => "✓",
-            "Failed" => "×",
-            "Skipped" => "–",
-            _ => "○",
+            "Passed" => "check",
+            "Failed" => "close",
+            "Skipped" => "skip",
+            _ => "circle",
         };
 
     public static string FormatDuration(long milliseconds) =>

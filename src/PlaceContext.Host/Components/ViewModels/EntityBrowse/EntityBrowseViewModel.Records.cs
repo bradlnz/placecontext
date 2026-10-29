@@ -17,6 +17,7 @@ public sealed partial class EntityBrowseViewModel
     public string Search { get; set; } = "";
     public int PageNum { get; private set; } = 1;
     public const int RecordsPageSize = 50;
+    private int _recordsVersion;
     public string ViewTab { get; set; } = "records";
 
     // ── Record detail ─────────────────────────────────────────────────────────────────────────
@@ -29,19 +30,25 @@ public sealed partial class EntityBrowseViewModel
     {
         if (Entity is null)
             return;
+        var version = ++_recordsVersion;
+        var loadVersion = _loadVersion;
         try
         {
-            Page = await _svc.QueryProjectTablePageAsync(
+            var page = await _svc.QueryProjectTablePageAsync(
                 ProjectId,
                 Entity.TableName,
                 Search,
                 PageNum,
                 RecordsPageSize
             );
+            if (version != _recordsVersion || loadVersion != _loadVersion) return;
+            Page = page;
+            _pageRowsCache = null;
+            Rows = new(Page.Columns, Page.Rows, 0, Page.TotalCount > Page.Rows.Count);
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            if (version == _recordsVersion && loadVersion == _loadVersion) Error = ex.Message;
         }
         NotifyStateChanged();
     }
@@ -358,27 +365,9 @@ public sealed partial class EntityBrowseViewModel
 
     public async Task ReloadPageAsync()
     {
-        if (Entity is null)
-            return;
-        try
-        {
-            Page = await _svc.QueryProjectTablePageAsync(
-                ProjectId,
-                Entity.TableName,
-                Search,
-                Page?.Page ?? 1,
-                Page?.PageSize ?? 50
-            );
-            Rows = await _svc.ExecuteProjectDataAsync(
-                ProjectId,
-                $"SELECT * FROM \"{Entity.TableName}\" LIMIT 500"
-            );
-        }
-        catch (Exception ex)
-        {
-            Error = ex.Message;
-        }
-        NotifyStateChanged();
+        BrainGraph = null;
+        await LoadRecordsPageAsync();
+        if (IsGraphTab) await SelectGraph();
     }
 
     // ── Record link graph (SVG) ──────────────────────────────────────────────────────────────

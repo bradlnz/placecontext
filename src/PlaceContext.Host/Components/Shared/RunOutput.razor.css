@@ -1,0 +1,11 @@
+.output-preview-note { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px; color:var(--text-3); font-size:12px; }
+.run-output {
+    height: 320px;
+    max-height: 60vh;
+    min-height: 160px;
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}

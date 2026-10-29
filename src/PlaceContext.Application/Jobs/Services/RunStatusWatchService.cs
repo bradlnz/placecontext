@@ -83,7 +83,7 @@ public sealed class RunStatusWatchService
         {
             var key = ChainRunKey(chain.RunId);
             var title = $"Run chain — {chain.ChainName}";
-            var link = $"/project/{chain.ProjectId}/chains";
+            var link = $"/observability?tab=workflows&workflowRun={chain.RunId}";
 
             if (chain.Status == ChainRunStatus.Running)
             {

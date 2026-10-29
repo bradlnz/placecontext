@@ -199,7 +199,7 @@
     cursor: pointer;
     font-size: 11px;
 }
-.file-row .delete-file:hover { color: var(--bad); }
+.file-row .delete-file:hover { color: var(--text); }
 
 .file-foot {
     padding: 9px 11px;

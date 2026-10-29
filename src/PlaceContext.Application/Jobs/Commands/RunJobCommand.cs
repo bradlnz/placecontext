@@ -34,6 +34,3 @@ public sealed record RunJobCommand(
     int AttemptNumber = 1,
     Guid? OriginalRunId = null)
     : ICommand<JobRunDetailView>;
-
-/// <summary>Replay a prior run: re-execute the exact workload snapshot it captured. Returns the new run.</summary>
-public sealed record ReplayRunCommand(Guid RunId, Guid? NewRunId = null) : ICommand<JobRunDetailView>;

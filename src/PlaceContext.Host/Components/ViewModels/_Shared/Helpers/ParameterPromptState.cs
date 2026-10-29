@@ -40,7 +40,7 @@ public sealed class ParameterPromptState
 
     public void SetError(string? error) => Error = error;
 
-    /// <summary>UI-only form key for a chain step parameter (never sent on the wire).</summary>
+    /// <summary>UI-only form key for a workflow step parameter (never sent on the wire).</summary>
     public static string ChainArgKey(int stepIndex, string param) => $"step{stepIndex}:{param}";
 
     /// <summary>

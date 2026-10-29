@@ -18,7 +18,7 @@ else
 {
     <div class="page">
         <header class="toolbar">
-            <button class="dcbtn back-button" @onclick="Vm.NavigateBack">←</button>
+            <button aria-label="Go back" class="dcbtn back-button" @onclick="Vm.NavigateBack"><AppIcon Kind="arrow-left" /></button>
             <div class="title-block">
                 <strong>@Vm.Test.Name</strong>
                 <span>@Vm.Test.JobName</span>
@@ -43,7 +43,7 @@ else
             </span>
             <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ResetStarterAsync">Starter</button>
             <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RunAsync">
-                @(Vm.Running ? "Running…" : "▶ Run block")
+                <AppIcon Kind="play" /> @(Vm.Running ? "Running…" : "Run block")
             </button>
             <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveAsync">
                 @(Vm.Saving ? "Saving…" : "Save code")
@@ -72,7 +72,7 @@ else
                         @foreach (var method in Vm.Methods)
                         {
                             <div class="method-row @method.Status.ToLowerInvariant()" title="@method.Message">
-                                <span class="method-status">@JobTestCodeEditorViewModel.MethodIcon(method.Status)</span>
+                                <span class="method-status"><AppIcon Kind="@JobTestCodeEditorViewModel.MethodIcon(method.Status)" /></span>
                                 <span>@method.Name</span>
                                 @if (method.DurationMs is { } methodDuration)
                                 {
@@ -85,7 +85,7 @@ else
 
                 <div class="file-tree-head">
                     <span>Test files</span>
-                    <button class="add-file-button" @onclick="Vm.StartAddFile" title="Add file">+</button>
+                    <button class="add-file-button" @onclick="Vm.StartAddFile" title="Add file" aria-label="Add"><AppIcon Kind="plus" /></button>
                 </div>
 
                 @if (Vm.AddingFile)
@@ -94,7 +94,7 @@ else
                         <input class="dcinput" placeholder="path/name.py"
                                @bind="Vm.NewFileName" @bind:event="oninput"
                                @onkeydown="Vm.AddFileKey" @ref="Vm.NewFileInput" />
-                        <button @onclick="Vm.ConfirmAddFile">✓</button>
+                        <button aria-label="Confirm" @onclick="Vm.ConfirmAddFile"><AppIcon Kind="check" /></button>
                     </div>
                 }
 
@@ -119,7 +119,7 @@ else
                             {
                                 <button class="delete-file" title="Delete file"
                                         @onclick:stopPropagation="true"
-                                        @onclick="@(() => Vm.DeleteFileAsync(fileIndex))">×</button>
+                                        @onclick="@(() => Vm.DeleteFileAsync(fileIndex))"><AppIcon Kind="close" /></button>
                             }
                         </div>
                     }
@@ -147,7 +147,7 @@ else
                             }
                         }
                         <i></i>
-                        <span>@(Vm.PanelOpen ? "▾" : "▴")</span>
+                        <span><AppIcon Kind="@(Vm.PanelOpen ? "chevron-down" : "chevron-up")" /></span>
                     </button>
                     @if (Vm.PanelOpen)
                     {

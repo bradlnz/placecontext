@@ -20,6 +20,7 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly NavigationManager _navigation;
     private readonly ParameterPromptState _runPrompt = new();
     private readonly IJobChainSubmissionQueue? _submissions;
+    private readonly IQemuEnvironmentCatalog? _qemuCatalog;
 
     public JobChainsViewModel(
         PlaceContextService svc,
@@ -27,11 +28,13 @@ public sealed partial class JobChainsViewModel : PageViewModel
         IWorkloadOutputBuffer outputBuffer,
         IPermissionService permissions,
         NavigationManager navigation,
-        IJobChainSubmissionQueue? submissions = null
+        IJobChainSubmissionQueue? submissions = null,
+        IQemuEnvironmentCatalog? qemuCatalog = null
     )
     {
         _svc = svc;
         _submissions = submissions;
+        _qemuCatalog = qemuCatalog;
         _opCenter = opCenter;
         _outputBuffer = outputBuffer;
         _permissions = permissions;
@@ -56,14 +59,30 @@ public sealed partial class JobChainsViewModel : PageViewModel
     public bool CanSendSmsAction { get; private set; }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
+    private int _pageVersion;
+
+    public async Task LoadPageAsync(Guid projectId, Guid? chainId)
+    {
+        var version = ++_pageVersion;
+        Initialize(projectId);
+        await LoadAsync();
+        if (version != _pageVersion) return;
+        if (chainId is { } id && Chains?.FirstOrDefault(chain => chain.Id == id) is { } chain
+            && (!ShowEditor || EditChainId != id))
+            await OpenChainEditorAsync(chain);
+    }
+
     public void Initialize(Guid projectId)
     {
         ProjectId = projectId;
+        _opCenter.Changed -= OnOpsChanged;
         _opCenter.Changed += OnOpsChanged;
     }
 
     public void DetachEvents()
     {
+        _pageVersion++;
+        ShowEditor = false;
         _opCenter.Changed -= OnOpsChanged;
         StopPolling();
     }

@@ -1,10 +1,23 @@
 using Microsoft.Extensions.Configuration;
+using PlaceContext.Application.Ports;
 using PlaceContext.Host.Controllers;
 
 namespace PlaceContext.Host.Tests;
 
 public sealed class ExternalSsoLoginTests
 {
+    [Theory]
+    [InlineData("admin", UserRole.Admin)]
+    [InlineData(" ADMIN ", UserRole.Admin)]
+    [InlineData("administrator", UserRole.Admin)]
+    [InlineData("owner", UserRole.Admin)]
+    [InlineData("member", UserRole.Viewer)]
+    [InlineData("customer", UserRole.Viewer)]
+    [InlineData("superadmin", UserRole.Viewer)]
+    [InlineData(null, UserRole.Viewer)]
+    public void Only_recognized_provider_admin_roles_grant_admin_access(string? role, UserRole expected)
+        => Assert.Equal(expected, SsoSessionsController.ExternalRole(role));
+
     [Fact]
     public void Complete_https_configuration_enables_external_login()
     {

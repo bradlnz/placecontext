@@ -48,6 +48,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     private readonly PortalUiState _ui;
     private readonly IConfiguration _configuration;
     private readonly ICurrentTenant _tenant;
+    private readonly ICurrentUser? _currentUser;
     private readonly OperationCenter _operations;
     private readonly IJSRuntime _js;
     private readonly NavigationManager _navigation;
@@ -67,12 +68,14 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         OperationCenter operations,
         IJSRuntime js,
         NavigationManager navigation,
-        IServiceScopeFactory scopeFactory
+        IServiceScopeFactory scopeFactory,
+        ICurrentUser? currentUser = null
     )
     {
         _ui = ui;
         _configuration = configuration;
         _tenant = tenant;
+        _currentUser = currentUser;
         _operations = operations;
         _js = js;
         _navigation = navigation;
@@ -223,7 +226,9 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
 
     public void ToggleGroup(string id)
     {
-        if (!_expanded.Remove(id))
+        var wasExpanded = _expanded.Contains(id);
+        _expanded.Clear();
+        if (!wasExpanded)
             _expanded.Add(id);
     }
 
@@ -389,9 +394,10 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
 
     private void ExpandActiveGroups()
     {
-        foreach (var item in _menu.Where(IsGroup))
-            if (IsGroupActive(item))
-                _expanded.Add(item.Id);
+        var active = _menu.FirstOrDefault(item => IsGroup(item) && IsGroupActive(item));
+        if (active is null) return;
+        _expanded.Clear();
+        _expanded.Add(active.Id);
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
@@ -424,7 +430,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     private void OnUiChanged() => _ = InvokeOnDispatcherAsync(static () => { });
 
     private void RefreshRunningCount() =>
-        RunningCount = _tenant.IsResolved ? _operations.ActiveCount(_tenant.TenantId) : 0;
+        RunningCount = _tenant.IsResolved ? _operations.ActiveCount(_tenant.TenantId, _currentUser?.UserId) : 0;
 
     private string GetCurrentPath() => new Uri(_navigation.Uri).AbsolutePath.TrimEnd('/');
 

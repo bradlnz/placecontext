@@ -1,6 +1,6 @@
 .page {
     padding: 20px 24px 40px;
-    max-width: 1320px;
+    width: 100%;
     margin: 0 auto;
 }
 
@@ -197,8 +197,4 @@
 .btn-sm {
     padding: 3px 10px;
     font-size: 11px;
-}
-
-.btn-danger {
-    color: var(--bad);
 }

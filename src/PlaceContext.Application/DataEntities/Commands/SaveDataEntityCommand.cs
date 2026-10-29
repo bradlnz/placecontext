@@ -11,5 +11,3 @@ public sealed record SaveDataEntityCommand(
     Guid ProjectId, string Name, string TableName, string? LabelColumn,
     IReadOnlyList<EntityRelationDto> Relations, IReadOnlyList<string>? Tags = null,
     Guid? EntityId = null) : ICommand<DataEntityView>;
-
-public sealed record DeleteDataEntityCommand(Guid EntityId) : ICommand<bool>;

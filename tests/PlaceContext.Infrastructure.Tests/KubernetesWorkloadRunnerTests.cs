@@ -9,6 +9,18 @@ namespace PlaceContext.Infrastructure.Tests;
 /// </summary>
 public class KubernetesWorkloadRunnerTests
 {
+    [Theory]
+    [InlineData(0, 1800, 60)]
+    [InlineData(40, 1800, 100)]
+    [InlineData(1780, 1800, 1800)]
+    [InlineData(0, 20, 20)]
+    [InlineData(-10, 1800, 60)]
+    public void Pulse_extends_expiry_without_exceeding_the_jobs_hard_timeout(int elapsed, int timeout, long expected)
+    {
+        var started = DateTimeOffset.UtcNow;
+        Assert.Equal(expected, KubernetesWorkloadRunner.LeaseDeadlineSeconds(started, timeout, started.AddSeconds(elapsed)));
+    }
+
     // Regression: the shared SandboxMemory option is written in Docker notation ("256m" = 256 MiB),
     // but a bare "m" in a Kubernetes quantity means milli (10⁻³). Passing it verbatim set the
     // container memory limit to ~0 bytes, so runc OOM-killed the container init before any user code
@@ -187,6 +199,7 @@ public class KubernetesWorkloadRunnerTests
 
         Assert.Equal("pcbake-abc", job.Metadata.Name);
         Assert.Equal(600, job.Spec.TtlSecondsAfterFinished);
+        Assert.Equal(IJobRunHeartbeat.TimeoutSeconds, job.Spec.ActiveDeadlineSeconds);
         Assert.False(job.Spec.Template.Spec.AutomountServiceAccountToken);
         var containers = job.Spec.Template.Spec.Containers;
         Assert.Equal(2, containers.Count);
@@ -255,15 +268,14 @@ public class KubernetesWorkloadRunnerTests
         Assert.Equal("ALL", Assert.Single(ctr.Capabilities.Drop));
     }
 
-    [Fact]
-    public void RunAsNonRoot_relaxes_only_when_the_operator_configures_uid_zero()
+    [Theory]
+    [InlineData(0, 65534)]
+    [InlineData(65534, 0)]
+    [InlineData(-1, 65534)]
+    public void Root_or_invalid_identities_are_rejected(long user, long group)
     {
-        var ctr = KubernetesWorkloadRunner.BuildRestrictedContainerSecurityContext(
-            new WorkloadRunnerOptions { RunAsUser = 0, RunAsGroup = 0 });
-
-        // runAsNonRoot=true with a numeric uid 0 would make the kubelet refuse to start the pod.
-        Assert.False(ctr.RunAsNonRoot);
-        Assert.Equal(0, ctr.RunAsUser);
+        Assert.Throws<InvalidOperationException>(() => KubernetesWorkloadRunner.BuildRestrictedContainerSecurityContext(
+            new WorkloadRunnerOptions { RunAsUser = user, RunAsGroup = group }));
     }
 
     [Fact]

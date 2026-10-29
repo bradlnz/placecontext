@@ -256,7 +256,7 @@ public class DockerWorkloadRunnerTests
     {
         var args = ProfileArgs("dotnet", "main.cs", new[] { "dotnet", "run", "/work/main.cs" }, depsBaked: false);
 
-        var imageAt = args.IndexOf("mcr.microsoft.com/dotnet/sdk:10.0");
+        var imageAt = args.IndexOf("mcr.microsoft.com/dotnet/sdk:10.0.403");
         Assert.True(imageAt >= 0);
         Assert.Equal(new[] { "sh", "-c" }, args.Skip(imageAt + 1).Take(2).ToArray());
         var script = args[imageAt + 3];

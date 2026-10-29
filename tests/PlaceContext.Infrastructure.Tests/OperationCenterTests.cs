@@ -17,6 +17,19 @@ public class OperationCenterTests
 
     private static OperationCenter Center() => new(new StubScopeFactory(), new StubLifetime());
 
+    [Fact]
+    public void Private_build_operations_are_visible_only_to_the_submitting_user()
+    {
+        var center = Center();
+        var user = Guid.NewGuid();
+        var operation = center.Track(Tenant, null, "Private Build", "/build", userId: user);
+        Assert.Empty(center.ListForTenant(Tenant.Id));
+        Assert.Empty(center.ListForTenant(Tenant.Id, Guid.NewGuid()));
+        Assert.Equal(0, center.ActiveCount(Tenant.Id));
+        Assert.Equal(operation.Id, Assert.Single(center.ListForTenant(Tenant.Id, user)).Id);
+        Assert.Equal(1, center.ActiveCount(Tenant.Id, user));
+    }
+
     // ── Sync upsert ──────────────────────────────────────────────────────────────────────────────
 
     [Fact]

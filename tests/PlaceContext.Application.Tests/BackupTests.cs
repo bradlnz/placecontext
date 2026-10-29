@@ -17,6 +17,12 @@ public class BackupTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 7, 1, 9, 0, 0, TimeSpan.Zero);
     private static readonly Guid TenantId = Guid.NewGuid();
+    private sealed class FakePermissionService(bool allowed) : IPermissionService
+    {
+        public Task<bool> HasAsync(string permission, CancellationToken ct = default) => Task.FromResult(allowed);
+        public Task<IReadOnlySet<string>> GetEffectivePermissionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
+        public Task<IReadOnlySet<string>> GetEffectivePermissionsForUserAsync(Guid id, string role, CancellationToken ct = default) => GetEffectivePermissionsAsync(ct);
+    }
 
     private sealed class Ctx
     {
@@ -32,11 +38,45 @@ public class BackupTests
         public RecordingUnitOfWork Uow = new();
         public FakeClock Clock = new(T0);
 
+        public FakeWorkerNetworkService Networks = new();
         public ExportManifestHandler Exporter() =>
-            new(Projects, Jobs, Chains, Triggers, Events, Mappings, TenantSettings, Tenant, Clock);
+            new(Projects, Jobs, Chains, Triggers, Events, Mappings, TenantSettings, Tenant, Clock, Networks);
 
         public ImportManifestHandler Importer() =>
-            new(Projects, Jobs, Chains, Triggers, Events, Mappings, TenantSettings, Cron, Tenant, Uow, Clock);
+            new(Projects, Jobs, Chains, Triggers, Events, Mappings, TenantSettings, Cron, Tenant, Uow, Clock, Networks, new FakePermissionService(true));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Network_backup_rewires_job_assignments_and_leaves_failed_restores_deny_egress(bool failAssignment)
+    {
+        var (source, project, job) = await SeedAsync();
+        var group = new NetworkSecurityGroup(Guid.NewGuid(), "Web", [new("egress", "TCP", "10.20.0.0/24", 443, 443)]);
+        var network = new WorkerNetwork(Guid.NewGuid(), project.Id.Value, "Workers", "10.20.0.0/24", [group]);
+        await source.Networks.SaveAsync(network);
+        await source.Networks.AssignAsync(project.Id.Value, job.Id, network.Id, group.Id);
+        var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
+        Assert.Single(manifest.WorkerNetworks);
+        Assert.Single(manifest.NetworkAssignments);
+        var target = new Ctx();
+        target.Networks.FailAssignment = failAssignment;
+        if (failAssignment) await Assert.ThrowsAsync<InvalidOperationException>(() => target.Importer().HandleAsync(new ImportManifestCommand(manifest)));
+        else await target.Importer().HandleAsync(new ImportManifestCommand(manifest));
+        var targetProject = Assert.Single(await target.Projects.ListAsync());
+        var targetJob = Assert.Single(await target.Jobs.ListForProjectAsync(targetProject.Id.Value));
+        Assert.False(targetJob.AllowNetworkEgress);
+        if (failAssignment) Assert.Empty(target.Networks.Assignments);
+        else
+        {
+            var restored = Assert.Single(target.Networks.Networks);
+            Assert.NotEqual(network.Id, restored.Id);
+            Assert.Equal(group.Rules, restored.Groups[0].Rules);
+            Assert.Equal(targetJob.Id, Assert.Single(target.Networks.Assignments).JobId);
+            await target.Importer().HandleAsync(new ImportManifestCommand(manifest));
+            Assert.Single(target.Networks.Networks);
+            Assert.Single(target.Networks.Assignments);
+        }
     }
 
     /// <summary>Seeds one project with one job, one chain (single step), one schedule trigger, one
@@ -155,7 +195,7 @@ public class BackupTests
     }
 
     [Fact]
-    public async Task Backup_round_trips_typed_email_action_and_stage_shape()
+    public async Task Backup_round_trips_typed_actions_and_stage_shape()
     {
         var (source, project, job) = await SeedAsync();
         var chain = Assert.Single(await source.Chains.ListForProjectAsync(project.Id.Value));
@@ -165,11 +205,14 @@ public class BackupTests
             new(Array.Empty<Guid>(), new ConditionGate("eq:release.email_release:true"),
                 action: new SendEmailChainAction(
                     "{{client.email}}", "{{client.name}}", "Your report", "Hello {{client.name}}")),
+            ChainStage.ForAction(new LoopChainAction(LoopChainAction.HumanType, "Review the draft", "human_review", LoopChainAction.YesNoResponse)),
+            ChainStage.ForAction(new LoopChainAction(LoopChainAction.AgentType, "Check the sources", "agent_review", agentProvider: LoopChainAction.JevAgent)),
+            ChainStage.ForAction(new QemuChainAction("browser", "cat", "vm_result", 2048, 2, 600, true)),
         }, T0.AddMinutes(1));
 
         var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
         var exported = Assert.Single(manifest.JobChains);
-        Assert.Equal(2, exported.Stages!.Count);
+        Assert.Equal(5, exported.Stages!.Count);
         Assert.Equal(SendEmailChainAction.ActionType, exported.Stages[1].Action!.Type);
 
         var target = new Ctx();
@@ -177,10 +220,28 @@ public class BackupTests
 
         var importedProject = Assert.Single(await target.Projects.ListAsync());
         var imported = Assert.Single(await target.Chains.ListForProjectAsync(importedProject.Id.Value));
-        Assert.Equal(2, imported.Stages.Count);
+        Assert.Equal(5, imported.Stages.Count);
         var email = Assert.IsType<SendEmailChainAction>(imported.Stages[1].Action);
         Assert.Equal("{{client.email}}", email.Recipient);
         Assert.IsType<ConditionGate>(imported.Stages[1].Gate);
+        var human = Assert.IsType<LoopChainAction>(imported.Stages[2].Action);
+        Assert.Equal(LoopChainAction.HumanType, human.Type);
+        Assert.Equal("Review the draft", human.Instructions);
+        Assert.Equal("human_review", human.ResponseField);
+        Assert.Equal(LoopChainAction.YesNoResponse, human.ResponseType);
+        var agent = Assert.IsType<LoopChainAction>(imported.Stages[3].Action);
+        Assert.Equal(LoopChainAction.AgentType, agent.Type);
+        Assert.Equal("Check the sources", agent.Instructions);
+        Assert.Equal("agent_review", agent.ResponseField);
+        Assert.Equal(LoopChainAction.JevAgent, agent.AgentProvider);
+        var vm = Assert.IsType<QemuChainAction>(imported.Stages[4].Action);
+        Assert.Equal("browser", vm.ImageProfile);
+        Assert.Equal("cat", vm.Command);
+        Assert.Equal("vm_result", vm.OutputField);
+        Assert.Equal(2048, vm.MemoryMb);
+        Assert.Equal(2, vm.Cpus);
+        Assert.Equal(600, vm.TimeoutSeconds);
+        Assert.True(vm.AllowNetwork);
     }
 
     [Fact]

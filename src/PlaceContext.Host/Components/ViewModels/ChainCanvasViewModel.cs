@@ -4,7 +4,6 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, IDisposable
 {
-    private string _addJobId = string.Empty;
     private string _pathJobId = string.Empty;
     private int? _draggedStage;
     private (int Stage, int Branch)? _draggedPath;
@@ -14,11 +13,9 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
     public IReadOnlyList<JobView> Jobs { get; private set; } = [];
     public IReadOnlyDictionary<int, ChainGateView> Gates { get; private set; } =
         new Dictionary<int, ChainGateView>();
-    public string AddJobId => _addJobId;
     public string PathJobId => _pathJobId;
     public int? PathPickerStage { get; private set; }
     public int? DragOverStage => _dragOverStage;
-    public bool IsAddStageEnabled => Guid.TryParse(_addJobId, out _);
     public bool IsPathEnabled => Guid.TryParse(_pathJobId, out _);
 
     public void SetParameters(
@@ -32,22 +29,9 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
         Gates = gates;
     }
 
-    public void SetAddJobId(string? value)
-    {
-        _addJobId = value ?? string.Empty;
-    }
-
     public void SetPathJobId(string? value)
     {
         _pathJobId = value ?? string.Empty;
-    }
-
-    public Guid? ConsumeAddStageJob()
-    {
-        Guid? result = Guid.TryParse(_addJobId, out var id) ? id : null;
-        if (result is not null)
-            _addJobId = string.Empty;
-        return result;
     }
 
     public void OpenPathPicker(int stageIndex)
@@ -123,9 +107,9 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
     public string GateIcon(ChainGateView gate) =>
         gate switch
         {
-            WaitGateView => "◷",
-            ConditionGateView => "◇",
-            _ => "?",
+            WaitGateView => "clock",
+            ConditionGateView => "split",
+            _ => "about",
         };
 
     public string GateClass(ChainGateView gate) =>
@@ -135,6 +119,16 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
             ConditionGateView => "gate-condition",
             _ => string.Empty,
         };
+
+    public static string StageIcon(JobChainStageView stage) => stage.Action switch
+    {
+        SendEmailChainActionView => "mail",
+        SendSmsChainActionView => "message",
+        QemuChainActionView => "vm",
+        LoopChainActionView loop => loop.Kind == "humanInput" ? "human" : "agent",
+        null => "code",
+        _ => "event",
+    };
 
     public string GateLabel(ChainGateView gate) =>
         gate switch

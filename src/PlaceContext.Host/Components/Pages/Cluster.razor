@@ -25,11 +25,11 @@ else
             </div>
             <div class="hero-actions">
                 <button class="dcbtn" @onclick="() => Vm.RefreshAsync(false)" disabled="@Vm.Busy" title="Refresh nodes" aria-label="Refresh nodes">
-                    <span class="@(Vm.Busy ? "spin" : "")">↻</span>
+                    <span class="@(Vm.Busy ? "spin" : "")"><AppIcon Kind="refresh" /></span>
                     Refresh
                 </button>
                 <button class="dcbtn primary" @onclick="Vm.AddWorkerAsync" disabled="@Vm.Busy">
-                    <span class="button-plus">+</span>
+                    <span class="button-plus"><AppIcon Kind="plus" /></span>
                     Add node
                 </button>
             </div>
@@ -78,7 +78,7 @@ else
             @if (Vm.Nodes is null || Vm.Nodes.Count == 0)
             {
                 <div class="empty-fleet">
-                    <div class="empty-orbit">○</div>
+                    <div class="empty-orbit"><AppIcon Kind="circle" /></div>
                     <strong>No nodes found</strong>
                     <span>Add a worker to start building this cluster.</span>
                 </div>
@@ -91,7 +91,7 @@ else
                         <article class="node-card @(!n.Ready ? "node-warning" : "")">
                             <div class="node-top">
                                 <div class="node-avatar @(n.IsControlPlane ? "master-avatar" : n.NodeType == ClusterNodeType.AiShard ? "ai-avatar" : "")">
-                                    @(n.IsControlPlane ? "◇" : n.NodeType == ClusterNodeType.AiShard ? "✦" : "◆")
+                                    <AppIcon Kind="@(n.IsControlPlane ? "data.graph" : n.NodeType == ClusterNodeType.AiShard ? "agent" : "box")" />
                                     <span class="status-pin @(n.Ready ? "online" : "offline")"></span>
                                 </div>
                                 <div class="node-title">
@@ -151,20 +151,20 @@ else
             }
         </section>
 
-        @* ── Join command modal ─────────────────────────────────────────────────────── *@
+        @* ── Join command pane ─────────────────────────────────────────────────────── *@
         @if (Vm.ShowAddWorkerOptions)
         {
-            <div class="cluster-overlay" @onclick="Vm.DismissJoin">
-                <div class="join-dialog" @onclick:stopPropagation="true">
+            <div class="cluster-overlay dcmodal-overlay" @onclick="Vm.DismissJoin">
+                <div class="join-dialog dcmodal" role="dialog" aria-modal="true" aria-label="Add a node" @onclick:stopPropagation="true">
                     <div class="join-head">
-                        <div class="join-symbol">＋</div>
+                        <div class="join-symbol"><AppIcon Kind="plus" /></div>
                         <div>
                             <h3>Add a node</h3>
                             <p>Connect job capacity or an AI model shard.</p>
                         </div>
-                        <button class="dialog-close" @onclick="Vm.DismissJoin">×</button>
+                        <button aria-label="Close" class="dialog-close" @onclick="Vm.DismissJoin"><AppIcon Kind="close" /></button>
                     </div>
-                    <div class="join-body">
+                    <div class="join-body dcmodal-body">
                         <div class="join-step">
                             <span>1</span>
                             <p>Choose what you are adding.</p>
@@ -202,10 +202,10 @@ else
                         </div>
                         <div class="command-shell">
                             <code>@Vm.JoinCommand</code>
-                            <button @onclick="Vm.CopyCommandAsync">@(Vm.Copied ? "✓ Copied" : "Copy")</button>
+                            <button @onclick="Vm.CopyCommandAsync"><AppIcon Kind="@(Vm.Copied ? "check" : "copy")" /> @(Vm.Copied ? "Copied" : "Copy")</button>
                         </div>
                         <div class="security-note">
-                            <span>⌁</span>
+                            <AppIcon Kind="key" />
                             This join token is short-lived. Generate a new command for each worker.
                         </div>
                     </div>

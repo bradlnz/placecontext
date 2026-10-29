@@ -11,7 +11,7 @@ public sealed class QemuChainAction : ChainAction
         if (imageProfile.Length is < 1 or > 80 || imageProfile.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_')))
             throw new ArgumentException("Choose an image profile using letters, numbers, hyphens or underscores (up to 80 characters).");
         if (string.IsNullOrWhiteSpace(command) || command.Length > 8192 || command.Contains('\0'))
-            throw new ArgumentException("A guest command is required (up to 8,192 characters).");
+            throw new ArgumentException("An agent task prompt is required (up to 8,192 characters).");
         outputField = outputField?.Trim() ?? "";
         if (outputField.Length is < 1 or > 80 || !char.IsAsciiLetter(outputField[0])
             || outputField.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_'))
@@ -31,6 +31,7 @@ public sealed class QemuChainAction : ChainAction
     public override string Type => ActionType;
     public override string DisplayName => "QEMU environment";
     public string ImageProfile { get; }
+    // Retain the stored field name for existing workflow exports; its content is an agent prompt.
     public string Command { get; }
     public string OutputField { get; }
     public int MemoryMb { get; }

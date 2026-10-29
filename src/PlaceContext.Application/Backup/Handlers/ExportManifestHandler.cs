@@ -18,11 +18,12 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
     private readonly ITenantSettingsPort _tenantSettings;
     private readonly ICurrentTenant _tenant;
     private readonly IClock _clock;
+    private readonly IWorkerNetworkService? _networks;
 
     public ExportManifestHandler(
         IProjectRepository projects, IJobRepository jobs, IJobChainRepository chains,
         IJobTriggerRepository triggers, IEventRepository events, IDataMappingRepository mappings,
-        ITenantSettingsPort tenantSettings, ICurrentTenant tenant, IClock clock)
+        ITenantSettingsPort tenantSettings, ICurrentTenant tenant, IClock clock, IWorkerNetworkService? networks = null)
     {
         _projects = projects;
         _jobs = jobs;
@@ -33,6 +34,7 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
         _tenantSettings = tenantSettings;
         _tenant = tenant;
         _clock = clock;
+        _networks = networks;
     }
 
     public async Task<BackupManifest> HandleAsync(ExportManifestQuery query, CancellationToken ct = default)
@@ -44,10 +46,18 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
         var chainManifests = new List<JobChainManifest>();
         var triggerManifests = new List<TriggerManifest>();
         var mappingManifests = new List<DataMappingManifest>();
+        var workerNetworks = new List<WorkerNetwork>();
+        var networkAssignments = new List<JobNetworkAssignment>();
 
         foreach (var project in projects)
         {
             var projectId = project.Id.Value;
+            if (_networks is not null)
+            {
+                var state = await _networks.LoadAsync(projectId, ct);
+                workerNetworks.AddRange(state.Networks);
+                networkAssignments.AddRange(state.Assignments);
+            }
 
             jobManifests.AddRange((await _jobs.ListForProjectAsync(projectId, ct)).Select(ToJobManifest));
 
@@ -74,7 +84,8 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             BackupManifest.CurrentSchemaVersion,
             _clock.UtcNow,
             new TenantSettingsManifest(settings.TimeZoneId, settings.BrandingJson, settings.GitHubLogin),
-            projectManifests, jobManifests, chainManifests, triggerManifests, eventManifests, mappingManifests);
+            projectManifests, jobManifests, chainManifests, triggerManifests, eventManifests, mappingManifests)
+        { WorkerNetworks = workerNetworks, NetworkAssignments = networkAssignments };
     }
 
     // JobViewMapper.ToView already assembles the workload-source shape correctly (image vs. code,
@@ -108,6 +119,10 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             },
             stage.Action switch
             {
+                QemuChainAction vm => new ChainActionManifest(vm.Type, ImageProfile: vm.ImageProfile, Command: vm.Command,
+                    OutputField: vm.OutputField, MemoryMb: vm.MemoryMb, Cpus: vm.Cpus, TimeoutSeconds: vm.TimeoutSeconds, AllowNetwork: vm.AllowNetwork),
+                LoopChainAction loop => new ChainActionManifest(loop.Type,
+                    Instructions: loop.Instructions, ResponseField: loop.ResponseField, ResponseType: loop.ResponseType, AgentProvider: loop.AgentProvider),
                 SendEmailChainAction email => new ChainActionManifest(
                     SendEmailChainAction.ActionType,
                     email.Recipient,

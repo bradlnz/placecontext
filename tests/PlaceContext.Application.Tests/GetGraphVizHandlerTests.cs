@@ -61,7 +61,7 @@ public sealed class GetGraphVizHandlerTests
             Guid projectId,
             int take,
             string? search = null,
-            CancellationToken ct = default
+            CancellationToken ct = default, int skip = 0
         ) => Task.FromResult(artifacts);
 
         public Task AddAsync(RunArtifactLink link, CancellationToken ct = default) =>
@@ -82,7 +82,7 @@ public sealed class GetGraphVizHandlerTests
 
         public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(
             int take,
-            CancellationToken ct = default
+            CancellationToken ct = default, int skip = 0, string? search = null
         ) => Task.FromResult<IReadOnlyList<RunArtifactLink>>([]);
 
         public Task<IReadOnlyList<RunArtifactLink>> ListPendingOcrAsync(

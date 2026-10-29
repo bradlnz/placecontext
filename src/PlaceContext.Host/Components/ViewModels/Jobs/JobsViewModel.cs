@@ -137,6 +137,7 @@ public sealed partial class JobsViewModel : PageViewModel
     public IReadOnlyList<McpConnectionView>? ProjectMcpConnections { get; private set; }
     public HashSet<string> EdMcpConnectionIds { get; } = new();
 
+    private int _paneVersion;
     private CancellationTokenSource? _runPollCts;
     private CancellationTokenSource? _runDetailCts;
 
@@ -146,6 +147,7 @@ public sealed partial class JobsViewModel : PageViewModel
         StopRunDetailPolling();
         _runDetailCts = new CancellationTokenSource();
         var ct = _runDetailCts.Token;
+        var version = _paneVersion;
         _ = Task.Run(
             async () =>
             {
@@ -158,11 +160,12 @@ public sealed partial class JobsViewModel : PageViewModel
                     try
                     {
                         var detail = await _svc.GetJobRunAsync(runId);
-                        if (ct.IsCancellationRequested)
+                        var artifacts = await _svc.ListRunArtifactsAsync(runId);
+                        if (ct.IsCancellationRequested || version != _paneVersion || RunDetail?.Id != runId)
                             break;
 
                         RunDetail = detail;
-                        RunArtifacts = await _svc.ListRunArtifactsAsync(runId);
+                        RunArtifacts = artifacts;
                         NotifyStateChanged();
                         _ = ScrollLogsDown();
 
@@ -195,8 +198,57 @@ public sealed partial class JobsViewModel : PageViewModel
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
     public void Initialize(Guid projectId)
     {
+        if (ProjectId != projectId)
+        {
+            ResetPaneState();
+            _editorMetadataLoaded = false;
+            VaultSecrets = null;
+            EventTypes = null;
+            ProjectMcpConnections = null;
+        }
         ProjectId = projectId;
+        _opCenter.Changed -= OnOpsChanged;
         _opCenter.Changed += OnOpsChanged;
+        McpOAuthCompleted -= OnMcpOAuthCompleted;
+        McpOAuthCompleted += OnMcpOAuthCompleted;
+    }
+
+    public async Task LoadPageAsync(Guid projectId, Guid? jobId, string? tab)
+    {
+        Initialize(projectId);
+        var version = _paneVersion;
+        await LoadAsync();
+        if (version != _paneVersion) return;
+        if (jobId is { } id && Jobs?.FirstOrDefault(job => job.Id == id) is { } job)
+        {
+            if (!ShowEditor || EditJobId != id) await OpenJobAsync(job);
+            if (ShowEditor && EditJobId == id && tab == "triggers") EditorTab = "triggers";
+        }
+    }
+
+    private void InvalidateRunRequests()
+    {
+        _paneVersion++;
+        StopRunPolling();
+        StopRunDetailPolling();
+    }
+
+    private void ResetPaneState()
+    {
+        InvalidateRunRequests();
+        ShowEditor = false;
+        ShowTemplateModal = false;
+        RunPromptJob = null;
+        RunDetail = null;
+        RunArtifacts = null;
+        SelectedJobId = null;
+        PendingRunId = null;
+        PendingRunJobId = null;
+        EditJobId = null;
+        SelectedTriggerId = null;
+        EditorError = null;
+        EditorTab = "details";
+        ResetSourceEditor();
     }
 
     [JSInvokable]
@@ -210,8 +262,7 @@ public sealed partial class JobsViewModel : PageViewModel
     {
         _opCenter.Changed -= OnOpsChanged;
         McpOAuthCompleted -= OnMcpOAuthCompleted;
-        StopRunPolling();
-        StopRunDetailPolling();
+        ResetPaneState();
     }
 
     private async void OnMcpOAuthCompleted(object? sender, EventArgs args)
@@ -221,19 +272,15 @@ public sealed partial class JobsViewModel : PageViewModel
 
     public async Task LoadAsync()
     {
+        _editorMetadataLoaded = false;
         Loading = true;
         Message = null;
         try
         {
             Jobs = await _svc.ListJobsAsync(ProjectId);
-            // The catalogue is the primary content. Reveal it before the editor-only metadata
-            // below finishes so users can scan and select a job immediately.
             Loading = false;
             NotifyStateChanged();
-            VaultSecrets = await _svc.ListProjectSecretsAsync(ProjectId);
             Triggers = await _svc.ListTriggersAsync(ProjectId);
-            EventTypes = await _svc.ListEventTypesAsync();
-            ProjectMcpConnections = await _svc.ListMcpConnectionsAsync(ProjectId);
         }
         catch (Exception ex)
         {

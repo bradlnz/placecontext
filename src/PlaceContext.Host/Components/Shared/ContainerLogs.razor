@@ -1,0 +1,26 @@
+@inject ContainerLogsViewModel Vm
+@using PlaceContext.Host.Components.ViewModels.Helpers
+
+@{ var filtered = Vm.Filtered.ToList(); }
+
+<section class="container-logs" aria-label="Container log events">
+    <div class="log-tools">
+        <input class="dcinput" type="search" aria-label="Search container logs" placeholder="Search log messages…" @bind="Vm.Search" @bind:event="oninput" />
+        <select class="dcinput" aria-label="Container log level" @bind="Vm.Level"><option value="">All levels</option>@foreach (var level in new[] { "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL" }) { <option value="@level">@level</option> }</select>
+        <label><input type="checkbox" @bind="Vm.Wrap" /> Wrap lines</label>
+        <ArtifactDownload Label="Download logs" GetArtifact="@(() => new RunArtifactView("container.log", Text))" />
+    </div>
+    <div class="log-events @(Vm.Wrap ? "wrap-lines" : "")" tabindex="0" role="region" aria-label="Container logs">
+        <table><thead><tr><th scope="col">#</th><th scope="col">Timestamp</th><th scope="col">Stream</th><th scope="col">Level</th><th scope="col">Message</th></tr></thead>
+            <tbody>@foreach (var entry in filtered.TakeLast(100))
+            { <tr><td class="log-index">@entry.Index</td><td class="log-time">@FormatHelper.Trunc(entry.Timestamp, 80)</td><td class="log-stream">@FormatHelper.Trunc(entry.Stream, 120)</td><td><span class="log-level @entry.Level.ToLowerInvariant()">@(entry.Level.Length == 0 ? "—" : entry.Level)</span></td><td class="log-message">@FormatHelper.Trunc(entry.Message, 2000)</td></tr> }
+            @if (filtered.Count == 0) { <tr><td colspan="5" class="log-empty">@(Vm.Events.Count == 0 ? "No logs yet." : "No log events match these filters.")</td></tr> }</tbody>
+        </table>
+    </div>
+    <footer>Showing @Math.Min(filtered.Count, 100) of @filtered.Count matching events · @Vm.Events.Count loaded. Newest 100 matches; messages shortened to 2,000 characters. Download logs for full text.</footer>
+</section>
+
+@code {
+    [Parameter] public string Text { get; set; } = "";
+    protected override void OnParametersSet() => Vm.SetText(Text);
+}

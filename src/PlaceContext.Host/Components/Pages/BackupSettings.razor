@@ -13,7 +13,7 @@
     <div class="export-grid">
         <div class="dccard card-export">
             <div class="card-title">Export backup</div>
-            <div class="card-desc">Downloads projects, jobs, chains, triggers, event types, data mappings, and workspace settings as one JSON file.</div>
+            <div class="card-desc">Downloads projects, jobs, workflows, triggers, event types, data mappings, and workspace settings as one JSON file.</div>
             <a class="dcbtn primary link-btn" href="/backup/export">Download backup</a>
         </div>
         <div class="dccard card-export code-export">
@@ -29,7 +29,7 @@
         @if (Vm.Pending is not null)
         {
             <div class="card-desc">
-                Loaded <span class="code">@Vm.FileName</span> — @Vm.Pending.Projects.Count project(s), @Vm.Pending.Jobs.Count job(s), @Vm.Pending.JobChains.Count chain(s).
+                Loaded <span class="code">@Vm.FileName</span> — @Vm.Pending.Projects.Count project(s), @Vm.Pending.Jobs.Count job(s), @Vm.Pending.JobChains.Count workflow(s).
             </div>
             @if (Vm.Confirming)
             {

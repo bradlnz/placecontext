@@ -12,6 +12,28 @@ namespace PlaceContext.Application.Tests;
 /// </summary>
 public class NetworkEgressTests
 {
+    [Fact]
+    public async Task Assigned_policy_reaches_every_map_and_reduce_request_and_the_run_snapshot()
+    {
+        var jobs = new InMemoryJobRepository();
+        var runs = new InMemoryJobRunRepository();
+        var runner = new FakeWorkloadRunner();
+        var networks = new FakeWorkerNetworkService();
+        var job = PlaceContext.Domain.Entities.Job.Create(Guid.NewGuid(), "networked", null,
+            new MapSpec("worker", ["{}", "{}"], new Dictionary<string, string>()),
+            new ReduceSpec("reducer", new Dictionary<string, string>()), 1, ExitCodePolicy.Default, T0);
+        await jobs.AddAsync(job);
+        var group = new NetworkSecurityGroup(Guid.NewGuid(), "Isolated", []);
+        var network = new PlaceContext.Application.Ports.WorkerNetwork(Guid.NewGuid(), job.ProjectId, "Workers", "10.20.0.0/24", [group]);
+        await networks.SaveAsync(network);
+        await networks.AssignAsync(job.ProjectId, job.Id, network.Id, group.Id);
+        var handler = new RunJobHandler(jobs, runs, runner, new RecordingUnitOfWork(), new FakeClock(T0), networks: networks);
+        var result = await handler.HandleAsync(new RunJobCommand(job.Id));
+        Assert.Equal(3, runner.ReceivedRequests.Count);
+        Assert.All(runner.ReceivedRequests, request => Assert.Equal(network.Id, request.Network!.NetworkId));
+        Assert.Equal(network.Id, result.Snapshot.Network!.NetworkId);
+        Assert.Empty(result.Snapshot.Network.Group.Rules);
+    }
     private static readonly DateTimeOffset T0 = new(2026, 6, 25, 12, 0, 0, TimeSpan.Zero);
 
     private static CreateJobCommand ImageCmd(

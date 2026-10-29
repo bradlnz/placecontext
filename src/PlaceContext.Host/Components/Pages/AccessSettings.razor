@@ -134,13 +134,13 @@
                             {
                                 @if (Vm.ConfirmRemoveId == m.Id)
                                 {
-                                    <button class="dcbtn perm-toggle danger" disabled="@Vm.Busy"
+                                    <button class="dcbtn perm-toggle" disabled="@Vm.Busy"
                                             @onclick="@(() => Vm.RemoveMemberAsync(m.Id))">Confirm remove</button>
                                     <button class="dcbtn perm-toggle" @onclick="@(() => Vm.ConfirmRemoveId = null)">Keep</button>
                                 }
                                 else
                                 {
-                                    <button class="dcbtn perm-toggle danger" @onclick="@(() => Vm.ConfirmRemoveId = m.Id)">Remove</button>
+                                    <button class="dcbtn perm-toggle" @onclick="@(() => Vm.ConfirmRemoveId = m.Id)">Remove</button>
                                 }
                             }
                         </div>
@@ -214,13 +214,13 @@
                                 {
                                     @if (Vm.ConfirmDeleteRoleId == role.Id)
                                     {
-                                        <button class="dcbtn perm-toggle danger" disabled="@Vm.Busy"
+                                        <button class="dcbtn perm-toggle" disabled="@Vm.Busy"
                                                 @onclick="@(() => Vm.DeleteRoleAsync(role.Id))">Confirm delete</button>
                                         <button class="dcbtn perm-toggle" @onclick="@(() => Vm.ConfirmDeleteRoleId = null)">Keep</button>
                                     }
                                     else
                                     {
-                                        <button class="dcbtn perm-toggle danger" @onclick="@(() => Vm.ConfirmDeleteRoleId = role.Id)">Delete</button>
+                                        <button class="dcbtn perm-toggle" @onclick="@(() => Vm.ConfirmDeleteRoleId = role.Id)">Delete</button>
                                     }
                                 }
                             </div>

@@ -59,6 +59,23 @@ public sealed partial class JobChainsViewModel
     public string GateEditorOperator { get; set; } = "exists";
     public string GateEditorPath { get; set; } = "data";
     public string GateEditorValue { get; set; } = "";
+    public List<ChainStage> GateEditorElseStages { get; } = new();
+    public string GateEditorElseJobId { get; set; } = "";
+
+    public void AddElseJob()
+    {
+        if (!Guid.TryParse(GateEditorElseJobId, out var jobId) || jobId == Guid.Empty)
+            return;
+        GateEditorElseStages.Add(ChainStage.Of(jobId));
+        GateEditorElseJobId = "";
+        NotifyStateChanged();
+    }
+
+    public void RemoveElseStage(int index)
+    {
+        GateEditorElseStages.RemoveAt(index);
+        NotifyStateChanged();
+    }
 
     // ── Editor ────────────────────────────────────────────────────────────────────────────────
     public void NewChain()
@@ -78,14 +95,11 @@ public sealed partial class JobChainsViewModel
         NotifyStateChanged();
     }
 
-    public async Task OpenChainAsync(JobChainView chain)
+    public async Task OpenChainEditorAsync(JobChainView chain)
     {
-        OpenChainEditor(chain);
-        await SwitchToRunsTabAsync();
-    }
-
-    public void OpenChainEditor(JobChainView chain)
-    {
+        _pageVersion++;
+        StopPolling();
+        ChainRuns = null;
         EditChainId = chain.Id;
         EdName = chain.Name;
         EdDescription = chain.Description ?? "";
@@ -94,21 +108,10 @@ public sealed partial class JobChainsViewModel
         EdStageActions.Clear();
         foreach (var (stage, i) in chain.Stages.Select((stage, i) => (stage, i)))
         {
-            EdStages.Add(stage.Jobs.Select(j => j.JobId).ToList());
-            if (stage.Action is SendEmailChainActionView email)
-                EdStageActions[i] = new SendEmailChainAction(
-                    email.Recipient,
-                    email.RecipientName,
-                    email.Subject,
-                    email.Body,
-                    email.AttachmentPath
-                );
-            else if (stage.Action is SendSmsChainActionView sms)
-                EdStageActions[i] = new SendSmsChainAction(sms.Recipient, sms.Body);
-        }
-        foreach (var (stage, i) in chain.Stages.Select((s, i) => (s, i)))
-        {
-            EdStageGates[i] = FromViewGate(stage.Gate);
+            var definition = PlaceContext.Host.Build.WorkflowStage.FromView(stage).ToStage();
+            EdStages.Add(definition.JobIds.ToList());
+            EdStageGates[i] = definition.Gate;
+            EdStageActions[i] = definition.Action;
         }
         EdAddJobId = "";
         EdBranchJobIds.Clear();
@@ -119,19 +122,25 @@ public sealed partial class JobChainsViewModel
         StepRunDetail = null;
         ShowEditor = true;
         NotifyStateChanged();
+        await RefreshRunsAsync(chain.Id);
     }
 
     public void CloseEditor()
     {
+        _pageVersion++;
         ShowEditor = false;
         ShowGateEditor = false;
         ShowEmailActionEditor = false;
         ShowSmsActionEditor = false;
+        ShowLoopEditor = false;
+        ShowQemuEditor = false;
         ShowStageNodePicker = false;
         EditorError = null;
         OpenRun = null;
         StepRunDetail = null;
         StopPolling();
+        var uri = _navigation.GetUriWithQueryParameters(new Dictionary<string, object?> { ["workflow"] = null, ["chain"] = null });
+        if (uri != _navigation.Uri) _navigation.NavigateTo(uri, replace: true);
         NotifyStateChanged();
     }
 
@@ -707,6 +716,13 @@ public sealed partial class JobChainsViewModel
         ShowStageNodePicker = false;
         switch (type)
         {
+            case QemuChainAction.ActionType:
+                OpenQemuActionAt(StageNodePickerIndex);
+                break;
+            case LoopChainAction.HumanType:
+            case LoopChainAction.AgentType:
+                OpenLoopActionAt(type, StageNodePickerIndex);
+                break;
             case "email":
                 await OpenEmailActionAt(StageNodePickerIndex);
                 break;
@@ -732,6 +748,9 @@ public sealed partial class JobChainsViewModel
     {
         GateEditorStageIndex = stageIndex;
         var existing = EdStageGates.GetValueOrDefault(stageIndex);
+        GateEditorElseStages.Clear();
+        GateEditorElseStages.AddRange((existing as ConditionGate)?.ElseBranch ?? []);
+        GateEditorElseJobId = "";
         switch (existing)
         {
             case WaitGate w:
@@ -768,7 +787,7 @@ public sealed partial class JobChainsViewModel
         EdStageGates[GateEditorStageIndex] = GateEditorType switch
         {
             "wait" => new WaitGate(TimeSpan.FromSeconds(GateEditorDuration)),
-            "condition" => new ConditionGate(GateEditorExpression),
+            "condition" => new ConditionGate(GateEditorExpression, GateEditorElseStages.Count > 0 ? GateEditorElseStages.ToList() : null),
             _ => null,
         };
         ShowGateEditor = false;
@@ -827,31 +846,28 @@ public sealed partial class JobChainsViewModel
     }
 
     /// <summary>Build a view model for the canvas from current editor state.</summary>
-    public List<JobChainStageView> BuildCanvasStageViews()
-    {
-        var views = new List<JobChainStageView>(EdStages.Count);
-        foreach (var (stage, i) in EdStages.Select((s, i) => (s, i)))
+    public List<JobChainStageView> BuildCanvasStageViews() => EdStages
+        .Select((jobs, index) => BuildStageView(jobs,
+            EdStageGates.GetValueOrDefault(index), EdStageActions.GetValueOrDefault(index)))
+        .ToList();
+
+    public JobChainStageView BuildStageView(ChainStage stage) =>
+        BuildStageView(stage.JobIds, stage.Gate, stage.Action, stage.ElseBranch);
+
+    private JobChainStageView BuildStageView(IReadOnlyList<Guid> jobs, ChainGate? gate,
+        ChainAction? action, IReadOnlyList<ChainStage>? elseBranch = null) => new(
+        jobs.Select(id => new JobChainStepView(id, JobName(id))).ToList(),
+        ToViewGate(gate),
+        (elseBranch ?? (gate as ConditionGate)?.ElseBranch)?.Select(BuildStageView).ToList(),
+        action switch
         {
-            var stepViews = stage
-                .Select(jobId => new JobChainStepView(jobId, JobName(jobId)))
-                .ToList();
-            var gate = EdStageGates.GetValueOrDefault(i);
-            ChainActionView? action = EdStageActions.GetValueOrDefault(i) switch
-            {
-                SendEmailChainAction email => new SendEmailChainActionView(
-                    email.Recipient,
-                    email.RecipientName,
-                    email.Subject,
-                    email.Body,
-                    email.AttachmentPath
-                ),
-                SendSmsChainAction sms => new SendSmsChainActionView(sms.Recipient, sms.Body),
-                _ => null,
-            };
-            views.Add(new JobChainStageView(stepViews, ToViewGate(gate), Action: action));
-        }
-        return views;
-    }
+            QemuChainAction vm => new QemuChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork),
+            LoopChainAction loop => new LoopChainActionView(loop.Type, loop.Instructions, loop.ResponseField, loop.ResponseType, loop.AgentProvider),
+            SendEmailChainAction email => new SendEmailChainActionView(email.Recipient, email.RecipientName, email.Subject, email.Body, email.AttachmentPath),
+            SendSmsChainAction sms => new SendSmsChainActionView(sms.Recipient, sms.Body),
+            null => null,
+            _ => throw new InvalidOperationException($"Unsupported chain action '{action.Type}'."),
+        });
 
     // ── Save ──────────────────────────────────────────────────────────────────────────────────
 
@@ -920,8 +936,8 @@ public sealed partial class JobChainsViewModel
             Chains = await _svc.ListJobChainsAsync(ProjectId);
             ShowEditor = false;
             Message = EditChainId.HasValue
-                ? $"Chain '{EdName.Trim()}' updated."
-                : $"Chain '{EdName.Trim()}' created.";
+                ? $"Workflow '{EdName.Trim()}' updated."
+                : $"Workflow '{EdName.Trim()}' created.";
         }
         catch (Exception ex)
         {
@@ -943,7 +959,7 @@ public sealed partial class JobChainsViewModel
             ConfirmDeleteId = null;
             if (EditChainId == chainId)
                 CloseEditor();
-            Message = "Chain deleted.";
+            Message = "Workflow deleted.";
         }
         catch (Exception ex)
         {
@@ -963,13 +979,4 @@ public sealed partial class JobChainsViewModel
             _ => null,
         };
 
-    private static ChainGate? FromViewGate(ChainGateView? gate) =>
-        gate switch
-        {
-            null => null,
-            NoGateView => null,
-            WaitGateView w => new WaitGate(TimeSpan.FromSeconds(w.DurationSeconds)),
-            ConditionGateView c => new ConditionGate(c.Expression),
-            _ => null,
-        };
 }

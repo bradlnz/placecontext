@@ -1,0 +1,227 @@
+@page "/project/{ProjectId:guid}/queues"
+@page "/project/{ProjectId:guid}/queues/{QueueId:guid}"
+@attribute [Authorize(Policy = Permission.ChainsManage)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@implements IDisposable
+@inject QueuesViewModel Vm
+
+<PageTitle>PlaceContext — Queues</PageTitle>
+<div class="queues-page">
+    <nav class="queue-breadcrumb" aria-label="Breadcrumb"><span>Messaging</span><AppIcon Kind="chevron-right" /><a href="@Vm.ListUrl">Queues</a>@if (QueueId.HasValue) { <AppIcon Kind="chevron-right" /><span aria-current="page">@(Vm.Selected?.Name ?? "Queue details")</span> }</nav>
+    @if (Vm.Error is not null) { <p class="queue-error queue-alert" role="alert">@Vm.Error</p> }
+    @if (Vm.Loading) { <Skeleton Kind="list" Rows="4" /> }
+    else if (!QueueId.HasValue)
+    {
+        <header class="queues-head">
+            <div><h2>Queues <span class="queue-count">(@Vm.Queues.Count)</span></h2><p>Manage message intake and delivery to your workflows.</p></div>
+            <div class="queue-actions">
+                <button class="dcbtn icon-button" disabled="@Vm.Busy" aria-label="Refresh queues" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /></button>
+                <button class="dcbtn" disabled="@(Vm.Busy || Vm.Selected is null)" @onclick="Vm.EditSelected"><AppIcon Kind="edit" /> Edit</button>
+                <button class="dcbtn" disabled="@(Vm.Busy || Vm.Selected is null)" @onclick="Vm.RequestDelete"><AppIcon Kind="trash" /> Delete</button>
+                <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="() => Vm.Edit()"><AppIcon Kind="plus" /> Create queue</button>
+            </div>
+        </header>
+        <section class="dccard queue-catalogue" aria-label="Configured queues">
+            <div class="queue-toolbar">
+                <label class="queue-search"><AppIcon Kind="data.search" /><input class="dcinput" aria-label="Find queues" placeholder="Find queues by name, workflow, or ID" @bind="Vm.Search" @bind:event="oninput" /></label>
+                <select class="dcinput" aria-label="Filter intake status" @bind="Vm.IntakeFilter"><option value="">All intake statuses</option><option value="enabled">Accepting messages</option><option value="paused">Paused</option></select>
+                <select class="dcinput" aria-label="Sort queues" @bind="Vm.Sort"><option value="created">Newest first</option><option value="name">Name: A–Z</option></select>
+            </div>
+            <div class="queue-table-scroll" tabindex="0" role="region" aria-label="Queue list">
+                <table class="queue-table"><thead><tr><th><span class="visually-hidden">Select</span></th><th>Name</th><th>Intake status</th><th>Workflow</th><th>Delivery delay</th><th>Message TTL</th><th>Created</th></tr></thead><tbody>
+                @foreach (var queue in Vm.VisibleQueues)
+                {
+                    <tr @key="queue.Id" class="queue-row @(Vm.Selected?.Id == queue.Id ? "selected" : "")">
+                        <td><input type="radio" name="selected-queue" aria-label="@($"Select {queue.Name}")" checked="@(Vm.Selected?.Id == queue.Id)" disabled="@Vm.Busy" @onchange="() => Vm.SelectAsync(queue)" /></td>
+                        <td class="queue-name-cell"><a href="@Vm.QueueUrl(queue.Id)"><AppIcon Kind="queue" /> @queue.Name</a></td>
+                        <td><span class="queue-status @(queue.Enabled ? "accepting" : "paused")"><span class="status-dot"></span>@(queue.Enabled ? "Accepting" : "Paused")</span></td>
+                        <td>@Vm.ChainName(queue.ChainId)</td><td>@queue.DeliveryDelaySeconds seconds</td><td>@queue.MessageTtlSeconds seconds</td><td class="nowrap">@Vm.Presentation.DateTime(queue.CreatedAt)</td>
+                    </tr>
+                }
+                </tbody></table>
+            </div>
+            @if (Vm.Queues.Count == 0)
+            {
+                <div class="queue-empty"><AppIcon Kind="queue" /><h3>No queues</h3><p>Create a queue to accept JSON messages and run a workflow.</p><button class="dcbtn primary" @onclick="() => Vm.Edit()">Create your first queue</button></div>
+            }
+            else if (Vm.VisibleQueues.Count == 0)
+            {
+                <div class="queue-empty"><h3>No matching queues</h3><p>Try another name or change the intake filter.</p></div>
+            }
+            <footer class="queue-table-footer">@Vm.VisibleQueues.Count of @Vm.Queues.Count queues <span>Select a row to edit or delete. Open a queue to inspect messages.</span></footer>
+        </section>
+    }
+    else if (Vm.Selected is { } selected)
+    {
+        <header class="queues-head">
+            <div><h2>@selected.Name</h2><p><span class="queue-status @(selected.Enabled ? "accepting" : "paused")"><span class="status-dot"></span>@(selected.Enabled ? "Accepting messages" : "Intake paused")</span><span class="queue-heading-meta">Workflow queue · JSON messages</span></p></div>
+            <div class="queue-actions">
+                <button class="dcbtn icon-button" disabled="@Vm.Busy" aria-label="Refresh queue" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /></button>
+                <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ToggleIntakeAsync"><AppIcon Kind="@(selected.Enabled ? "pause" : "play")" /> @(selected.Enabled ? "Pause intake" : "Enable intake")</button>
+                <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.EditSelected"><AppIcon Kind="edit" /> Edit</button>
+                <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RequestDelete"><AppIcon Kind="trash" /> Delete</button>
+            </div>
+        </header>
+        <section class="dccard queue-card queue-overview" aria-label="Queue details">
+            <header><h3>Details</h3><a href="@($"/project/{ProjectId}/workflows?workflow={selected.ChainId}")">View workflow <AppIcon Kind="arrow-right" /></a></header>
+            <dl class="queue-properties">
+                <div><dt>Queue name</dt><dd>@selected.Name</dd></div><div><dt>Queue ID</dt><dd><code>@selected.Id</code></dd></div>
+                <div><dt>Workflow</dt><dd>@Vm.ChainName(selected.ChainId)</dd></div><div><dt>Created</dt><dd>@Vm.Presentation.DateTime(selected.CreatedAt)</dd></div>
+                <div class="endpoint-property"><dt><label for="queue-endpoint">Queue URL</label></dt><dd class="endpoint-row"><span>POST</span><input id="queue-endpoint" class="dcinput" readonly value="@Vm.Endpoint" /></dd></div>
+            </dl>
+        </section>
+        <nav class="dctabs queue-tabs" aria-label="Queue sections">
+            <button class="dctab @(Vm.Tab == "messages" ? "active" : "")" aria-current="@(Vm.Tab == "messages" ? "page" : null)" @onclick='() => Vm.SelectTab("messages")'><AppIcon Kind="queue" /> Messages <span class="n">@Vm.Messages.Count</span></button>
+            <button class="dctab @(Vm.Tab == "monitoring" ? "active" : "")" aria-current="@(Vm.Tab == "monitoring" ? "page" : null)" @onclick='() => Vm.SelectTab("monitoring")'><AppIcon Kind="pulse" /> Monitoring</button>
+            <button class="dctab @(Vm.Tab == "configuration" ? "active" : "")" aria-current="@(Vm.Tab == "configuration" ? "page" : null)" @onclick='() => Vm.SelectTab("configuration")'><AppIcon Kind="settings" /> Configuration</button>
+            <button class="dctab @(Vm.Tab == "integration" ? "active" : "")" aria-current="@(Vm.Tab == "integration" ? "page" : null)" @onclick='() => Vm.SelectTab("integration")'><AppIcon Kind="code" /> Integration</button>
+        </nav>
+        @if (Vm.Tab == "messages")
+        {
+            <section class="dccard queue-card queue-messages" aria-label="Queue messages">
+                <header><div><h3>Messages <span class="queue-count">(@Vm.Messages.Count)</span></h3><p class="queue-note">Latest 50 receipts. Workers process messages automatically.</p></div><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /> Refresh messages</button></header>
+                <div class="queue-toolbar">
+                    <label class="queue-search"><AppIcon Kind="data.search" /><input class="dcinput" aria-label="Find messages" placeholder="Find by message ID, run ID, or error" @bind="Vm.MessageSearch" @bind:event="oninput" /></label>
+                    <select class="dcinput" aria-label="Filter message status" @bind="Vm.MessageFilter"><option value="">All message statuses</option>@foreach (var state in QueuesViewModel.MessageStates) { <option value="@state">@state</option> }</select>
+                </div>
+                <div class="queue-table-scroll" tabindex="0" role="region" aria-label="Message receipts">
+                    <table class="queue-table"><thead><tr><th>Message ID</th><th>Status</th><th>Submitted</th><th>Eligible at</th><th>Failures</th><th>Workflow run</th></tr></thead><tbody>
+                    @foreach (var message in Vm.VisibleMessages)
+                    {
+                        <tr @key="message.TrackingId"><td><code title="@message.TrackingId">@Vm.Presentation.AbbreviatedId(message.TrackingId)</code></td>
+                            <td><span class="queue-message-status" style="color:@Vm.Presentation.StatusColor(message.Status)">@Vm.MessageLabel(message)</span>
+                                @if (message.Error is not null) { <details class="message-error"><summary>Error details</summary><p class="queue-error">@message.Error</p></details> }
+                                @if (message.Status == "Failed") { <button class="dcbtn retry-message" disabled="@Vm.Busy" @onclick="() => Vm.RetryAsync(message)"><AppIcon Kind="refresh" /> Retry message</button> }
+                            </td>
+                            <td class="nowrap">@Vm.Presentation.DateTime(message.SubmittedAt)</td><td class="nowrap">@(message.AvailableAt.HasValue ? Vm.Presentation.DateTime(message.AvailableAt.Value) : "—")</td><td>@message.Attempts</td>
+                            <td>@if (message.StartedAt.HasValue && message.Status != "Expired") { <button class="dcbtn btn-sm" @onclick="() => Vm.InspectAsync(message)">Inspect run <AppIcon Kind="arrow-right" /></button> } else { <span class="queue-note">Not started</span> }
+                                @if (message.PreviousRunIds.Count > 0) { <details class="message-attempts"><summary>Previous attempts (@message.PreviousRunIds.Count)</summary>@foreach (var runId in message.PreviousRunIds) { <div><button class="dcbtn btn-sm" @onclick="() => Vm.InspectAsync(message, runId)">@Vm.Presentation.AbbreviatedId(runId)</button></div> }</details> }
+                            </td>
+                        </tr>
+                    }
+                    </tbody></table>
+                </div>
+                @if (!Vm.VisibleMessages.Any()) { <div class="queue-empty"><AppIcon Kind="queue" /><h3>@(Vm.Messages.Count == 0 ? "No messages yet" : "No matching messages")</h3><p>@(Vm.Messages.Count == 0 ? "Use the queue URL to submit a JSON object. Integration has the request example." : "Change the search or status filter to see other receipts.")</p></div> }
+                <footer class="queue-table-footer">@Vm.VisibleMessages.Count() of @Vm.Messages.Count loaded receipts <span>Updated @Vm.UpdatedAt?.ToUniversalTime().ToString("HH:mm:ss 'UTC'")</span></footer>
+            </section>
+        }
+        else if (Vm.Tab == "monitoring")
+        {
+            <section class="queue-monitoring" aria-label="Queue monitoring">
+                <header class="monitoring-head"><div><h3>Message activity</h3><p class="queue-note">Snapshot of the latest @Vm.Messages.Count receipts (up to 50), not total queue depth. Updated @Vm.UpdatedAt?.ToUniversalTime().ToString("HH:mm:ss 'UTC'").</p></div><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /> Refresh metrics</button></header>
+                <div class="queue-metrics">
+                    @foreach (var state in new[] { "Available", "In flight", "Delayed", "Failed" })
+                    {
+                        <article class="dccard queue-metric"><span>@state</span><strong>@Vm.MessageCount(state)</strong><small>messages in loaded receipts</small></article>
+                    }
+                </div>
+                <section class="dccard queue-card"><header><h3>Message status breakdown</h3><span class="queue-note">@Vm.Messages.Count receipts</span></header>
+                    <div class="queue-breakdown">@foreach (var state in QueuesViewModel.MessageStates) { <div><span>@state</span><progress max="100" value="@Vm.MessagePercent(state)" aria-label="@($"{state} messages")"></progress><strong>@Vm.MessageCount(state)</strong></div> }</div>
+                </section>
+            </section>
+        }
+        else if (Vm.Tab == "configuration")
+        {
+            <section class="dccard queue-card"><header><h3>Delivery configuration</h3><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.EditSelected"><AppIcon Kind="edit" /> Edit configuration</button></header>
+                <dl class="queue-properties configuration-properties">
+                    <div><dt>Delivery delay</dt><dd>@selected.DeliveryDelaySeconds seconds</dd><small>Default wait before a message is eligible.</small></div>
+                    <div><dt>Message TTL</dt><dd>@selected.MessageTtlSeconds seconds</dd><small>Starts when eligible; running workflows continue.</small></div>
+                    <div><dt>Receipt retention</dt><dd>@selected.ReceiptRetentionDays days</dd><small>After completion. Workflow history is retained separately.</small></div>
+                    <div><dt>Maximum attempts</dt><dd>@selected.MaxAttempts</dd><small>Includes the initial attempt.</small></div>
+                    <div><dt>Initial retry delay</dt><dd>@selected.RetryDelaySeconds seconds</dd><small>Triples after each failure, capped at 24 hours.</small></div>
+                    <div><dt>Processing</dt><dd>Distributed workers</dd><small>Concurrent delivery; execution order is not guaranteed.</small></div>
+                </dl>
+            </section>
+            <div class="queue-info"><AppIcon Kind="chain" /><p>Accepted messages retain their original workflow and delivery settings. Pausing intake stops new submissions; accepted messages continue processing.</p></div>
+        }
+        else if (Vm.Tab == "integration")
+        {
+            <section class="dccard queue-card"><header><h3>Send messages</h3><a href="/settings/api-tokens">Manage API tokens <AppIcon Kind="arrow-right" /></a></header>
+                <p>POST a JSON object to the queue URL using a personal API token whose user can run jobs. The full object becomes the workflow's starting context, including nested fields and arrays.</p>
+                <div class="queue-example"><RunOutput Value="@Vm.Example" Language="shell" Label="Queue integration request" /></div>
+                <dl class="queue-properties configuration-properties">
+                    <div><dt>Authentication</dt><dd>Bearer token</dd><small>The queue selects the project and workflow.</small></div>
+                    <div><dt>Acknowledgement</dt><dd>HTTP 202 Accepted</dd><small>Returns a tracking ID and status URL in the Location header.</small></div>
+                    <div><dt>Duplicate protection</dt><dd><code>Idempotency-Key</code></dd><small>Reuse the same key only when retrying the same message.</small></div>
+                    <div><dt>Schedule delivery</dt><dd><code>X-Execute-At</code></dd><small>Send a future ISO timestamp to override the default delay.</small></div>
+                </dl>
+            </section>
+        }
+    }
+    else { <div class="queue-empty"><h3>Queue unavailable</h3><a class="dcbtn" href="@Vm.ListUrl">Back to queues</a></div> }
+</div>
+@if (Vm.ShowEditor)
+{
+    <div class="dcmodal-overlay" @onclick="Vm.CloseEditor"><div class="dcmodal queue-pane" role="dialog" aria-modal="true" aria-labelledby="queue-editor-title" @onclick:stopPropagation="true">
+        <div class="dcmodal-head"><h3 id="queue-editor-title">@(Vm.EditId.HasValue ? "Edit queue" : "New queue")</h3><button class="dcslide-x" aria-label="Close queue settings" @onclick="Vm.CloseEditor"><AppIcon Kind="close" /></button></div>
+        <div class="dcmodal-body queue-pane-body">
+            <div class="dcfield"><label for="queue-name">Name</label><input id="queue-name" class="dcinput" @bind="Vm.Name" maxlength="120" placeholder="incoming-orders" /></div>
+            <div class="dcfield"><label for="queue-chain">Workflow</label><select id="queue-chain" class="dcinput" @bind="Vm.ChainId"><option value="">Select a workflow…</option>@foreach (var chain in Vm.Chains) { <option value="@chain.Id">@chain.Name</option> }</select></div>
+            @if (Vm.Chains.Count == 0) { <p>Create a <a href="@($"/project/{ProjectId}/workflows")">workflow</a> before linking a queue.</p> }
+            <div class="dcfield"><label for="queue-delivery-delay">Default delivery delay (seconds)</label><input id="queue-delivery-delay" class="dcinput" type="number" min="0" max="604800" @bind="Vm.DeliveryDelaySeconds" /><p class="queue-note">0 runs as soon as a worker is available. Set up to 7 days, or send X-Execute-At with a future ISO timestamp to schedule an individual message up to a year ahead. TTL starts when the message becomes eligible.</p></div>
+            <div class="dcfield"><label for="queue-ttl">Message TTL (seconds)</label><input id="queue-ttl" class="dcinput" type="number" min="1" max="604800" @bind="Vm.MessageTtlSeconds" /><p class="queue-note">1–604,800 seconds (7 days). Expired waiting messages do not start a workflow. Running workflows continue.</p></div>
+            <div class="dcfield"><label for="queue-retention">Receipt retention (days)</label><input id="queue-retention" class="dcinput" type="number" min="1" max="365" @bind="Vm.ReceiptRetentionDays" /><p class="queue-note">1–365 days after completion. Receipt cleanup runs hourly and does not delete workflow history. Retrying an idempotency key after its receipt is removed creates a new message.</p></div>
+            <div class="dcfield"><label for="queue-attempts">Maximum attempts</label><input id="queue-attempts" class="dcinput" type="number" min="1" max="10" @bind="Vm.MaxAttempts" /><p class="queue-note">Includes the first attempt. Set 1 to disable automatic retries. Failed workflows restart from the beginning with the original JSON; jobs with external side effects must handle repeated input safely.</p></div>
+            <div class="dcfield"><label for="queue-retry-delay">Initial retry delay (seconds)</label><input id="queue-retry-delay" class="dcinput" type="number" min="1" max="86400" @bind="Vm.RetryDelaySeconds" /><p class="queue-note">Delay triples after each failure, capped at 24 hours. TTL starts after the delivery or retry delay. Exhausted messages remain available for manual retry until receipt cleanup.</p></div>
+            <label class="queue-checkbox"><input type="checkbox" @bind="Vm.Enabled" /> Accept new messages</label>
+            <p class="queue-note">Changing the workflow affects new messages. Accepted messages keep their original workflow, TTL, retention, and retry settings.</p>
+            @if (Vm.FormError is not null) { <p class="queue-error" role="alert">@Vm.FormError</p> }
+        </div>
+        <div class="dcmodal-foot queue-pane-foot"><button class="dcbtn" @onclick="Vm.CloseEditor">Cancel</button><button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveAsync">@(Vm.Busy ? "Saving…" : "Save queue")</button></div>
+    </div></div>
+}
+@if (Vm.Deleting is { } deleting)
+{
+    <div class="dcmodal-overlay" @onclick="Vm.CancelDelete"><div class="dcmodal queue-pane" role="dialog" aria-modal="true" aria-labelledby="delete-queue-title" @onclick:stopPropagation="true">
+        <div class="dcmodal-head"><h3 id="delete-queue-title">Delete queue?</h3><button class="dcslide-x" aria-label="Close delete confirmation" @onclick="Vm.CancelDelete"><AppIcon Kind="close" /></button></div>
+        <div class="dcmodal-body queue-pane-body"><p>Delete <strong>@deleting.Name</strong> and its intake endpoint? This cannot be undone.</p><p>Accepted messages will continue running. Existing receipts and workflow history will remain available.</p>@if (Vm.DeleteError is not null) { <p class="queue-error" role="alert">@Vm.DeleteError</p> }</div>
+        <div class="dcmodal-foot queue-pane-foot"><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.CancelDelete">Cancel</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.DeleteAsync">@(Vm.Busy ? "Deleting…" : "Delete queue")</button></div>
+    </div></div>
+}
+@if (Vm.InspectMessage is { } inspected)
+{
+    <div class="dcmodal-overlay" @onclick="Vm.CloseInspect">
+        <div class="dcmodal queue-inspect-pane" role="dialog" aria-modal="true" aria-label="Queue message run" @onclick:stopPropagation="true">
+            <div class="dcmodal-head">
+                <div class="flex-fill-min"><h3>Workflow run</h3><small>Message @inspected.TrackingId</small></div>
+                <button class="dcbtn" disabled="@Vm.InspectLoading" @onclick="Vm.RefreshInspectAsync"><AppIcon Kind="refresh" /> Refresh</button>
+                <button class="dcslide-x" aria-label="Close message inspection" @onclick="Vm.CloseInspect"><AppIcon Kind="close" /></button>
+            </div>
+            <div class="dcmodal-body">
+                @if (Vm.InspectLoading) { <Skeleton Kind="text" Rows="3" /> }
+                @if (Vm.InspectError is not null) { <p role="alert" class="danger">@Vm.InspectError</p> }
+                @if (Vm.InspectRun is { } run)
+                {
+                    <h3>@run.ChainName <span class="queue-status">@run.Status</span></h3>
+                    <p class="queue-note">Run @run.Id · @Vm.Presentation.DateTime(run.StartedAt)</p>
+                    <ChainPipeline Run="run" OnStepClick="Vm.InspectStepAsync" />
+                    @if (run.Steps.Any(step => step.ActionType == PlaceContext.Domain.ValueObjects.QemuChainAction.ActionType))
+                    {
+                        <QemuReplay @key="run.Id" Run="run" />
+                    }
+                    <div class="dcfield"><label for="queue-run-job">Underlying job logs</label>
+                        <select id="queue-run-job" class="dcinput" value="@Vm.InspectJobId" @onchange="e => Vm.SelectInspectJobAsync(e.Value?.ToString())">
+                            <option value="">Select a job run</option>
+                            @foreach (var step in run.Steps.Where(step => step.RunId.HasValue && step.RunId != Guid.Empty))
+                            { <option value="@step.RunId">@(step.Index + 1). @step.JobName · @step.Status</option> }
+                        </select>
+                    </div>
+                    @if (Vm.InspectJob is { } job) { <JobRunLogs @key="job.Id" Run="job" /> }
+                    else if (!Vm.InspectLoading) { <p class="queue-note">Select a job step to inspect its logs. Refresh to load newly started steps.</p> }
+                    @if (!string.IsNullOrWhiteSpace(run.FinalOutput))
+                    { <h4>Workflow output</h4><RunOutput Value="@(Vm.Presentation.Json(run.FinalOutput))" /> }
+                }
+            </div>
+            <div class="dcmodal-foot"><button class="dcbtn" @onclick="Vm.CloseInspect">Close</button></div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public Guid? QueueId { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId, QueueId, Tab);
+    public void Dispose() { Vm.CloseInspect(); Vm.Detach(); }
+}

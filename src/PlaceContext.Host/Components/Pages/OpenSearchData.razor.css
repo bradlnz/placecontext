@@ -122,7 +122,7 @@
     cursor: pointer;
 }
 .card-actions button:hover { color: var(--text); background: var(--card-2); }
-.card-actions .delete:hover { color: var(--bad); }
+.card-actions .delete:hover { color: var(--text); }
 
 .saved-chart { height: 240px; margin-top: 8px; }
 

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.403 AS build
 ARG TARGETARCH
 WORKDIR /src
 COPY . .
@@ -9,7 +9,7 @@ RUN arch="$TARGETARCH"; [ "$arch" != amd64 ] || arch=x64; \
     dotnet restore src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -a "$arch" && \
     dotnet publish src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -c Release -o /app/cluster -a "$arch" --no-restore
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.14 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/bradlnz/placecontext" \
       org.opencontainers.image.description="Self-hosted job engine for local and distributed infrastructure" \
       org.opencontainers.image.licenses="MIT"

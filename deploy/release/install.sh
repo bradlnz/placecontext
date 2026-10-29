@@ -536,6 +536,7 @@ deploy_local() {
   say "Waiting for PostgreSQL"
   kubectl -n "$NAMESPACE" rollout status deployment/placecontext-db --timeout=10m
   kubectl apply -f "$ROOT/k3s/network-policies.yaml" >/dev/null
+  kubectl apply -f "$ROOT/k3s/hosted-services.yaml" >/dev/null
   cluster_endpoint="http://placecontext-cluster-host:8081/api/cluster"
   [[ "$INSTALL_AI" == 1 ]] || cluster_endpoint=""
   sed -e "s|__IMAGE__|$runtime_image|g" \

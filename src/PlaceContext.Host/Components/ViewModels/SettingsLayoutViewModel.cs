@@ -12,6 +12,7 @@ public sealed class SettingsLayoutViewModel : PageViewModel
         new("Menu", "menu"),
         new("Artifacts", "artifacts"),
         new("Communications", "communications"),
+        new("Models", "models"),
         new("MCP servers", "mcp"),
         new("Locality", "locality"),
         new("Backup", "backup"),
@@ -58,8 +59,8 @@ public sealed class SettingsLayoutViewModel : PageViewModel
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             IsDefaultAdmin = await scope
-                .ServiceProvider.GetRequiredService<IMembershipService>()
-                .IsDefaultAdminAsync(_currentUser.UserId);
+                .ServiceProvider.GetRequiredService<IPermissionService>()
+                .HasAsync(Permission.SettingsManage);
         }
         NotifyStateChanged();
     }

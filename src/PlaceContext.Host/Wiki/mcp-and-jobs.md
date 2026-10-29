@@ -54,7 +54,7 @@ An MCP client can:
 - onboard projects and read their overview;
 - record activity and decisions;
 - create, upload, and run jobs;
-- build and run job chains;
+- build and run job workflows;
 - create schedules and event triggers;
 - query project data with read-only SQL;
 - save analytics charts;

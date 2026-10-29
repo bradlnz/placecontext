@@ -15,7 +15,12 @@ public sealed record JobChainSubmission(
     string? Error,
     DateTimeOffset SubmittedAt,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? FinishedAt);
+    DateTimeOffset? FinishedAt)
+{
+    public DateTimeOffset? AvailableAt { get; init; }
+    public DateTimeOffset? ExpiresAt { get; init; }
+    public IReadOnlyList<Guid> PreviousRunIds { get; init; } = [];
+}
 
 /// <summary>
 /// Durable, encrypted hand-off used by the asynchronous MCP chain-ingestion tools. Implementations
@@ -28,7 +33,8 @@ public interface IJobChainSubmissionQueue
         Guid chainId,
         string? inputPayload,
         string? idempotencyKey = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        Guid? queueId = null, int? messageTtlSeconds = null, int receiptRetentionDays = 30, int maxAttempts = 3, int retryDelaySeconds = 3, DateTimeOffset? availableAt = null);
 
     Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default);
 

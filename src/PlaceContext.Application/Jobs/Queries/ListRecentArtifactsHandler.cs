@@ -11,7 +11,7 @@ public sealed class ListRecentArtifactsHandler : IQueryHandler<ListRecentArtifac
     public ListRecentArtifactsHandler(IRunArtifactLinkRepository links) => _links = links;
 
     public async Task<IReadOnlyList<ArtifactFileView>> HandleAsync(ListRecentArtifactsQuery query, CancellationToken ct = default)
-        => (await _links.ListRecentAsync(query.Take, ct))
+        => (await _links.ListRecentAsync(query.Take, ct, query.Skip, query.Search))
             .Select(Map)
             .ToList();
 

@@ -35,6 +35,11 @@ public sealed class CancelJobRunHandler : ICommandHandler<CancelJobRunCommand, b
         if (run is null) return false;
         if (run.Status != Domain.Entities.JobRunStatus.Running) return true; // idempotent
 
+        // Revoke the pulse before deleting containers, so queued shards cannot keep starting.
+        run.Cancel(_clock.UtcNow);
+        await _runs.UpdateAsync(run, ct);
+        await _uow.SaveChangesAsync(ct);
+
         // Cancel every shard + reduce container (best-effort).
         var snapshot = run.Snapshot;
         var shardCount = snapshot.InputPayloads.Count;
@@ -54,10 +59,6 @@ public sealed class CancelJobRunHandler : ICommandHandler<CancelJobRunCommand, b
 
         await Task.WhenAll(tasks);
 
-        // Mark the run terminal.
-        run.Cancel(_clock.UtcNow);
-        await _runs.UpdateAsync(run, ct);
-        await _uow.SaveChangesAsync(ct);
         return true;
     }
 

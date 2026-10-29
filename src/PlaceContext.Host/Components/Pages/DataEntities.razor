@@ -20,8 +20,8 @@
             </div>
         </div>
         <div class="head-actions">
-            <button class="dcbtn" disabled="@Vm.Rescanning" @onclick="Vm.RescanAsync">@(Vm.Rescanning ? "Scanning…" : "↻ Rescan links")</button>
-            <button class="dcbtn primary" @onclick="@(() => Vm.OpenEditor(null))">+ New entity</button>
+            <button class="dcbtn" disabled="@Vm.Rescanning" @onclick="Vm.RescanAsync"><AppIcon Kind="refresh" /> @(Vm.Rescanning ? "Scanning…" : "Rescan links")</button>
+            <button class="dcbtn primary" @onclick="@(() => Vm.OpenEditor(null))"><AppIcon Kind="plus" /> New entity</button>
         </div>
     </div>
 
@@ -82,7 +82,7 @@
                 <div class="slide-title">@(Vm.EditId.HasValue ? "Edit entity" : "New entity")</div>
                 <div class="slide-sub">A named business view over an ingested table, related to other entities.</div>
             </div>
-            <button class="dcslide-x" @onclick="@(() => Vm.ShowEditor = false)">×</button>
+            <button aria-label="Close" class="dcslide-x" @onclick="@(() => Vm.ShowEditor = false)"><AppIcon Kind="close" /></button>
         </div>
         <div class="dcslide-body editor-body">
             <div class="field-row">
@@ -114,7 +114,7 @@
                         <span class="tag-chip">
                             @t
                             <button class="dcslide-x tag-chip-x"
-                                    title="Remove tag" @onclick="@(() => Vm.EditTags.Remove(t))">×</button>
+                                    title="Remove tag" @onclick="@(() => Vm.EditTags.Remove(t))"><AppIcon Kind="close" /></button>
                         </span>
                     }
                     <input class="dcinput tag-input"
@@ -125,7 +125,7 @@
             <div class="dcfield">
                 <div class="flex-between">
                     <label>Relations <span class="code code-hint">this column ↔ that entity's column</span></label>
-                    <button class="dcbtn rel-add-btn" @onclick="@(() => Vm.EditRelations.Add(new DataEntitiesViewModel.RelationEdit()))">+ relation</button>
+                    <button class="dcbtn rel-add-btn" @onclick="@(() => Vm.EditRelations.Add(new DataEntitiesViewModel.RelationEdit()))"><AppIcon Kind="plus" /> relation</button>
                 </div>
                 <div class="rel-list">
                     @for (var i = 0; i < Vm.EditRelations.Count; i++)
@@ -142,7 +142,7 @@
                                 }
                             </select>
                             <input class="dcinput rel-input-mono" placeholder="their column (default: same)" @bind="Vm.EditRelations[idx].TargetColumn" />
-                            <button class="dcbtn rel-del-btn" @onclick="@(() => Vm.EditRelations.RemoveAt(idx))">×</button>
+                            <button aria-label="Remove" class="dcbtn rel-del-btn" @onclick="@(() => Vm.EditRelations.RemoveAt(idx))"><AppIcon Kind="close" /></button>
                         </div>
                     }
                 </div>
@@ -155,7 +155,7 @@
             }
             @if (Vm.EditId.HasValue)
             {
-                <button class="dcbtn btn-danger" @onclick="Vm.DeleteAsync">Delete</button>
+                <button class="dcbtn" @onclick="Vm.DeleteAsync">Delete</button>
             }
             <button class="dcbtn" @onclick="@(() => Vm.ShowEditor = false)">Cancel</button>
             <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveAsync">@(Vm.Busy ? "Saving…" : "Save entity")</button>

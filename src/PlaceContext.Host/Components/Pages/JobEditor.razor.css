@@ -190,13 +190,26 @@
     min-height: 0;
 }
 
+.view-tabs {
+    display: flex;
+    gap: 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.execution-error {
+    color: var(--bad);
+    padding: 12px 0;
+    white-space: pre-wrap;
+}
+
 .results-panel {
-    flex: none;
+    flex: 1;
+    min-height: 0;
     border-top: 1px solid var(--border);
     background: var(--card);
     display: flex;
     flex-direction: column;
-    transition: height .12s;
 }
 
 .results-bar {
@@ -204,8 +217,6 @@
     align-items: center;
     gap: 10px;
     padding: 7px 14px;
-    cursor: pointer;
-    user-select: none;
 }
 
 .section-label {
@@ -252,39 +263,6 @@
     color: var(--text-3);
 }
 
-.shard-artifact {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px;
-    font-size: 10.5px;
-    font-family: var(--font-mono);
-    white-space: pre-wrap;
-    word-break: break-all;
-    color: var(--text-2);
-    max-height: 120px;
-    overflow: auto;
-    margin: 0;
-}
-
-.shard-log-details {
-    margin-top: 3px;
-}
-
-.shard-log-summary {
-    font-size: 10.5px;
-    color: var(--text-3);
-    cursor: pointer;
-}
-
-.shard-log {
-    font-size: 10px;
-    font-family: var(--font-mono);
-    color: var(--text-3);
-    white-space: pre-wrap;
-    margin: 3px 0 0;
-}
-
 @media (max-width: 950px) {
     .page { height: calc(100vh - 54px); overflow: hidden; }
     .toolbar { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
@@ -294,5 +272,5 @@
     .file-tree { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 180px; flex: none; }
     .editor-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
     .editor-host { flex: 1; min-height: 0; height: 100%; }
-    .results-panel { flex: none; }
+    .results-panel { flex: 1; min-height: 0; }
 }

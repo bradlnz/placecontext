@@ -25,6 +25,15 @@ public static class DependencyInjection
         services.Configure<OpenSearch.OpenSearchOptions>(
             configuration.GetSection("PlaceContext:OpenSearch"));
 
+        services.AddScoped<PlaceContext.Application.Build.IBuildChatStore, Build.DbBuildChatStore>();
+        services.AddSingleton<Build.LocalModelDiscovery>();
+        services.AddScoped<Build.LocalCliModels>();
+        services.AddScoped<Build.ModelConnections>();
+        services.AddScoped<PlaceContext.Application.Build.IModelConnections>(sp => sp.GetRequiredService<Build.ModelConnections>());
+        services.AddScoped<PlaceContext.Application.Build.IBuildModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
+        services.AddHttpClient("build-model", client => client.Timeout = Timeout.InfiniteTimeSpan)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+
         services.AddSingleton<IClock, SystemClock>();
 
         // (Activation/licensing removed — subscriptions are managed by a separate billing portal.)
@@ -36,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
         services.AddScoped<IMenuConfigService, Tenancy.MenuConfigService>();
         services.AddScoped<IArtifactViewConfigService, Tenancy.ArtifactViewConfigService>();
+        services.AddScoped<IWorkerNetworkService, Networking.DbWorkerNetworkService>();
         services.AddScoped<IArtifactShareTokenService, Artifacts.ArtifactShareTokenService>();
 
         // Portal authentication (tenant-scoped users) + persisted OAuth clients.
@@ -95,20 +105,38 @@ public static class DependencyInjection
         services.AddSingleton<IRepoFiles, Files.FileRepoFiles>();
         services.AddSingleton<ICodeWorkspace, CodeWorkspace>();
 
-        // Generic workload runner. In-cluster (the Host pod has KUBERNETES_SERVICE_HOST) we run jobs as
-        // Kubernetes Jobs via the API + the Host's ServiceAccount/RBAC; otherwise (local dev) Docker.
+        // Workloads use Kubernetes in-cluster or the explicitly configured local kubeconfig.
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));
+        services.Configure<QemuEnvironmentOptions>(configuration.GetSection("PlaceContext:Qemu"));
+        services.AddHttpClient("qemu-agent", client => client.Timeout = TimeSpan.FromSeconds(90))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddSingleton<IQemuTaskAgent, QemuPromptAgent>();
+        services.AddSingleton<IChainQuestionGenerator, ModelChainQuestionGenerator>();
+        services.Configure<TypeSafeOptions>(configuration.GetSection("PlaceContext:TypeSafe"));
+        services.PostConfigure<TypeSafeOptions>(options =>
+        {
+            if (string.IsNullOrWhiteSpace(options.ApiKey)) options.ApiKey = configuration["TYPESAFE_API_KEY"] ?? "";
+        });
+        services.AddHttpClient("typesafe", client => client.Timeout = TimeSpan.FromSeconds(90))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddSingleton<IJevReviewer, JevReviewer>();
+        services.AddScoped<IQemuReplayStore, DbQemuReplayStore>();
+        services.AddSingleton<QemuEnvironmentRunner>();
+        services.AddSingleton<IQemuEnvironmentRunner>(sp => sp.GetRequiredService<QemuEnvironmentRunner>());
+        services.AddSingleton<IQemuEnvironmentCatalog>(sp => sp.GetRequiredService<QemuEnvironmentRunner>());
         services.AddSingleton<IWorkloadOutputBuffer, InMemoryWorkloadOutputBuffer>();
         services.AddSingleton<KubernetesWorkloadRunner>();
-        services.AddSingleton<DockerWorkloadRunner>();
+        services.AddSingleton<k8s.IKubernetes>(sp => new k8s.Kubernetes(KubernetesRuntime.Configuration(
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkloadRunnerOptions>>().Value)));
+        services.AddScoped<KubernetesServiceConsole>();
+        services.AddScoped<IServiceConsole>(sp => sp.GetRequiredService<KubernetesServiceConsole>());
+        services.AddScoped<IDatabaseConsole>(sp => sp.GetRequiredService<KubernetesServiceConsole>());
         services.AddHttpClient("persistent-workloads", client => client.Timeout = Timeout.InfiniteTimeSpan);
         services.AddSingleton<IWorkloadRunner>(sp => new PersistentWorkloadRunner(
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkloadRunnerOptions>>(),
             sp.GetRequiredService<IHttpClientFactory>(),
-            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST"))
-                ? sp.GetRequiredService<KubernetesWorkloadRunner>()
-                : sp.GetRequiredService<DockerWorkloadRunner>()));
+            sp.GetRequiredService<KubernetesWorkloadRunner>()));
 
         // Field encryption at rest (AES via Data Protection). Portal/jobs decrypt in-process;
         // raw Postgres/MinIO without the DP key ring only see ciphertext.
@@ -144,6 +172,7 @@ public static class DependencyInjection
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();
+        services.AddScoped<IJobRunHeartbeat, Scheduling.DbJobRunHeartbeat>();
         services.Configure<Comms.ClientCommsOptions>(
             configuration.GetSection(Comms.ClientCommsOptions.SectionName));
         services.AddScoped<Comms.CommunicationProviderService>();
@@ -215,6 +244,9 @@ public static class DependencyInjection
         services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
         services.AddScoped<IJobRunQueue, Scheduling.DbJobRunQueue>();
         services.AddScoped<IJobChainSubmissionQueue, Scheduling.DbJobChainSubmissionQueue>();
+        services.AddScoped<Scheduling.DbChainQueueService>();
+        services.AddScoped<IChainQueueService>(sp => sp.GetRequiredService<Scheduling.DbChainQueueService>());
+        services.AddScoped<IAppQueueGateway, KubernetesAppQueueGateway>();
         services.AddHostedService<Scheduling.TriggerSchedulerService>();
         services.AddHostedService<Scheduling.ChainContinuationWorker>();
         services.AddHostedService<Scheduling.RpcChainSubmissionWorker>();
@@ -280,6 +312,8 @@ public static class DependencyInjection
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
         EnsureRpcChainSubmissionSchema(db);
+        EnsureWorkerNetworkingSchema(db);
+        EnsureQemuReplaySchema(db);
         // Additive indexes for the hot run queries (safe if already present). The status watcher
         // scans job_runs/chain_runs for in-flight or recently-finished rows every 2 seconds — a
         // sequential scan of the whole run history without these. Partial indexes keep the active-
@@ -302,6 +336,42 @@ public static class DependencyInjection
         // Backfill denormalized shard counts for existing runs.
         // The JSON is encrypted at the app layer, so we must read/decrypt/count in C#.
         BackfillShardCounts(db, scope.ServiceProvider);
+    }
+
+    internal static void EnsureQemuReplaySchema(AppDbContext db)
+    {
+        db.Database.ExecuteSqlRaw("""
+            CREATE TABLE IF NOT EXISTS qemu_replay_frames (
+                "TenantId" uuid NOT NULL,
+                "RunId" uuid NOT NULL REFERENCES chain_runs("Id") ON DELETE CASCADE,
+                "Step" integer NOT NULL CHECK ("Step" >= 0),
+                "Sequence" integer NOT NULL CHECK ("Sequence" >= 0 AND "Sequence" <= 100),
+                "Metadata" text NOT NULL,
+                "Image" bytea,
+                "ImageBytes" integer NOT NULL CHECK ("ImageBytes" >= 0 AND "ImageBytes" <= 3000000),
+                PRIMARY KEY ("TenantId", "RunId", "Step", "Sequence")
+            );
+            CREATE INDEX IF NOT EXISTS ix_qemu_replay_run ON qemu_replay_frames ("RunId");
+            """);
+    }
+
+    internal static void EnsureWorkerNetworkingSchema(AppDbContext db)
+    {
+        db.Database.ExecuteSqlRaw("""
+            CREATE TABLE IF NOT EXISTS worker_networks (
+                "Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "ProjectId" uuid NOT NULL,
+                "Name" text NOT NULL, "Cidr" text NOT NULL, "Groups" jsonb NOT NULL, "Version" bigint NOT NULL,
+                UNIQUE ("TenantId", "ProjectId", "Id"),
+                FOREIGN KEY ("ProjectId") REFERENCES projects ("Id") ON DELETE CASCADE
+            );
+            CREATE TABLE IF NOT EXISTS job_network_assignments (
+                "TenantId" uuid NOT NULL, "ProjectId" uuid NOT NULL, "JobId" uuid NOT NULL,
+                "NetworkId" uuid NOT NULL, "GroupId" uuid NOT NULL,
+                PRIMARY KEY ("TenantId", "JobId"),
+                FOREIGN KEY ("TenantId", "ProjectId", "NetworkId") REFERENCES worker_networks ("TenantId", "ProjectId", "Id") ON DELETE CASCADE,
+                FOREIGN KEY ("JobId") REFERENCES jobs ("Id") ON DELETE CASCADE
+            );
+            """);
     }
 
     private static void EnsureRpcChainSubmissionSchema(AppDbContext db)
@@ -337,6 +407,33 @@ public static class DependencyInjection
                 WHERE "IdempotencyKey" IS NOT NULL;
             CREATE INDEX IF NOT EXISTS ix_rpc_chain_submissions_pending
                 ON rpc_chain_submissions ("Status", "NextAttemptAt", "SubmittedAt");
+            CREATE TABLE IF NOT EXISTS chain_queues (
+                "Id" uuid PRIMARY KEY,
+                "TenantId" uuid NOT NULL,
+                "ProjectId" uuid NOT NULL,
+                "ChainId" uuid NOT NULL,
+                "Name" text NOT NULL,
+                "Enabled" boolean NOT NULL,
+                "CreatedAt" timestamptz NOT NULL,
+                "UpdatedAt" timestamptz NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS ix_chain_queues_project ON chain_queues ("TenantId", "ProjectId");
+            ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "DeliveryDelaySeconds" integer NOT NULL DEFAULT 0;
+            ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "MaxAttempts" integer NOT NULL DEFAULT 3;
+            ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "RetryDelaySeconds" integer NOT NULL DEFAULT 3;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "MaxAttempts" integer NOT NULL DEFAULT 3;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "RetryDelaySeconds" integer NOT NULL DEFAULT 3;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "MessageTtlSeconds" integer NULL;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "PreviousRunIds" uuid[] NOT NULL DEFAULT ARRAY[]::uuid[];
+            ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "MessageTtlSeconds" integer NOT NULL DEFAULT 86400;
+            ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "ReceiptRetentionDays" integer NOT NULL DEFAULT 30;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "ExpiresAt" timestamptz NULL;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "ReceiptRetentionDays" integer NOT NULL DEFAULT 30;
+            CREATE INDEX IF NOT EXISTS ix_rpc_chain_submissions_expiry
+                ON rpc_chain_submissions ("ExpiresAt") WHERE "Status" IN ('Queued', 'Running');
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "QueueId" uuid NULL;
+            CREATE INDEX IF NOT EXISTS ix_rpc_chain_submissions_queue
+                ON rpc_chain_submissions ("TenantId", "QueueId", "SubmittedAt" DESC);
             """);
     }
 

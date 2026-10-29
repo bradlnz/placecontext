@@ -99,7 +99,7 @@
             }
             <button type="button" class="dcbtn cron-toggle"
                     @onclick="Vm.ToggleAdvancedCron">
-                @(Vm.AdvancedCron ? "◂ simple" : "cron ▸")
+                <AppIcon Kind="settings" /> @(Vm.AdvancedCron ? "Simple" : "Cron")
             </button>
         }
         else
@@ -200,7 +200,7 @@
                             <span class="row-actions">
                                 <button class="dcbtn btn-sm" @onclick="@(() => Vm.ToggleAsync(ProjectId, t))">@(t.Enabled ? "Pause" : "Resume")</button>
                                 <button class="dcbtn btn-sm" @onclick="@(() => Vm.StartEdit(t))">Edit</button>
-                                <button class="dcbtn btn-sm btn-danger" @onclick="@(() => Vm.RemoveAsync(ProjectId, t.Id))">Delete</button>
+                                <button class="dcbtn btn-sm" @onclick="@(() => Vm.RemoveAsync(ProjectId, t.Id))">Delete</button>
                             </span>
                         }
                     </div>

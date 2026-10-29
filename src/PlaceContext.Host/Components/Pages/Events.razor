@@ -11,11 +11,11 @@
     <header class="events-head">
         <div>
             <h2>Events</h2>
-            <p>See what happened in the workspace and manage the event types that can start Jobs automatically.</p>
+            <p>Investigate activity, define event contracts, and see which jobs respond to them.</p>
         </div>
         <div class="head-actions">
-            <button class="dcbtn" @onclick="@(() => Vm.OpenJobs())">Manage triggers</button>
-            <button class="dcbtn primary" @onclick="Vm.BeginDefine">+ New event type</button>
+            <button class="dcbtn" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /> Refresh</button>
+            <button class="dcbtn primary" @onclick="Vm.BeginDefine"><AppIcon Kind="plus" /> New event type</button>
         </div>
     </header>
 
@@ -40,13 +40,20 @@
             </div>
         </section>
 
+        <div class="dctabs event-tabs" aria-label="Event views">
+            <button class="dctab @(Vm.IsActivityTab ? "active" : "")" @onclick="Vm.SelectActivityTab"><AppIcon Kind="pulse" /> Activity</button>
+            <button class="dctab @(Vm.IsTypesTab ? "active" : "")" @onclick="Vm.SelectTypesTab"><AppIcon Kind="event" /> Event types</button>
+            <button class="dctab @(Vm.IsSubscriptionsTab ? "active" : "")" @onclick="Vm.SelectSubscriptionsTab"><AppIcon Kind="chain" /> Subscriptions</button>
+        </div>
         <div class="event-layout">
+            @if (Vm.IsTypesTab)
+            {
             <section class="dccard event-panel type-panel">
                 <header class="panel-head">
                     <div>
-                        <span class="panel-caret">⌄</span>
+                        <AppIcon Kind="event" />
                         <strong>Event types</strong>
-                        <span>Choose one to emit it manually</span>
+                        <span>Workspace contracts that jobs can subscribe to</span>
                     </div>
                     <span>@(Vm.Types?.Count ?? 0) available</span>
                 </header>
@@ -54,7 +61,7 @@
                 @if (Vm.Types is null or { Count: 0 })
                 {
                     <div class="panel-empty">
-                        <span class="empty-icon">◇</span>
+                        <span class="empty-icon"><AppIcon Kind="event" /></span>
                         <strong>No event types yet</strong>
                         <span>Create one to connect external activity to a Job.</span>
                         <button class="dcbtn primary" @onclick="Vm.BeginDefine">Create event type</button>
@@ -67,7 +74,7 @@
                         {
                             var subscriberCount = Vm.SubscriberCount(eventType.Name);
                             <article class="type-row">
-                                <div class="type-icon" aria-hidden="true">@(eventType.IsBuiltIn ? "◆" : "◇")</div>
+                                <div class="type-icon" aria-hidden="true"><AppIcon Kind="@(eventType.IsBuiltIn ? "settings" : "event")" /></div>
                                 <div class="type-copy">
                                     <div class="type-title">
                                         <strong>@eventType.Name</strong>
@@ -86,35 +93,46 @@
                                         </details>
                                     }
                                 </div>
-                                <button class="dcbtn emit-button" @onclick="@(() => Vm.Emit(eventType.Name))">Emit</button>
+                                <div class="type-actions">
+                                    <button class="dcbtn" @onclick="() => Vm.ShowSubscriptions(eventType.Name)"><AppIcon Kind="chain" /> Subscriptions</button>
+                                    @if (!eventType.IsBuiltIn) { <button class="dcbtn" @onclick="() => Vm.Emit(eventType.Name)"><AppIcon Kind="play" /> Emit event</button> }
+                                </div>
                             </article>
                         }
                     </div>
                 }
             </section>
 
+            }
+            @if (Vm.IsActivityTab)
+            {
+            <div class="event-filters">
+                <input class="dcinput" type="search" aria-label="Search events" placeholder="Search event names and payloads…" @bind="Vm.Search" @bind:event="oninput" />
+                <select class="dcinput" aria-label="Event scope" @bind="Vm.Scope"><option value="project">This project</option><option value="workspace">Workspace</option></select>
+                <select class="dcinput" aria-label="Event source" @bind="Vm.Source"><option value="">All sources</option><option value="Domain">System</option><option value="User">Manual</option></select>
+            </div>
             <section class="dccard event-panel activity-panel">
                 <header class="panel-head">
                     <div>
-                        <span class="activity-mark" aria-hidden="true">●</span>
-                        <strong>Recent activity</strong>
+                        <AppIcon Kind="pulse" />
+                        <strong>Activity timeline</strong>
                         <span>Newest first</span>
                     </div>
-                    <span>latest 50</span>
+                    <span>@Vm.FilteredLog.Count() of latest 100 workspace events</span>
                 </header>
 
-                @if (Vm.Log is null or { Count: 0 })
+                @if (!Vm.FilteredLog.Any())
                 {
                     <div class="panel-empty">
-                        <span class="empty-icon">↯</span>
-                        <strong>No events emitted yet</strong>
-                        <span>Emitted events will appear here with their source, time, and payload.</span>
+                        <span class="empty-icon"><AppIcon Kind="pulse" /></span>
+                        <strong>No matching activity</strong>
+                        <span>Run a job or emit a custom event to see activity. Adjust the scope or filters to find other events.</span>
                     </div>
                 }
                 else
                 {
                     <div class="activity-rows">
-                        @foreach (var occurrence in Vm.Log)
+                        @foreach (var occurrence in Vm.FilteredLog)
                         {
                             <article class="activity-row">
                                 <div class="timeline">
@@ -125,6 +143,11 @@
                                         <strong>@occurrence.Name</strong>
                                         <span class="source-chip @EventsViewModel.SourceClass(occurrence.Source)">@EventsViewModel.SourceLabel(occurrence.Source)</span>
                                     </div>
+                                    @if (EventsViewModel.Outcome(occurrence) is { } outcome) { <span class="event-outcome">@outcome</span> }
+                                    @if (EventsViewModel.OriginRunId(occurrence) is { } runId)
+                                    {
+                                        <a class="event-run-link" href="@($"/observability?run={runId}")"><AppIcon Kind="logs" /> Inspect run and logs <AppIcon Kind="arrow-right" /></a>
+                                    }
                                     <time datetime="@Vm.Presentation.Iso(occurrence.OccurredAt)">
                                         @Vm.Presentation.Date(occurrence.OccurredAt) · @Vm.Presentation.Time(occurrence.OccurredAt)
                                     </time>
@@ -145,6 +168,31 @@
                     </div>
                 }
             </section>
+            }
+            @if (Vm.IsSubscriptionsTab)
+            {
+                <div class="subscription-intro"><h3>What happens when an event arrives?</h3><p>Enabled subscriptions start their job when the event name matches. These subscriptions belong to this project; event names are shared across the workspace.</p></div>
+                <div class="event-filters">
+                    <label for="subscription-event">Event type</label>
+                    <select id="subscription-event" class="dcinput" @bind="Vm.SubscriptionEvent"><option value="">All event types</option>@foreach (var type in Vm.Types ?? []) { <option value="@type.Name">@type.Name</option> }</select>
+                    <button class="dcbtn" @onclick="Vm.OpenJobs"><AppIcon Kind="plus" /> Manage job triggers</button>
+                </div>
+                <section class="dccard event-panel" aria-label="Event subscriptions">
+                    @foreach (var trigger in Vm.EventSubscriptions)
+                    {
+                        <article class="subscription-row">
+                            <AppIcon Kind="chain" />
+                            <div><strong>@trigger.Name</strong><p><code>@trigger.EventName</code> <AppIcon Kind="arrow-right" /> Job trigger</p><small>Last fired: @(trigger.LastFiredAt is { } fired ? Vm.Presentation.DateTime(fired) : "Never")</small></div>
+                            <span class="type-chip @(trigger.Enabled ? "subscribed" : "")">@(trigger.Enabled ? "Enabled" : "Paused")</span>
+                            <button class="dcbtn" @onclick="() => Vm.OpenSubscription(trigger)">Manage <AppIcon Kind="arrow-right" /></button>
+                        </article>
+                    }
+                    @if (!Vm.EventSubscriptions.Any())
+                    {
+                        <div class="panel-empty"><span class="empty-icon"><AppIcon Kind="chain" /></span><strong>No subscriptions here yet</strong><span>Open a job's Triggers tab, choose Event, and select the event name that should start it.</span><button class="dcbtn primary" @onclick="Vm.OpenJobs">Choose a job</button></div>
+                    }
+                </section>
+            }
         </div>
     }
 </div>
@@ -157,10 +205,10 @@
             <header>
                 <div>
                     <span class="eyebrow">EVENT TYPE</span>
-                    <h3 id="event-definition-title">Vm.DefineAsync an event</h3>
+                    <h3 id="event-definition-title">Define an event</h3>
                     <p>Name an activity that Jobs can listen for.</p>
                 </div>
-                <button class="close-button" aria-label="Close" @onclick="Vm.CloseDefinition">×</button>
+                <button class="close-button" aria-label="Close" @onclick="Vm.CloseDefinition"><AppIcon Kind="close" /></button>
             </header>
             <div class="editor-body">
                 <label class="field">
@@ -202,13 +250,13 @@
                 <div>
                     <span class="eyebrow">EMIT EVENT</span>
                     <h3 id="emit-event-title">@Vm.EmitName</h3>
-                    <p>Every enabled Job trigger listening for this name will start.</p>
+                    <p>Matching enabled subscriptions across the workspace will start their jobs.</p>
                 </div>
-                <button class="close-button" aria-label="Close" @onclick="Vm.CloseEmit">×</button>
+                <button class="close-button" aria-label="Close" @onclick="Vm.CloseEmit"><AppIcon Kind="close" /></button>
             </header>
             <div class="editor-body">
                 <div class="impact-note">
-                    <strong>@Vm.SubscriberCount(Vm.EmitName) active trigger@(Vm.SubscriberCount(Vm.EmitName) == 1 ? "" : "s")</strong>
+                    <strong>@Vm.SubscriberCount(Vm.EmitName) active subscription@(Vm.SubscriberCount(Vm.EmitName) == 1 ? "" : "s") in this project</strong>
                     <span>The payload becomes the input for each triggered Job.</span>
                 </div>
                 <label class="field">

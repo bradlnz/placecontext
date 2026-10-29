@@ -1,7 +1,5 @@
 .shell {
-    --menu-width-collapsed: 60px;
-    --menu-width-expanded: 220px;
-    --menu-hover-hit: 20px;
+    --menu-width: 248px;
     display: flex;
     height: 100vh;
     height: 100dvh;
@@ -12,7 +10,7 @@
 }
 
 .sidebar {
-    width: var(--menu-width-collapsed);
+    width: var(--menu-width);
     flex: none;
     min-width: 0;
     position: absolute;
@@ -24,21 +22,6 @@
     border-right: 1px solid var(--ch-border, var(--border));
     overflow: hidden;
     contain: layout paint;
-    will-change: width;
-    transition: width .18s cubic-bezier(.2, .8, .2, 1), box-shadow .18s ease;
-}
-
-.sidebar:hover {
-    width: var(--menu-width-expanded);
-    overflow: hidden;
-    box-shadow: 12px 0 28px rgba(0, 0, 0, .28);
-}
-
-.sidebar:not(:hover)::before {
-    content: "";
-    position: absolute;
-    inset: 0 auto 0 0;
-    width: var(--menu-hover-hit);
 }
 
 .brand-text,
@@ -67,25 +50,6 @@
 .user-detail {
     opacity: 1;
     transition: opacity .11s ease .055s;
-}
-
-.sidebar:not(:hover) .nav-label,
-.sidebar:not(:hover) .brand-text,
-.sidebar:not(:hover) .nav-section,
-.sidebar:not(:hover) .switcher-name,
-.sidebar:not(:hover) .switcher-caret,
-.sidebar:not(:hover) .user-detail {
-    width: 0;
-    max-width: 0;
-    opacity: 0;
-    margin-left: 0;
-    margin-right: 0;
-    padding-left: 0;
-    padding-right: 0;
-}
-
-.sidebar:not(:hover) .nav-child .bar {
-    left: -8px;
 }
 
 .brand-row {
@@ -139,7 +103,7 @@
 }
 
 .nav-list {
-    padding: 7px 8px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -151,10 +115,30 @@
     flex: 1;
 }
 
-.dcnav {
+.nav-list ::deep .dcnav {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    min-height: 44px;
+    padding: 11px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 550;
+    flex-shrink: 0;
+}
+
+.nav-list ::deep .dcnav:focus-visible {
+    outline: 2px solid var(--brand-2);
+    outline-offset: -2px;
+}
+
+.nav-group-toggle[aria-expanded="true"] {
+    background: var(--card-2);
+    color: var(--text);
+}
+
+.nav-children[hidden] {
+    display: none;
 }
 
 .dcnav svg {
@@ -204,6 +188,7 @@
 .nav-group {
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
 }
 
 .nav-parent {
@@ -271,14 +256,14 @@
     border-left: 1px solid var(--border);
 }
 
-.nav-child {
+.nav-list ::deep .nav-child {
     font-size: 12.5px;
     padding: 7px 9px;
     width: 100%;
     border: none;
 }
 
-.nav-child .bar {
+.nav-list ::deep .nav-child .bar {
     left: -10px;
 }
 
@@ -376,12 +361,6 @@
     overflow: hidden;
 }
 
-.sidebar:not(:hover) .user-bar {
-    padding-inline: 8px;
-    justify-content: flex-start;
-    gap: 8px;
-}
-
 .user-info {
     display: flex;
     align-items: center;
@@ -435,18 +414,6 @@
     margin-left: auto;
 }
 
-.sidebar:not(:hover) .user-actions {
-    gap: 4px;
-    margin-left: 0;
-}
-
-.sidebar:not(:hover) .user-actions .icon-btn,
-.sidebar:not(:hover) .icon-btn {
-    width: 27px;
-    height: 27px;
-    min-width: 27px;
-}
-
 .logout-form {
     margin: 0;
 }
@@ -493,7 +460,7 @@
 .main {
     flex: 1;
     min-width: 0;
-    margin-left: var(--menu-width-collapsed);
+    margin-left: var(--menu-width);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -636,39 +603,15 @@
         contain: layout paint;
         will-change: transform;
         transition: transform .18s cubic-bezier(.2, .8, .2, 1);
-        width: 220px;
+        width: min(var(--menu-width), calc(100vw - 32px));
     }
 
     .sidebar.open {
         transform: translateX(0);
     }
 
-    .sidebar:hover {
-        width: 220px;
-        box-shadow: 12px 0 28px rgba(0, 0, 0, .28);
-    }
-
-    .sidebar.open .nav-label,
-    .sidebar.open .brand-text,
-    .sidebar.open .nav-section,
-    .sidebar.open .switcher-name,
-    .sidebar.open .switcher-caret,
-    .sidebar.open .user-detail {
-        width: auto;
-        max-width: none;
-        opacity: 1;
-    }
-
-    .sidebar.open .nav-section {
-        padding: 15px 8px 5px;
-    }
-
     .main {
         margin-left: 0;
-    }
-
-    .sidebar:not(:hover)::before {
-        content: none;
     }
 
     .sidebar-close {

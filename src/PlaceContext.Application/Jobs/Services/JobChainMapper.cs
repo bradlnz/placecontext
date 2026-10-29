@@ -27,9 +27,12 @@ internal static class JobChainMapper
         }
 
         IReadOnlyList<JobChainStageView>? elseBranchView = null;
-        if (stage.ElseBranch is { Count: > 0 } elseBranch)
+        if ((stage.ElseBranch ?? (stage.Gate as ConditionGate)?.ElseBranch) is { Count: > 0 } elseBranch)
         {
-            elseBranchView = await Task.WhenAll(elseBranch.Select(s => ToStageViewAsync(s, jobs, ct)));
+            var branches = new List<JobChainStageView>();
+            foreach (var branch in elseBranch)
+                branches.Add(await ToStageViewAsync(branch, jobs, ct));
+            elseBranchView = branches;
         }
 
         return new JobChainStageView(
@@ -39,6 +42,8 @@ internal static class JobChainMapper
     private static ChainActionView? ToActionView(ChainAction? action) => action switch
     {
         null => null,
+        QemuChainAction vm => new QemuChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork),
+        LoopChainAction loop => new LoopChainActionView(loop.Type, loop.Instructions, loop.ResponseField, loop.ResponseType, loop.AgentProvider),
         SendEmailChainAction email => new SendEmailChainActionView(
             email.Recipient, email.RecipientName, email.Subject, email.Body, email.AttachmentPath),
         SendSmsChainAction sms => new SendSmsChainActionView(sms.Recipient, sms.Body),

@@ -3,41 +3,6 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-/// <summary>A pre-built starting point for a new job. Templates are pure presentation-layer
-/// defaults — they pre-fill the generic job editor with sample code, env vars, parameters and
-/// a list of vault credentials the integration needs.</summary>
-public sealed record JobTemplate(
-    string Id,
-    string Name,
-    string Category,
-    string Description,
-    string Icon,
-    string MapSourceKind,
-    string? MapRuntimeId,
-    string? MapEntrypoint,
-    string MapSource,
-    string MapEnvRaw,
-    string InputPayloadsRaw,
-    IReadOnlyList<JobParameterDto> Parameters,
-    JobReturnType ReturnType,
-    bool AllowNetworkEgress,
-    IReadOnlyList<JobCredentialRequirement> RequiredCredentials)
-{
-    public string MapImage => MapSourceKind == "image" ? MapSource : "";
-
-    /// <summary>Starter source code per runtime id ("node", "python"). Runtimes without an
-    /// entry fall back to a generic stdin/stdout skeleton in the editor.</summary>
-    public IReadOnlyDictionary<string, string> SourcesByRuntime { get; init; } =
-        new Dictionary<string, string>();
-}
-
-/// <summary>Describes one credential that must be stored in the project vault before the
-/// template can run successfully.</summary>
-public sealed record JobCredentialRequirement(
-    string Name,
-    string Description,
-    string EnvVarName);
-
 public static class JobTemplateCatalog
 {
     public static IReadOnlyList<JobTemplate> All { get; } = new List<JobTemplate>
@@ -69,7 +34,7 @@ public static class JobTemplateCatalog
         Name: "HubSpot contact sync",
         Category: "Integrations",
         Description: "Pull recently updated contacts from HubSpot and return them as JSON. Add your Private App access token to the vault.",
-        Icon: "◎",
+        Icon: "data.search",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -96,7 +61,7 @@ public static class JobTemplateCatalog
         Name: "Xero invoice export",
         Category: "Integrations",
         Description: "Fetch a page of invoices from Xero for the configured tenant. Uses OAuth 2 client credentials flow.",
-        Icon: "✕",
+        Icon: "close",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -125,7 +90,7 @@ public static class JobTemplateCatalog
         Name: "Shopify order export",
         Category: "Integrations",
         Description: "Pull the latest orders from a Shopify store using the Admin API.",
-        Icon: "S",
+        Icon: "data",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -155,7 +120,7 @@ public static class JobTemplateCatalog
         Name: "PostgreSQL query",
         Category: "Databases",
         Description: "Run a SQL query against PostgreSQL and return the rows as JSON. Uses the DATABASE_URL environment variable.",
-        Icon: "🐘",
+        Icon: "data",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -182,7 +147,7 @@ public static class JobTemplateCatalog
         Name: "MySQL query",
         Category: "Databases",
         Description: "Run a SQL query against MySQL and return the rows as JSON. Uses the DATABASE_URL environment variable.",
-        Icon: "🐬",
+        Icon: "data",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -209,7 +174,7 @@ public static class JobTemplateCatalog
         Name: "SQL Server query",
         Category: "Databases",
         Description: "Run a SQL query against SQL Server and return the rows as JSON. Uses the DATABASE_URL environment variable.",
-        Icon: "🗄",
+        Icon: "data",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -236,7 +201,7 @@ public static class JobTemplateCatalog
         Name: "MongoDB collection export",
         Category: "Databases",
         Description: "Query a MongoDB collection and return matching documents as JSON.",
-        Icon: "🍃",
+        Icon: "data",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -263,7 +228,7 @@ public static class JobTemplateCatalog
         Name: "Snowflake query",
         Category: "Databases",
         Description: "Run a query against Snowflake and return the result set as JSON.",
-        Icon: "❄",
+        Icon: "data",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -292,7 +257,7 @@ public static class JobTemplateCatalog
         Name: "BigQuery query",
         Category: "Databases",
         Description: "Run a query against Google BigQuery using a service account. Store the service account JSON in the vault.",
-        Icon: "B",
+        Icon: "data",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -322,7 +287,7 @@ public static class JobTemplateCatalog
         Name: "REST API poller",
         Category: "Common patterns",
         Description: "Poll any REST endpoint with an API key and return the JSON response. Add credentials and customise the URL.",
-        Icon: "↻",
+        Icon: "refresh",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -349,7 +314,7 @@ public static class JobTemplateCatalog
         Name: "Webhook receiver",
         Category: "Common patterns",
         Description: "Handle JSON delivered through the authenticated /api/ingest/{event} endpoint. Pair the job with an Event trigger using the same event name.",
-        Icon: "⇄",
+        Icon: "sync",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -376,7 +341,7 @@ public static class JobTemplateCatalog
         Name: "CSV import to database",
         Category: "Common patterns",
         Description: "Download a CSV file and insert its rows into a database table. Configure the URL, table and connection string.",
-        Icon: "CSV",
+        Icon: "file",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",
@@ -403,7 +368,7 @@ public static class JobTemplateCatalog
         Name: "Scheduled email report",
         Category: "Common patterns",
         Description: "Generate a simple HTML report and email it via SMTP. Wire this to a schedule trigger for daily/weekly reports.",
-        Icon: "✉",
+        Icon: "mail",
         MapSourceKind: "code",
         MapRuntimeId: "node",
         MapEntrypoint: "index.js",

@@ -61,18 +61,18 @@
         <div class="quick-chain-head">
             <div>
                 <div class="quick-chain-kicker">QUICK ACTION</div>
-                <h2 id="quick-chain-title" class="quick-chain-title">Run a job chain</h2>
+                <h2 id="quick-chain-title" class="quick-chain-title">Run a workflow</h2>
                 <p class="quick-chain-sub">Start a repeatable workflow from the current project.</p>
             </div>
             @if (Vm.CurrentProjectId is { } chainProjectId)
             {
-                <a class="dcbtn btn-sm" href="@($"/project/{chainProjectId}/chains")">View chains</a>
+                <a class="dcbtn btn-sm" href="@($"/project/{chainProjectId}/workflows")">View workflows</a>
             }
         </div>
 
         @if (Vm.CurrentProjectId is null)
         {
-            <div class="quick-chain-empty">Select a project to run its job chains.</div>
+            <div class="quick-chain-empty">Select a project to run its workflows.</div>
         }
         else if (!Vm.ChainsReady)
         {
@@ -80,7 +80,7 @@
         }
         else if (Vm.Chains.Count == 0)
         {
-            <div class="quick-chain-empty">No job chains are configured for this project.</div>
+            <div class="quick-chain-empty">No workflows are configured for this project.</div>
         }
         else
         {
@@ -117,6 +117,16 @@
     @* ── Pinned entities: one-click access to the business views of tagged data ────────── *@
     @if (Vm.Entities.Count > 0)
     {
+        <div class="charts-head">
+            <span class="section-title">Entities</span>
+            <button class="dcbtn btn-sm" disabled="@Vm.EntityChartsLoading" @onclick="Vm.LoadEntityChartsAsync">
+                @(Vm.EntityChartsLoading ? "Loading summaries…" : "Load summaries")
+            </button>
+        </div>
+        @if (Vm.EntityChartsError is not null)
+        {
+            <div class="quick-chain-message error" role="alert">@Vm.EntityChartsError</div>
+        }
         <div class="entity-grid">
             @foreach (var e in Vm.Entities)
             {
@@ -159,7 +169,7 @@
             <span class="section-title">Charts</span>
             @if (Vm.CurrentProjectId is { } chartsPid)
             {
-                <a href="@($"/project/{chartsPid}/analytics")" class="charts-edit-link">edit in Analytics →</a>
+                <a href="@($"/project/{chartsPid}/analytics")" class="charts-edit-link">edit in Analytics <AppIcon Kind="arrow-right" /></a>
             }
         </div>
         <div class="charts-grid">
@@ -247,7 +257,7 @@
                     </div>
                 </div>
                 <button class="dcslide-x" aria-label="Close run input prompt"
-                        disabled="@(Vm.RunningChainId is not null)" @onclick="Vm.CancelQuickChainPrompt">×</button>
+                        disabled="@(Vm.RunningChainId is not null)" @onclick="Vm.CancelQuickChainPrompt"><AppIcon Kind="close" /></button>
             </div>
             <div class="dcmodal-body quick-chain-modal-body">
                 <div class="dcfield">
@@ -259,7 +269,7 @@
                                 ProjectId="@Vm.RunPromptChain.ProjectId"
                                 Value="@Vm.RunAttachment"
                                 ValueChanged="@Vm.SetRunAttachment" />
-                    <small>Available to the chain as <code>attachment.$file</code>.</small>
+                    <small>Available to the workflow as <code>attachment.$file</code>.</small>
                 </div>
                 @foreach (var step in Vm.RunPromptSteps)
                 {
@@ -297,7 +307,7 @@
                         @onclick="Vm.CancelQuickChainPrompt">Cancel</button>
                 <button class="dcbtn primary" disabled="@(Vm.RunningChainId is not null)"
                         @onclick="Vm.SubmitQuickChainPromptAsync">
-                    @(Vm.RunningChainId is not null ? "Starting…" : "▶ Run chain")
+                    <AppIcon Kind="play" /> @(Vm.RunningChainId is not null ? "Starting…" : "Run workflow")
                 </button>
             </div>
         </div>

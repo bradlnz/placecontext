@@ -1,0 +1,5 @@
+<span class="app-icon" aria-hidden="true">@((MarkupString)MainLayoutIconCatalog.Markup(Kind))</span>
+
+@code {
+    [Parameter, EditorRequired] public string Kind { get; set; } = "";
+}

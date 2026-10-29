@@ -1,0 +1,20 @@
+@implements IAsyncDisposable
+@inject RunOutputViewModel Vm
+
+@if (Vm.Truncated)
+{
+    <div class="output-preview-note">
+        <span>Preview shortened to the first 32,000 characters.</span>
+        <ArtifactDownload Label="Download full output" GetArtifact="@(() => new RunArtifactView(Language == "json" ? "output.json" : "output.txt", Value))" />
+    </div>
+}
+<div id="@Vm.EditorId" class="run-output" aria-label="@Label"></div>
+
+@code {
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string Language { get; set; } = "json";
+    [Parameter] public string Label { get; set; } = "Run output";
+    protected override void OnParametersSet() { Vm.Value = Value; Vm.Language = Language; Vm.Label = Label; }
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync();
+    public ValueTask DisposeAsync() => Vm.DisposeAsync();
+}

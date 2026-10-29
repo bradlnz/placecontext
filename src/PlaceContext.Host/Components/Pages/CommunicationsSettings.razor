@@ -15,7 +15,7 @@
             <h2>Communications</h2>
             <p>Connect providers for workflows and sign-in codes. Credentials are referenced from project Vaults and resolved only when a message is sent.</p>
         </div>
-        <button class="dcbtn primary" @onclick="Vm.ShowAdd">+ Add provider</button>
+        <button class="dcbtn primary" @onclick="Vm.ShowAdd"><AppIcon Kind="plus" /> Add provider</button>
     </header>
 
     @if (Vm.Loading)
@@ -73,12 +73,12 @@
                             <button class="dcbtn xs" @onclick="@(() => Vm.StartEdit(provider))">Edit</button>
                             @if (Vm.ConfirmDeleteId == provider.Id)
                             {
-                                <button class="dcbtn xs danger" @onclick="@(() => Vm.DeleteAsync(provider.Id))">Confirm</button>
+                                <button class="dcbtn xs" @onclick="@(() => Vm.DeleteAsync(provider.Id))">Confirm</button>
                                 <button class="dcbtn xs" @onclick="@(() => Vm.ConfirmDeleteId = null)">Keep</button>
                             }
                             else
                             {
-                                <button class="dcbtn xs danger" @onclick="@(() => Vm.ConfirmDeleteId = provider.Id)">Delete</button>
+                                <button class="dcbtn xs" @onclick="@(() => Vm.ConfirmDeleteId = provider.Id)">Delete</button>
                             }
                         </div>
                     </article>

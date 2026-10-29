@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 using PlaceContext.Application;
@@ -33,6 +34,8 @@ public sealed partial class JobsViewModel
 
     public async Task AfterRenderAsync()
     {
+        if ((ShowEditor || ShowTemplateModal) && !_editorMetadataLoaded && !_editorMetadataLoading)
+            await LoadEditorMetadataAsync();
         if (
             ShowEditor
             && EditJobId is null
@@ -61,6 +64,35 @@ public sealed partial class JobsViewModel
             }
             if (!SourceMonaco)
                 NotifyStateChanged();
+        }
+    }
+
+    private bool _editorMetadataLoaded;
+    private bool _editorMetadataLoading;
+
+    private async Task LoadEditorMetadataAsync()
+    {
+        var projectId = ProjectId;
+        _editorMetadataLoading = true;
+        try
+        {
+            var secrets = await _svc.ListProjectSecretsAsync(projectId);
+            var events = await _svc.ListEventTypesAsync();
+            var connections = await _svc.ListMcpConnectionsAsync(projectId);
+            if (projectId != ProjectId) return;
+            VaultSecrets = secrets;
+            EventTypes = events;
+            ProjectMcpConnections = connections;
+        }
+        catch (Exception ex)
+        {
+            if (projectId == ProjectId) Message = ex.Message;
+        }
+        finally
+        {
+            if (projectId == ProjectId) _editorMetadataLoaded = true;
+            _editorMetadataLoading = false;
+            NotifyStateChanged();
         }
     }
 
@@ -170,8 +202,8 @@ public sealed partial class JobsViewModel
 
     public async Task SwitchToRunsTabAsync()
     {
+        CloseRunDetail();
         EditorTab = "runs";
-        RunDetail = null;
         if (EditJobId is { } jobId)
         {
             try
@@ -199,6 +231,7 @@ public sealed partial class JobsViewModel
     // ── Editor ────────────────────────────────────────────────────────────────────────────────
     public void NewJob()
     {
+        ResetPaneState();
         EditJobId = null;
         EdName = "";
         EdDescription = "";
@@ -231,6 +264,7 @@ public sealed partial class JobsViewModel
 
     public void OpenTemplateModal()
     {
+        ResetPaneState();
         ShowTemplateModal = true;
         SelectedTemplate = null;
         TemplateFilter = "";
@@ -293,6 +327,7 @@ public sealed partial class JobsViewModel
 
     public void EditJob(JobView job)
     {
+        ResetPaneState();
         EditJobId = job.Id;
         EdName = job.Name;
         EdDescription = job.Description ?? "";
@@ -330,17 +365,15 @@ public sealed partial class JobsViewModel
 
     public void CloseEditor()
     {
-        ShowEditor = false;
-        EditorError = null;
-        RunDetail = null;
-        SelectedTriggerId = null;
-        EditorTab = "details";
-        ResetSourceEditor();
+        ResetPaneState();
+        var uri = _navigation.GetUriWithQueryParameters(new Dictionary<string, object?> { ["job"] = null, ["tab"] = null });
+        if (uri != _navigation.Uri) _navigation.NavigateTo(uri, replace: true);
         NotifyStateChanged();
     }
 
     public void SetEditorTab(string tab)
     {
+        CloseRunDetail();
         EditorTab = tab;
         if (tab == "triggers")
             SelectedTriggerId = null;

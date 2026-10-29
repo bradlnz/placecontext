@@ -116,9 +116,10 @@ public sealed class JobsController : ControllerBase
     // ── Chain Run Cancel ──────────────────────────────────────────────────
 
     /// <summary>
-    /// POST /api/v1/chain-runs/{chainRunId}/cancel — cancels a running chain run: cancels every
+    /// POST /api/v1/workflow-runs/{chainRunId}/cancel — cancels a running chain run: cancels every
     /// still-running step job run and marks the chain run as Cancelled. Idempotent.
     /// </summary>
+    [HttpPost("workflow-runs/{chainRunId:guid}/cancel")]
     [HttpPost("chain-runs/{chainRunId:guid}/cancel")]
     [Authorize(Policy = Permission.JobsManage)]
     public async Task<ActionResult<bool>> CancelChainRun(Guid chainRunId)
@@ -130,10 +131,11 @@ public sealed class JobsController : ControllerBase
     // ── Chain Trigger ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// POST /api/v1/chains/{chainId}/trigger — start a fresh chain run. The chain executes from
+    /// POST /api/v1/workflows/{chainId}/trigger — start a fresh chain run. The chain executes from
     /// the first stage, using the supplied input payload (or the first job's stored shard payloads
     /// when null). Returns the new chain run view.
     /// </summary>
+    [HttpPost("workflows/{chainId:guid}/trigger")]
     [HttpPost("chains/{chainId:guid}/trigger")]
     [Authorize(Policy = Permission.JobsEdit)]
     public async Task<ActionResult<ChainRunView>> TriggerChain(
@@ -158,10 +160,11 @@ public sealed class JobsController : ControllerBase
     // ── Chain Replay ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// POST /api/v1/chains/{chainId}/replay — replay a failed/partial chain run from the
+    /// POST /api/v1/workflows/{chainId}/replay — replay a failed/partial chain run from the
     /// first failed step. The original run is preserved; a new run is created that re-executes
     /// from the failure point.
     /// </summary>
+    [HttpPost("workflows/{chainId:guid}/replay")]
     [HttpPost("chains/{chainId:guid}/replay")]
     [Authorize(Policy = Permission.JobsEdit)]
     public async Task<ActionResult<ChainRunView>> ReplayChain(

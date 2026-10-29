@@ -1,31 +1,8 @@
 namespace PlaceContext.Application.Ports;
 
-/// <summary>One customizable slot in the portal navigation.</summary>
-public sealed record MenuItemOverride(
-    string Id,
-    string? Label = null,
-    int Order = 0,
-    bool Visible = true,
-    string? Section = null);
-
-/// <summary>Tenant-owned menu layout for the workspace shell.</summary>
-public sealed record MenuLayout(IReadOnlyList<MenuItemOverride> Workspace);
-
-/// <summary>Resolved item ready to render (after layout + permissions).</summary>
-public sealed record ResolvedMenuItem(
-    string Id,
-    string Label,
-    string Kind,
-    string? Href,
-    string? Icon,
-    string? Section,
-    int Order,
-    /// <summary>Id of the accordion group this item renders under; null = top level.</summary>
-    string? Parent = null);
-
 /// <summary>
 /// Built-in menu catalog + per-tenant layout. Layout controls order, labels, visibility, and
-/// section headers; the caller's effective permissions still hide items they cannot use.
+/// navigation groups; the caller's effective permissions still hide items they cannot use.
 /// </summary>
 public interface IMenuConfigService
 {

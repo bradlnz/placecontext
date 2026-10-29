@@ -83,7 +83,8 @@ public static class CoreApiMapper
             v.Snapshot.Goal,
             v.Snapshot.ConcurrencyLimit,
             v.Snapshot.ShardCount,
-            v.Snapshot.AllowNetworkEgress),
+            v.Snapshot.AllowNetworkEgress,
+            v.Snapshot.Network),
         v.ShardResults.Select(s => new CoreShardResult(
             s.Index,
             s.ExitCode,

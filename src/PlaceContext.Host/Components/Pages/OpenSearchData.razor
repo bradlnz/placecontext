@@ -70,13 +70,13 @@
                                 <span>@dashboard.IndexPattern · @dashboard.MetricType by @dashboard.BucketField</span>
                             </div>
                             <div class="card-actions">
-                                <button title="Open in builder" @onclick="@(() => Vm.LoadDashboardAsync(dashboard))">✎</button>
+                                <button title="Open in builder" @onclick="@(() => Vm.LoadDashboardAsync(dashboard))"><AppIcon Kind="edit" /></button>
                                 <button title="Duplicate dashboard" disabled="@(Vm.Replicating == dashboard.Id)"
                                         @onclick="@(() => Vm.DuplicateDashboardAsync(dashboard))">⧉</button>
                                 <button title="Refresh chart" disabled="@(Vm.Refreshing == dashboard.Id)"
-                                        @onclick="@(() => Vm.RefreshDashboardAsync(dashboard))">↻</button>
+                                        @onclick="@(() => Vm.RefreshDashboardAsync(dashboard))"><AppIcon Kind="refresh" /></button>
                                 <button title="Delete chart" class="delete"
-                                        @onclick="@(() => Vm.DeleteDashboardAsync(dashboard.Id))">×</button>
+                                        @onclick="@(() => Vm.DeleteDashboardAsync(dashboard.Id))"><AppIcon Kind="close" /></button>
                             </div>
                         </header>
                         <div class="saved-chart">
@@ -121,12 +121,16 @@
                     <span>@(Vm.GeneratingCharts ? "analysing fields…" : $"{Vm.GeneratedCharts.Count} charts from {Vm.IndexPattern}")</span>
                 </div>
                 <button class="dcbtn" disabled="@(Vm.GeneratingCharts || Vm.Loading)" @onclick="Vm.GenerateChartsAsync">
-                    @(Vm.GeneratingCharts ? "Generating…" : "Regenerate charts")
+                    @(Vm.GeneratingCharts ? "Generating…" : Vm.ChartsRequested ? "Regenerate charts" : "Generate charts")
                 </button>
             </div>
             @if (Vm.GeneratingCharts)
             {
                 <div class="generated-loading dccard">Finding useful date, category, and numeric fields…</div>
+            }
+            else if (!Vm.ChartsRequested)
+            {
+                <div class="generated-loading dccard">Generate charts to explore this index.</div>
             }
             else if (Vm.GeneratedCharts.Count == 0)
             {
@@ -311,9 +315,9 @@
                 </table>
             </div>
             <footer class="pager">
-                <button class="dcbtn" disabled="@(Vm.Page <= 1 || Vm.Searching)" @onclick="Vm.PreviousPageAsync">← Previous</button>
+                <button class="dcbtn" disabled="@(Vm.Page <= 1 || Vm.Searching)" @onclick="Vm.PreviousPageAsync"><AppIcon Kind="arrow-left" /> Previous</button>
                 <span>Page @Vm.Page</span>
-                <button class="dcbtn" disabled="@(Vm.Result.Hits.Count < Vm.PageSize || Vm.Searching)" @onclick="Vm.NextPageAsync">Next →</button>
+                <button class="dcbtn" disabled="@(Vm.Result.Hits.Count < Vm.PageSize || Vm.Searching)" @onclick="Vm.NextPageAsync">Next <AppIcon Kind="arrow-right" /></button>
             </footer>
         }
     </section>
@@ -326,7 +330,7 @@
                     <strong>Record details</strong>
                     <span>@Vm.SelectedRecord.Index</span>
                 </div>
-                <button class="dcbtn close-panel" @onclick="Vm.CloseRecordPanelAsync">×</button>
+                <button aria-label="Close" class="dcbtn close-panel" @onclick="Vm.CloseRecordPanelAsync"><AppIcon Kind="close" /></button>
             </header>
             <div class="record-sidepanel-body">
                 <section>

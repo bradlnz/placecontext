@@ -167,7 +167,7 @@
                                     <span>@SqlPreview(q.Sql)</span>
                                 </div>
                                 <button class="studio-query-delete" title="Delete @q.Name"
-                                        @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteSavedQueryAsync(q.Id))">✕</button>
+                                        @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteSavedQueryAsync(q.Id))"><AppIcon Kind="close" /></button>
                             </article>
                         }
                     }
@@ -208,7 +208,7 @@
                             <span>@tab.TableName</span>
                             <span class="studio-tab-close"
                                   @onclick:stopPropagation="true" @onclick="@(() => CloseTableTabAsync(tab.TableName))"
-                                  title="Close @tab.TableName">×</span>
+                                  title="Close @tab.TableName"><AppIcon Kind="close" /></span>
                         </button>
                     }
                 </div>
@@ -348,7 +348,7 @@
                     <aside class="json-side-pane">
                         <header>
                             <div><strong>@_jsonViewerTitle</strong><span>JSON data</span></div>
-                            <button class="json-pane-close" @onclick="CloseJsonViewer" aria-label="Close JSON viewer">×</button>
+                            <button class="json-pane-close" @onclick="CloseJsonViewer" aria-label="Close JSON viewer"><AppIcon Kind="close" /></button>
                         </header>
                         <pre>@_jsonViewerValue</pre>
                     </aside>
@@ -362,7 +362,7 @@
                                 <strong>@Vm.GraphSidePaneTitle</strong>
                                 <span>@Vm.GraphSidePaneGraph.Links.Count linked record@(Vm.GraphSidePaneGraph.Links.Count == 1 ? "" : "s")</span>
                             </div>
-                            <button class="graph-pane-close" @onclick="Vm.CloseGraphPane" aria-label="Close linked records">×</button>
+                            <button class="graph-pane-close" @onclick="Vm.CloseGraphPane" aria-label="Close linked records"><AppIcon Kind="close" /></button>
                         </header>
                         <div class="graph-side-pane-body">
                             <GraphCanvas Graph="Vm.GraphSidePaneGraph" Height="440" Searchable="true" AllowFullscreen="true" />
@@ -381,7 +381,7 @@
     <div class="dcslide slide-560">
         <div class="dcslide-head">
             <span class="slide-title-13">New table</span>
-            <button class="dcslide-x" @onclick="() => Vm.CloseNewTable()">×</button>
+            <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseNewTable()"><AppIcon Kind="close" /></button>
         </div>
         <div class="slide-pad">
             <label class="field-label">Table name</label>
@@ -390,7 +390,7 @@
 
             <div class="columns-head">
                 <span class="field-sub">Columns</span>
-                <button class="dcbtn btn-add-col" @onclick="() => Vm.AddColumn()">+ column</button>
+                <button class="dcbtn btn-add-col" @onclick="() => Vm.AddColumn()"><AppIcon Kind="plus" /> column</button>
             </div>
             <div class="col-grid-head">
                 <span>name</span><span>type</span><span class="center">not null</span><span class="center">PK</span><span></span>
@@ -407,7 +407,7 @@
                     </select>
                     <input type="checkbox" @bind="col.NotNull" class="center-self" />
                     <input type="checkbox" @bind="col.PrimaryKey" class="center-self" />
-                    <button class="dclink link-bad" @onclick="@(() => Vm.NewTable.Columns.RemoveAt(idx))">✕</button>
+                    <button aria-label="Remove" class="dclink" @onclick="@(() => Vm.NewTable.Columns.RemoveAt(idx))"><AppIcon Kind="close" /></button>
                 </div>
             }
 
@@ -435,7 +435,7 @@
                     @Vm.CsvImport.FileName · @Vm.CsvImport.DataRowCount row(s) · @Vm.CsvImport.Columns.Count column(s)
                 </div>
             </div>
-            <button class="dcslide-x" @onclick="() => Vm.CloseCsvImport()">×</button>
+            <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseCsvImport()"><AppIcon Kind="close" /></button>
         </div>
         <div class="slide-pad-scroll">
             <div class="csv-name-row">
@@ -513,7 +513,7 @@
     <div class="dcslide slide-560">
         <div class="dcslide-head">
             <span class="slide-title-13">New view</span>
-            <button class="dcslide-x" @onclick="() => Vm.CloseNewView()">×</button>
+            <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseNewView()"><AppIcon Kind="close" /></button>
         </div>
         <div class="slide-pad">
             <label class="field-label">View name</label>
@@ -551,7 +551,7 @@
     <div class="dcslide slide-420">
         <div class="dcslide-head">
             <span class="slide-title-13">Save query</span>
-            <button class="dcslide-x" @onclick="() => Vm.CloseSaveQueryDialog()">×</button>
+            <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseSaveQueryDialog()"><AppIcon Kind="close" /></button>
         </div>
         <div class="slide-pad">
             <label class="field-label">Name</label>
@@ -578,7 +578,7 @@
     <div class="dcslide slide-420">
         <div class="dcslide-head">
             <span class="slide-title-13">Materialize to index</span>
-            <button class="dcslide-x" @onclick="() => Vm.CloseMaterializeDialog()">×</button>
+            <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseMaterializeDialog()"><AppIcon Kind="close" /></button>
         </div>
         <div class="slide-pad">
             <div class="slide-sub">Copies <strong>@Vm.MaterializeTableName</strong> into an OpenSearch index so you can search and aggregate it with your other indices. Re-materializing replaces the existing index.</div>

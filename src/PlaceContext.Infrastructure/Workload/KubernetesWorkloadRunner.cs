@@ -51,7 +51,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     public async Task CancelAsync(string correlationId, CancellationToken ct = default)
     {
         var name = MakeName(correlationId);
-        var cfg = KubernetesClientConfiguration.InClusterConfig();
+        var cfg = KubernetesRuntime.Configuration(_options);
         var ns = Namespace(cfg);
         using var client = new Kubernetes(cfg);
         await CleanupAsync(client, ns, name);
@@ -59,9 +59,14 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
 
     public async Task<WorkloadRunResult> RunAsync(WorkloadRunRequest request, CancellationToken ct = default)
     {
-        var cfg = KubernetesClientConfiguration.InClusterConfig();
+        BuildRestrictedContainerSecurityContext(_options);
+        if (request.Network is not null && !_options.KubeOvnEnabled)
+            throw new InvalidOperationException("This job requires a worker VPC. Install Kube-OVN and enable PlaceContext:WorkloadRunner:KubeOvnEnabled on the execution host.");
+        var cfg = KubernetesRuntime.Configuration(_options);
         var ns = Namespace(cfg);
         using var client = new Kubernetes(cfg);
+        if (request.Network is { } network)
+            await Networking.KubeOvnNetwork.EnsureAsync(client, network, ns, ct);
 
         var name = MakeName(request.CorrelationId);
         var runLabel = name; // pod selector for the NetworkPolicy
@@ -97,7 +102,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             {
                 depsPreamble += WorkloadDependencies.ShellPreamble(recipe);
                 if (recipe.InvokePrefix is not null) invoke = recipe.InvokePrefix + " " + invoke;
-                if (request.AllowNetworkEgress && _options.WarmDependencyCache && _store is { IsEnabled: true })
+                if (request.Network is null && request.AllowNetworkEgress && _options.WarmDependencyCache && _store is { IsEnabled: true })
                 {
                     depsGetUrl = await EnsureWarmCacheAsync(ns, client, runtimeId, image, recipe, request, ct);
                 }
@@ -126,121 +131,124 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         // exist before the Job below, so this is awaited before the Job create. Sandbox: deny-all
         // egress unless the job opted in; explicit egress reaches DNS + public networks but cannot
         // pivot into cluster/private address space.
-        var createConfigMap = client.CoreV1.CreateNamespacedConfigMapAsync(
-            new V1ConfigMap { Metadata = new V1ObjectMeta { Name = name }, Data = data }, ns, cancellationToken: ct);
-        var createNetPolicy = client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(
-            BuildEgressPolicy(name, runLabel, request.AllowNetworkEgress), ns,
-            cancellationToken: ct);
-        await Task.WhenAll(createConfigMap, createNetPolicy);
-
-        // ── The Job ─────────────────────────────────────────────────────────────────────────────
-        var runContainer = new V1Container
+        try
         {
-            Name = "run",
-            Image = image,
-            // A writable HOME for tools that insist on one (npm cache, go env), then the runtime
-            // profile's env (which may relocate HOME to an exec-capable root), then the job's own
-            // env — later entries override earlier ones by key, so the job always wins.
-            Env = BuildContainerEnv(runtime, request),
-            VolumeMounts = new[]
-            {
-                new V1VolumeMount { Name = "work", MountPath = "/work" },
-                new V1VolumeMount { Name = "in", MountPath = "/in", ReadOnlyProperty = true },
-                // /out must be a volume: running as nobody, the job could never mkdir /out on the
-                // root-owned image rootfs. The pod fsGroup makes the emptyDir group-writable.
-                new V1VolumeMount { Name = "out", MountPath = "/out" },
-            },
-            Resources = ResourceLimits(runtime),
-            SecurityContext = BuildRestrictedContainerSecurityContext(_options),
-        };
-        if (runShell.Length > 0) runContainer.Command = new[] { "sh", "-c", runShell };
+            var createConfigMap = client.CoreV1.CreateNamespacedConfigMapAsync(
+                new V1ConfigMap { Metadata = new V1ObjectMeta { Name = name }, Data = data }, ns, cancellationToken: ct);
+            var createNetPolicy = client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(
+                request.Network is { } policy ? Networking.KubeOvnNetwork.Policy(name, policy)
+                    : BuildEgressPolicy(name, runLabel, request.AllowNetworkEgress), ns,
+                cancellationToken: ct);
+            await Task.WhenAll(createConfigMap, createNetPolicy);
 
-        var job = new V1Job
-        {
-            Metadata = new V1ObjectMeta { Name = name, Labels = new Dictionary<string, string> { ["placecontext-run"] = runLabel } },
-            Spec = new V1JobSpec
+            // ── The Job ─────────────────────────────────────────────────────────────────────────────
+            var runContainer = new V1Container
             {
-                BackoffLimit = 0,
-                ActiveDeadlineSeconds = timeoutSeconds,
-                TtlSecondsAfterFinished = 120,
-                Template = new V1PodTemplateSpec
+                Name = "run",
+                Image = image,
+                // A writable HOME for tools that insist on one (npm cache, go env), then the runtime
+                // profile's env (which may relocate HOME to an exec-capable root), then the job's own
+                // env — later entries override earlier ones by key, so the job always wins.
+                Env = BuildContainerEnv(runtime, request),
+                VolumeMounts = new[]
                 {
-                    Metadata = new V1ObjectMeta
+                    new V1VolumeMount { Name = "work", MountPath = "/work" },
+                    new V1VolumeMount { Name = "in", MountPath = "/in", ReadOnlyProperty = true },
+                    // /out must be a volume: running as nobody, the job could never mkdir /out on the
+                    // root-owned image rootfs. The pod fsGroup makes the emptyDir group-writable.
+                    new V1VolumeMount { Name = "out", MountPath = "/out" },
+                },
+                Resources = ResourceLimits(runtime),
+                SecurityContext = BuildRestrictedContainerSecurityContext(_options),
+            };
+            if (runShell.Length > 0) runContainer.Command = new[] { "sh", "-c", runShell };
+
+            var job = new V1Job
+            {
+                Metadata = new V1ObjectMeta { Name = name, Labels = new Dictionary<string, string> { ["placecontext-run"] = runLabel } },
+                Spec = new V1JobSpec
+                {
+                    BackoffLimit = 0,
+                    ActiveDeadlineSeconds = Math.Min(timeoutSeconds, IJobRunHeartbeat.TimeoutSeconds),
+                    TtlSecondsAfterFinished = 120,
+                    Template = new V1PodTemplateSpec
                     {
-                        // placecontext-run is unique per run (NetworkPolicy selector); placecontext-workload is the
-                        // shared label every job pod carries so the scheduler can balance them across nodes.
-                        Labels = new Dictionary<string, string>
+                        Metadata = new V1ObjectMeta
                         {
-                            ["placecontext-run"] = runLabel,
-                            ["placecontext-workload"] = "job",
-                        },
-                    },
-                    Spec = new V1PodSpec
-                    {
-                        RestartPolicy = "Never",
-                        // User-authored code must never receive a Kubernetes API credential. The
-                        // Host creates and observes Jobs; workload pods need no API access.
-                        AutomountServiceAccountToken = false,
-                        // Jobs never run as root: pod-level seccomp + an fsGroup that keeps /work and
-                        // /out writable for the unprivileged run container; the run container itself
-                        // adds the uid/gid, no-new-privileges and dropped capabilities. The
-                        // materializer uses that same identity, satisfying Restricted Pod Security.
-                        SecurityContext = BuildPodSecurityContext(_options),
-                        // Keep execution on the operator's own machines: prefer (or require) worker/agent
-                        // nodes so the control-plane node — typically a small cloud server whose only duty
-                        // is the portal/MCP — doesn't burn its CPU running job pods. See BuildWorkerAffinity.
-                        Affinity = BuildWorkerAffinity(_options),
-                        NodeSelector = _options.JobNodeSelector.Count > 0 ? _options.JobNodeSelector : null,
-                        // Spread job pods evenly across nodes by hostname. ScheduleAnyway keeps it a soft
-                        // preference (never blocks a run), but a freshly added node — which carries zero job
-                        // pods — becomes the lowest-skew target, so new workload flows onto it automatically.
-                        TopologySpreadConstraints = new[]
-                        {
-                            new V1TopologySpreadConstraint
+                            Annotations = request.Network is { } assigned ? Networking.KubeOvnNetwork.Annotations(assigned) : null,
+                            // placecontext-run is unique per run (NetworkPolicy selector); placecontext-workload is the
+                            // shared label every job pod carries so the scheduler can balance them across nodes.
+                            Labels = new Dictionary<string, string>
                             {
-                                MaxSkew = 1,
-                                TopologyKey = "kubernetes.io/hostname",
-                                WhenUnsatisfiable = "ScheduleAnyway",
-                                LabelSelector = new V1LabelSelector
-                                {
-                                    MatchLabels = new Dictionary<string, string> { ["placecontext-workload"] = "job" },
-                                },
+                                ["placecontext-run"] = runLabel,
+                                ["placecontext-workload"] = "job",
                             },
                         },
-                        InitContainers = new[]
+                        Spec = new V1PodSpec
                         {
-                            new V1Container
+                            RestartPolicy = "Never",
+                            TerminationGracePeriodSeconds = 5,
+                            // User-authored code must never receive a Kubernetes API credential. The
+                            // Host creates and observes Jobs; workload pods need no API access.
+                            AutomountServiceAccountToken = false,
+                            // Jobs never run as root: pod-level seccomp + an fsGroup that keeps /work and
+                            // /out writable for the unprivileged run container; the run container itself
+                            // adds the uid/gid, no-new-privileges and dropped capabilities. The
+                            // materializer uses that same identity, satisfying Restricted Pod Security.
+                            SecurityContext = BuildPodSecurityContext(_options),
+                            // Keep execution on the operator's own machines: prefer (or require) worker/agent
+                            // nodes so the control-plane node — typically a small cloud server whose only duty
+                            // is the portal/MCP — doesn't burn its CPU running job pods. See BuildWorkerAffinity.
+                            Affinity = BuildWorkerAffinity(_options),
+                            NodeSelector = _options.JobNodeSelector.Count > 0 ? _options.JobNodeSelector : null,
+                            // Spread job pods evenly across nodes by hostname. ScheduleAnyway keeps it a soft
+                            // preference (never blocks a run), but a freshly added node — which carries zero job
+                            // pods — becomes the lowest-skew target, so new workload flows onto it automatically.
+                            TopologySpreadConstraints = new[]
                             {
-                                Name = "materialize",
-                                Image = "busybox:1.36",
-                                Command = new[] { "sh", "-c", script },
-                                Env = depsGetUrl is null
-                                    ? null
-                                    : new[] { new V1EnvVar { Name = "PCDEPS_GET_URL", Value = depsGetUrl } },
-                                VolumeMounts = new[]
+                                new V1TopologySpreadConstraint
                                 {
-                                    new V1VolumeMount { Name = "cm", MountPath = "/cm", ReadOnlyProperty = true },
-                                    new V1VolumeMount { Name = "work", MountPath = "/work" },
-                                    new V1VolumeMount { Name = "in", MountPath = "/in" },
+                                    MaxSkew = 1,
+                                    TopologyKey = "kubernetes.io/hostname",
+                                    WhenUnsatisfiable = "ScheduleAnyway",
+                                    LabelSelector = new V1LabelSelector
+                                    {
+                                        MatchLabels = new Dictionary<string, string> { ["placecontext-workload"] = "job" },
+                                    },
                                 },
-                                SecurityContext = BuildRestrictedContainerSecurityContext(_options),
                             },
-                        },
-                        Containers = new[] { runContainer },
-                        Volumes = new[]
-                        {
-                            new V1Volume { Name = "cm", ConfigMap = new V1ConfigMapVolumeSource { Name = name } },
-                            new V1Volume { Name = "work", EmptyDir = new V1EmptyDirVolumeSource() },
-                            new V1Volume { Name = "in", EmptyDir = new V1EmptyDirVolumeSource() },
-                            new V1Volume { Name = "out", EmptyDir = new V1EmptyDirVolumeSource() },
+                            InitContainers = new[]
+                            {
+                                new V1Container
+                                {
+                                    Name = "materialize",
+                                    Image = "busybox:1.36",
+                                    Command = new[] { "sh", "-c", script },
+                                    Env = depsGetUrl is null
+                                        ? null
+                                        : new[] { new V1EnvVar { Name = "PCDEPS_GET_URL", Value = depsGetUrl } },
+                                    VolumeMounts = new[]
+                                    {
+                                        new V1VolumeMount { Name = "cm", MountPath = "/cm", ReadOnlyProperty = true },
+                                        new V1VolumeMount { Name = "work", MountPath = "/work" },
+                                        new V1VolumeMount { Name = "in", MountPath = "/in" },
+                                    },
+                                    SecurityContext = BuildRestrictedContainerSecurityContext(_options),
+                                },
+                            },
+                            Containers = new[] { runContainer },
+                            Volumes = new[]
+                            {
+                                new V1Volume { Name = "cm", ConfigMap = new V1ConfigMapVolumeSource { Name = name } },
+                                new V1Volume { Name = "work", EmptyDir = new V1EmptyDirVolumeSource() },
+                                new V1Volume { Name = "in", EmptyDir = new V1EmptyDirVolumeSource() },
+                                new V1Volume { Name = "out", EmptyDir = new V1EmptyDirVolumeSource() },
+                            },
                         },
                     },
                 },
-            },
-        };
+            };
 
-        try
-        {
             await client.BatchV1.CreateNamespacedJobAsync(job, ns, cancellationToken: ct);
             return await AwaitResultAsync(client, ns, name, request.CorrelationId, timeoutSeconds, ct);
         }
@@ -263,11 +271,22 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds + 30);
         var delay = TimeSpan.FromMilliseconds(200);
         var nextLogRead = DateTimeOffset.MinValue;
+        var nextPulse = DateTimeOffset.MinValue;
+        string failure = "";
         while (DateTimeOffset.UtcNow < deadline)
         {
             var job = await client.BatchV1.ReadNamespacedJobStatusAsync(name, ns, cancellationToken: ct);
             if ((job.Status?.Succeeded ?? 0) >= 1 || (job.Status?.Failed ?? 0) >= 1)
+            {
+                failure = string.Join("; ", job.Status?.Conditions?.Where(c => c.Type is "Failed" or "FailureTarget")
+                    .Select(c => c.Reason + ": " + c.Message) ?? []);
                 break;
+            }
+            if (DateTimeOffset.UtcNow >= nextPulse)
+            {
+                await PulseJobAsync(client, ns, job, timeoutSeconds, ct);
+                nextPulse = DateTimeOffset.UtcNow.AddSeconds(IJobRunHeartbeat.IntervalSeconds);
+            }
             if (_output is not null && DateTimeOffset.UtcNow >= nextLogRead)
             {
                 await CaptureLivePodLogAsync(client, ns, name, correlationId, ct);
@@ -297,7 +316,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         // stdout is the artifact (the authoring contract); framed /out files ride behind the marker.
         var (stdout, files) = SplitFramedLogs(logs);
         _output?.Set(correlationId, stdout);
-        return new WorkloadRunResult(exit, string.IsNullOrEmpty(stdout) ? null : stdout, stdout, "", files);
+        return new WorkloadRunResult(exit, string.IsNullOrEmpty(stdout) ? null : stdout, stdout, failure, files);
     }
 
     private async Task CaptureLivePodLogAsync(
@@ -428,7 +447,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             }
             catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.Conflict) { }
 
-            await WaitForJobCompletionAsync(client, ns, name, BakeTimeoutSeconds + 30, ct);
+            await WaitForJobCompletionAsync(client, ns, name, BakeTimeoutSeconds, createdJob, ct);
             // The object is the ground truth (not the Job status): another replica's bake may have
             // completed while its Job was already cleaned up under our poll.
             if (await store.ExistsAsync(bucket, key, ct))
@@ -452,9 +471,10 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
 
     /// <summary>Polls a Job to a terminal state (or the deadline). False on failure/timeout/disappearance.</summary>
     private static async Task<bool> WaitForJobCompletionAsync(Kubernetes client, string ns, string name,
-        int timeoutSeconds, CancellationToken ct)
+        int timeoutSeconds, bool renew, CancellationToken ct)
     {
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds + 30);
+        var nextPulse = DateTimeOffset.MinValue;
         while (DateTimeOffset.UtcNow < deadline)
         {
             try
@@ -462,6 +482,11 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                 var job = await client.BatchV1.ReadNamespacedJobStatusAsync(name, ns, cancellationToken: ct);
                 if ((job.Status?.Succeeded ?? 0) >= 1) return true;
                 if ((job.Status?.Failed ?? 0) >= 1) return false;
+                if (renew && DateTimeOffset.UtcNow >= nextPulse)
+                {
+                    await PulseJobAsync(client, ns, job, timeoutSeconds, ct);
+                    nextPulse = DateTimeOffset.UtcNow.AddSeconds(IJobRunHeartbeat.IntervalSeconds);
+                }
             }
             catch (HttpOperationException ex) when (ex.Response?.StatusCode == HttpStatusCode.NotFound)
             {
@@ -470,6 +495,24 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
         }
         return false;
+    }
+
+    // The cluster owns expiry, so killing the portal cannot leave its containers running.
+    internal static long LeaseDeadlineSeconds(DateTimeOffset? startedAt, int timeoutSeconds, DateTimeOffset now)
+        => Math.Min(timeoutSeconds, Math.Max(0, (long)((now - (startedAt ?? now)).TotalSeconds)) + IJobRunHeartbeat.TimeoutSeconds);
+
+    private static async Task PulseJobAsync(Kubernetes client, string ns, V1Job job, int timeoutSeconds, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (job.Status?.StartTime is { } started && job.Spec.ActiveDeadlineSeconds is { } deadline
+            && (now - started).TotalSeconds >= deadline)
+            throw new TimeoutException("Job keep-alive expired before it could be renewed.");
+        var seconds = LeaseDeadlineSeconds(job.Status?.StartTime, timeoutSeconds, now);
+        using var pulse = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        pulse.CancelAfter(TimeSpan.FromSeconds(IJobRunHeartbeat.IntervalSeconds));
+        await client.BatchV1.PatchNamespacedJobAsync(new V1Patch(
+            new { spec = new { activeDeadlineSeconds = seconds } }, V1Patch.PatchType.MergePatch),
+            job.Metadata.Name, ns, cancellationToken: pulse.Token);
     }
 
     /// <summary>
@@ -506,7 +549,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             Spec = new V1JobSpec
             {
                 BackoffLimit = 0,
-                ActiveDeadlineSeconds = BakeTimeoutSeconds,
+                ActiveDeadlineSeconds = Math.Min(BakeTimeoutSeconds, IJobRunHeartbeat.TimeoutSeconds),
                 TtlSecondsAfterFinished = 600,
                 Template = new V1PodTemplateSpec
                 {
@@ -514,6 +557,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                     Spec = new V1PodSpec
                     {
                         RestartPolicy = "Never",
+                            TerminationGracePeriodSeconds = 5,
                         AutomountServiceAccountToken = false,
                         SecurityContext = BuildPodSecurityContext(options),
                         Affinity = BuildWorkerAffinity(options),
@@ -570,18 +614,21 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     /// <summary>
     /// The restricted container-level security context for the containers that execute workload code
     /// (the run container, the dependency bake): non-root numeric identity, no privilege escalation,
-    /// all capabilities dropped. RunAsNonRoot follows the configured uid so an operator who knowingly
-    /// sets RunAsUser=0 doesn't produce pods the kubelet refuses to start.
+    /// all capabilities dropped. Root identities are rejected, including configuration overrides.
     /// </summary>
     internal static V1SecurityContext BuildRestrictedContainerSecurityContext(WorkloadRunnerOptions options)
-        => new()
+    {
+        if (options.RunAsUser <= 0 || options.RunAsGroup <= 0)
+            throw new InvalidOperationException("Workloads must use a non-root user and group.");
+        return new()
         {
-            RunAsNonRoot = options.RunAsUser != 0,
+            RunAsNonRoot = true,
             RunAsUser = options.RunAsUser,
             RunAsGroup = options.RunAsGroup,
             AllowPrivilegeEscalation = false,
             Capabilities = new V1Capabilities { Drop = new[] { "ALL" } },
         };
+    }
 
     /// <summary>
     /// The egress policy for a workload pod. Default is deny-all. Explicitly networked jobs get DNS
@@ -723,12 +770,13 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
 
     private static Task CleanupAsync(Kubernetes client, string ns, string name)
     {
-        var bg = new V1DeleteOptions { PropagationPolicy = "Background" };
+        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var bg = new V1DeleteOptions { PropagationPolicy = "Background", GracePeriodSeconds = 0 };
         static async Task Best(Func<Task> delete) { try { await delete(); } catch { } }
         return Task.WhenAll(
-            Best(() => client.BatchV1.DeleteNamespacedJobAsync(name, ns, body: bg)),
-            Best(() => client.CoreV1.DeleteNamespacedConfigMapAsync(name, ns)),
-            Best(() => client.NetworkingV1.DeleteNamespacedNetworkPolicyAsync(name, ns)));
+            Best(() => client.BatchV1.DeleteNamespacedJobAsync(name, ns, body: bg, cancellationToken: cleanup.Token)),
+            Best(() => client.CoreV1.DeleteNamespacedConfigMapAsync(name, ns, cancellationToken: cleanup.Token)),
+            Best(() => client.NetworkingV1.DeleteNamespacedNetworkPolicyAsync(name, ns, cancellationToken: cleanup.Token)));
     }
 
     /// <summary>

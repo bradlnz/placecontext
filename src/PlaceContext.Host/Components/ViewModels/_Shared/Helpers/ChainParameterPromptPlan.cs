@@ -3,7 +3,7 @@ using PlaceContext.Application.Dtos;
 namespace PlaceContext.Host.Components.ViewModels.Helpers;
 
 /// <summary>
-/// Resolves the parameterized execution steps for a chain and prepares their stored input defaults.
+/// Resolves the parameterized execution steps for a workflow and prepares their stored input defaults.
 /// The execution indexes match <c>RunJobChainCommand</c>, including action stages and parallel jobs.
 /// </summary>
 public sealed record ChainParameterPromptPlan(

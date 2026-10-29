@@ -10,22 +10,25 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
     private readonly ICurrentTenant _tenant;
     private readonly NavigationManager _navigation;
     private bool _initialized;
+    private readonly ICurrentUser? _user;
 
     public NotificationsViewModel(
         OperationCenter operationsCenter,
         ICurrentTenant tenant,
-        NavigationManager navigation
+        NavigationManager navigation,
+        ICurrentUser? user = null
     )
     {
         _operationsCenter = operationsCenter;
         _tenant = tenant;
         _navigation = navigation;
+        _user = user;
     }
 
     public bool IsOpen { get; private set; }
     public IReadOnlyList<PortalOperation> Operations { get; private set; } = [];
     public int ActiveCount =>
-        _tenant.IsResolved ? _operationsCenter.ActiveCount(_tenant.TenantId) : 0;
+        _tenant.IsResolved ? _operationsCenter.ActiveCount(_tenant.TenantId, _user?.UserId) : 0;
     public string ActiveSummary => ActiveCount > 0 ? $"{ActiveCount} in progress" : "all quiet";
 
     public void Initialize()
@@ -53,6 +56,7 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
     public void Open(string link)
     {
         IsOpen = false;
+        NotifyStateChanged();
         _navigation.NavigateTo(link);
     }
 
@@ -73,11 +77,11 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
     public string StatusIcon(PortalOperationStatus status) =>
         status switch
         {
-            PortalOperationStatus.Queued => "⏳",
-            PortalOperationStatus.Running => "◐",
-            PortalOperationStatus.Succeeded => "✓",
-            PortalOperationStatus.Failed => "✗",
-            _ => "?",
+            PortalOperationStatus.Queued => "clock",
+            PortalOperationStatus.Running => "refresh",
+            PortalOperationStatus.Succeeded => "check",
+            PortalOperationStatus.Failed => "close",
+            _ => "about",
         };
 
     public string StatusClass(PortalOperationStatus status) =>
@@ -111,7 +115,7 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
     }
 
     private void Reload() =>
-        Operations = _tenant.IsResolved ? _operationsCenter.ListForTenant(_tenant.TenantId) : [];
+        Operations = _tenant.IsResolved ? _operationsCenter.ListForTenant(_tenant.TenantId, _user?.UserId) : [];
 
     private static string Elapsed(DateTimeOffset since) =>
         FormatDuration(DateTimeOffset.UtcNow - since);

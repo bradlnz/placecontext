@@ -35,7 +35,8 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         Guid chainId,
         string? inputPayload,
         string? idempotencyKey = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        Guid? queueId = null, int? messageTtlSeconds = null, int receiptRetentionDays = 30, int maxAttempts = 3, int retryDelaySeconds = 3, DateTimeOffset? availableAt = null)
     {
         if (!_tenant.IsResolved)
             throw new InvalidOperationException("A tenant is required to submit a job chain.");
@@ -78,12 +79,12 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             """
             WITH inserted AS (
                 INSERT INTO rpc_chain_submissions
-                    ("Id", "TenantId", "ProjectId", "ChainId", "ChainRunId", "IdempotencyKey",
+                    ("Id", "TenantId", "ProjectId", "ChainId", "ChainRunId", "IdempotencyKey", "QueueId",
                      "InputPayload", "SubmitterUserId", "SubmitterRole", "Status", "Attempts",
-                     "SubmittedAt", "NextAttemptAt")
+                     "SubmittedAt", "NextAttemptAt", "ExpiresAt", "ReceiptRetentionDays", "MessageTtlSeconds", "MaxAttempts", "RetryDelaySeconds")
                 VALUES
-                    (@id, @tenant, @project, @chain, @run, @key,
-                     @payload, @user, @role, 'Queued', 0, now(), now())
+                    (@id, @tenant, @project, @chain, @run, @key, @queue,
+                     @payload, @user, @role, 'Queued', 0, now(), COALESCE(@available, now()), COALESCE(@available, now()) + make_interval(secs => @ttl), @retention, @ttl, @maxAttempts, @retryDelay)
                 ON CONFLICT ("TenantId", "IdempotencyKey")
                     WHERE "IdempotencyKey" IS NOT NULL
                 DO NOTHING
@@ -105,6 +106,12 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         command.Parameters.AddWithValue("chain", chainId);
         command.Parameters.AddWithValue("run", chainRunId);
         command.Parameters.AddWithValue("key", (object?)idempotencyKey ?? DBNull.Value);
+        command.Parameters.AddWithValue("queue", NpgsqlTypes.NpgsqlDbType.Uuid, (object?)queueId ?? DBNull.Value);
+        command.Parameters.AddWithValue("ttl", NpgsqlTypes.NpgsqlDbType.Integer, (object?)messageTtlSeconds ?? DBNull.Value);
+        command.Parameters.AddWithValue("retention", receiptRetentionDays);
+        command.Parameters.AddWithValue("maxAttempts", maxAttempts);
+        command.Parameters.AddWithValue("retryDelay", retryDelaySeconds);
+        command.Parameters.AddWithValue("available", NpgsqlTypes.NpgsqlDbType.TimestampTz, (object?)availableAt?.ToUniversalTime() ?? DBNull.Value);
         command.Parameters.AddWithValue("payload", (object?)protectedPayload ?? DBNull.Value);
         command.Parameters.AddWithValue("user", _user.UserId);
         command.Parameters.AddWithValue("role", _user.Role);
@@ -148,6 +155,8 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             SELECT * FROM chain_runs WHERE "Id" = {chainRunId} AND "TenantId" = {_tenant.TenantId} FOR UPDATE
             """).ToListAsync(ct);
         var row = rows.SingleOrDefault() ?? throw new ArgumentException("Chain run not found.");
+        // A Blazor circuit can retain a tracked checkpoint while a worker advances to the next input.
+        await _db.Entry(row).ReloadAsync(ct);
         var purpose = IDataEncryptor.Purpose.ChainRun;
         var request = row.InputRequest is null ? null : JsonSerializer.Deserialize<ChainInputRequest>(
             _encryptor.Unprotect(row.InputRequest, purpose));

@@ -17,7 +17,7 @@ public sealed class DashboardQuickActionsContractTests
         );
 
         Assert.Contains("dashboard-quick-chains", page, StringComparison.Ordinal);
-        Assert.Contains("Run a job chain", page, StringComparison.Ordinal);
+        Assert.Contains("Run a workflow", page, StringComparison.Ordinal);
         Assert.Contains("ListJobChainsAsync", viewModel, StringComparison.Ordinal);
         Assert.Contains("ListJobsAsync", viewModel, StringComparison.Ordinal);
         Assert.Contains("ParameterPromptState", page, StringComparison.Ordinal);
@@ -25,6 +25,7 @@ public sealed class DashboardQuickActionsContractTests
         Assert.Contains("ParamInput", page, StringComparison.Ordinal);
         Assert.Contains("ToStepPayloadOverrides", prompt, StringComparison.Ordinal);
         Assert.Contains("PrepareQuickChainRunAsync", viewModel, StringComparison.Ordinal);
+        Assert.Contains("/observability?tab=workflows&workflowRun={chainRunId}", viewModel, StringComparison.Ordinal);
         Assert.Contains("quick-chain-run", page, StringComparison.Ordinal);
         Assert.Contains("padding: 16px", css, StringComparison.Ordinal);
         Assert.Contains("quick-chain-modal", css, StringComparison.Ordinal);

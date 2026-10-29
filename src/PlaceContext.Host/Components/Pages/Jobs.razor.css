@@ -82,16 +82,14 @@
 .icon-action:hover:not(:disabled) { color: var(--text); background: var(--card-2); }
 .icon-action:disabled { opacity: .35; cursor: default; }
 .run-action:hover:not(:disabled) { color: var(--good); }
-.danger-action:hover:not(:disabled) { color: var(--bad); }
 .code-action { width: 34px; font: 9px var(--font-mono); }
-.danger { color: var(--bad); }
 
 .spinner { width: 11px; height: 11px; border: 2px solid var(--border-2); border-top-color: var(--brand-2); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Slide-out shell ─────────────────────────────────────────── */
-.slide-620 {
-    width: 620px;
+.slide-wide {
+    width: min(1100px, 92vw);
 }
 
 .mr-10 {
@@ -971,7 +969,7 @@
 /* ── Template picker modal ───────────────────────────────────── */
 .modal-templates {
     width: 720px;
-    max-width: 94vw;
+    max-width: 100vw;
 }
 
 .template-modal-body {

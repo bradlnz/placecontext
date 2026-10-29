@@ -80,8 +80,93 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
   records, map job outputs into tables, and explore relationships without mixing tenant data.
 - **Containerised compute** — upload code (`python`, `node`, `go`, `ruby`, `dotnet`) or use a container image;
   PlaceContext fans out sandboxed shards across your fleet, collects results and logs, and persists outputs.
-- **Job chains and automation** — pass output through ordered stages, fan out parallel work, add wait or condition
-  gates, replay from a failed step, and trigger the whole chain on demand, on a schedule, or from an event.
+- **Worker networking** — manage VPCs, security groups, and job assignments in separate Networking tabs.
+  Kubernetes workers use Kube-OVN for private IPv4 allocation and per-run NetworkPolicies for allowed
+  CIDRs and TCP/UDP ports. Unsupported workers reject assigned jobs. See the
+  [worker networking guide](src/PlaceContext.Host/Wiki/worker-networking.md) for cluster setup and limits.
+  The Network flow canvas shows inbound/outbound rules and assigned jobs. Check an IPv4 flow against
+  saved rules or run a temporary outbound TCP probe using the selected VPC and security group.
+- **Services** — open **Infrastructure → Services** to launch long-running web app or worker images on
+  a Docker host. Services survive portal restarts, restart unless stopped, and expose start/stop/restart,
+  removal, status, image health, and bounded logs. Each service has its own network and resource limits;
+  web ports bind to host localhost. Images must support non-root execution and a read-only root filesystem
+  with writable `/tmp`. Environment variables are stored in Docker, visible to host administrators.
+  Apps can submit work to the existing authenticated queue API using a reachable portal URL and API token.
+  Kubernetes hosting, public ingress/TLS, persistent volumes, and rolling image updates are not yet supported.
+- **Workflows and automation** — pass output through ordered stages, fan out parallel work, add wait or condition
+  gates, pause for human or external-agent responses, replay from a failed step, and trigger the whole chain
+  on demand, on a schedule, or from an event. In the workflow editor, add a Human in the loop or Agent in the
+  loop step with validation instructions and a response field. The configured model generates a question
+  from those instructions and the preceding output. Configure `PlaceContext:Qemu:Agent` with a model and
+  either the `codex` provider or a `chat-completions` endpoint; question generation does not launch a VM.
+  Generation errors fail the step without bypassing review. Human steps accept either a written answer
+  or Yes/No buttons; Yes/No answers are JSON booleans, including `false`. The run waits for a fresh response
+  through the run panel or `resume_job_chain`; subsequent steps receive that field in the accumulated context. Agent steps
+  do not launch an agent automatically. These hand-offs are top-level stages and can have condition gates.
+- **QEMU agent steps** — describe a task in a prompt. An agent inspects screenshots, operates the
+  browser/desktop, executes non-root guest commands, verifies results, and returns a final summary.
+  Configure a prepared image and a vision/tool-capable model endpoint, or use the local `codex`
+  provider with the host account's Codex login. Inference remains remote with Codex. The model key
+  remains outside the VM; generated commands run only in the guest. VM disks are disposable,
+  networking is off by default, and cancellation/timeout stop the VM. The agent has a bounded
+  step count; each guest command is limited to 30 seconds. The output includes `exitCode`, final
+  summary in `stdout`, errors in `stderr`, `agentSteps`, and an activity list. Older stored QEMU
+  instructions are now interpreted as prompts; review steps containing scripts before running them.
+  See the [QEMU image and agent guide](deploy/qemu/README.md) for setup, data flow, and real-VM tests.
+  Workflows use `/project/{projectId}/workflows` and Observability uses `tab=workflows&workflowRun={runId}`.
+  API trigger/replay endpoints use `/api/v1/workflows/{workflowId}` and cancellation uses
+  `/api/v1/workflow-runs/{runId}/cancel`. Existing chain URLs remain compatible aliases.
+- **Job logs** — workflow runs and individual job runs include a log event viewer with live updates,
+  shard/reduce streams, text search, level filters, line wrapping, pause/resume, and log downloads.
+  Filters search the newest 2,000 captured events; the table previews the newest 100 matches with up to
+  2,000 characters per message. Downloads include all available output and load only on click. Timestamps
+  and levels are shown when emitted by the job. Live output uses the existing per-host buffer;
+  completed jobs use retained run logs.
+- **Log analytics** — Observability → Logs uses Monaco for command pipelines such as
+  `filter level = ERROR | stats count() as errors by job | sort errors desc | limit 20`.
+  Select and rename fields with `fields` / `project`; filter with `filter` / `where`; aggregate with
+  `stats` / `summarize`; then `sort` and `limit` / `take`. Aggregates include count, distinct count,
+  sum, average, minimum, and maximum. Group by fields or UTC time buckets such as `bin(5m)`.
+  Azure-style substring conditions support `where message contains "timeout"`, `!contains`, and case-sensitive `contains_cs` / `!contains_cs`, including mapped and JSON fields.
+  JSON messages expose nested fields under `json`, for example `stats avg(json.durationMs) by job`.
+  Commands execute in order, and result columns follow the query. This is a bounded local pipeline
+  language, not a complete KQL or CloudWatch implementation. Existing filter expressions still work.
+  Queries cover the latest 100 authorized runs, newest 2,000 events per run, and at most 500 displayed
+  rows; aggregations use all loaded events before that display cap. Refresh reruns the query snapshot.
+  “Map log fields” maps nested JSON properties into timestamp, level, message, and stream before filtering or aggregating. Blank/missing fields retain detected values; timestamp mappings accept ISO dates. Mappings stay in the current browser session while navigating; original JSON fields and saved logs are preserved.
+  The active Observability tab is stored in the URL and survives refresh and browser navigation.
+- **Run input files** — the job-run dialog toggles between parameter values (or configured payloads)
+  and a JSON file up to 1 MiB. The file must contain an object and required parameters; nested JSON
+  is preserved. File input overrides the payload only for that run, leaving job defaults unchanged.
+- **Queues** — configure a named queue under a project and link it to a workflow chain. Submit a JSON
+  object to `POST /api/v1/queues/{queueId}/messages` using a personal API token with `jobs.run` permission.
+  The full object becomes the starting context. A durable HTTP 202 receipt includes a tracking ID and
+  `Location` URL (read with `jobs.view`). Optional `Idempotency-Key` values deduplicate retries within
+  a queue. Payloads are limited to 1 MiB; names to 120 characters and idempotency keys to 128 characters.
+  Pausing rejects new intake; accepted messages retain their original chain. Workers across host replicas
+  share PostgreSQL and claim disjoint batches atomically, with heartbeat recovery and the existing
+  `PlaceContext:Scheduling:MaxConcurrentChains` limit per replica. This distributes messages dynamically;
+  it does not provide fixed partition ownership, per-key ordering, or FIFO execution. Tracking receipts
+  expire after a configurable 1–365 days from completion (default 30, hourly cleanup). A message TTL
+  of 1–604,800 seconds (default 24 hours) expires waiting messages before dispatch; running workflows
+  continue. Default delivery delay is configurable from 0 to 604,800 seconds. Override it for one
+  submission with an `X-Execute-At` ISO timestamp up to 365 days ahead; workers never claim it before
+  that time. Receipts include `availableAt` and `expiresAt`. TTL starts when a message becomes eligible,
+  after its delivery or retry delay. Configure 1–10 total attempts and an initial retry delay of 1–86,400 seconds; the delay
+  triples after each failure, capped at 24 hours. Failed workflows restart from the beginning with
+  the original payload, including failures after human/agent hand-offs. Make side effects idempotent.
+  Exhausted messages retain their encrypted payload for manual retry until receipt cleanup; successful
+  and expired messages release it. Previous attempt runs remain linked for inspection.
+  Settings are captured on acceptance. Deleting a queue removes intake but preserves
+  accepted messages and their receipts. Once a receipt expires, its idempotency key can create a new
+  message again. Queue configuration and deletion require `chains.manage` permission.
+  The queue list supports search, intake filters, and selection. Each queue has Messages, Monitoring,
+  Configuration, and Integration tabs that survive refresh. Monitoring summarizes the latest 50 receipts,
+  not the total queue depth. Creation, editing, and deletion use side panes, like other app dialogs.
+- **Events** — Activity filters the latest 100 workspace events by project, source, and text, with links
+  from system job-completion events to run details and logs. Event types define workspace contracts;
+  Subscriptions shows the selected project's event triggers, their enabled state, last firing time,
+  and a direct link to manage each job's triggers.
 - **Analytics and artifacts** — query project data, create charts and reports, and retain HTML, chart, CSV, and
   structured run artifacts in object storage.
 - **Lineage and observability** — inspect job-to-table mappings, run and chain history, shard outcomes, logs,

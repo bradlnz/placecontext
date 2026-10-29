@@ -18,7 +18,7 @@
                     @onclick="Vm.RunAllAsync">
                 @(Vm.Running.Count > 0 ? "Running…" : "Run all")
             </button>
-            <button class="dcbtn primary" disabled="@(Vm.Jobs.Count == 0)" @onclick="Vm.NewTest">+ New block</button>
+            <button class="dcbtn primary" disabled="@(Vm.Jobs.Count == 0)" @onclick="Vm.NewTest"><AppIcon Kind="plus" /> New block</button>
         </div>
     </header>
 
@@ -34,7 +34,7 @@
     else if (Vm.Jobs.Count == 0)
     {
         <div class="dccard empty-state">
-            <div class="empty-icon">⌁</div>
+            <div class="empty-icon"><AppIcon Kind="code" /></div>
             <strong>Create a Job before adding tests</strong>
             <span>Tests use declared mock scenarios and never execute the selected Job.</span>
             <button class="dcbtn primary" @onclick="@(() => Vm.OpenJobs())">Open Jobs</button>
@@ -43,7 +43,7 @@
     else if (Vm.Tests.Count == 0)
     {
         <div class="dccard empty-state">
-            <div class="empty-icon">✓</div>
+            <div class="empty-icon"><AppIcon Kind="check" /></div>
             <strong>No test blocks yet</strong>
             <span>Add a framework-backed block with multiple test methods to start verifying Job code.</span>
             <button class="dcbtn primary" @onclick="Vm.NewTest">Create first block</button>
@@ -67,7 +67,7 @@
                 <section class="dccard test-suite">
                     <header class="suite-head">
                         <div>
-                            <span class="suite-caret">⌄</span>
+                            <span class="suite-caret"><AppIcon Kind="chevron-down" /></span>
                             <strong>@suite.Key</strong>
                             <span>@suite.Count() block@(suite.Count() == 1 ? "" : "s") · @suite.Sum(JobTestsViewModel.MethodCount) methods</span>
                         </div>
@@ -86,15 +86,15 @@
                                     }
                                     else if (JobTestsViewModel.IsPassed(test))
                                     {
-                                        <span>✓</span>
+                                        <span><AppIcon Kind="check" /></span>
                                     }
                                     else if (JobTestsViewModel.IsFailed(test))
                                     {
-                                        <span>×</span>
+                                        <span><AppIcon Kind="close" /></span>
                                     }
                                     else
                                     {
-                                        <span>○</span>
+                                        <span><AppIcon Kind="circle" /></span>
                                     }
                                 </div>
                                 <div class="test-copy">
@@ -135,21 +135,21 @@
                                 <div class="test-actions">
                                     @if (Vm.ConfirmDelete == test.Id)
                                     {
-                                        <button class="dcbtn danger" @onclick="@(() => Vm.DeleteAsync(test.Id))">Delete</button>
+                                        <button class="dcbtn" @onclick="@(() => Vm.DeleteAsync(test.Id))">Delete</button>
                                         <button class="dcbtn" @onclick="@(() => Vm.ConfirmDelete = null)">Keep</button>
                                     }
                                     else
                                     {
                                         <button class="icon-action" title="Run test" aria-label="Run @test.Name"
                                                 disabled="@(isRunning || !test.Enabled)"
-                                                @onclick="@(() => Vm.RunAsync(test.Id))">▶</button>
+                                                @onclick="@(() => Vm.RunAsync(test.Id))"><AppIcon Kind="play" /></button>
                                         <button class="icon-action" title="Edit test" aria-label="Edit @test.Name"
-                                                @onclick="@(() => Vm.EditTest(test))">✎</button>
+                                                @onclick="@(() => Vm.EditTest(test))"><AppIcon Kind="edit" /></button>
                                         <button class="icon-action code-action" title="Open test code editor"
                                                 aria-label="Open code editor for @test.Name"
-                                                @onclick="@(() => Vm.OpenCodeEditor(test.Id))">&lt;/&gt;</button>
+                                                @onclick="@(() => Vm.OpenCodeEditor(test.Id))"><AppIcon Kind="code" /></button>
                                         <button class="icon-action" title="Delete test" aria-label="Delete @test.Name"
-                                                @onclick="@(() => Vm.ConfirmDelete = test.Id)">⋯</button>
+                                                @onclick="@(() => Vm.ConfirmDelete = test.Id)"><AppIcon Kind="trash" /></button>
                                     }
                                 </div>
                             </article>
@@ -171,7 +171,7 @@
                     <span class="eyebrow">JOB TEST BLOCK</span>
                     <h3 id="test-editor-title">@(Vm.EditId is null ? "New block" : "Edit block")</h3>
                 </div>
-                <button class="close-button" aria-label="Close" @onclick="Vm.CloseEditor">×</button>
+                <button class="close-button" aria-label="Close" @onclick="Vm.CloseEditor"><AppIcon Kind="close" /></button>
             </header>
 
             <div class="editor-body">
@@ -230,7 +230,7 @@
                     @if (Vm.EditId is { } testId)
                     {
                         <button class="dcbtn" @onclick="@(() => Vm.OpenCodeEditor(testId))">
-                            &lt;/&gt; Open code editor
+                            <AppIcon Kind="code" /> Open code editor
                         </button>
                     }
                     else

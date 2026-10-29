@@ -44,6 +44,3 @@ public sealed class RunEmbedding
         Guid id, Guid jobRunId, Guid jobId, Guid projectId, string text, float[] vector, DateTimeOffset createdAt)
         => new(id, jobRunId, jobId, projectId, text, vector, createdAt);
 }
-
-/// <summary>A run-embedding search hit with its similarity score (higher = more similar, 0..1 cosine).</summary>
-public sealed record RunEmbeddingMatch(RunEmbedding Embedding, double Score);

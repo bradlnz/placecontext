@@ -354,9 +354,9 @@ public class PostJobActionServiceTests
             => Task.FromResult<RunArtifactLink?>(null);
         public Task<IReadOnlyList<RunArtifactLink>> ListForJobAsync(Guid jobId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Array.Empty<RunArtifactLink>());
-        public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default)
+        public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default, int skip = 0, string? search = null)
             => Task.FromResult<IReadOnlyList<RunArtifactLink>>(Links.Take(take).ToList());
-        public Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default)
+        public Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default, int skip = 0)
         {
             IEnumerable<RunArtifactLink> q = Links.Where(l => l.ProjectId == projectId);
             if (!string.IsNullOrWhiteSpace(search))

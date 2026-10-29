@@ -6,52 +6,6 @@ using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Infrastructure.Comms;
 
-public sealed record CommunicationProviderView(
-    Guid Id,
-    string Channel,
-    string Kind,
-    string Name,
-    bool Enabled,
-    bool IsDefault,
-    bool UseForTwoFactor,
-    string AuthType,
-    string? AuthHeaderName,
-    Guid? VaultProjectId,
-    string? ApiKeySecretName,
-    string SettingsJson,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
-
-public sealed record CommunicationProviderInput(
-    string Channel,
-    string Kind,
-    string Name,
-    bool Enabled,
-    string AuthType,
-    string? AuthHeaderName,
-    Guid? VaultProjectId,
-    string? ApiKeySecretName,
-    string SettingsJson);
-
-/// <summary>
-/// A provider row resolved for sending, with the Vault secret decrypted. <see cref="SecretResolved"/>
-/// is false when the row references a secret that no longer exists — sends throw, capabilities
-/// report the channel as not ready.
-/// </summary>
-public sealed record ResolvedProvider(
-    Guid Id,
-    string Channel,
-    string Kind,
-    string Name,
-    string AuthType,
-    string? AuthHeaderName,
-    string? Secret,
-    bool SecretResolved,
-    string SettingsJson)
-{
-    public bool RequiresSecret => AuthType is "bearer" or "header" or "basic";
-}
-
 /// <summary>
 /// Tenant-scoped CRUD + resolution for communication providers. Stores only a reference to a
 /// project Vault secret; the secret value is decrypted at send time so it never appears in

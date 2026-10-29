@@ -11,7 +11,7 @@ public sealed class ListProjectArtifactsHandler : IQueryHandler<ListProjectArtif
     public ListProjectArtifactsHandler(IRunArtifactLinkRepository links) => _links = links;
 
     public async Task<IReadOnlyList<ArtifactFileView>> HandleAsync(ListProjectArtifactsQuery query, CancellationToken ct = default)
-        => (await _links.ListForProjectAsync(query.ProjectId, query.Take, query.Search, ct))
+        => (await _links.ListForProjectAsync(query.ProjectId, query.Take, query.Search, ct, query.Skip))
             .Select(ListRecentArtifactsHandler.Map)
             .ToList();
 }

@@ -1,0 +1,42 @@
+using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Features;
+using PlaceContext.Domain.ValueObjects;
+
+namespace PlaceContext.Host.Api;
+
+/// <summary>Public read model for a job definition, including its full workload source.</summary>
+public sealed record JobResponse(
+    Guid Id,
+    Guid ProjectId,
+    string Name,
+    string? Description,
+    /// <summary>"image" or "code".</summary>
+    string MapSourceKind,
+    string? MapImage,
+    string? MapRuntimeId,
+    string? MapSource,
+    string? MapEntrypoint,
+    IReadOnlyList<JobCodeFile> MapFiles,
+    IReadOnlyList<string> InputPayloads,
+    IReadOnlyDictionary<string, string> MapEnv,
+    string? ReduceSourceKind,
+    string? ReduceImage,
+    string? ReduceRuntimeId,
+    string? ReduceSource,
+    string? ReduceEntrypoint,
+    IReadOnlyList<JobCodeFile> ReduceFiles,
+    IReadOnlyDictionary<string, string>? ReduceEnv,
+    int ConcurrencyLimit,
+    IReadOnlyList<int> SuccessExitCodes,
+    IReadOnlyList<int> PartialExitCodes,
+    bool AllowNetworkEgress,
+    bool AllowApiInvocation,
+    IReadOnlyList<JobParameterRequest> Parameters,
+    IReadOnlyList<string> PostJobActions,
+    string ReturnType,
+    string? ReturnFileName,
+    int RetryCount,
+    int RetryDelaySeconds,
+    IReadOnlyList<Guid> McpConnectionIds,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);

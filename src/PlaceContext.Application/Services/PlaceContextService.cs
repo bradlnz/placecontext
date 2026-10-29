@@ -230,11 +230,11 @@ public sealed class PlaceContextService
     public Task<bool> DeleteJobAsync(Guid jobId, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteJobCommand(jobId), ct);
 
-    public Task<IReadOnlyList<ArtifactFileView>> ListRecentArtifactsAsync(int take = 100, CancellationToken ct = default)
-        => _dispatcher.Query(new ListRecentArtifactsQuery(take), ct);
+    public Task<IReadOnlyList<ArtifactFileView>> ListRecentArtifactsAsync(int take = 100, CancellationToken ct = default, int skip = 0, string? search = null)
+        => _dispatcher.Query(new ListRecentArtifactsQuery(take, skip, search), ct);
 
-    public Task<IReadOnlyList<ArtifactFileView>> ListProjectArtifactsAsync(Guid projectId, int take = 2000, string? search = null, CancellationToken ct = default)
-        => _dispatcher.Query(new ListProjectArtifactsQuery(projectId, take, search), ct);
+    public Task<IReadOnlyList<ArtifactFileView>> ListProjectArtifactsAsync(Guid projectId, int take = 2000, string? search = null, CancellationToken ct = default, int skip = 0)
+        => _dispatcher.Query(new ListProjectArtifactsQuery(projectId, take, search, skip), ct);
 
     public Task<bool> DeleteArtifactAsync(Guid artifactId, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteArtifactCommand(artifactId), ct);

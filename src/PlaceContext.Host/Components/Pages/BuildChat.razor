@@ -1,0 +1,130 @@
+@page "/project/{ProjectId:guid}/build"
+@attribute [Authorize(Policy = Permission.ProjectsView)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@implements IAsyncDisposable
+@inject BuildChatViewModel Vm
+
+<PageTitle>PlaceContext — Build</PageTitle>
+<div id="@Vm.ViewId" class="build-chat @(Vm.ShowHistory ? "history-open" : "")">
+    @if (Vm.ShowHistory)
+    {
+        <aside id="@(Vm.ViewId + "-build-history")" class="chat-history" aria-label="Conversations">
+            <header><h2>Conversations</h2><button class="chat-icon-button" aria-label="Close conversations" @onclick="() => Vm.ShowHistory = false"><AppIcon Kind="close" /></button></header>
+            <button class="dcbtn history-new" disabled="@Vm.NavigationLocked" @onclick="Vm.NewAsync"><AppIcon Kind="plus" /> New conversation</button>
+            <p class="history-label">RECENT</p>
+            @if (Vm.Conversations.Count == 0)
+            { <div class="history-empty"><AppIcon Kind="message" /><p>A fresh start.</p><span>Your conversations will appear here.</span></div> }
+            @foreach (var chat in Vm.Conversations)
+            {
+                <button class="history-item @(chat.Id == Vm.Conversation.Id ? "active" : "")" title="@chat.Title" disabled="@Vm.NavigationLocked" @onclick="() => Vm.OpenAsync(chat.Id)"><AppIcon Kind="message" /><span>@chat.Title</span>@if (chat.Status is PlaceContext.Application.Build.BuildRunStatus.Queued or PlaceContext.Application.Build.BuildRunStatus.Running) { <small>@chat.Status</small> }</button>
+            }
+            <div class="history-foot"><AppIcon Kind="ledger" /><span>Private to you.<br />Connected to this project.</span></div>
+        </aside>
+    }
+    <section class="chat-main" aria-label="Build workspace">
+        <header class="chat-header">
+            <div class="chat-header-start">
+                <button class="chat-icon-button" aria-label="History" title="Conversation history" aria-expanded="@Vm.ShowHistory" aria-controls="@(Vm.ViewId + "-build-history")" @onclick="() => Vm.ShowHistory = !Vm.ShowHistory"><AppIcon Kind="history" /></button>
+                <button class="chat-icon-button" aria-label="New chat" title="New chat" disabled="@Vm.NavigationLocked" @onclick="Vm.NewAsync"><AppIcon Kind="edit" /></button>
+                            <div class="model-picker">
+                                <label for="@(Vm.ViewId + "-chat-provider")" class="visually-hidden">Model connection</label><select id="@(Vm.ViewId + "-chat-provider")" value="@Vm.Conversation.ConnectionId" @onchange="e => Vm.SelectConnection(e.Value?.ToString())" disabled="@Vm.Locked"><option value="">Select provider</option>@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select>
+                                <label for="@(Vm.ViewId + "-chat-model")" class="visually-hidden">Model</label><select id="@(Vm.ViewId + "-chat-model")" @bind="Vm.Conversation.Model" disabled="@Vm.Locked"><option value="">Select model</option>@foreach (var model in Vm.Models) { <option>@model</option> }</select>
+                            </div>
+            </div>
+            <div class="chat-header-actions">
+                <button class="chat-toolbar-button @(Vm.ShowMemory ? "selected" : "")" aria-label="Project memory" title="Project memory" aria-expanded="@Vm.ShowMemory" aria-controls="@(Vm.ViewId + "-build-memory")" @onclick="() => Vm.ShowMemory = !Vm.ShowMemory"><AppIcon Kind="ledger" /><span>Memory</span></button>
+                @if (Vm.Conversation.Messages.Count > 0)
+                { <button class="chat-icon-button delete-chat" aria-label="Delete conversation" title="Delete conversation" disabled="@Vm.Locked" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button> }
+            </div>
+        </header>
+        <div class="chat-content @(Vm.Conversation.Messages.Count == 0 ? "empty-chat" : "")">
+            @if (Vm.ShowMemory)
+            {
+                <section id="@(Vm.ViewId + "-build-memory")" class="chat-memory">
+                    <div class="memory-heading"><div><AppIcon Kind="ledger" /><h3>Project memory</h3></div><button class="chat-icon-button" aria-label="Close memory" @onclick="() => Vm.ShowMemory = false"><AppIcon Kind="close" /></button></div>
+                    <p>Preferences and context to remember across your conversations. Keep credentials in the vault.</p>
+                    <textarea class="dcinput" aria-label="Project memory" placeholder="For example: prefer Python for data jobs, and schedule reports in Brisbane time." rows="4" maxlength="8000" @bind="Vm.Memory" disabled="@Vm.Locked"></textarea>
+                    <div class="memory-footer"><small>Only you can see these notes.</small><button class="dcbtn" disabled="@Vm.Locked" @onclick="Vm.SaveMemoryAsync">Save memory</button></div>
+                </section>
+            }
+            <div class="chat-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-busy="@Vm.Busy">
+                @if (Vm.Loading) { <Skeleton Kind="list" Rows="3" /> }
+                else if (Vm.Conversation.Messages.Count == 0)
+                {
+                    <div class="chat-welcome">
+                        <span class="welcome-icon"><AppIcon Kind="agent" /></span>
+                        <h1>How can I help you build?</h1>
+                    </div>
+                }
+                @foreach (var message in Vm.Conversation.Messages.OfType<System.Text.Json.Nodes.JsonNode>())
+                {
+                    var role = BuildChatViewModel.Role(message);
+                    if (role == "tool")
+                    { <details class="tool-result"><summary><AppIcon Kind="logs" /> Action result</summary><pre>@BuildChatViewModel.Text(message)</pre></details> }
+                    else
+                    {
+                        <article class="chat-message @role">
+                            <div class="message-author"><span><AppIcon Kind="@(role == "user" ? "human" : "agent")" /></span><strong>@(role == "user" ? "You" : "Build")</strong></div>
+                            @if (BuildChatViewModel.Text(message).Length > 0) { <div class="message-text">@BuildChatViewModel.Text(message)</div> }
+                            @if (BuildChatViewModel.SuggestedAnswers(message).Any())
+                            {
+                                <div class="suggested-answers" role="group" aria-label="Suggested answers">
+                                    @foreach (var answer in BuildChatViewModel.SuggestedAnswers(message))
+                                    {
+                                        <button type="button" class="dcbtn" disabled="@(!Vm.CanAnswer(message))" @onclick="() => Vm.AnswerAsync(message, answer)">@answer</button>
+                                    }
+                                </div>
+                                <p class="answer-hint">Choose an answer to send, or type your own below.</p>
+                            }
+                            @foreach (var url in BuildChatViewModel.ImageUrls(message)) { <img class="message-image" src="@url" alt="Image attached to your message" /> }
+                            @foreach (var call in BuildChatViewModel.Calls(message)) { <details class="tool-call"><summary><AppIcon Kind="agent" /> @(call["function"]?["name"])</summary><pre>@(call["function"]?["arguments"])</pre></details> }
+                        </article>
+                    }
+                }
+                @if (Vm.Busy) { <div class="thinking" role="status"><span></span><span></span><span></span> @(Vm.Conversation.Status == PlaceContext.Application.Build.BuildRunStatus.Queued ? "Queued for background work" : "Build is working in the background")</div> }
+            </div>
+            <div class="chat-bottom">
+                @if (Vm.Error is not null && Vm.Error != Vm.Conversation.Messages.LastOrDefault()?["content"]?.ToString())
+                { <p class="chat-notice error-notice" role="alert"><AppIcon Kind="warning" /> @Vm.Error</p> }
+                @if (Vm.Notice is not null) { <p class="chat-notice" role="status">@Vm.Notice</p> }
+                <span id="@(Vm.ViewId + "-composer-keys")" class="visually-hidden">Enter to send. Shift and Enter for a new line.</span>
+                <form class="chat-composer" @onsubmit="Vm.SendAsync" @onsubmit:preventDefault>
+                    @if (Vm.Images.Count > 0)
+                    {
+                        <div class="attachments">@foreach (var image in Vm.Images) { <div><img src="@image.DataUrl" alt="@image.Name" /><button type="button" disabled="@Vm.Locked" aria-label="@($"Remove {image.Name}")" @onclick="() => Vm.Images.Remove(image)"><AppIcon Kind="close" /></button></div> }</div>
+                    }
+                    <textarea class="chat-input" aria-label="Message Build" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Message Build…" rows="2" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
+                    <div class="composer-actions">
+                        <div class="composer-tools">
+                            <label class="chat-icon-button attach-button" title="Attach images · up to four, 2 MB each"><AppIcon Kind="plus" /><InputFile OnChange="Vm.UploadAsync" accept="image/png,image/jpeg,image/webp" multiple disabled="@Vm.Locked" aria-label="Attach images" /></label>
+
+
+                        </div>
+                        <div class="send-actions">
+                            <button type="button" class="chat-icon-button mic-button @(Vm.Listening ? "listening" : "")" disabled="@(Vm.Locked || !Vm.SpeechSupported)" aria-label="@(Vm.Listening ? "Stop dictation" : "Dictate")" aria-pressed="@Vm.Listening" title="@(Vm.SpeechSupported ? "Dictate a message" : "Dictation requires a supported browser and HTTPS")" @onclick="Vm.ToggleSpeechAsync"><AppIcon Kind="mic" /></button>
+                            @if (Vm.Busy) { <button type="button" class="send-button stop-button" aria-label="Stop response" title="Stop response" @onclick="Vm.StopAsync"><span></span></button> }
+                            else { <button type="submit" class="send-button" aria-label="Send message" title="Send message" disabled="@(!Vm.CanSend)"><AppIcon Kind="arrow-up" /></button> }
+                        </div>
+                    </div>
+                </form>
+                @if (Vm.ModelSetupHint is not null)
+                { <div class="composer-note" role="status">@Vm.ModelSetupHint</div> }
+                else if (!Vm.Loading && !Vm.Connections.Any(x => x.Models.Count > 0))
+                { <div class="model-setup" role="status"><span><AppIcon Kind="agent" /> No models available. Sign in to Codex or Claude Code on this host, start a local model server, or add a connection.</span><a href="/settings/models">Model settings <AppIcon Kind="arrow-right" /></a></div> }
+                else { <div class="composer-note">@(Vm.Listening ? "Listening… Stop dictation to review and send." : "Build can make changes to this project. Review action results.")</div> }
+            </div>
+        </div>
+    </section>
+</div>
+@if (Vm.ConfirmDelete)
+{
+    <div class="dcmodal-overlay"><section class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="@(Vm.ViewId + "-delete-chat-title")"><div class="dcmodal-head"><h3 id="@(Vm.ViewId + "-delete-chat-title")">Delete conversation?</h3></div><div class="dcmodal-body">This removes the conversation and its images. Project memory and completed actions are kept.</div><div class="dcmodal-foot"><button class="dcbtn" @onclick="() => Vm.ConfirmDelete = false">Cancel</button><button class="dcbtn" @onclick="Vm.DeleteAsync">Delete</button></div></section></div>
+}
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "conversation")] public Guid? ConversationId { get; set; }
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId, ConversationId);
+    protected override Task OnAfterRenderAsync(bool firstRender) => firstRender ? Vm.InitializeBrowserAsync() : Task.CompletedTask;
+    public ValueTask DisposeAsync() => Vm.DisposePageAsync();
+}

@@ -76,7 +76,7 @@
                             <strong>@source.Title</strong>
                             <small>@source.Description</small>
                         </span>
-                        <span class="source-check">@(selected ? "✓" : "→")</span>
+                        <span class="source-check"><AppIcon Kind="@(selected ? "check" : "arrow-right")" /></span>
                     </button>
                 }
             </div>
@@ -153,7 +153,7 @@
     else
     {
         <section class="dccard guide-card ready-card">
-            <div class="ready-mark">✓</div>
+            <div class="ready-mark"><AppIcon Kind="check" /></div>
             <div class="guide-number">SETUP READY</div>
             <h2>Your next step is ready</h2>
             @if (Vm.OpenSearchChoice == OnboardingViewModel.InstallOpenSearch)

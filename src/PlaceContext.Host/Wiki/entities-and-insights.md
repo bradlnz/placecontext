@@ -34,3 +34,6 @@ Select an artifact node to render previewable attachments—including images, PD
 video—inside the graph detail panel. Other file types remain available from the artifact link.
 
 Pin important entities to the Dashboard for quick access.
+
+Dashboard entity cards show links and estimated row counts immediately. Select **Load summaries**
+to calculate the category breakdowns when you need them; large tables can take longer to summarize.

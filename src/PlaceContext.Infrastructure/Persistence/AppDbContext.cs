@@ -24,6 +24,10 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     /// <summary>Shared ASP.NET Data Protection key ring (so every replica decrypts the same auth cookie).</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
+    public DbSet<ModelConnectionRow> ModelConnections => Set<ModelConnectionRow>();
+    public DbSet<BuildConversationRow> BuildConversations => Set<BuildConversationRow>();
+    public DbSet<BuildMemoryRow> BuildMemories => Set<BuildMemoryRow>();
+
     public DbSet<TenantRow> Tenants => Set<TenantRow>();
     public DbSet<OAuthClientRow> OAuthClients => Set<OAuthClientRow>();
     public DbSet<OAuthRefreshTokenRow> OAuthRefreshTokens => Set<OAuthRefreshTokenRow>();
@@ -86,6 +90,29 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<ModelConnectionRow>(e =>
+        {
+            e.ToTable("model_connections");
+            e.HasKey(x => x.Id);
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+        b.Entity<BuildConversationRow>(e =>
+        {
+            e.ToTable("build_conversations");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.TenantId, x.UserId, x.ProjectId, x.UpdatedAt });
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.Property(x => x.Status).HasConversion<string>();
+            e.HasIndex(x => new { x.Status, x.UpdatedAt });
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+        b.Entity<BuildMemoryRow>(e =>
+        {
+            e.ToTable("build_memories");
+            e.HasKey(x => new { x.TenantId, x.UserId, x.ProjectId });
+            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+        });
+
         b.Entity<TenantRow>(e =>
         {
             e.ToTable("tenants");
@@ -121,6 +148,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
             e.Property(x => x.PasswordSet).HasDefaultValue(false);
             e.Property(x => x.IsDefaultAdmin).HasDefaultValue(false);
+            e.Property(x => x.IsExternalAdmin).HasDefaultValue(false);
             e.Property(x => x.TwoFactorEnabled).HasDefaultValue(false);
             e.Property(x => x.TwoFactorChannel).HasDefaultValue("email");
             e.Property(x => x.TwoFactorCodeFailedAttempts).HasDefaultValue(0);
@@ -382,6 +410,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         {
             e.ToTable("job_runs");
             e.HasKey(x => x.Id);
+            e.Property(x => x.Status).IsConcurrencyToken();
             e.HasIndex(x => new { x.JobId, x.StartedAt });
             e.HasIndex(x => x.ProjectId);
             e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);

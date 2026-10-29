@@ -2,12 +2,6 @@ using PlaceContext.Application.Dtos;
 
 namespace PlaceContext.Application.Ports;
 
-public sealed record OpenSearchConnection(
-    string Endpoint,
-    string? Username,
-    string? Password,
-    string DefaultIndexPattern);
-
 /// <summary>Resolves the OpenSearch connection without exposing credentials to UI read models.</summary>
 public interface IOpenSearchConnectionResolver
 {
@@ -66,22 +60,6 @@ public interface IOpenSearchSyncGateway
 {
     Task<OpenSearchSyncView> TriggerAsync(CancellationToken ct = default);
 }
-
-public sealed record OpenSearchDashboardRecord(
-    Guid Id,
-    Guid ProjectId,
-    string Name,
-    string IndexPattern,
-    string? QueryText,
-    string BucketField,
-    string BucketType,
-    string ChartType,
-    string MetricType,
-    string? MetricField,
-    string? DateInterval,
-    string ChartSpecJson,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
 
 public interface IOpenSearchDashboardStore
 {

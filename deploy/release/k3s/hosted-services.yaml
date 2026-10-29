@@ -1,0 +1,143 @@
+# Kubernetes >= 1.30. Apply admission boundaries BEFORE granting provisioning permissions.
+# The portal can bootstrap managed namespaces, then gets only a namespace-scoped runtime RoleBinding.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata: { name: placecontext-hosted-namespace-boundary }
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [namespaces]
+  matchConditions:
+    - name: portal-provisioner
+      expression: "request.userInfo.username == 'system:serviceaccount:placecontext:placecontext'"
+  variables:
+    - name: ns
+      expression: "request.operation == 'DELETE' ? oldObject : object"
+  validations:
+    - expression: "variables.ns.metadata.name.matches('^pc-(app|db)-[a-f0-9]{32}$') && variables.ns.metadata.labels['placecontext.io/managed'] == 'true'"
+      message: Portal provisioning is limited to managed app and database namespaces.
+    - expression: "request.operation == 'DELETE' || (object.metadata.labels['pod-security.kubernetes.io/enforce'] == 'restricted' && object.metadata.labels['pod-security.kubernetes.io/audit'] == 'restricted' && object.metadata.labels['pod-security.kubernetes.io/warn'] == 'restricted')"
+      message: Hosted namespaces must enforce restricted pod security.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: placecontext-hosted-namespace-boundary }
+spec:
+  policyName: placecontext-hosted-namespace-boundary
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata: { name: placecontext-hosted-binding-boundary }
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [rbac.authorization.k8s.io]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [rolebindings]
+  matchConditions:
+    - name: portal-provisioner
+      expression: "request.userInfo.username == 'system:serviceaccount:placecontext:placecontext'"
+  validations:
+    - expression: "namespaceObject != null && namespaceObject.metadata.name.matches('^pc-(app|db)-[a-f0-9]{32}$') && namespaceObject.metadata.labels['placecontext.io/managed'] == 'true'"
+      message: The portal may bind management access only inside its managed namespaces.
+    - expression: "object.metadata.name == 'placecontext-management' && object.roleRef.apiGroup == 'rbac.authorization.k8s.io' && object.roleRef.kind == 'ClusterRole' && object.roleRef.name == 'placecontext-hosted-runtime' && size(object.subjects) == 1 && object.subjects[0].kind == 'ServiceAccount' && object.subjects[0].name == 'placecontext' && object.subjects[0].namespace == 'placecontext'"
+      message: Only the fixed namespace management binding is permitted; workload identities get no role bindings.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: placecontext-hosted-binding-boundary }
+spec:
+  policyName: placecontext-hosted-binding-boundary
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata: { name: placecontext-hosted-workload-identity }
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    namespaceSelector:
+      matchLabels: { placecontext.io/managed: "true" }
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE]
+        resources: [pods]
+  validations:
+    - expression: "object.spec.serviceAccountName == 'workload' && has(object.spec.automountServiceAccountToken) && !object.spec.automountServiceAccountToken"
+      message: Hosted workloads must use their dedicated token-free service account.
+    - expression: "has(object.spec.securityContext) && object.spec.securityContext.runAsNonRoot == true && object.spec.securityContext.runAsUser > 0 && object.spec.securityContext.runAsGroup > 0 && object.spec.securityContext.fsGroup > 0"
+      message: Hosted workloads require explicit non-root user and group IDs.
+    - expression: "object.spec.containers.all(c, has(c.securityContext) && c.securityContext.runAsNonRoot == true && c.securityContext.runAsUser > 0 && c.securityContext.runAsGroup > 0 && c.securityContext.readOnlyRootFilesystem == true)"
+      message: Every app/database container must use a non-root identity and read-only root filesystem.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata: { name: placecontext-hosted-workload-identity }
+spec:
+  policyName: placecontext-hosted-workload-identity
+  validationActions: [Deny]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: placecontext-hosted-runtime }
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, create, update]
+  - apiGroups: [""]
+    resources: [services, secrets, configmaps, persistentvolumeclaims, resourcequotas, serviceaccounts]
+    verbs: [get, create, update]
+  - apiGroups: [""]
+    resources: [pods, pods/log]
+    verbs: [get, list]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, create, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: placecontext-hosted-provisioner }
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, create, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [create]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    resourceNames: [placecontext-hosted-runtime]
+    verbs: [bind]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: placecontext-hosted-provisioner }
+subjects:
+  - kind: ServiceAccount
+    name: placecontext
+    namespace: placecontext
+roleRef:
+  kind: ClusterRole
+  name: placecontext-hosted-provisioner
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: hosted-app-platform-api, namespace: placecontext }
+spec:
+  podSelector: { matchLabels: { app: placecontext } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { placecontext.io/managed: "true", placecontext.io/kind: service }
+          podSelector: { matchLabels: { app: workload } }
+      ports: [{ port: 7700, protocol: TCP }]

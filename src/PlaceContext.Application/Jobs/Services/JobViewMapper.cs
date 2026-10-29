@@ -85,7 +85,8 @@ internal static class JobViewMapper
         Goal: GoalFromInputPayload(snap.InputPayloads.FirstOrDefault()),
         ConcurrencyLimit: snap.ConcurrencyLimit,
         ShardCount: snap.InputPayloads.Count,
-        AllowNetworkEgress: snap.AllowNetworkEgress);
+        AllowNetworkEgress: snap.AllowNetworkEgress,
+        Network: snap.Network);
 
     private static string? GoalFromInputPayload(string? payload)
     {

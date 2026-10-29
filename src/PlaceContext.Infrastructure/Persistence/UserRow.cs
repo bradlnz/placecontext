@@ -26,6 +26,8 @@ public sealed class UserRow : ITenantOwned
     /// self-service API tokens page) is open to.
     /// </summary>
     public bool IsDefaultAdmin { get; set; }
+    // Refreshed from the configured SSO provider at each sign-in; separate from bootstrap ownership.
+    public bool IsExternalAdmin { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>Legacy TOTP secret retained for migration compatibility.</summary>

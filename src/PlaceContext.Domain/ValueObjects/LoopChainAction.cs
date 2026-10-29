@@ -7,13 +7,18 @@ public sealed class LoopChainAction : ChainAction
     public const string AgentType = "agentInput";
     public const string TextResponse = "text";
     public const string YesNoResponse = "yesNo";
+    public const string ExternalAgent = "external";
+    public const string JevAgent = "jev";
 
-    public LoopChainAction(string type, string instructions, string responseField, string responseType = TextResponse)
+    public LoopChainAction(string type, string instructions, string responseField, string responseType = TextResponse,
+        string agentProvider = ExternalAgent)
     {
         if (type is not (HumanType or AgentType))
             throw new ArgumentException("Choose a human or agent step.", nameof(type));
         if (responseType is not (TextResponse or YesNoResponse) || type == AgentType && responseType != TextResponse)
             throw new ArgumentException("Choose a text response, or Yes/No for a human step.", nameof(responseType));
+        if (agentProvider is not (ExternalAgent or JevAgent) || type == HumanType && agentProvider != ExternalAgent)
+            throw new ArgumentException("Choose an external agent or Jev for an agent step.", nameof(agentProvider));
         if (string.IsNullOrWhiteSpace(instructions) || instructions.Trim().Length > 4000)
             throw new ArgumentException("Instructions are required (up to 4,000 characters).", nameof(instructions));
         responseField = responseField?.Trim() ?? "";
@@ -24,6 +29,7 @@ public sealed class LoopChainAction : ChainAction
         Instructions = instructions.Trim();
         ResponseField = responseField;
         ResponseType = responseType;
+        AgentProvider = agentProvider;
     }
 
     public override string Type { get; }
@@ -31,4 +37,5 @@ public sealed class LoopChainAction : ChainAction
     public string Instructions { get; }
     public string ResponseField { get; }
     public string ResponseType { get; }
+    public string AgentProvider { get; }
 }

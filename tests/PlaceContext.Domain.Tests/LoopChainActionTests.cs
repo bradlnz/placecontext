@@ -4,6 +4,16 @@ namespace PlaceContext.Domain.Tests;
 
 public class LoopChainActionTests
 {
+    [Fact]
+    public void Jev_is_an_explicit_agent_choice_and_existing_steps_remain_external()
+    {
+        Assert.Equal(LoopChainAction.ExternalAgent, new LoopChainAction(LoopChainAction.AgentType, "Review", "answer").AgentProvider);
+        var jev = new LoopChainAction(LoopChainAction.AgentType, "Review", "answer", agentProvider: LoopChainAction.JevAgent);
+        Assert.Equal(LoopChainAction.JevAgent, jev.AgentProvider);
+        Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.HumanType, "Review", "answer", agentProvider: LoopChainAction.JevAgent));
+        Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.AgentType, "Review", "answer", agentProvider: "unknown"));
+    }
+
     [Theory]
     [InlineData("unknown", "Review", "response")]
     [InlineData(LoopChainAction.HumanType, " ", "response")]

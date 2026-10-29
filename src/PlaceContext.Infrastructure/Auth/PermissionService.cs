@@ -45,10 +45,11 @@ public sealed class PermissionService : IPermissionService
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var overrides = await grants.ListForUserAsync(userId, ct);
-        var isDefaultAdmin = await db.Users.AsNoTracking()
-            .Where(u => u.Id == userId)
-            .Select(u => u.IsDefaultAdmin)
-            .FirstOrDefaultAsync(ct);
+        var account = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+        var isDefaultAdmin = account is not null && (account.IsDefaultAdmin || account.IsExternalAdmin);
+        // Service API principals have no user row; their authenticated role still controls job access.
+        if (account is not null)
+            roleName = account.IsExternalAdmin ? nameof(UserRole.Admin) : account.Role;
         var definition = await roleDefinitions.GetByNameAsync(roleName, ct);
         IReadOnlySet<string> roleGrants = definition is not null
             ? new HashSet<string>(definition.Permissions, StringComparer.Ordinal)

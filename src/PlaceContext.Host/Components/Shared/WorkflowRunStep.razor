@@ -1,0 +1,27 @@
+@inject ChainPipelineViewModel Vm
+
+<div class="run-step" data-status="@Step.Status" style="border-color:@Vm.Border(Step.Status); background:@Vm.Background(Step.Status)">
+    <button class="run-step-link" disabled="@(!Vm.HasRun(Step))" @onclick="@(() => OnStepClick.InvokeAsync(Step))"
+            aria-label="@($"{Step.JobName}: {Vm.Summary(Step)}")">
+        <span class="run-step-title" style="color:@Vm.Color(Step.Status)"><AppIcon Kind="@Vm.Icon(Step.Status)" /> @Step.JobName</span>
+        <span class="run-step-status">@Vm.Summary(Step)</span>
+    </button>
+    @if (!string.IsNullOrWhiteSpace(Step.Provider))
+    {
+        <div class="run-step-detail">@Step.Provider@(string.IsNullOrWhiteSpace(Step.ExternalId) ? "" : $" · {Step.ExternalId}")</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Step.Error))
+    {
+        <div class="run-step-detail" title="@Step.Error">@Step.Error</div>
+    }
+    @if (OnStepCancel.HasDelegate && Vm.CanCancel(Step))
+    {
+        <button class="dcbtn btn-2-8 text-bad" @onclick="@(() => OnStepCancel.InvokeAsync(Step))">Cancel</button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ChainStepRunView Step { get; set; } = null!;
+    [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
+    [Parameter] public EventCallback<ChainStepRunView> OnStepCancel { get; set; }
+}

@@ -1,0 +1,99 @@
+.networking-page { padding: 24px 28px 40px; max-width: 1680px; margin: 0 auto; min-width: 0; }
+.networking-breadcrumb { display: flex; gap: 10px; align-items: center; margin-bottom: 24px; font-size: 12px; color: var(--text-3); }
+.networking-heading, .networking-rule { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.networking-heading { margin-bottom: 20px; }
+.networking-heading h2 { margin: 0; font-size: 25px; font-weight: 650; }
+.networking-heading p { margin: 8px 0 0; font-size: 12px; color: var(--text-3); line-height: 1.7; }
+.networking-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.networking-tabs { display: flex; overflow-x: auto; margin-bottom: 20px; }
+.networking-tabs .dctab { white-space: nowrap; flex-shrink: 0; text-decoration: none; }
+.networking-catalogue { overflow: hidden; }
+.networking-toolbar { display: flex; gap: 12px; align-items: center; padding: 16px 20px; }
+.networking-search { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 0; color: var(--text-3); }
+.networking-search input { width: 100%; min-width: 0; }
+.networking-toolbar > select { min-width: 180px; }
+.networking-scroll { overflow-x: auto; max-width: 100%; }
+table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; }
+th, td { padding: 15px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--text-3); font-size: 11px; font-weight: 600; background: var(--card-2); white-space: nowrap; }
+td:first-child { min-width: 220px; padding-left: 20px; }
+tr:hover { background: var(--card-2); }
+.networking-link { padding: 0; border: 0; background: none; color: var(--brand-2); font: inherit; font-weight: 600; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.networking-link:hover { text-decoration: underline; }
+.networking-id { display: block; color: var(--text-3); font: 10px var(--font-mono); margin-top: 6px; }
+.networking-footer { padding: 14px 20px; font-size: 11px; color: var(--text-3); line-height: 1.7; }
+.networking-note { color: var(--text-3); font-size: 12px; line-height: 1.7; margin-top: 16px; }
+.networking-empty { padding: 42px 18px; text-align: center; color: var(--text-3); font-size: 12px; }
+.networking-empty h3 { color: var(--text-2); font-size: 15px; }
+.networking-pane { width: min(600px, 100vw); }
+.networking-pane .dcfield { margin-bottom: 20px; }
+.networking-pane .dcinput { width: 100%; }
+.networking-rule { margin-bottom: 8px; font-size: 12px; overflow-wrap: anywhere; }
+.networking-ports { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+fieldset { margin-top: 20px; border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+@media (max-width: 900px) { .networking-heading { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 600px) {
+    .networking-page { padding: 16px 12px 28px; }
+    .networking-heading h2 { font-size: 22px; }
+    .networking-toolbar { padding: 12px; flex-wrap: wrap; }
+    .networking-search { flex-basis: 100%; }
+    .networking-toolbar > select { width: 100%; }
+}
+
+.networking-actions { flex-wrap: wrap; }
+.networking-groups td:first-child { min-width: 0; width: 44px; }
+.networking-groups td:nth-child(2) { min-width: 180px; }
+.networking-groups .selected { background: var(--brand-bg); }
+.networking-groups input { accent-color: var(--brand-2); cursor: pointer; }
+.networking-details { margin-top: 20px; overflow: hidden; }
+.networking-details > header { padding: 20px; margin: 0; }
+.networking-details h3 { margin: 0; font-size: 17px; }
+.networking-details header p { overflow-wrap: anywhere; }
+.networking-details .networking-tabs { padding: 0 20px; margin-bottom: 0; }
+.networking-details td:first-child, .networking-editor-rules td:first-child { min-width: 0; }
+.networking-editor-rules th, .networking-editor-rules td { padding: 10px 8px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+.flow-section { overflow: hidden; margin-bottom: 20px; }
+.flow-toolbar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 20px; }
+.flow-toolbar > div:first-child { flex: 1; min-width: 230px; }
+.flow-section h3 { margin: 0; font-size: 17px; }
+.flow-section header p { color: var(--text-3); font-size: 12px; line-height: 1.6; }
+.flow-toolbar .dcfield { min-width: 150px; }
+.flow-viewport { overflow: auto; max-height: 560px; background: radial-gradient(var(--border) 1px, transparent 1px); background-size: 18px 18px; border-block: 1px solid var(--border); }
+.flow-canvas { display: grid; grid-template-columns: minmax(200px, 1fr) 80px minmax(240px, 1fr) 80px minmax(200px, 1fr); align-items: center; gap: 12px; min-width: 920px; padding: 28px 24px; }
+.flow-column { display: grid; gap: 12px; align-content: center; }
+.flow-column h4 { font-size: 12px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; margin: 0 0 4px; }
+.flow-node, .flow-deny { display: grid; gap: 8px; text-align: left; border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: var(--card); color: var(--text-2); font: inherit; font-size: 12px; }
+.flow-node { cursor: pointer; border-left: 3px solid var(--good); }
+.flow-node strong { font-family: var(--font-mono); }
+.flow-node small { color: var(--good); }
+.flow-node:hover, .flow-node:focus-visible, .flow-node.matched { border-color: var(--brand-2); background: var(--brand-bg); }
+.flow-deny { border-style: dashed; color: var(--text-3); }
+.flow-deny span { color: var(--bad); }
+.flow-connector { text-align: center; font-size: 11px; color: var(--text-3); }
+.flow-arrow { display: block; font-size: 40px; line-height: 1.2; color: var(--brand-2); }
+.flow-workloads { padding: 24px 18px; border: 1px solid var(--brand-2); border-radius: 12px; background: var(--card); text-align: center; min-width: 0; }
+.flow-workloads > code { display: block; margin: 8px 0 20px; font-size: 12px; color: var(--text-3); }
+.flow-vpc-label { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.flow-group-node { border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: var(--card-2); }
+.flow-workloads h4 { margin: 8px 0; font-size: 13px; overflow-wrap: anywhere; }
+.flow-workloads small, .flow-workloads p { font-size: 11px; color: var(--text-3); line-height: 1.7; }
+.flow-job { display: block; padding: 8px; border-bottom: 1px solid var(--border); color: var(--brand-2); font-size: 12px; overflow-wrap: anywhere; }
+.flow-test { padding: 20px; }
+.flow-test-fields { display: grid; grid-template-columns: 1fr 1fr 2fr 1fr; gap: 16px; margin: 20px 0; }
+.flow-test-fields .dcinput { width: 100%; }
+.flow-result { margin-top: 20px; border: 1px solid var(--border); border-left: 3px solid var(--good); border-radius: 6px; padding: 16px; font-size: 12px; overflow-wrap: anywhere; }
+.flow-result.blocked { border-left-color: var(--warn); }
+.flow-result h4 { margin: 0 0 12px; }
+.flow-result small { color: var(--text-3); }
+@media (max-width: 700px) {
+    .flow-toolbar { padding: 16px; }
+    .flow-toolbar > div:first-child { flex: 1 1 100%; min-width: 0; }
+    .flow-toolbar .dcfield { flex: 1 1 calc(50% - 16px); min-width: 0; }
+    .flow-toolbar .dcinput { width: 100%; }
+    .flow-test-fields { grid-template-columns: 1fr 1fr; }
+    .flow-test { padding: 16px; }
+}
+
+.flow-deny.matched-deny { border-color: var(--bad); border-width: 2px; }

@@ -25,8 +25,6 @@ public class RpcChainSubmissionWorker : BackgroundService
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(20);
     private readonly int _maxConcurrentChains;
-    private const int MaxAttempts = 3;
-    private static readonly TimeSpan TrackingRetention = TimeSpan.FromDays(30);
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromHours(1);
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<RpcChainSubmissionWorker> _log;
@@ -91,6 +89,32 @@ public class RpcChainSubmissionWorker : BackgroundService
         var connection = (NpgsqlConnection)db.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open) await connection.OpenAsync(ct);
 
+        // Reconcile terminal failures after direct runs or human/agent continuations. The run-id
+        // predicate makes concurrent workers and late completion callbacks harmless.
+        await db.Database.ExecuteSqlRawAsync("""
+            UPDATE rpc_chain_submissions submission
+            SET "Attempts" = "Attempts" + 1,
+                "Status" = CASE WHEN "Attempts" + 1 >= "MaxAttempts" THEN 'Failed' ELSE 'Queued' END,
+                "PreviousRunIds" = CASE WHEN "ChainRunId" = ANY("PreviousRunIds") THEN "PreviousRunIds"
+                    ELSE array_append("PreviousRunIds", "ChainRunId") END,
+                "ChainRunId" = CASE WHEN "Attempts" + 1 >= "MaxAttempts" THEN "ChainRunId" ELSE gen_random_uuid() END,
+                "NextAttemptAt" = now() + make_interval(secs => LEAST(86400, "RetryDelaySeconds" * power(3, "Attempts"))::integer),
+                "ExpiresAt" = now() + make_interval(secs => LEAST(86400, "RetryDelaySeconds" * power(3, "Attempts"))::integer + "MessageTtlSeconds"),
+                "FinishedAt" = CASE WHEN "Attempts" + 1 >= "MaxAttempts" THEN now() ELSE NULL END,
+                "StartedAt" = CASE WHEN "Attempts" + 1 >= "MaxAttempts" THEN "StartedAt" ELSE NULL END,
+                "ClaimedBy" = NULL, "ClaimedAt" = NULL, "HeartbeatAt" = NULL
+            WHERE "QueueId" IS NOT NULL AND "Status" IN ('Running', 'Waiting', 'AwaitingInput', 'RetryPending')
+              AND EXISTS (SELECT 1 FROM chain_runs run WHERE run."Id" = submission."ChainRunId" AND run."Status" = 'Failed')
+            """, ct);
+        // Expiry applies before dispatch, including abandoned claims that never created a run.
+        await db.Database.ExecuteSqlRawAsync("""
+            UPDATE rpc_chain_submissions submission
+            SET "Status" = 'Expired', "FinishedAt" = now(), "InputPayload" = NULL,
+                "ClaimedBy" = NULL, "ClaimedAt" = NULL, "HeartbeatAt" = NULL
+            WHERE "ExpiresAt" <= now()
+              AND ("Status" = 'Queued' OR ("Status" = 'Running' AND "HeartbeatAt" < now() - interval '2 minutes'))
+              AND NOT EXISTS (SELECT 1 FROM chain_runs run WHERE run."Id" = submission."ChainRunId")
+            """, ct);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -104,6 +128,8 @@ public class RpcChainSubmissionWorker : BackgroundService
                     ("Status" = 'Queued' AND "NextAttemptAt" <= now())
                     OR ("Status" = 'Running' AND "HeartbeatAt" < now() - interval '2 minutes')
                 )
+                AND ("ExpiresAt" IS NULL OR "ExpiresAt" > now()
+                    OR EXISTS (SELECT 1 FROM chain_runs run WHERE run."Id" = rpc_chain_submissions."ChainRunId"))
                 ORDER BY "SubmittedAt"
                 FOR UPDATE SKIP LOCKED
                 LIMIT @batch
@@ -267,27 +293,27 @@ public class RpcChainSubmissionWorker : BackgroundService
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
             UPDATE rpc_chain_submissions
-            SET "Status" = {run.Status}, "ClaimedBy" = NULL, "ClaimedAt" = NULL,
+            SET "Status" = CASE WHEN "QueueId" IS NOT NULL AND {run.Status} = 'Failed' THEN 'RetryPending' ELSE {run.Status} END, "ClaimedBy" = NULL, "ClaimedAt" = NULL,
                 "HeartbeatAt" = now(), "FinishedAt" = {run.FinishedAt},
                 "LastError" = NULL,
-                "InputPayload" = CASE WHEN {terminal} THEN NULL ELSE "InputPayload" END
-            WHERE "Id" = {id}
+                "InputPayload" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR {run.Status} <> 'Failed') THEN NULL ELSE "InputPayload" END
+            WHERE "Id" = {id} AND "ChainRunId" = {run.Id}
+              AND "Status" NOT IN ('Queued', 'Failed', 'Expired', 'Succeeded', 'Cancelled')
             """, ct);
     }
 
     protected virtual async Task CleanupTrackingAsync(CancellationToken ct)
     {
-        var cutoff = DateTimeOffset.UtcNow.Subtract(TrackingRetention);
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var removed = await db.Database.ExecuteSqlInterpolatedAsync(
-            $"""
+        var removed = await db.Database.ExecuteSqlRawAsync(
+            """
             DELETE FROM rpc_chain_submissions submission
-            WHERE submission."FinishedAt" < {cutoff}
+            WHERE submission."FinishedAt" < now() - make_interval(days => submission."ReceiptRetentionDays")
                OR EXISTS (
                     SELECT 1 FROM chain_runs run
                     WHERE run."Id" = submission."ChainRunId"
-                      AND run."FinishedAt" < {cutoff}
+                      AND run."FinishedAt" < now() - make_interval(days => submission."ReceiptRetentionDays")
                )
             """, ct);
         _nextCleanupAt = DateTimeOffset.UtcNow.Add(CleanupInterval);
@@ -306,13 +332,14 @@ public class RpcChainSubmissionWorker : BackgroundService
             $"""
             UPDATE rpc_chain_submissions
             SET "Attempts" = "Attempts" + 1,
-                "Status" = CASE WHEN "Attempts" + 1 >= {MaxAttempts} THEN 'Failed' ELSE 'Queued' END,
+                "Status" = CASE WHEN "Attempts" + 1 >= "MaxAttempts" THEN 'Failed' ELSE 'Queued' END,
                 "LastError" = {protectedError}, "ClaimedBy" = NULL, "ClaimedAt" = NULL,
                 "HeartbeatAt" = NULL,
-                "NextAttemptAt" = now() + make_interval(secs => power(3, "Attempts" + 1)::integer),
-                "FinishedAt" = CASE WHEN "Attempts" + 1 >= {MaxAttempts} THEN now() ELSE NULL END,
-                "InputPayload" = CASE WHEN "Attempts" + 1 >= {MaxAttempts} THEN NULL ELSE "InputPayload" END
-            WHERE "Id" = {id}
+                "NextAttemptAt" = now() + make_interval(secs => LEAST(86400, "RetryDelaySeconds" * power(3, "Attempts"))::integer),
+                "ExpiresAt" = now() + make_interval(secs => LEAST(86400, "RetryDelaySeconds" * power(3, "Attempts"))::integer + "MessageTtlSeconds"),
+                "FinishedAt" = CASE WHEN "Attempts" + 1 >= "MaxAttempts" THEN now() ELSE NULL END,
+                "InputPayload" = CASE WHEN "QueueId" IS NULL AND "Attempts" + 1 >= "MaxAttempts" THEN NULL ELSE "InputPayload" END
+            WHERE "Id" = {id} AND "Status" = 'Running' AND "ClaimedBy" = {_instanceId}
             """, ct);
     }
 

@@ -65,6 +65,7 @@ done
   || die 'placecontext-object-store/force-path-style must be true or false'
 
 kubectl apply -f "$ROOT/k3s/network-policies.yaml" >/dev/null
+kubectl apply -f "$ROOT/k3s/hosted-services.yaml" >/dev/null
 sed -e "s|__IMAGE__|$IMAGE|g" -e 's|__IMAGE_PULL_POLICY__|IfNotPresent|g' \
   -e 's|__CLUSTER_ENDPOINT__||g' \
   "$ROOT/k3s/placecontext.yaml" | kubectl apply -f - >/dev/null

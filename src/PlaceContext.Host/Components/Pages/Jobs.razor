@@ -33,7 +33,7 @@ else
             </div>
             <div class="head-actions">
                 <button class="dcbtn" @onclick="Vm.NavigateToTests">View tests</button>
-                <button class="dcbtn primary" @onclick="() => Vm.OpenTemplateModal()">+ New job</button>
+                <button class="dcbtn primary" @onclick="() => Vm.OpenTemplateModal()"><AppIcon Kind="plus" /> New job</button>
             </div>
         </header>
 
@@ -45,7 +45,7 @@ else
         @if (jobsCount == 0)
         {
             <div class="dccard empty-state">
-                <div class="empty-icon">⌁</div>
+                <div class="empty-icon"><AppIcon Kind="code" /></div>
                 <strong>No jobs yet</strong>
                 <span>Create a reusable workload, then run it manually or connect it to a schedule or event.</span>
                 <button class="dcbtn primary" @onclick="() => Vm.OpenTemplateModal()">
@@ -68,7 +68,7 @@ else
             <section class="dccard job-suite">
                 <header class="suite-head">
                     <div>
-                        <span class="suite-caret">⌄</span>
+                        <span class="suite-caret"><AppIcon Kind="chevron-down" /></span>
                         <strong>Job catalogue</strong>
                         <span>@jobsCount reusable workload@(jobsCount == 1 ? "" : "s")</span>
                     </div>
@@ -90,7 +90,7 @@ else
                                 }
                                 else
                                 {
-                                    <span>@(Vm.IsCodeJob(job) ? "⌁" : "□")</span>
+                                    <AppIcon Kind="@(Vm.IsCodeJob(job) ? "code" : "box")" />
                                 }
                             </div>
                             <div class="job-copy">
@@ -115,24 +115,24 @@ else
                             <div class="job-actions">
                                 @if (Vm.ConfirmDeleteId == job.Id)
                                 {
-                                    <button class="dcbtn danger" @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteJobAsync(job.Id))">Delete</button>
+                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteJobAsync(job.Id))">Delete</button>
                                     <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = null)">Keep</button>
                                 }
                                 else
                                 {
                                     <button class="icon-action run-action" title="Run job" aria-label="Run @job.Name"
                                             disabled="@isRunning" @onclick:stopPropagation="true"
-                                            @onclick="@(() => Vm.RunJobAsync(job.Id))">▶</button>
+                                            @onclick="@(() => Vm.RunJobAsync(job.Id))"><AppIcon Kind="play" /></button>
                                     <button class="icon-action" title="Edit job" aria-label="Edit @job.Name"
-                                            @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenJobAsync(job))">✎</button>
+                                            @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenJobAsync(job))"><AppIcon Kind="edit" /></button>
                                     @if (Vm.IsCodeJob(job))
                                     {
                                         <button class="icon-action code-action" title="Open code editor" aria-label="Open code editor for @job.Name"
                                                 @onclick:stopPropagation="true"
-                                                @onclick="@(() => Vm.NavigateToJob(job.Id))">&lt;/&gt;</button>
+                                                @onclick="@(() => Vm.NavigateToJob(job.Id))"><AppIcon Kind="code" /></button>
                                     }
-                                    <button class="icon-action danger-action" title="Delete job" aria-label="Delete @job.Name"
-                                            @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = job.Id)">⋯</button>
+                                    <button class="icon-action" title="Delete job" aria-label="Delete @job.Name"
+                                            @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = job.Id)"><AppIcon Kind="trash" /></button>
                                 }
                             </div>
                         </article>
@@ -148,7 +148,7 @@ else
 @if (Vm.ShowEditor)
 {
     <div class="dcslide-scrim" @onclick="() => Vm.CloseEditor()"></div>
-    <div class="dcslide slide-620">
+    <div class="dcslide slide-wide">
         <div class="dcslide-head job-slide-head">
             <div class="flex-fill-min">
                 <div class="title-14">@(Vm.EditJobId.HasValue ? Vm.EdName : "New job")</div>
@@ -159,9 +159,9 @@ else
             @if (Vm.EditJobId is { } runnableId)
             {
                 <button class="dcbtn primary mr-10 job-slide-run" disabled="@Vm.IsRunningJob(runnableId)"
-                        @onclick="@(() => Vm.RunJobAsync(runnableId))">▶ Run</button>
+                        @onclick="@(() => Vm.RunJobAsync(runnableId))"><AppIcon Kind="play" /> Run</button>
             }
-            <button class="dcslide-x job-slide-close" @onclick="() => Vm.CloseEditor()">×</button>
+            <button aria-label="Close" class="dcslide-x job-slide-close" @onclick="() => Vm.CloseEditor()"><AppIcon Kind="close" /></button>
         </div>
 
         @if (Vm.EditJobId.HasValue)
@@ -206,7 +206,7 @@ else
 
                     @if (Vm.Runs is null or { Count: 0 })
                     {
-                        <div class="empty-note">No runs yet — click ▶ Run to start one.</div>
+                        <div class="empty-note">No runs yet — click Run to start one.</div>
                     }
                     else
                     {
@@ -222,7 +222,7 @@ else
                                             @Vm.Presentation.DateTime(run.StartedAt)
                                         </span>
                                         <span class="meta-11">
-                                            ✓ @run.SucceededShards  @(run.PartialShards > 0 ? $"~ {run.PartialShards}" : "")  @(run.FailedShards > 0 ? $"✗ {run.FailedShards}" : "")
+                                            <AppIcon Kind="check" /> @run.SucceededShards  @if (run.PartialShards > 0) { <AppIcon Kind="warning" /> @run.PartialShards }  @if (run.FailedShards > 0) { <AppIcon Kind="close" /> @run.FailedShards }
                                         </span>
                                         @if (run.FinishedAt.HasValue)
                                         {
@@ -243,7 +243,7 @@ else
                 }
                 else
                 {
-                    <button class="dcbtn mb-12" @onclick="() => Vm.CloseRunDetail()">← All runs</button>
+                    <button class="dcbtn mb-12" @onclick="() => Vm.CloseRunDetail()"><AppIcon Kind="arrow-left" /> All runs</button>
 
                     <div class="run-detail-head">
                         <span class="status-badge-lg" style="color:@Vm.Presentation.StatusColor(Vm.RunDetail.Status); background:@Vm.Presentation.StatusBackground(Vm.RunDetail.Status)">
@@ -269,11 +269,17 @@ else
                     <div class="snapshot-line">
                         Ran as: <code>@Vm.RunDetail.Snapshot.MapSourceKind</code> · @Vm.RunDetail.Snapshot.MapSourceLabel
                         · @Vm.RunDetail.Snapshot.ShardCount shard(s) · concurrency @Vm.RunDetail.Snapshot.ConcurrencyLimit
-                        @if (Vm.RunDetail.Snapshot.AllowNetworkEgress)
+                        @if (Vm.RunDetail.Snapshot.Network is { } network)
+                        {
+                            <span class="egress-flag">[VPC @network.Cidr · @network.Group.Name]</span>
+                        }
+                        else if (Vm.RunDetail.Snapshot.AllowNetworkEgress)
                         {
                             <span class="egress-flag">[network egress allowed]</span>
                         }
                     </div>
+
+                    <JobRunLogs Run="Vm.RunDetail" />
 
                     @if (Vm.RunArtifacts is { Count: > 0 })
                     {
@@ -285,7 +291,7 @@ else
                                     <div class="output-row">
                                         <span class="output-kind">@art.Kind</span>
                                         <a href="@($"/runs/{art.RunId}/artifacts/{art.Id}")" target="_blank" rel="noopener"
-                                           class="output-link">@art.Title ↗</a>
+                                           class="output-link">@art.Title <AppIcon Kind="external-link" /></a>
                                         <span class="hint-10-5">@Vm.Presentation.Bytes(art.SizeBytes)</span>
                                     </div>
                                 }
@@ -305,7 +311,7 @@ else
                             </div>
                             @if (shard.Artifact is not null)
                             {
-                                <pre class="artifact-pre">@Vm.Presentation.Json(shard.Artifact)</pre>
+                                <RunOutput Value="@(Vm.Presentation.Json(shard.Artifact))" />
                                 @if (Vm.TryArtifactSvg(shard.Artifact, out var shardChart))
                                 {
                                     <div class="chart-label">chart <span class="text-3">(from the artifact's JSON)</span></div>
@@ -321,23 +327,9 @@ else
                                 <div class="artifact-links">
                                     @foreach (var a in shard.Artifacts)
                                     {
-                                        <a class="dcbtn artifact-dl"
-                                           href="@JobsViewModel.DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                                        <ArtifactDownload CssClass="dcbtn artifact-dl" Label="@a.Name" GetArtifact="@(() => a)" />
                                     }
                                 </div>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(shard.Log))
-                            {
-                                <details class="mt-4" open="@Vm.IsRunning(Vm.RunDetail.Status)">
-                                    <summary class="log-summary">
-                                        Log
-                                        @if (Vm.IsRunning(Vm.RunDetail.Status))
-                                        {
-                                            <span class="live-badge">LIVE</span>
-                                        }
-                                    </summary>
-                                    <pre class="log-pre">@shard.Log</pre>
-                                </details>
                             }
                         </div>
                     }
@@ -354,7 +346,7 @@ else
                             </div>
                             @if (reduce.Artifact is not null)
                             {
-                                <pre class="artifact-pre-lg">@JobsViewModel.PrettyJson(reduce.Artifact)</pre>
+                                <RunOutput Value="@(JobsViewModel.PrettyJson(reduce.Artifact))" />
                                 @if (Vm.TryArtifactSvg(reduce.Artifact, out var reduceChart))
                                 {
                                     <div class="chart-label">chart <span class="text-3">(from the artifact's JSON)</span></div>
@@ -366,23 +358,9 @@ else
                                 <div class="artifact-links">
                                     @foreach (var a in reduce.Artifacts)
                                     {
-                                        <a class="dcbtn artifact-dl"
-                                           href="@JobsViewModel.DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                                        <ArtifactDownload CssClass="dcbtn artifact-dl" Label="@a.Name" GetArtifact="@(() => a)" />
                                     }
                                 </div>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(reduce.Log))
-                            {
-                                <details class="mt-4" open="@Vm.IsRunning(Vm.RunDetail.Status)">
-                                    <summary class="log-summary">
-                                        Reduce log
-                                        @if (Vm.IsRunning(Vm.RunDetail.Status))
-                                        {
-                                            <span class="live-badge">LIVE</span>
-                                        }
-                                    </summary>
-                                    <pre class="log-pre">@reduce.Log</pre>
-                                </details>
                             }
                         </div>
                     }
@@ -395,7 +373,7 @@ else
             <div class="dcslide-body slide-body-col">
                 @if (Vm.SelectedTrigger() is { } sel)
                 {
-                    <button class="dcbtn self-start" @onclick="() => Vm.SelectedTriggerId = null">← All triggers</button>
+                    <button class="dcbtn self-start" @onclick="() => Vm.SelectedTriggerId = null"><AppIcon Kind="arrow-left" /> All triggers</button>
 
                     <div class="row-center-8">
                         <span class="status-badge-lg" style="color:@(sel.Enabled ? "var(--good)" : "var(--text-3)"); background:@(sel.Enabled ? "var(--good-bg)" : "var(--card-2)")">
@@ -404,7 +382,7 @@ else
                         <span class="title-14">@sel.Name</span>
                         <span class="flex-1"></span>
                         <button class="dcbtn" @onclick="@(() => Vm.ToggleTriggerAsync(sel))">@(sel.Enabled ? "Pause" : "Enable")</button>
-                        <button class="dcbtn text-bad" @onclick="@(() => Vm.RemoveTriggerAsync(sel.Id))">Delete</button>
+                        <button class="dcbtn" @onclick="@(() => Vm.RemoveTriggerAsync(sel.Id))">Delete</button>
                     </div>
 
                     <div class="dccard trigger-detail-card">
@@ -439,7 +417,7 @@ else
                                     <span class="run-time">
                                         @Vm.Presentation.DateTime(run.StartedAt)
                                     </span>
-                                    <span class="meta-11">✓ @run.SucceededShards @(run.FailedShards > 0 ? $"✗ {run.FailedShards}" : "")</span>
+                                    <span class="meta-11"><AppIcon Kind="check" /> @run.SucceededShards @if (run.FailedShards > 0) { <AppIcon Kind="close" /> @run.FailedShards }</span>
                                 </div>
                             }
                         </div>
@@ -590,7 +568,7 @@ else
                         {
                             <button class="dcbtn open-editor-btn"
                                     @onclick="@(() => Vm.NavigateToJob(editingJobId))">
-                                ⤷ Open code editor
+                                <AppIcon Kind="code" /> Open code editor
                                 <span class="hint-10-5">@Math.Max(Vm.EdMapFiles.Count, 1) file(s)</span>
                             </button>
                         }
@@ -671,7 +649,7 @@ else
                 <div class="dcfield">
                     <div class="row-between">
                         <label>Run-form parameters</label>
-                        <button type="button" class="dcbtn btn-2-9" @onclick="@(() => Vm.EdParams.Add(new ParamEdit()))">+ input</button>
+                        <button type="button" class="dcbtn btn-2-9" @onclick="@(() => Vm.EdParams.Add(new ParamEdit()))"><AppIcon Kind="plus" /> input</button>
                     </div>
                     <div class="param-list">
                         @for (var i = 0; i < Vm.EdParams.Count; i++)
@@ -699,7 +677,7 @@ else
                                 <label class="param-required-label">
                                     <input type="checkbox" @bind="Vm.EdParams[idx].Required" class="accent-brand" /> required
                                 </label>
-                                <button type="button" class="dcbtn btn-2-8" @onclick="@(() => Vm.EdParams.RemoveAt(idx))">×</button>
+                                <button aria-label="Remove" type="button" class="dcbtn btn-2-8" @onclick="@(() => Vm.EdParams.RemoveAt(idx))"><AppIcon Kind="close" /></button>
                             </div>
                         }
                     </div>
@@ -724,7 +702,7 @@ else
                     <div class="vault-head">
                         <span class="text-3-12">Injected at run time (from Vault)</span>
                         <button type="button" class="link-btn"
-                                @onclick="Vm.NavigateToSecrets">manage in Vault →</button>
+                                @onclick="Vm.NavigateToSecrets">manage in Vault <AppIcon Kind="arrow-right" /></button>
                     </div>
                     @if (Vm.VaultSecrets is { Count: > 0 })
                     {
@@ -897,13 +875,13 @@ else
 @if (Vm.ShowTemplateModal)
 {
     <div class="dcmodal-overlay" @onclick="() => Vm.CloseTemplateModal()">
-        <div class="dcmodal modal-templates" @onclick:stopPropagation="true">
+        <div class="dcmodal modal-templates" role="dialog" aria-modal="true" aria-label="Create job" @onclick:stopPropagation="true">
             <div class="dcmodal-head">
                 <div class="flex-fill-min">
                     <div class="title-14">New job</div>
                     <div class="subtitle-11-5">Choose a template to get started, or start from scratch.</div>
                 </div>
-                <button class="dcslide-x" @onclick="() => Vm.CloseTemplateModal()">×</button>
+                <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseTemplateModal()"><AppIcon Kind="close" /></button>
             </div>
             <div class="dcmodal-body template-modal-body">
                 <div class="template-search-row">
@@ -928,7 +906,7 @@ else
                                 <button type="button" class="template-card @(Vm.SelectedTemplate?.Id == template.Id ? "selected" : "")"
                                         @onclick="() => Vm.SelectTemplate(template)">
                                     <div class="template-card-head">
-                                        <span class="template-icon">@template.Icon</span>
+                                        <span class="template-icon"><AppIcon Kind="@template.Icon" /></span>
                                         <span class="template-name">@template.Name</span>
                                     </div>
                                     <div class="template-desc">@template.Description</div>
@@ -939,7 +917,7 @@ else
                                         }
                                         else if (template.RequiredCredentials.Count > 0)
                                         {
-                                            <span class="template-cred-ok">✓ Vault credentials present</span>
+                                            <span class="template-cred-ok"><AppIcon Kind="check" /> Vault credentials present</span>
                                         }
                                         else
                                         {
@@ -982,7 +960,7 @@ else
                                         <span>@cred.Description</span>
                                         @if (Vm.HasTemplateCredential(cred))
                                         {
-                                            <span class="template-cred-ok">✓ present</span>
+                                            <span class="template-cred-ok"><AppIcon Kind="check" /> present</span>
                                         }
                                         else
                                         {
@@ -993,7 +971,7 @@ else
                             </ul>
                             <div class="template-detail-hint">
                                 Vault secrets are injected as environment variables at runtime.
-                                <button type="button" class="link-btn" @onclick="Vm.NavigateToSecrets">Open Vault →</button>
+                                <button type="button" class="link-btn" @onclick="Vm.NavigateToSecrets">Open Vault <AppIcon Kind="arrow-right" /></button>
                             </div>
                         }
                     </div>
@@ -1013,7 +991,7 @@ else
 @if (Vm.RunPromptJob is not null)
 {
     <div class="dcmodal-overlay" @onclick="() => Vm.CancelRunPrompt()">
-        <div class="dcmodal modal-440" @onclick:stopPropagation="true">
+        <div class="dcmodal modal-440" role="dialog" aria-modal="true" aria-label="Job run input" @onclick:stopPropagation="true">
             <div class="dcmodal-head">
                 <div class="flex-fill-min">
                     <div class="title-14">Run @Vm.RunPromptJob.Name</div>
@@ -1021,9 +999,24 @@ else
                         This job takes input — the values below become the run's payload.
                     </div>
                 </div>
-                <button class="dcslide-x" @onclick="() => Vm.CancelRunPrompt()">×</button>
+                <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CancelRunPrompt()"><AppIcon Kind="close" /></button>
             </div>
             <div class="dcmodal-body">
+                <div class="dctabs" role="group" aria-label="Input source">
+                    <button type="button" class="dctab @(!Vm.RunFileMode ? "active" : "")" aria-pressed="@(!Vm.RunFileMode)" @onclick="Vm.UseRunFields">Input values</button>
+                    <button type="button" class="dctab @(Vm.RunFileMode ? "active" : "")" aria-pressed="@Vm.RunFileMode" @onclick="Vm.UseRunFile"><AppIcon Kind="file" /> JSON file</button>
+                </div>
+                @if (Vm.RunFileMode)
+                {
+                    <div class="form-row"><label for="run-input-file">Input JSON file</label><InputFile id="run-input-file" OnChange="Vm.ReadRunFileAsync" accept=".json,application/json" disabled="@Vm.RunFileLoading" />
+                    <p>A JSON object up to 1 MiB. Nested objects and arrays are preserved.</p>
+                    @if (Vm.RunFileLoading) { <p role="status">Reading file…</p> }
+                    @if (Vm.RunFileName is not null) { <p role="status">Ready: @Vm.RunFileName</p> }
+                    </div>
+                }
+                else
+                {
+                @if (Vm.RunPromptJob.Parameters.Count == 0) { <p>This job will use its configured input payloads. Choose JSON file to override them for this run.</p> }
                 @foreach (var (p, i) in Vm.RunPromptJob.Parameters.Select((p, i) => (p, i)))
                 {
                     <div class="dcfield">
@@ -1039,15 +1032,16 @@ else
                                     ValueChanged="@(v => Vm.SetArg(p.Name, v))" />
                     </div>
                 }
+                }
                 @if (Vm.RunPromptError is not null)
                 {
-                    <div class="prompt-error">@Vm.RunPromptError</div>
+                    <div class="prompt-error" role="alert">@Vm.RunPromptError</div>
                 }
             </div>
             <div class="dcmodal-foot">
                 <button class="dcbtn" @onclick="() => Vm.CancelRunPrompt()">Cancel</button>
-                <button class="dcbtn primary" disabled="@Vm.IsRunningJob(Vm.RunPromptJob.Id)" @onclick="() => Vm.SubmitRunPromptAsync()">
-                    @(Vm.IsRunningJob(Vm.RunPromptJob.Id) ? "Running…" : "▶ Run job")
+                <button class="dcbtn primary" disabled="@(Vm.RunFileLoading || Vm.IsRunningJob(Vm.RunPromptJob.Id))" @onclick="() => Vm.SubmitRunPromptAsync()">
+                    <AppIcon Kind="play" /> @(Vm.IsRunningJob(Vm.RunPromptJob.Id) ? "Running…" : "Run job")
                 </button>
             </div>
         </div>
@@ -1056,6 +1050,8 @@ else
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    [SupplyParameterFromQuery(Name = "job")] public Guid? JobId { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? PageTab { get; set; }
 
     protected override void OnInitialized()
     {
@@ -1071,11 +1067,7 @@ else
         try { await Vm.AfterRenderAsync(); } catch { }
     }
 
-    protected override async Task OnParametersSetAsync()
-    {
-        Vm.Initialize(ProjectId);
-        await Vm.LoadAsync();
-    }
+    protected override Task OnParametersSetAsync() => Vm.LoadPageAsync(ProjectId, JobId, PageTab);
 
     public void Dispose()
     {

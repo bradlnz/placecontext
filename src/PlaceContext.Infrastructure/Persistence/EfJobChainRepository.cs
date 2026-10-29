@@ -86,6 +86,19 @@ public sealed class EfJobChainRepository : IJobChainRepository
     private static object? SerializeAction(ChainAction? action) => action switch
     {
         null => null,
+        QemuChainAction vm => new
+        {
+            type = vm.Type, imageProfile = vm.ImageProfile, command = vm.Command, outputField = vm.OutputField,
+            memoryMb = vm.MemoryMb, cpus = vm.Cpus, timeoutSeconds = vm.TimeoutSeconds, allowNetwork = vm.AllowNetwork,
+        },
+        LoopChainAction loop => new
+        {
+            type = loop.Type,
+            instructions = loop.Instructions,
+            responseField = loop.ResponseField,
+            responseType = loop.ResponseType,
+            agentProvider = loop.AgentProvider,
+        },
         SendEmailChainAction email => new
         {
             type = SendEmailChainAction.ActionType,
@@ -173,6 +186,17 @@ public sealed class EfJobChainRepository : IJobChainRepository
             || !element.TryGetProperty("type", out var type)) return null;
         return type.GetString() switch
         {
+            QemuChainAction.ActionType => new QemuChainAction(
+                element.GetProperty("imageProfile").GetString()!, element.GetProperty("command").GetString()!,
+                element.GetProperty("outputField").GetString()!, element.GetProperty("memoryMb").GetInt32(),
+                element.GetProperty("cpus").GetInt32(), element.GetProperty("timeoutSeconds").GetInt32(),
+                element.GetProperty("allowNetwork").GetBoolean()),
+            LoopChainAction.HumanType or LoopChainAction.AgentType => new LoopChainAction(
+                type.GetString()!,
+                element.GetProperty("instructions").GetString() ?? "",
+                element.GetProperty("responseField").GetString() ?? "",
+                element.TryGetProperty("responseType", out var responseType) ? responseType.GetString() ?? LoopChainAction.TextResponse : LoopChainAction.TextResponse,
+                element.TryGetProperty("agentProvider", out var agentProvider) ? agentProvider.GetString() ?? LoopChainAction.ExternalAgent : LoopChainAction.ExternalAgent),
             SendEmailChainAction.ActionType => new SendEmailChainAction(
                 element.TryGetProperty("recipient", out var recipient) ? recipient.GetString() ?? "" : "",
                 element.TryGetProperty("recipientName", out var name) ? name.GetString() ?? "" : "",

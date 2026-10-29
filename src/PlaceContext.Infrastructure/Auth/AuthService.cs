@@ -75,13 +75,14 @@ public sealed class AuthService : IAuthService
         var existing = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
         if (existing is not null)
         {
+            existing.IsExternalAdmin = newUserRole == UserRole.Admin;
             if (!string.IsNullOrWhiteSpace(displayName)
                 && !string.Equals(existing.DisplayName, displayName.Trim(), StringComparison.Ordinal))
             {
                 existing.DisplayName = displayName.Trim();
-                await _db.SaveChangesAsync(ct);
             }
-            return ToAuthUser(existing);
+            await _db.SaveChangesAsync(ct);
+            return ExternalUser(existing);
         }
 
         var row = new UserRow
@@ -91,24 +92,29 @@ public sealed class AuthService : IAuthService
             DisplayName = string.IsNullOrWhiteSpace(displayName) ? email.Split('@')[0] : displayName.Trim(),
             PasswordHash = PasswordHasher.Hash(Guid.NewGuid().ToString("N")),
             PasswordSet = false,
-            Role = newUserRole.ToString(),
+            Role = UserRole.Viewer.ToString(),
+            IsExternalAdmin = newUserRole == UserRole.Admin,
             CreatedAt = DateTimeOffset.UtcNow,
         };
         await _db.Users.AddAsync(row, ct);
         try
         {
             await _db.SaveChangesAsync(ct);
-            return ToAuthUser(row);
+            return ExternalUser(row);
         }
         catch (DbUpdateException)
         {
             // A concurrent first sign-in may have won the tenant/email unique-index race.
             _db.Entry(row).State = EntityState.Detached;
             var raced = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
-            if (raced is not null) return ToAuthUser(raced);
+            if (raced is not null)
+                return await GetOrCreateExternalUserAsync(email, displayName, newUserRole, ct);
             throw;
         }
     }
+
+    private static AuthUser ExternalUser(UserRow row)
+        => ToAuthUser(row) with { Role = row.IsExternalAdmin ? nameof(UserRole.Admin) : row.Role };
 
     public async Task<AuthUser> GetOrCreateOperatorAsync(CancellationToken ct = default)
     {

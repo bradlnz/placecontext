@@ -13,28 +13,3 @@ public sealed record JobChainStageView(
     /// <summary>True when this stage fans out to more than one job.</summary>
     public bool IsParallel => Jobs.Count > 1;
 }
-
-public abstract record ChainActionView(string Type, string DisplayName);
-
-public sealed record SendEmailChainActionView(
-    string Recipient,
-    string RecipientName,
-    string Subject,
-    string Body,
-    string AttachmentPath = "")
-    : ChainActionView(SendEmailChainAction.ActionType, "Send email");
-
-public sealed record SendSmsChainActionView(string Recipient, string Body)
-    : ChainActionView(SendSmsChainAction.ActionType, "Send SMS");
-
-/// <summary>Read model for a flow-control gate on a chain stage.</summary>
-public abstract record ChainGateView;
-
-/// <summary>No gate — the stage runs unconditionally.</summary>
-public sealed record NoGateView : ChainGateView;
-
-/// <summary>Pauses the pipeline before the stage.</summary>
-public sealed record WaitGateView(double DurationSeconds) : ChainGateView;
-
-/// <summary>Conditional routing gate.</summary>
-public sealed record ConditionGateView(string Expression, IReadOnlyList<JobChainStageView>? ElseBranch = null) : ChainGateView;

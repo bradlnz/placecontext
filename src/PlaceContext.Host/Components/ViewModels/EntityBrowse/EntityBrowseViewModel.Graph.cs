@@ -96,6 +96,7 @@ public sealed partial class EntityBrowseViewModel
     // ── Insights ──────────────────────────────────────────────────────────────────────────────
     public async Task BuildInsightsAsync()
     {
+        var version = _loadVersion;
         Insights.Clear();
         if (Entity is null)
             return;
@@ -103,10 +104,11 @@ public sealed partial class EntityBrowseViewModel
         try
         {
             var columns = await _svc.ListProjectTableColumnsAsync(ProjectId, Entity.TableName);
+            if (version != _loadVersion) return;
             Insights.Add(
                 new Insight(
                     $"{Entity.Name} total",
-                    (Rows?.Rows.Count ?? 0).ToString("N0"),
+                    (Page?.TotalCount ?? 0).ToString("N0"),
                     "records",
                     Array.Empty<(string, string, int)>()
                 )
@@ -118,6 +120,7 @@ public sealed partial class EntityBrowseViewModel
                     ProjectId,
                     $"SELECT round(avg(\"{col.Name}\")::numeric, 1), min(\"{col.Name}\"), max(\"{col.Name}\") FROM \"{table}\""
                 );
+                if (version != _loadVersion) return;
                 if (r.Rows.Count == 1 && r.Rows[0][0] is { } avg)
                     Insights.Add(
                         new Insight(
@@ -147,6 +150,7 @@ public sealed partial class EntityBrowseViewModel
                     ProjectId,
                     $"SELECT \"{col}\"::text, count(*) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
                 );
+                if (version != _loadVersion) return;
                 if (r.Rows.Count == 0)
                     continue;
                 var max = r.Rows.Max(x => long.TryParse(x[1], out var n) ? n : 0);
@@ -169,6 +173,7 @@ public sealed partial class EntityBrowseViewModel
     // ── Graph ─────────────────────────────────────────────────────────────────────────────────
     public async Task BuildSectionGraphAsync()
     {
+        var version = _loadVersion;
         BrainGraph = null;
         if (Entity is null || Rows is null || Rows.Rows.Count == 0)
             return;
@@ -227,6 +232,7 @@ public sealed partial class EntityBrowseViewModel
                         ProjectId,
                         $"SELECT a.\"{rel.Column}\"::text, b.\"{tLabel.Replace("\"", "")}\"::text FROM \"{Entity.TableName.Replace("\"", "")}\" a JOIN \"{target.TableName.Replace("\"", "")}\" b ON a.\"{rel.Column}\"::text = b.\"{rel.TargetColumn.Replace("\"", "")}\"::text LIMIT 40"
                     );
+                    if (version != _loadVersion) return;
                     foreach (var row in join.Rows)
                     {
                         if (row.Count < 2 || row[0] is not { } k || row[1] is not { } lbl)
@@ -248,9 +254,11 @@ public sealed partial class EntityBrowseViewModel
                     }
                 }
                 catch { }
+                if (version != _loadVersion) return;
             }
 
             var pairs = await _svc.ListEntityTagPairsAsync(Entity.Id);
+            if (version != _loadVersion) return;
             var runNodes = new List<Guid>();
             var runEdges = new List<(int Record, int Run)>();
             foreach (var pair in pairs)
@@ -278,6 +286,7 @@ public sealed partial class EntityBrowseViewModel
                 try
                 {
                     var hits = await _svc.ListProjectArtifactsAsync(ProjectId, take: 20, search: key);
+                    if (version != _loadVersion) return;
                     foreach (var art in hits.OrderByDescending(a => a.CreatedAt))
                     {
                         if (runNodes.Count >= 8)
@@ -293,6 +302,7 @@ public sealed partial class EntityBrowseViewModel
                     }
                 }
                 catch { }
+                if (version != _loadVersion) return;
                 if (runNodes.Count >= 8)
                     break;
             }
@@ -306,6 +316,7 @@ public sealed partial class EntityBrowseViewModel
                         allArts.Add((ri, a));
                 }
                 catch { }
+                if (version != _loadVersion) return;
             }
             var artNodes = allArts
                 .GroupBy(x => (x.Art.Kind, x.Art.Title))

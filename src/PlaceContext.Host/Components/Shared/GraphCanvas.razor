@@ -23,7 +23,7 @@
                             @if (AllowFullscreen)
                             {
                                 <button class="dcbtn btn-fs" @onclick="Vm.ToggleFullscreenAsync">
-                                    @(Vm.Fullscreen ? "✕ Exit full screen" : "⛶ Full screen")
+                                    <AppIcon Kind="@(Vm.Fullscreen ? "close" : "fullscreen")" /> @(Vm.Fullscreen ? "Exit full screen" : "Full screen")
                                 </button>
                         }
                     </div>
@@ -54,7 +54,7 @@
                     </button>
                 }
                 <button class="dcbtn btn-fs" @onclick="Vm.ToggleFullscreenAsync">
-                    @(Vm.Fullscreen ? "✕ Exit full screen" : "⛶ Full screen")
+                    <AppIcon Kind="@(Vm.Fullscreen ? "close" : "fullscreen")" /> @(Vm.Fullscreen ? "Exit full screen" : "Full screen")
                 </button>
             }
         </div>
@@ -97,11 +97,11 @@
                     <div class="sel-id">@sel.Id</div>
                 </div>
                 <button type="button" class="dcslide-x card-x" aria-label="Close panel"
-                        @onclick="@(() => ClosePanelAsync(sel.Id))">×</button>
+                        @onclick="@(() => ClosePanelAsync(sel.Id))"><AppIcon Kind="close" /></button>
             </div>
             @if (NodeUrl?.Invoke(sel) is { Length: > 0 } url)
             {
-                <a class="dcbtn open-link" href="@url">Open ↗</a>
+                <a class="dcbtn open-link" href="@url">Open <AppIcon Kind="external-link" /></a>
             }
             <div class="badge-row">
                 @if (sel.IsGod)
@@ -115,7 +115,7 @@
                 <div class="section-cap">Run details</div>
                 <div class="run-status-line">
                     <span class="run-status" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
-                    <a href="@($"/observability?run={run.Id}")" class="run-observability-link">Observability ↗</a>
+                    <a href="@($"/observability?run={run.Id}")" class="run-observability-link">Observability <AppIcon Kind="external-link" /></a>
                 </div>
                 <dl class="run-detail-grid">
                     <dt>Run ID</dt>
@@ -135,7 +135,7 @@
                     <dt>Execution</dt>
                     <dd>@run.Snapshot.ShardCount shard(s) · concurrency @run.Snapshot.ConcurrencyLimit</dd>
                     <dt>Network</dt>
-                    <dd>@(run.Snapshot.AllowNetworkEgress ? "Egress allowed" : "Egress blocked")</dd>
+                    <dd>@(run.Snapshot.Network is { } network ? $"VPC {network.Cidr} · {network.Group.Name}" : run.Snapshot.AllowNetworkEgress ? "Egress allowed" : "Egress blocked")</dd>
                 </dl>
                 @if (!string.IsNullOrWhiteSpace(run.Snapshot.Goal))
                 {
@@ -152,11 +152,11 @@
                             </summary>
                             @if (!string.IsNullOrWhiteSpace(shard.Artifact))
                             {
-                                <pre>@Vm.Presentation.Json(shard.Artifact)</pre>
+                                <RunOutput Value="@(Vm.Presentation.Json(shard.Artifact))" />
                             }
                             @if (!string.IsNullOrWhiteSpace(shard.Log))
                             {
-                                <pre class="run-log">@shard.Log</pre>
+                                <RunOutput Value="@shard.Log" Language="plaintext" Label="Shard log" />
                             }
                         </details>
                     }
@@ -171,11 +171,11 @@
                         </summary>
                         @if (!string.IsNullOrWhiteSpace(reduce.Artifact))
                         {
-                            <pre>@Vm.Presentation.Json(reduce.Artifact)</pre>
+                            <RunOutput Value="@(Vm.Presentation.Json(reduce.Artifact))" />
                         }
                         @if (!string.IsNullOrWhiteSpace(reduce.Log))
                         {
-                            <pre class="run-log">@reduce.Log</pre>
+                            <RunOutput Value="@reduce.Log" Language="plaintext" Label="Reduce log" />
                         }
                     </details>
                 }
@@ -255,7 +255,7 @@
                             </button>
                             @if (NodeUrl?.Invoke(node) is { Length: > 0 } nurl)
                             {
-                                <a href="@nurl" class="artifact-open" target="_blank" title="Open">↗</a>
+                                <a href="@nurl" class="artifact-open" target="_blank" title="Open"><AppIcon Kind="external-link" /></a>
                             }
                         </div>
                     }
@@ -270,18 +270,18 @@
                         <div class="neighbor-row">
                             <button class="neighbor-btn"
                                     title="@node.Id" @onclick="@(() => Vm.SelectAsync(node.Id))">
-                                @Vm.ShortLabel(node.Label)@(Vm.IsAmbiguous(confidence) ? " ⇢" : "")
+                                @Vm.ShortLabel(node.Label) @if (Vm.IsAmbiguous(confidence)) { <AppIcon Kind="chain" /> }
                             </button>
                             @if (NodeUrl?.Invoke(node) is { Length: > 0 } nurl)
                             {
-                                <a href="@nurl" class="neighbor-link" title="Open">↗</a>
+                                <a href="@nurl" class="neighbor-link" title="Open"><AppIcon Kind="external-link" /></a>
                             }
                         </div>
                     }
                 </div>
                 @if (neighbors.Any(n => Vm.IsAmbiguous(n.Confidence)))
                 {
-                    <div class="ambiguous-note">⇢ ambiguous link (low confidence)</div>
+                    <div class="ambiguous-note"><AppIcon Kind="chain" /> ambiguous link (low confidence)</div>
                 }
             }
         </div>

@@ -56,6 +56,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IPermissionService? _permissions;
     private readonly IChainContextStore? _contextStore;
     private readonly ILogger<RunJobChainHandler>? _log;
+    private readonly IQemuEnvironmentRunner? _qemu;
+    private readonly IQemuReplayStore? _qemuReplay;
+    private readonly IChainQuestionGenerator? _questions;
+    private readonly IJevReviewer? _jev;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
         IUnitOfWork uow, IClock clock, IJobRunner jobRunner,
@@ -64,7 +68,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         IClientCommunicationSender? communications = null,
         IPermissionService? permissions = null,
         IChainContextStore? contextStore = null,
-        ILogger<RunJobChainHandler>? log = null)
+        ILogger<RunJobChainHandler>? log = null,
+        IQemuEnvironmentRunner? qemu = null, IQemuReplayStore? qemuReplay = null,
+        IChainQuestionGenerator? questions = null, IJevReviewer? jev = null)
     {
         _dataMappings = dataMappings;
         _chains = chains;
@@ -77,6 +83,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _permissions = permissions;
         _contextStore = contextStore;
         _log = log;
+        _qemu = qemu;
+        _qemuReplay = qemuReplay;
+        _questions = questions;
+        _jev = jev;
     }
 
     private readonly DataMappingIngestionService? _dataMappings;
@@ -208,6 +218,65 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 }
             }
 
+            if (stage.Action is LoopChainAction loop)
+            {
+                var request = chainRun.InputRequestJson is null ? null
+                    : JsonSerializer.Deserialize<ChainInputRequest>(chainRun.InputRequestJson);
+                if (command.ResumeFromStageIndex == stageIndex
+                    && loop.AgentProvider != LoopChainAction.JevAgent
+                    && request is { SubmittedValues: not null }
+                    && request.Kind == loop.Type && request.Steps.Count == 1
+                    && request.Steps[0].Index == flatIndex)
+                {
+                    var responses = ChainInputPayload.Apply(request, request.SubmittedValues, null, null);
+                    payload = MergePayload(payload, responses[flatIndex]);
+                    chainRun.MarkStepRunning(flatIndex, null, _clock.UtcNow);
+                    chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow);
+                    chainRun.SetCurrentPayload(payload);
+                    await SaveProgressAsync(chainRun, ct);
+                    await SaveContextAsync(chainRun, payload, ct);
+                    continue;
+                }
+
+                string question;
+                System.Text.Json.Nodes.JsonObject? verification = null;
+                chainRun.MarkStepRunning(flatIndex, null, _clock.UtcNow);
+                await SaveProgressAsync(chainRun, ct);
+                try
+                {
+                    question = _questions is null ? loop.Instructions : await _questions.GenerateAsync(loop, payload, ct);
+                    if (loop.AgentProvider == LoopChainAction.JevAgent)
+                        verification = await (_jev ?? throw new InvalidOperationException("Jev review is not configured."))
+                            .EvaluateAsync(question, payload, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Failed, _clock.UtcNow,
+                        error: ShortError((loop.AgentProvider == LoopChainAction.JevAgent
+                            ? "Could not complete Jev verification: " : "Could not generate validation question: ") + ex.Message));
+                    status = ChainRunStatus.Failed;
+                    break;
+                }
+                if (verification is not null)
+                {
+                    payload = MergePayload(payload, new System.Text.Json.Nodes.JsonObject { [loop.ResponseField] = verification }.ToJsonString());
+                    chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow);
+                    chainRun.SetCurrentPayload(payload);
+                    await SaveProgressAsync(chainRun, ct);
+                    await SaveContextAsync(chainRun, payload, ct);
+                    continue;
+                }
+                chainRun.AwaitInput(stageIndex, payload,
+                    JsonSerializer.Serialize(new ChainInputRequest(Guid.NewGuid(),
+                        [new ChainInputStep(flatIndex, loop.DisplayName,
+                            [new JobParameterDto(loop.ResponseField, "Response", Type: loop.ResponseType == LoopChainAction.YesNoResponse ? "checkbox" : "text")])],
+                        Kind: loop.Type, Instructions: question, ResponseType: loop.ResponseType)),
+                    command.StepPayloadOverrides is null ? null : JsonSerializer.Serialize(command.StepPayloadOverrides));
+                await SaveProgressAsync(chainRun, ct);
+                return ChainRunMapper.ToView(chainRun);
+            }
+
             var requiredSteps = new List<ChainInputStep>();
             for (var branch = 0; branch < stage.JobIds.Count; branch++)
             {
@@ -228,6 +297,14 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     command.StepPayloadOverrides is null ? null : JsonSerializer.Serialize(command.StepPayloadOverrides));
                 await SaveProgressAsync(chainRun, ct);
                 return ChainRunMapper.ToView(chainRun);
+            }
+
+            if (stage.Action is QemuChainAction vm)
+            {
+                var outcome = await ExecuteQemuAsync(vm, chainRun, flatIndex++, payload, ct);
+                payload = outcome.Payload;
+                if (outcome.Status is ChainRunStatus.Failed or ChainRunStatus.Cancelled) { status = outcome.Status; break; }
+                continue;
             }
 
             if (stage.Action is SendEmailChainAction email)
@@ -480,6 +557,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             }
         }
 
+        if (stage.Action is QemuChainAction vm)
+            return await ExecuteQemuAsync(vm, chainRun, chainRun.AppendStep(vm.Type, stageIndex), payload, ct);
+
         if (stage.Action is SendEmailChainAction email)
         {
             var actionIndex = chainRun.AppendStep("send-email", stageIndex);
@@ -676,6 +756,68 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
     // Fold collected step parameters over the chained input: two JSON objects merge shallowly
     // (parameter values win); anything else keeps the chained input under "previous" beside them.
+    private async Task<(string? Payload, ChainRunStatus Status)> ExecuteQemuAsync(
+        QemuChainAction action, ChainRun run, int index, string? payload, CancellationToken ct)
+    {
+        run.MarkStepRunning(index, null, _clock.UtcNow);
+        await SaveProgressAsync(run, ct);
+        try
+        {
+            if (_permissions is null || !await _permissions.HasAsync(Permission.JobsRun, ct))
+                throw new UnauthorizedAccessException($"The '{Permission.JobsRun}' permission is required to run a QEMU step.");
+            if (_qemu is null) throw new InvalidOperationException("QEMU execution is not configured on this host.");
+            var result = await RunQemuUntilCancelledAsync(action, run.Id, index, payload, ct);
+            if (result is null)
+            {
+                run.MarkStepFinished(index, null, ChainStepStatus.Cancelled, _clock.UtcNow, "QEMU");
+                return (payload, ChainRunStatus.Cancelled);
+            }
+            payload = MergeContext(payload, JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                [action.OutputField] = new { exitCode = result.ExitCode, stdout = result.Stdout, stderr = result.Stderr, outputTruncated = result.OutputTruncated,
+                    agentSteps = result.AgentSteps, activity = result.Activity },
+            }));
+            run.SetCurrentPayload(payload);
+            var success = result.ExitCode == 0;
+            run.MarkStepFinished(index, null, success ? ChainStepStatus.Succeeded : ChainStepStatus.Failed,
+                _clock.UtcNow, "QEMU", error: success ? null : ShortError(string.IsNullOrWhiteSpace(result.Stderr) ? "The QEMU agent did not complete the task." : result.Stderr));
+            await SaveProgressAsync(run, ct);
+            await SaveContextAsync(run, payload, ct);
+            return (payload, success ? ChainRunStatus.Succeeded : ChainRunStatus.Failed);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            run.MarkStepFinished(index, null, ChainStepStatus.Failed, _clock.UtcNow, "QEMU", error: ShortError(ex.Message));
+            await SaveProgressAsync(run, ct);
+            return (payload, ChainRunStatus.Failed);
+        }
+    }
+
+    private async Task<QemuEnvironmentResult?> RunQemuUntilCancelledAsync(QemuChainAction action, Guid runId, int step, string? payload, CancellationToken ct)
+    {
+        using var execution = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var task = _qemu!.RunAsync(action, payload, execution.Token,
+            _qemuReplay is null ? null : (frame, token) => _qemuReplay.AppendAsync(runId, step, frame, token));
+        try
+        {
+            while (!task.IsCompleted)
+            {
+                await Task.WhenAny(task, Task.Delay(1000, ct));
+                ct.ThrowIfCancellationRequested();
+                if ((await _runs.GetByIdAsync(runId, ct))?.Status == ChainRunStatus.Cancelled)
+                    return null;
+            }
+            if ((await _runs.GetByIdAsync(runId, ct))?.Status == ChainRunStatus.Cancelled) return null;
+            return await task;
+        }
+        finally
+        {
+            await execution.CancelAsync();
+            try { await task; } catch { /* Preserve the result or exception from the execution above. */ }
+        }
+    }
+
     private static string MergePayload(string? chained, string args)
     {
         if (string.IsNullOrWhiteSpace(chained)) return args;

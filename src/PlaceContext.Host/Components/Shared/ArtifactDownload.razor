@@ -1,0 +1,10 @@
+@inject ArtifactDownloadViewModel Vm
+
+<button type="button" class="@CssClass" disabled="@Vm.Busy" @onclick="() => Vm.DownloadAsync(GetArtifact)"><AppIcon Kind="download" /> @(Vm.Busy ? "Downloading…" : Label)</button>
+@if (Vm.Error is not null) { <span role="alert">@Vm.Error</span> }
+
+@code {
+    [Parameter, EditorRequired] public Func<RunArtifactView> GetArtifact { get; set; } = default!;
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string CssClass { get; set; } = "dcbtn";
+}

@@ -1,3 +1,4 @@
+using PlaceContext.Domain.ValueObjects;
 using System.Text.Json;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +20,7 @@ public sealed partial class JobChainsViewModel
     public Guid? SelectedStepRunId { get; private set; }
     public DateTimeOffset? LiveOutputUpdatedAt { get; private set; }
     public string? LiveOutputText { get; private set; }
+    public string? StepOutputError { get; private set; }
     public IReadOnlyList<(string Path, string Value)> ContextRows =>
         FlattenContext(OpenRun?.FinalOutput);
     public bool FollowNewest { get; set; }
@@ -94,16 +96,23 @@ public sealed partial class JobChainsViewModel
 
     public void SetResumeArg(int index, string name, string value) => _resumePrompt.Set(ArgKey(index, name), value);
 
-    public async Task ResumeWithInputsAsync()
+    public Task ResumeWithInputsAsync() => ResumeWithInputsCoreAsync(null);
+    public Task RespondYesNoAsync(bool answer) => ResumeWithInputsCoreAsync(answer);
+
+    private async Task ResumeWithInputsCoreAsync(bool? answer)
     {
         if (OpenRun?.InputRequest is not { } request || _submissions is null || Resuming) return;
         Resuming = true;
         ResumeError = null;
         try
         {
+            if (request.ResponseType == LoopChainAction.YesNoResponse && answer is null)
+                throw new ArgumentException("Choose Yes or No to continue.");
             var values = request.Steps.ToDictionary(step => step.Index.ToString(), step =>
-                JsonSerializer.Deserialize<JsonElement>(ParameterPromptState.ToJsonPayload(step.Parameters,
-                    name => GetResumeArg(step.Index, name))));
+                request.ResponseType == LoopChainAction.YesNoResponse
+                    ? JsonSerializer.SerializeToElement(step.Parameters.ToDictionary(field => field.Name, _ => answer!.Value))
+                    : JsonSerializer.Deserialize<JsonElement>(ParameterPromptState.ToJsonPayload(step.Parameters,
+                        name => GetResumeArg(step.Index, name))));
             await _submissions.ResumeAsync(OpenRun.Id, request.Id, JsonSerializer.Serialize(values));
             await RefreshRunsAsync(OpenRun.ChainId);
         }
@@ -111,7 +120,7 @@ public sealed partial class JobChainsViewModel
         finally { Resuming = false; NotifyStateChanged(); }
     }
 
-    // ── Run chain ─────────────────────────────────────────────────────────────────────────────
+    // ── Run workflow ─────────────────────────────────────────────────────────────────────────────
     public Task RunChainAsync(JobChainView chain)
     {
         var plan = ChainParameterPromptPlan.Build(chain, Jobs ?? Array.Empty<JobView>());
@@ -169,13 +178,13 @@ public sealed partial class JobChainsViewModel
         var chainRunId = Guid.NewGuid();
         var err = _ops.TryRun(
             ProjectId,
-            $"Run chain — {chain.Name}",
-            $"/project/{ProjectId}/chains",
+            $"Run workflow — {chain.Name}",
+            $"/observability?tab=workflows&workflowRun={chainRunId}",
             async (sp, ct) =>
             {
                 var result = await sp.GetRequiredService<PlaceContextService>()
                     .RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
-                return $"chain finished — {result.Status}";
+                return $"workflow finished — {result.Status}";
             },
             correlationKey: RunStatusWatchService.ChainRunKey(chainRunId)
         );
@@ -209,7 +218,7 @@ public sealed partial class JobChainsViewModel
         try
         {
             await _svc.CancelChainRunAsync(chainRunId);
-            Message = "Chain run cancellation requested.";
+            Message = "Workflow run cancellation requested.";
             if (OpenRun?.Id == chainRunId && OpenRun is { } run)
                 await RefreshRunsAsync(run.ChainId);
         }
@@ -248,6 +257,8 @@ public sealed partial class JobChainsViewModel
 
     public async Task OpenChainRunAsync(ChainRunView run)
     {
+        StopPolling();
+        StepOutputError = null;
         OpenRun = run;
         StepRunDetail = null;
         SelectedStepRunId = null;
@@ -260,6 +271,8 @@ public sealed partial class JobChainsViewModel
 
     public void CloseChainRun()
     {
+        StopPolling();
+        StepOutputError = null;
         OpenRun = null;
         StepRunDetail = null;
         SelectedStepRunId = null;
@@ -269,12 +282,17 @@ public sealed partial class JobChainsViewModel
 
     public async Task OpenStepRunAsync(ChainStepRunView step)
     {
+        StepOutputError = null;
+        StepRunDetail = null;
+        LiveOutputText = null;
+        SelectedStepRunId = step.RunId;
         try
         {
-            SelectedStepRunId = step.RunId;
             if (step.RunId is { } rid)
             {
-                StepRunDetail = await _svc.GetJobRunAsync(rid);
+                var detail = await _svc.GetJobRunAsync(rid);
+                if (SelectedStepRunId != rid) return;
+                StepRunDetail = detail;
                 UpdateLiveOutput(rid);
                 LiveOutputUpdatedAt = DateTimeOffset.UtcNow;
             }
@@ -283,13 +301,27 @@ public sealed partial class JobChainsViewModel
         }
         catch
         {
-            StepRunDetail = null;
+            if (SelectedStepRunId == step.RunId)
+            {
+                StepRunDetail = null;
+                StepOutputError = "Could not load this job's logs. Select the job again to retry.";
+            }
         }
         NotifyStateChanged();
     }
 
+    public Task SelectLogStepAsync(string? runId)
+    {
+        var step = Guid.TryParse(runId, out var id)
+            ? OpenRun?.Steps.FirstOrDefault(step => step.RunId == id) : null;
+        if (step is not null) return OpenStepRunAsync(step);
+        CloseStepRun();
+        return Task.CompletedTask;
+    }
+
     public void CloseStepRun()
     {
+        StepOutputError = null;
         StepRunDetail = null;
         SelectedStepRunId = null;
         LiveOutputText = null;
@@ -298,11 +330,14 @@ public sealed partial class JobChainsViewModel
 
     private async Task RefreshRunsAsync(Guid chainId, Guid? pendingChainRunId = null)
     {
-        if (!await _refreshLock.WaitAsync(0))
-            return; // skip if a refresh is already in-flight
+        var version = _pageVersion;
+        await _refreshLock.WaitAsync();
         try
         {
-            ChainRuns = await _svc.ListChainRunsAsync(chainId);
+            if (version != _pageVersion || EditChainId != chainId) return;
+            var runs = await _svc.ListChainRunsAsync(chainId);
+            if (version != _pageVersion || EditChainId != chainId) return;
+            ChainRuns = runs;
 
             var targetId = pendingChainRunId ?? PendingChainRunId;
             if (targetId is { } pending)
@@ -382,12 +417,17 @@ public sealed partial class JobChainsViewModel
 
         try
         {
-            StepRunDetail = await _svc.GetJobRunAsync(runId.Value);
+            var detail = await _svc.GetJobRunAsync(runId.Value);
+            if (SelectedStepRunId != runId || OpenRun?.Id != run.Id) return;
+            StepRunDetail = detail;
+            StepOutputError = null;
             UpdateLiveOutput(runId.Value);
         }
         catch
         {
             // Keep the last good output visible through a transient refresh failure.
+            if (SelectedStepRunId == runId)
+                StepOutputError = "Log refresh failed. Showing the last available output; retrying while the run is active.";
         }
     }
 
@@ -404,7 +444,6 @@ public sealed partial class JobChainsViewModel
             return;
         _pollCts = new CancellationTokenSource();
         var ct = _pollCts.Token;
-        var started = DateTimeOffset.UtcNow;
         _ = Task.Run(
             async () =>
             {
@@ -413,15 +452,6 @@ public sealed partial class JobChainsViewModel
                     await Task.Delay(1000, ct).ConfigureAwait(false);
                     if (ct.IsCancellationRequested)
                         break;
-
-                    // Stop polling after a generous timeout.
-                    if (DateTimeOffset.UtcNow - started > TimeSpan.FromMinutes(5))
-                    {
-                        PendingChainRunId = null;
-                        PendingChainId = null;
-                        NotifyStateChanged();
-                        break;
-                    }
 
                     try
                     {

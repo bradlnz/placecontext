@@ -13,7 +13,7 @@
             <h2>MCP servers</h2>
             <p>Connect external tool servers and make them available to jobs in the selected project.</p>
         </div>
-        <button class="dcbtn primary" disabled="@(Vm.ProjectId is null)" @onclick="Vm.ShowAddMcp">+ Add server</button>
+        <button class="dcbtn primary" disabled="@(Vm.ProjectId is null)" @onclick="Vm.ShowAddMcp"><AppIcon Kind="plus" /> Add server</button>
     </header>
     <div class="dcfield project-picker">
         <label>Project</label>
@@ -65,7 +65,7 @@
                             </button>
                         }
                         <button class="dcbtn xs" @onclick="() => Vm.TestAsync(connection.Id)">Test</button>
-                        <button class="dcbtn xs danger" @onclick="() => Vm.DeleteAsync(connection.Id)">Delete</button>
+                        <button class="dcbtn xs" @onclick="() => Vm.DeleteAsync(connection.Id)">Delete</button>
                     </div>
                 </article>
             }

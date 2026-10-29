@@ -21,6 +21,7 @@ internal static class ChainRunMapper
         StartedAt: run.StartedAt,
         FinishedAt: run.FinishedAt)
     {
+        ProjectId = run.ProjectId,
         InputRequest = run.Status == PlaceContext.Domain.ValueObjects.ChainRunStatus.AwaitingInput
             && run.InputRequestJson is not null
             ? System.Text.Json.JsonSerializer.Deserialize<ChainInputRequest>(run.InputRequestJson) : null

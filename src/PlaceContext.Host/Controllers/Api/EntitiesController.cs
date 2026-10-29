@@ -218,30 +218,3 @@ public sealed class EntitiesController : ControllerBase
         return 0;
     }
 }
-
-public sealed record EntityApiResponse(
-    Guid Id,
-    Guid ProjectId,
-    string Name,
-    string TableName,
-    string? LabelColumn,
-    string Slug,
-    IReadOnlyList<EntityRelationResponse> Relations,
-    IReadOnlyList<string> Tags,
-    DateTimeOffset UpdatedAt);
-
-public sealed record EntityRelationResponse(string Column, string TargetEntity, string TargetColumn);
-
-public sealed record EntityRecordsResponse(
-    Guid EntityId,
-    string EntityName,
-    string TableName,
-    IReadOnlyList<string> Columns,
-    IReadOnlyList<IReadOnlyList<string?>> Rows,
-    long Total,
-    int Page,
-    int PageSize);
-
-public sealed record RunJobRequest(
-    string? InputPayload = null,
-    Guid? RunId = null);

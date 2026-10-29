@@ -4,6 +4,8 @@ using Microsoft.JSInterop;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Host.Components.ViewModels.Helpers;
+using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -22,6 +24,8 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
     private readonly PortalUiState _ui;
     private readonly NavigationManager _navigation;
     private readonly IJSRuntime _js;
+    private readonly OperationCenter _operations;
+    private CancellationTokenSource? _runPoll;
     private readonly List<EditorFile> _files = new();
     private JobView? _job;
     private int _active;
@@ -38,13 +42,15 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
         PlaceContextService service,
         PortalUiState ui,
         NavigationManager navigation,
-        IJSRuntime js
+        IJSRuntime js,
+        OperationCenter operations
     )
     {
         _service = service;
         _ui = ui;
         _navigation = navigation;
         _js = js;
+        _operations = operations;
         EditorId = $"pcmonaco-{Guid.NewGuid():N}";
     }
 
@@ -58,6 +64,7 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
     public string RuntimeId { get; private set; } = DefaultRuntime;
     public JobRunDetailView? LastRun { get; private set; }
     public string? Message => _message;
+    public string? ExecutionError { get; private set; }
     public bool Loading { get; private set; } = true;
     public bool Saving => _saving;
     public bool Running => _running;
@@ -93,6 +100,11 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
 
     public void Initialize(Guid projectId, Guid jobId)
     {
+        StopRunPolling();
+        LastRun = null;
+        ExecutionError = null;
+        PanelOpen = false;
+        _running = false;
         ProjectId = projectId;
         JobId = jobId;
         _ = LoadAsync();
@@ -334,29 +346,99 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
 
     public async Task RunAsync()
     {
-        if (_job is null)
+        if (_job is null || Busy)
         {
             return;
         }
 
         _running = true;
         _message = null;
+        ExecutionError = null;
+        LastRun = null;
+        PanelOpen = true;
+        NotifyStateChanged();
         try
         {
             await SaveCoreAsync();
-            LastRun = await _service.RunJobAsync(JobId);
-            PanelOpen = true;
-            _message = $"Run {LastRun.Status}.";
+            var jobId = JobId;
+            var runId = Guid.NewGuid();
+            var key = RunStatusWatchService.JobRunKey(runId);
+            var completion = new TaskCompletionSource<(JobRunDetailView? Run, string? Error)>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var error = new BackgroundOperationRunner(_operations).TryRun(
+                ProjectId, $"Run job — {_job.Name}", $"/observability?run={runId}",
+                async (sp, ct) =>
+                {
+                    try
+                    {
+                        var result = await sp.GetRequiredService<PlaceContextService>()
+                            .RunJobAsync(jobId, runId: runId, ct: ct);
+                        completion.SetResult((result, null));
+                        return $"Run {result.Status}.";
+                    }
+                    catch (Exception exception)
+                    {
+                        completion.SetResult((null, exception.Message));
+                        throw;
+                    }
+                }, correlationKey: key);
+            if (error is not null) throw new InvalidOperationException(error);
+
+            StopRunPolling();
+            _runPoll = new CancellationTokenSource();
+            _ = WatchRunAsync(runId, completion.Task, _runPoll.Token);
         }
         catch (Exception exception)
         {
-            _message = exception.Message;
+            ExecutionError = exception.Message;
+            _running = false;
         }
         finally
         {
-            _running = false;
             NotifyStateChanged();
         }
+    }
+
+    private async Task WatchRunAsync(Guid runId,
+        Task<(JobRunDetailView? Run, string? Error)> completion, CancellationToken ct)
+    {
+        try
+        {
+            while (!completion.IsCompleted)
+            {
+                var run = await _service.GetJobRunAsync(runId, ct);
+                ct.ThrowIfCancellationRequested();
+                LastRun = run ?? LastRun;
+                NotifyStateChanged();
+                await Task.WhenAny(completion, Task.Delay(1000, ct));
+            }
+            ct.ThrowIfCancellationRequested();
+            var finished = await completion;
+            LastRun = finished.Run ?? LastRun;
+            ExecutionError = finished.Error;
+            if (finished.Run is { } result) _message = $"Run {result.Status}.";
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            if (!ct.IsCancellationRequested)
+                ExecutionError = $"Could not refresh execution results: {exception.Message}";
+        }
+        finally
+        {
+            if (!ct.IsCancellationRequested)
+            {
+                _running = false;
+                NotifyStateChanged();
+            }
+        }
+    }
+
+    private void StopRunPolling()
+    {
+        _runPoll?.Cancel();
+        _runPoll?.Dispose();
+        _runPoll = null;
     }
 
     public static string StatusColor(string status) => JobEditorStatusCatalog.Color(status);
@@ -465,6 +547,7 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        StopRunPolling();
         try
         {
             await _js.InvokeVoidAsync(DestroyFunction, EditorId);

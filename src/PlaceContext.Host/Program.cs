@@ -112,6 +112,9 @@ builder.Services.AddHttpsRedirection(o =>
 // The former minimal-API endpoints (ingest, backup, auth, artifacts, health) now live as controllers
 // under Controllers/ — attribute-routed, same paths/auth, wired below with MapControllers().
 builder.Services.AddControllers();
+builder.Services.AddHttpForwarder();
+builder.Services.AddSingleton<ServiceAppSso>();
+builder.Services.AddSingleton<ServiceAppForwarder>();
 builder.Services.Configure<CoreApiOptions>(builder.Configuration.GetSection("PlaceContext:CoreApi"));
 builder.Services.AddRateLimiter(options =>
 {
@@ -158,6 +161,9 @@ Console.WriteLine($"[startup] LocalAI.Endpoint='{localAiEndpoint}'  Model='{loca
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PortalUiState>();
 builder.Services.AddScoped<BrandingService>();
+
+builder.Services.AddScoped<PlaceContext.Host.Build.BuildChatAgent>();
+builder.Services.AddHostedService<PlaceContext.Host.Build.BuildChatWorker>();
 
 // ── Page ViewModels ──────────────────────────────────────────────────────────
 // Page ViewModels are scoped to the Blazor circuit. Repeated stateful component ViewModels opt
@@ -445,6 +451,8 @@ else
 // product is no longer gated by an activation key.
 
 app.UseResponseCompression();
+app.UseWebSockets();
+app.UseMiddleware<ServiceAppGateway>();
 var staticContentTypes = new FileExtensionContentTypeProvider();
 staticContentTypes.Mappings[".sh"] = "text/x-shellscript";
 app.UseStaticFiles(new StaticFileOptions

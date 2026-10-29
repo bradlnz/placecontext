@@ -8,7 +8,7 @@ PlaceContext keeps project work, customer information, automated jobs, saved fil
 one workspace.
 
 You do not need to understand the technical parts to use the portal. A **job** is a saved task, a
-**chain** joins several tasks into a workflow, and an **artifact** is a file produced by a task.
+**workflow** connects tasks into ordered stages, and an **artifact** is a file produced by a task.
 
 ## First steps
 
@@ -43,7 +43,7 @@ to record activities and decisions. A project is the boundary for jobs, reusable
 analytics, permissions, and provenance.
 
 Once the project exists, ask the client to load the project overview at the beginning of work and record
-activities and decisions as work progresses. Use **Jobs** for repeatable computation and **Chains** for
+activities and decisions as work progresses. Use **Jobs** for repeatable computation and **Workflows** for
 multi-stage workflows; mapped outputs remain available through project tables, entities, analytics, and
 search.
 
@@ -55,15 +55,20 @@ search.
 | **Project overview** | Project activity, decisions, and dependency graph |
 | **Jobs** | Create, edit, run, and monitor jobs |
 | **Tests** | Check a job with saved example inputs before using it in a workflow |
-| **Chains** | Build multi-stage job pipelines |
+| **Workflows** | Build multi-stage job pipelines |
+| **Queues** | Submit messages to workflows and inspect delivery and run status |
+| **Networking** | Define private worker networks and job security groups |
 | **Schedules** | Manage scheduled and event triggers for jobs |
 | **Data** | Tables, SQL analytics, data mappings, entities, and searchable project data |
 | **Vault** | Store encrypted project secrets |
 | **Events** | View event types and recent occurrences |
 | **Artifacts** | Browse, preview, and optionally share files produced by job runs |
-| **Observability** | Review job and chain runs across projects |
+| **Observability** | Review job and workflow runs across projects |
 | **Cluster** | Check nodes and add workers |
 | **Wiki** | Read help for the portal |
+
+Observability loads the selected tab first. Switch tabs to load another history view, and open a
+run or live trace to fetch its details. The page controls remain available while history loads.
 
 The menu only shows areas your role can use. An administrator can rename or reorder it under
 **Settings → Menu**. If an item described in this wiki is missing, ask a workspace administrator
@@ -80,5 +85,5 @@ are used in dark mode; light mode uses its own readable light palette with the w
 ## A useful working loop
 
 Create or update code, record the change through an MCP client, run a job, inspect its output, and
-map useful results into project tables. Use chains, schedules, and events when the workflow
+map useful results into project tables. Use workflows, schedules, and events when the workflow
 should run without manual steps.

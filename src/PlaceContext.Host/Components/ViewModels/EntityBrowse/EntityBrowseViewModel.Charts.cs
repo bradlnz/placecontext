@@ -25,10 +25,19 @@ public sealed partial class EntityBrowseViewModel
     // ── Charts ────────────────────────────────────────────────────────────────────────────────
     public async Task OpenAnalyticsAsync()
     {
+        var version = _loadVersion;
         ViewTab = "analytics";
         RenderedCharts.Clear();
         ChartMonacoReady = false;
-        await EnsureDefaultChartsAsync();
+        NotifyStateChanged();
+        try
+        {
+            var charts = await _svc.ListProjectChartsAsync(ProjectId);
+            if (version != _loadVersion) return;
+            Charts = charts;
+            await EnsureDefaultChartsAsync();
+        }
+        catch (Exception ex) { if (version == _loadVersion) Error = ex.Message; }
         NotifyStateChanged();
     }
 
@@ -37,10 +46,12 @@ public sealed partial class EntityBrowseViewModel
         if (_defaultsTried || Entity is null || EntityCharts().Count > 0)
             return;
         _defaultsTried = true;
+        var version = _loadVersion;
         try
         {
             var table = Entity.TableName.Replace("\"", "");
             var columns = await _svc.ListProjectTableColumnsAsync(ProjectId, Entity.TableName);
+            if (version != _loadVersion) return;
             var categorical = Entity
                 .Relations.Select(r => r.Column)
                 .Concat(
@@ -71,6 +82,7 @@ public sealed partial class EntityBrowseViewModel
 
             async Task Seed(string name, string sql, string type)
             {
+                if (version != _loadVersion) return;
                 try
                 {
                     await _svc.SaveSqlChartAsync(ProjectId, $"{Entity.Name} · {name}", sql, type);
@@ -107,7 +119,9 @@ public sealed partial class EntityBrowseViewModel
                 );
             }
 
-            Charts = await _svc.ListProjectChartsAsync(ProjectId);
+            if (version != _loadVersion) return;
+            var charts = await _svc.ListProjectChartsAsync(ProjectId);
+            if (version == _loadVersion) Charts = charts;
         }
         catch { }
     }

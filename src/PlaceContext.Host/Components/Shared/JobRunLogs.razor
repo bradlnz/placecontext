@@ -1,0 +1,65 @@
+@inject JobRunLogsViewModel Vm
+@using PlaceContext.Host.Components.ViewModels.Helpers
+
+@{ var filtered = Vm.Filtered.ToList(); }
+
+<section class="job-log-viewer" aria-label="Job log events">
+    <div class="log-toolbar">
+        <div class="log-heading">
+            <strong>Log events</strong>
+            <span class="log-state @(Vm.IsLive && !Vm.Paused ? "live" : "")">@(Vm.Paused ? "Updates paused" : Vm.IsLive ? "Live" : "Saved logs")</span>
+        </div>
+        <div class="log-actions">
+            <ArtifactDownload Label="Download logs" GetArtifact="@(() => new RunArtifactView($"job-{Run.Id}.log", Vm.FullLog))" />
+            <label><input type="checkbox" @bind="_wrap" /> Wrap lines</label>
+            @if (Vm.IsLive || Vm.Paused)
+            {
+                <button type="button" class="dcbtn" @onclick="() => Vm.TogglePause(Run)">@(Vm.Paused ? "Resume updates" : "Pause updates")</button>
+            }
+        </div>
+    </div>
+    <div class="log-filters">
+        <input type="search" class="dcinput log-search" aria-label="Search loaded log events" placeholder="Search log messages…" @bind="Vm.Search" @bind:event="oninput" />
+        <select class="dcinput" aria-label="Log stream" @bind="Vm.Stream">
+            <option value="">All streams</option>
+            @foreach (var stream in Vm.Streams) { <option value="@stream">@stream</option> }
+        </select>
+        <select class="dcinput" aria-label="Log level" @bind="Vm.Level">
+            <option value="">All levels</option>
+            @foreach (var level in new[] { "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL" })
+            { <option value="@level">@level</option> }
+        </select>
+    </div>
+    <div class="log-events @(_wrap ? "wrap-lines" : "")" tabindex="0" role="region" aria-label="Scrollable log events">
+        <table>
+            <thead><tr><th scope="col">#</th><th scope="col">Timestamp</th><th scope="col">Stream</th><th scope="col">Level</th><th scope="col">Message</th></tr></thead>
+            <tbody>
+                @foreach (var entry in filtered.TakeLast(100))
+                {
+                    <tr @key="entry.Index">
+                        <td class="log-index">@entry.Index</td>
+                        <td class="log-time">@FormatHelper.Trunc(entry.Timestamp, 80)</td>
+                        <td class="log-stream">@FormatHelper.Trunc(entry.Stream, 120)</td>
+                        <td><span class="log-level @entry.Level.ToLowerInvariant()">@(entry.Level.Length == 0 ? "—" : entry.Level)</span></td>
+                        <td class="log-message">@FormatHelper.Trunc(entry.Message, 2000)</td>
+                    </tr>
+                }
+                @if (filtered.Count == 0)
+                {
+                    <tr><td colspan="5" class="log-empty">@(Vm.Events.Count > 0 ? "No log events match these filters." : Vm.IsLive ? "Waiting for job output…" : "This job did not record any log output.")</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="log-footer">
+        <span>Showing @Math.Min(filtered.Count, 100) of @filtered.Count matching events · @Vm.Events.Count loaded @(Vm.Truncated ? "(newest 2,000)" : "")</span>
+        <span>Newest 100 matches; messages shortened to 2,000 characters. Download logs for full text.</span>
+        @if (Vm.UpdatedAt is { } updated) { <span>Updated @updated.ToUniversalTime().ToString("HH:mm:ss 'UTC'")</span> }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public JobRunDetailView Run { get; set; } = default!;
+    private bool _wrap = true;
+    protected override void OnParametersSet() => Vm.SetRun(Run);
+}

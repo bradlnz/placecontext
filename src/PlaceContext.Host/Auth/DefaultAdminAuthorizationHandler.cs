@@ -34,7 +34,7 @@ public sealed class DefaultAdminAuthorizationHandler : AuthorizationHandler<Defa
         // Bind the lookup to the signed tenant claim explicitly instead of depending on ambient state.
         var isDefaultAdmin = await db.Users.IgnoreQueryFilters().AsNoTracking()
             .Where(u => u.Id == userId && u.TenantId == tenantId)
-            .Select(u => u.IsDefaultAdmin)
+            .Select(u => u.IsDefaultAdmin || u.IsExternalAdmin)
             .FirstOrDefaultAsync();
         if (isDefaultAdmin)
             context.Succeed(requirement);

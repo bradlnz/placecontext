@@ -22,7 +22,7 @@
             <span class="page-sub">SQL-defined charts plus one auto chart per table — every query runs isolated inside this project's own database</span>
         </div>
         <button class="dcbtn primary" disabled="@Vm.SweepPending" @onclick="Vm.GenerateAll">
-            @(Vm.SweepPending ? "Generating…" : "↻ Generate all")
+            <AppIcon Kind="refresh" /> @(Vm.SweepPending ? "Generating…" : "Generate all")
         </button>
     </div>
     @if (Vm.Error is not null)
@@ -57,7 +57,7 @@
                     <option value="pie">pie</option>
                 </select>
                 <button class="dcbtn primary btn-run-save" disabled="@Vm.SqlBusy" @onclick="Vm.SaveSqlAsync">
-                    @(Vm.SqlBusy ? "Running…" : "▶ Run & save")
+                    <AppIcon Kind="play" /> @(Vm.SqlBusy ? "Running…" : "Run & save")
                 </button>
                 <span class="dchint hint-flush">
                     First text column = labels, numeric columns = series. The query runs as this project's own
@@ -89,9 +89,9 @@
                         </span>
                         <span class="spacer"></span>
                         <span class="chart-time">@Vm.Presentation.DateTime(chart.GeneratedAt)</span>
-                        <button class="dcbtn btn-sm" @onclick="@(() => Vm.RefreshSqlAsync(chart))">↻ refresh</button>
+                        <button class="dcbtn btn-sm" @onclick="@(() => Vm.RefreshSqlAsync(chart))"><AppIcon Kind="refresh" /> refresh</button>
                         <button class="dcbtn btn-sm" @onclick="@(() => Vm.EditSql(chart))">edit</button>
-                        <button class="dcbtn btn-sm-danger" @onclick="@(() => Vm.DeleteSqlAsync(chart))">✕</button>
+                        <button aria-label="Remove" class="dcbtn btn-sm" @onclick="@(() => Vm.DeleteSqlAsync(chart))"><AppIcon Kind="close" /></button>
                     </div>
                     <div class="chart-canvas-box">
                         <canvas id="@ProjectAnalyticsViewModel.CanvasId(chart.TableName)"></canvas>
@@ -135,7 +135,7 @@
                     }
                     <button class="dcbtn btn-sm" disabled="@pending"
                             @onclick="@(() => Vm.ToggleRedraw(table.Name))">
-                        @(chart is null ? "▶ draw" : "↻ redraw")
+                        <AppIcon Kind="@(chart is null ? "play" : "refresh")" /> @(chart is null ? "Draw" : "Redraw")
                     </button>
                 </div>
 
@@ -146,7 +146,7 @@
                                placeholder="what should this chart show? (optional — e.g. totals per day)"
                                class="redraw-input" />
                         <button class="dcbtn primary btn-go" @onclick="@(() => Vm.RedrawAsync(table.Name))">Go</button>
-                        <button class="dcbtn btn-cancel" @onclick="@(() => Vm.CancelRedraw())">✕</button>
+                        <button aria-label="Close" class="dcbtn btn-cancel" @onclick="@(() => Vm.CancelRedraw())"><AppIcon Kind="close" /></button>
                     </div>
                 }
 

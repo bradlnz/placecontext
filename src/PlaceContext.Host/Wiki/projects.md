@@ -15,7 +15,7 @@ The **Projects overview** shows every registered project and the workspace's cur
 A project owns:
 
 - activity, decisions, and a dependency graph;
-- jobs, chains, schedules, and events;
+- jobs, workflows, schedules, and events;
 - SQL tables, mappings, analytics, and entities;
 - encrypted vault secrets;
 - run history and artifacts.

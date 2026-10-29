@@ -48,6 +48,42 @@ public class RoleDefinitionRepositoryTests
         return row;
     }
 
+    [Fact]
+    public async Task Crm_admin_settings_access_uses_current_database_status_even_with_stale_cookie_role()
+    {
+        var (provider, _) = NewServices();
+        Guid id;
+        using (var setup = provider.CreateScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<AppDbContext>();
+            var row = AddUser(db, "Viewer");
+            row.IsExternalAdmin = true;
+            id = row.Id;
+            await db.SaveChangesAsync();
+        }
+        var svc = new PermissionService(new FakeCurrentUser(), provider.GetRequiredService<IServiceScopeFactory>());
+        Assert.Contains(Permission.SettingsManage, await svc.GetEffectivePermissionsForUserAsync(id, "Viewer"));
+        using (var setup = provider.CreateScope())
+        {
+            var db = setup.ServiceProvider.GetRequiredService<AppDbContext>();
+            (await db.Users.SingleAsync(u => u.Id == id)).IsExternalAdmin = false;
+            await db.SaveChangesAsync();
+        }
+        Assert.DoesNotContain(Permission.SettingsManage, await svc.GetEffectivePermissionsForUserAsync(id, "Admin"));
+        Assert.DoesNotContain(Permission.JobsEdit, await svc.GetEffectivePermissionsForUserAsync(id, "Admin"));
+    }
+
+    [Fact]
+    public async Task Service_api_principals_keep_job_permissions_without_gaining_settings_access()
+    {
+        var (provider, _) = NewServices();
+        var svc = new PermissionService(new FakeCurrentUser(), provider.GetRequiredService<IServiceScopeFactory>());
+        var effective = await svc.GetEffectivePermissionsForUserAsync(Guid.NewGuid(), "Owner");
+        Assert.Contains(Permission.JobsView, effective);
+        Assert.Contains(Permission.JobsEdit, effective);
+        Assert.DoesNotContain(Permission.SettingsManage, effective);
+    }
+
     // ── Lazy system-role seed ────────────────────────────────────────────────────
 
     [Fact]

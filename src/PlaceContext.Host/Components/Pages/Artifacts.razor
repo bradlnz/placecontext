@@ -70,8 +70,16 @@
             @if (Vm.LoadMayBeIncomplete)
             {
                 <div class="cap-note">
-                    Showing the newest @Vm.Files.Count loaded files — older ones may not be listed yet. Pick a project or narrow the search to see more.
+                    @Vm.Files.Count files loaded. Older files and versions load on demand.
+                    <button class="dcbtn" disabled="@Vm.FilesLoading" @onclick="Vm.LoadMoreFilesAsync">
+                        @(Vm.FilesLoading ? "Loading…" : "Load more")
+                    </button>
                 </div>
+            }
+            @if (Vm.FilesError is not null)
+            {
+                <div role="alert">@Vm.FilesError</div>
+                <button class="dcbtn" disabled="@Vm.FilesLoading" @onclick="Vm.LoadFilesAsync">Retry</button>
             }
         </div>
         @{
@@ -82,7 +90,11 @@
             var pageGroups = groups.Skip((Vm.FilesPage - 1) * ArtifactsViewModel.FilesPageSize).Take(ArtifactsViewModel.FilesPageSize).ToList();
         }
         <div class="file-list">
-            @if (totalGroups == 0)
+            @if (Vm.FilesLoading && totalGroups == 0)
+            {
+                <Skeleton Kind="list" Rows="6" />
+            }
+            else if (totalGroups == 0)
             {
                 <div class="empty-note">
                     @Vm.EmptyMessage()
@@ -118,7 +130,7 @@
                                         class="version-btn"
                                         @onclick:stopPropagation="true"
                                         @onclick="@(() => Vm.Expanded = Vm.Expanded == groupKey ? null : groupKey)">
-                                    v@(group.Count) @(Vm.Expanded == groupKey ? "▴" : "▾")
+                                    v@(group.Count) <AppIcon Kind="@(Vm.Expanded == groupKey ? "chevron-up" : "chevron-down")" />
                                 </button>
                             }
                         </div>
@@ -192,7 +204,7 @@
                 <span class="viewer-title">@Vm.Active.Title</span>
                 <span class="viewer-ct">@Vm.Active.ContentType</span>
                 <a class="dcbtn viewer-open-btn" target="_blank" rel="noopener"
-                   href="@ArtifactsViewModel.Url(Vm.Active)">Open ↗</a>
+                   href="@ArtifactsViewModel.Url(Vm.Active)">Open <AppIcon Kind="external-link" /></a>
                 @if (Vm.CanShare)
                 {
                     <button class="dcbtn viewer-btn" title="Create or manage a public share link"
@@ -271,7 +283,7 @@
                 <div class="viewer-error">
                     <span class="icon-warn">@Vm.Presentation.FileIcon(Vm.Active.ContentType, 34)</span>
                     Couldn't load the preview — @(Vm.LoadError ?? "unknown error").
-                    <span>Use <strong>Open ↗</strong> to fetch the file directly.</span>
+                    <span>Use <strong>Open <AppIcon Kind="external-link" /></strong> to fetch the file directly.</span>
                 </div>
             }
             else if (Vm.Presentation.IsJson(Vm.Active.ContentType))

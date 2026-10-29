@@ -11,6 +11,7 @@ public sealed class PortalOperation
     public Guid Id { get; } = Guid.NewGuid();
     public required Guid TenantId { get; init; }
     public Guid? ProjectId { get; init; }
+    public Guid? UserId { get; init; }
     public required string Title { get; init; }
     /// <summary>Where to go to see the result (e.g. the job's run history).</summary>
     public string? Link { get; init; }

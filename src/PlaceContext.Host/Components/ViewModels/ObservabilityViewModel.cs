@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.JSInterop;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Components;
@@ -10,17 +11,23 @@ using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class ObservabilityViewModel(
+public sealed partial class ObservabilityViewModel(
     PlaceContextService service,
     PortalUiState ui,
     NavigationManager navigation,
     OperationCenter operations,
-    IJobTelemetryReader telemetry
+    IJobTelemetryReader telemetry,
+    IWorkloadOutputBuffer output,
+    IJSRuntime js,
+    IServiceConsole? serviceConsole = null,
+    IPermissionService? permissions = null
 ) : PageViewModel, IDisposable
 {
     public const string RunsTab = "runs";
-    public const string ChainsTab = "chains";
+    public const string ChainsTab = "workflows";
     public const string TracesTab = "traces";
+    public const string LogsTab = "logs";
+    private int _detailVersion;
     public string? RunId { get; set; }
     public string? ChainRunId { get; set; }
     public IReadOnlyList<RunReportView>? Reports { get; private set; }
@@ -31,12 +38,16 @@ public sealed class ObservabilityViewModel(
     public IReadOnlyList<JobRunTelemetry>? LiveTraces { get; private set; }
     public IReadOnlyList<ChainRunReportView>? ChainReports { get; private set; }
     public ChainRunReportView? OpenChain { get; private set; }
+    public Guid? SelectedChainStepRunId { get; private set; }
+    public JobRunDetailView? ChainStepRunDetail { get; private set; }
+    public string? ChainLogsError { get; private set; }
     public IReadOnlyList<(string Path, string Value)> OpenChainContextRows =>
         OpenChain is null ? Array.Empty<(string, string)>() : FlattenContext(OpenChain.Run.FinalOutput);
     public string Tab { get; private set; } = RunsTab;
     public bool IsRunsTab => Tab == RunsTab;
     public bool IsChainsTab => Tab == ChainsTab;
     public bool IsTracesTab => Tab == TracesTab;
+    public bool IsLogsTab => Tab == LogsTab;
     public string? Message { get; private set; }
     public bool Loading { get; private set; } = true;
     public int ActiveRunCount =>
@@ -53,10 +64,16 @@ public sealed class ObservabilityViewModel(
 
     public async Task InitializeAsync()
     {
+        await _logEditorCleanup;
+        _disposed = false;
+        operations.Changed -= OnOperationsChanged;
         operations.Changed += OnOperationsChanged;
-        await RefreshAsync();
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(navigation.Uri).Query);
+        Tab = NormalizeTab(query["tab"] ?? (ChainRunId is not null ? ChainsTab : RunId is not null ? RunsTab : Tab));
         ui.Set("Observability", "cross-project job history");
         Loading = false;
+        NotifyStateChanged();
+        await RefreshAsync();
         await ApplyDeepLinkAsync();
         NotifyStateChanged();
     }
@@ -91,7 +108,7 @@ public sealed class ObservabilityViewModel(
         );
 
     public string FailedShardSummary(JobRunDetailView run) =>
-        FailedShardCount(run) == 0 ? string.Empty : $" ✗ {FailedShardCount(run)}";
+        FailedShardCount(run) == 0 ? string.Empty : $" · {FailedShardCount(run)} failed";
 
     public int SucceededStepCount(ChainRunView run) =>
         run.Steps.Count(s =>
@@ -161,28 +178,42 @@ public sealed class ObservabilityViewModel(
 
     public async Task RefreshAsync()
     {
+        if (IsLogsTab) { await QueryLogsAsync(); return; }
         Message = null;
+        var tab = Tab;
         try
         {
-            Reports = await service.ListRecentRunReportsAsync(take: 50);
+            if (tab == RunsTab)
+                Reports = await service.ListRecentRunReportsAsync(take: 50);
+            else if (tab == TracesTab)
+                LiveTraces = telemetry.RecentRuns(50);
+            else if (tab == ChainsTab)
+            {
+                ChainReports = await service.ListRecentChainRunsAsync(take: 50);
+                if (OpenChain is { } openChain)
+                {
+                    var version = _detailVersion;
+                    var run = await service.GetChainRunAsync(openChain.Run.Id);
+                    if (version == _detailVersion && run is not null)
+                    {
+                        OpenChain = openChain with { Run = run };
+                        var selected = SelectedChainStepRunId
+                            ?? run.Steps.LastOrDefault(step => step.RunId is { } id && id != Guid.Empty)?.RunId;
+                        await SelectChainLogAsync(selected?.ToString());
+                    }
+                }
+            }
         }
         catch (Exception ex)
         {
-            Message = ex.Message;
-        }
-        try
-        {
-            ChainReports = await service.ListRecentChainRunsAsync(take: 50);
-        }
-        catch (Exception ex)
-        {
-            Message ??= ex.Message;
+            if (Tab == tab) Message = ex.Message;
         }
         NotifyStateChanged();
     }
 
     public async Task ApplyDeepLinkAsync()
     {
+        var detailVersion = _detailVersion;
         if (Guid.TryParse(RunId, out var runId) && Open?.Run.Id != runId)
         {
             var report = Reports?.FirstOrDefault(item => item.Run.Id == runId);
@@ -209,27 +240,62 @@ public sealed class ObservabilityViewModel(
                 }
             }
 
+            if (detailVersion != _detailVersion) return;
             if (report is not null)
                 await OpenRun(report);
             else
                 Message ??= "That job run could not be found.";
         }
-        if (
-            Guid.TryParse(ChainRunId, out var chainId)
-            && OpenChain?.Run.Id != chainId
-            && ChainReports?.FirstOrDefault(report => report.Run.Id == chainId) is { } chain
-        )
+        if (Guid.TryParse(ChainRunId, out var chainId) && OpenChain?.Run.Id != chainId)
         {
-            Tab = ChainsTab;
-            OpenChain = chain;
+            var chain = ChainReports?.FirstOrDefault(report => report.Run.Id == chainId);
+            if (chain is null)
+            {
+                try
+                {
+                    if (await service.GetChainRunAsync(chainId) is { } run)
+                    {
+                        var project = await service.GetProjectByIdAsync(run.ProjectId);
+                        chain = new ChainRunReportView(run.ProjectId, project?.Name ?? "(deleted project)", run);
+                    }
+                }
+                catch (Exception ex) { Message = ex.Message; }
+            }
+            if (detailVersion != _detailVersion) return;
+            if (chain is not null)
+            {
+                Tab = ChainsTab;
+                await OpenChainRun(chain);
+            }
+            else Message ??= "That workflow run could not be found.";
         }
     }
 
-    public void SelectTab(string tab) => Tab = tab is ChainsTab or TracesTab ? tab : RunsTab;
+    private static string NormalizeTab(string? tab) =>
+        tab == "chains" ? ChainsTab : tab is ChainsTab or TracesTab or LogsTab ? tab : RunsTab;
+
+    public void SelectTab(string tab)
+    {
+        Tab = NormalizeTab(tab);
+        ClearDetails();
+        var uri = DetailFreeUri();
+        if (uri != navigation.Uri) navigation.NavigateTo(uri);
+    }
+
+    public async Task RestoreTabAsync(string? tab)
+    {
+        var restored = NormalizeTab(tab);
+        if (Tab != restored && RunId is null && ChainRunId is null) ClearDetails();
+        Tab = restored;
+        if (IsLogsTab && LogResults is null) await QueryLogsAsync();
+        if (IsTracesTab) LiveTraces = telemetry.RecentRuns(50);
+        if ((IsRunsTab && Reports is null) || (IsChainsTab && ChainReports is null))
+            await RefreshAsync();
+    }
 
     public async Task LoadTracesAsync()
     {
-        Tab = TracesTab;
+        SelectTab(TracesTab);
         LiveTraces = telemetry.RecentRuns(50);
         await Task.CompletedTask;
         NotifyStateChanged();
@@ -237,62 +303,107 @@ public sealed class ObservabilityViewModel(
 
     public async Task OpenRun(RunReportView report)
     {
+        var version = ++_detailVersion;
+        try
+        {
+            if (await service.GetJobRunAsync(report.Run.Id) is { } detail)
+                report = report with { Run = detail };
+        }
+        catch (Exception ex) { if (version == _detailVersion) Message = ex.Message; return; }
+        IReadOnlyList<RunArtifactLinkView>? artifacts = null;
+        JobRunTelemetry? trace = null;
+        IReadOnlyList<TraceSpanNode>? spans = null;
+        try { artifacts = await service.ListRunArtifactsAsync(report.Run.Id); }
+        catch { }
+        try
+        {
+            trace = (await service.ListJobRunTelemetryAsync(report.JobId)).FirstOrDefault(item => item.RunId == report.Run.Id);
+            spans = telemetry.TraceForRun(report.Run.Id);
+        }
+        catch { }
+        // A tab change or close can happen while detail requests are still in flight.
+        if (version != _detailVersion) return;
         OpenChain = null;
         Open = report;
-        OpenArtifacts = null;
-        OpenTelemetry = null;
-        OpenTraceSpans = null;
-        try
-        {
-            OpenArtifacts = await service.ListRunArtifactsAsync(report.Run.Id);
-        }
-        catch { }
-        try
-        {
-            OpenTelemetry = (await service.ListJobRunTelemetryAsync(report.JobId)).FirstOrDefault(
-                item => item.RunId == report.Run.Id
-            );
-            OpenTraceSpans = telemetry.TraceForRun(report.Run.Id);
-        }
-        catch { }
+        OpenArtifacts = artifacts;
+        OpenTelemetry = trace;
+        OpenTraceSpans = spans;
         NotifyStateChanged();
     }
 
-    public void CloseRun()
+    private void ClearDetails()
     {
+        CloseLogEvent();
+        _detailVersion++;
+        RunId = null;
+        ChainRunId = null;
         Open = null;
+        OpenChain = null;
+        SelectedChainStepRunId = null;
+        ChainStepRunDetail = null;
+        ChainLogsError = null;
         OpenArtifacts = null;
         OpenTelemetry = null;
         OpenTraceSpans = null;
     }
 
-    public void OpenLiveTrace(JobRunTelemetry trace)
+    private string DetailFreeUri() => navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
     {
-        Open = null;
-        OpenChain = null;
+        ["tab"] = Tab, ["run"] = null, ["workflowRun"] = null, ["chainRun"] = null,
+    });
+
+    private void CloseDetails()
+    {
+        ClearDetails();
+        var uri = DetailFreeUri();
+        if (uri != navigation.Uri) navigation.NavigateTo(uri, replace: true);
+    }
+
+    public void CloseRun() => CloseDetails();
+
+    public async Task OpenLiveTrace(JobRunTelemetry trace)
+    {
+        ClearDetails();
         OpenTelemetry = trace;
         OpenTraceSpans = telemetry.TraceForRun(trace.RunId);
-        if (Reports?.FirstOrDefault(report => report.Run.Id == trace.RunId) is { } report)
-            _ = OpenRun(report);
+        RunId = trace.RunId.ToString();
+        await ApplyDeepLinkAsync();
     }
 
-    public void CloseLiveTrace()
+    public void CloseLiveTrace() => CloseDetails();
+
+    public async Task OpenChainRun(ChainRunReportView report)
     {
-        OpenTelemetry = null;
-        OpenTraceSpans = null;
+        ClearDetails();
+        OpenChain = report;
+        var step = report.Run.Steps.LastOrDefault(step => step.RunId is { } id && id != Guid.Empty);
+        await SelectChainLogAsync(step?.RunId?.ToString());
     }
 
-    public void OpenChainRun(ChainRunReportView report) => OpenChain = report;
+    public void CloseChainRun() => CloseDetails();
 
-    public void CloseChainRun() => OpenChain = null;
+    public Task OpenChainStep(ChainStepRunView step) => SelectChainLogAsync(step.RunId?.ToString());
 
-    public void OpenChainStep(ChainStepRunView step)
+    public async Task SelectChainLogAsync(string? value)
     {
-        if (step.RunId is { } id && id != Guid.Empty)
+        var version = _detailVersion;
+        SelectedChainStepRunId = Guid.TryParse(value, out var id)
+            && OpenChain?.Run.Steps.Any(step => step.RunId == id) == true ? id : null;
+        ChainStepRunDetail = null;
+        ChainLogsError = null;
+        if (SelectedChainStepRunId is not { } selected) return;
+        try
         {
-            OpenChain = null;
-            navigation.NavigateTo($"/observability?run={id}");
+            var detail = await service.GetJobRunAsync(selected);
+            if (version != _detailVersion || SelectedChainStepRunId != selected) return;
+            ChainStepRunDetail = detail;
+            if (detail is null) ChainLogsError = "That job run could not be found.";
         }
+        catch (Exception ex)
+        {
+            if (version == _detailVersion && SelectedChainStepRunId == selected) ChainLogsError = ex.Message;
+        }
+        NotifyStateChanged();
     }
 
     public void OpenProject(Guid projectId, string suffix) =>
@@ -393,5 +504,11 @@ public sealed class ObservabilityViewModel(
 
     private void OnOperationsChanged() => _ = RefreshAsync();
 
-    public void Dispose() => operations.Changed -= OnOperationsChanged;
+    public void Dispose()
+    {
+        operations.Changed -= OnOperationsChanged;
+        _disposed = true;
+        Detach();
+        _logEditorCleanup = DestroyLogEditorAsync();
+    }
 }

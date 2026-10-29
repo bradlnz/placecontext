@@ -21,10 +21,10 @@
                 <span class="title-14">@Vm.ProductName</span>
                 <span class="org-name">@Vm.OrganizationName</span>
             </div>
-            <button class="sidebar-close" @onclick="Vm.CloseNavigation" aria-label="Close navigation">×</button>
+            <button class="sidebar-close" @onclick="Vm.CloseNavigation" aria-label="Close navigation"><AppIcon Kind="close" /></button>
         </div>
 
-        <div class="nav-list">
+        <nav class="nav-list" aria-label="Workspace">
             @{
                 string? lastSection = null;
             }
@@ -59,20 +59,19 @@
                     continue;
                 }
                 var expanded = Vm.IsExpanded(item.Id);
-                var groupActive = href is not null && Vm.PathMatches(href);
+                var groupActive = Vm.IsGroupActive(item);
                 <div class="nav-group">
             <button class="dcnav nav-group-toggle@(groupActive ? " active" : null)"
-                            @onclick="@(() => Vm.ToggleGroup(item.Id))" title="@item.Label">
+                            @onclick="@(() => Vm.ToggleGroup(item.Id))" title="@item.Label"
+                            aria-expanded="@(expanded ? "true" : "false")" aria-controls="@($"nav-{Uri.EscapeDataString(item.Id)}")">
                 <span class="bar"></span>@((MarkupString)Vm.IconMarkup(string.IsNullOrWhiteSpace(item.Icon) ? item.Id : item.Icon))<span class="nav-label">@item.Label</span>
                         <span class="nav-caret-icon @(expanded ? "open" : null)">@((MarkupString)MainLayoutViewModel.CaretMarkup)</span>
                     </button>
-                    @if (expanded)
-                    {
-                        <div class="nav-children">
+                        <div class="nav-children" id="@($"nav-{Uri.EscapeDataString(item.Id)}")" hidden="@(!expanded)">
                             @foreach (var child in children)
                             {
                                 var childHref = Vm.AbsoluteHref(child.Href) ?? "/";
-                                    <NavLink class="dcnav nav-child" href="@childHref" Match="NavLinkMatch.Prefix" title="@child.Label">
+                                    <NavLink class="dcnav nav-child" href="@childHref" Match="@Vm.MatchFor(childHref)" title="@child.Label">
                                     <span class="bar"></span><span class="nav-label">@child.Label</span>
                                 </NavLink>
                             }
@@ -88,10 +87,9 @@
                                 }
                             }
                         </div>
-                    }
                 </div>
             }
-        </div>
+        </nav>
 
         <div class="user-bar">
             <AuthorizeView>
@@ -147,7 +145,7 @@
                                 <span class="topbar-switcher-name switcher-name">
                                     @(Vm.CurrentProjectName ?? "select project")
                                 </span>
-                                <span class="topbar-switcher-caret switcher-caret">▾</span>
+                                <span class="topbar-switcher-caret switcher-caret"><AppIcon Kind="chevron-down" /></span>
                             </div>
                             @if (Vm.SwitcherOpen)
                             {
@@ -193,10 +191,11 @@
 
     @if (Vm.SearchOpen)
     {
-        <div class="dcsearch-overlay" @onclick="Vm.CloseSearch">
-            <div class="dcsearch-modal" role="dialog" aria-modal="true" aria-label="Search workspace"
+        <div class="dcsearch-overlay dcmodal-overlay" @onclick="Vm.CloseSearch">
+            <div class="dcsearch-modal dcmodal" role="dialog" aria-modal="true" aria-label="Search workspace"
                  @onclick:stopPropagation="true">
-                <input class="dcsearch-input" placeholder="Search projects, changes, context, decisions…"
+                <div class="dcmodal-head"><h3 class="flex-fill">Search workspace</h3><button class="dcslide-x" aria-label="Close search" @onclick="Vm.CloseSearch"><AppIcon Kind="close" /></button></div>
+                <input aria-label="Search workspace" class="dcsearch-input" placeholder="Search projects, changes, context, decisions…"
                        value="@Vm.SearchTerm" @oninput="OnSearchInput" @onkeydown="OnSearchKey" @ref="_searchInput" />
                 <div class="dcsearch-results">
                     @if (Vm.Searching)

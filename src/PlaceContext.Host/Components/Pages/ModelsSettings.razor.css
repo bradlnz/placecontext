@@ -1,0 +1,10 @@
+.models-settings { max-width: 960px; display: grid; gap: 18px; }
+header,.connection,footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+h2,h3,p { margin: 0 0 8px; }
+p,small { opacity: .75; }
+.connection,.model-editor,.empty { padding: 24px; }
+.connection p { overflow-wrap: anywhere; }
+.connection small { font-size: 12px; font-weight: normal; }
+.model-editor { display: grid; gap: 16px; }
+.empty { text-align: center; padding: 48px 24px; }
+textarea { font-family: monospace; }

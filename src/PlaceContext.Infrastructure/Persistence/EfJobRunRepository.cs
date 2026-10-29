@@ -143,6 +143,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
         ProjectId = run.ProjectId,
         Status = run.Status.ToString(),
         StartedAt = run.StartedAt,
+        HeartbeatAt = run.StartedAt,
         FinishedAt = run.FinishedAt,
         ShardCount = run.ShardResults.Count,
         SucceededShards = run.ShardResults.Count(s => s.Outcome == WorkloadOutcome.Succeeded),
@@ -250,6 +251,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
         ReduceEnv = snap.ReduceEnv is not null ? new Dictionary<string, string>(snap.ReduceEnv) : null,
         ConcurrencyLimit = snap.ConcurrencyLimit,
         AllowNetworkEgress = snap.AllowNetworkEgress,
+        Network = snap.Network,
     };
 
     private static WorkloadSnapshot DeserialiseSnapshot(string json)
@@ -272,7 +274,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
             reduceSource,
             sj.ReduceEnv,
             sj.ConcurrencyLimit < 1 ? 1 : sj.ConcurrencyLimit,
-            allowNetworkEgress: sj.AllowNetworkEgress);
+            allowNetworkEgress: sj.AllowNetworkEgress, network: sj.Network);
     }
 
     private static SourceJson ToSourceJson(WorkloadSource source) => source switch
@@ -337,6 +339,7 @@ public sealed class EfJobRunRepository : IJobRunRepository
         public int ConcurrencyLimit { get; set; } = 1;
         /// <summary>Defaults to false for legacy rows (before AllowNetworkEgress was added).</summary>
         public bool AllowNetworkEgress { get; set; }
+        public WorkerNetworkPolicy? Network { get; set; }
     }
 
     private sealed class SourceJson

@@ -1,4 +1,4 @@
-# Jobs, chains, and artifacts
+# Jobs, workflows, and artifacts
 
 *Run code, connect steps, and keep the output.*
 
@@ -45,33 +45,94 @@ The run detail shows:
 - reduce output when configured;
 - retry attempts and the executed job snapshot.
 
-## Chains
+Log tables preview the newest 100 matching events, with up to 2,000 characters per message.
+Job log filters search the full text of the newest 2,000 loaded events; container log filters search
+all loaded events. **Download logs** retrieves the full available log, including text omitted from
+the preview. Output editors preview the first 32,000 characters and offer **Download full output**
+for larger results. Downloads load only when clicked, keeping large log and file contents out of
+the pane's initial display.
 
-A chain runs stages in order and passes each stage's primary output to the next stage.
+## Workflows
 
-In the chain canvas you can:
+A workflow runs stages in order and passes each stage's primary output to the next stage.
+
+In the workflow canvas you can:
 
 - drag jobs into stages and reorder them;
-- add parallel paths with the **+** control;
+- use **Add parallel job** to run more jobs together in a stage;
 - drag a path to another stage;
 - add wait or condition gates;
+- ask a human a question with a written answer or Yes/No buttons;
+- pause for a response from an external agent;
+- run instructions in a prepared QEMU Linux desktop;
 - add an email or SMS action from a **+** connector;
 - switch to the list editor when preferred.
 
-Condition gates support existence, equality, text, list, empty, and numeric comparisons. A
-parallel stage waits for every path before continuing.
+Condition gates support existence, equality, text, list, empty, and numeric comparisons.
+The canvas shows separate **True** and **False** paths. Use **Edit false path** to add
+the jobs that run when the condition is false; an empty false path skips the conditional
+stage. Both paths rejoin at the next stage. Parallel jobs within a path all run together,
+and the stage waits for every job before continuing.
 
-Email and SMS actions use the workspace's configured communications connection. The chain only
+Email and SMS actions use the workspace's configured communications connection. The workflow only
 needs the recipient and message details; it does not need to know which delivery service is behind
 that connection. If an action is unavailable, ask an administrator to check **Settings →
 Communications** and your send permission.
 
-Open a chain's **Runs** tab to watch the pipeline update in real time. Select a step to see its
-live output and logs. Failed chains can be replayed from a failed step.
+Open a workflow's **Runs** tab to watch the pipeline update in real time. Select a step to see its
+live output and logs. Failed workflows can be replayed from a failed step.
+
+Run details use the stacked workflow canvas, with status colours, durations, and errors on
+each job. True and false paths rejoin in the same place as the editor, and jobs that did not
+run are marked accordingly. Select a job to inspect its recorded output. This view uses the
+current workflow layout with recorded run results; when the steps no longer match that
+layout, it shows the recorded steps in execution order instead. The same view appears in
+Observability and queue message details.
+
+Human and agent steps use the configured model to turn validation instructions and the preceding
+output into a question. Human steps and **External agent** steps pause until a response arrives.
+A No answer is a valid boolean response, not a missing answer. Configure the question model
+through `PlaceContext:Qemu:Agent` (Codex or a chat-completions endpoint).
+
+For an automatic verification call, select **Jev (TypeSafe)** in an agent step. Jev evaluates the
+question against the preceding output and saves its probability of Yes in the response field's
+`noul` property, alongside the question and model version. Use a condition on a later stage,
+such as `gte:agent_response.noul:0.9`, to decide whether to proceed. Obtaining a result does not
+mean approval. An administrator must configure `PlaceContext__TypeSafe__ApiKey` or
+`TYPESAFE_API_KEY` on the server. Question generation or verification errors fail the step.
+
+### QEMU desktop steps
+
+Choose a configured image profile and describe a task in the **Task prompt** field. An agent
+receives the workflow context, inspects the desktop, operates Chromium and desktop tools, and
+verifies its work. It can run commands as the non-root `workflow` user inside the VM. The prompt
+is not executed as a shell script. The portal does not yet stream the desktop.
+
+The workflow waits for a verified completion, failure, cancellation, or timeout. The output field
+contains the agent's final summary in `stdout`, errors in `stderr`, `exitCode`, `agentSteps`, and
+an `activity` list. Each run discards its disk changes. Guest network access is off by default.
+An administrator must configure the image and a vision model with tool support. Model requests
+run on the host and include the prompt, workflow context, screenshots, and bounded guest output;
+model credentials stay on the host. The configured step limit prevents an endless agent loop.
+
+Existing QEMU steps retain their stored text, now treated as a prompt. Rewrite older scripts as
+tasks before running them. See the QEMU image guide in the repository for model and image setup.
+
+For local testing, an administrator can select the `codex` agent provider and a model available
+to the host account's Codex login. The app runs the local Codex API over a private connection;
+the model still runs remotely. It receives the task, workflow context, guest screenshots, and
+tool results. The same guest isolation, step limit, timeout, and cancellation rules apply.
+
+### Queue messages
+
+Open **Queues** to accept JSON messages for a workflow. A queue can delay delivery, retry failed
+workflows, and expire waiting messages. Open a queue's **Messages** tab and select **Inspect** to
+view a message's workflow run and job logs without leaving the queue. Its **Integration** tab
+provides the endpoint and an example request. Monitoring summarizes the latest 50 receipts.
 
 ### Example: local backup verification
 
-A homelab chain might:
+A homelab workflow might:
 
 1. discover the newest backups on a NAS;
 2. run checksums and sample restores in parallel on local workers;
@@ -83,12 +144,12 @@ The same pattern works for OCR and document indexing, media processing, sensor a
 nightly project reports. A failed stage can be fixed and replayed without rerunning successful
 earlier work.
 
-## Submit chains from another service
+## Submit workflows from another service
 
 For service-to-service ingestion, use the MCP JSON-RPC tools instead of keeping `run_job_chain`
 open until a long pipeline finishes:
 
-1. Call `submit_job_chain` with the project ID, either a chain ID or exact `chainName` (for example
+1. Call `submit_job_chain` with the project ID, either a workflow ID or exact `chainName` (for example
    `full-feasibility-report`), JSON input, and a stable `idempotencyKey` such as the source order UUID.
 2. Store the returned `trackingId` and `chainRunId`.
 3. Poll `get_job_chain_submission` by tracking ID until `terminal` is true.
@@ -96,13 +157,33 @@ open until a long pipeline finishes:
 
 The acknowledgement is returned only after the encrypted input is durable in PostgreSQL. Repeating
 the submission with the same idempotency key returns the original receipt. Workers claim requests
-atomically across replicas and use the preallocated chain-run ID, so a reconnect, retry, pod restart,
+atomically across replicas and use the preallocated workflow run ID, so a reconnect, retry, pod restart,
 or stale worker claim cannot create a second established run.
 
 Both tools are normal calls to the existing `/mcp` Streamable HTTP endpoint. The JSON-RPC method is
 `tools/call`; set `params.name` to `submit_job_chain` or `get_job_chain_submission` and authenticate
 with an OAuth access token or a scoped personal API token. `Queued`, `Running`, and `Waiting` are non-terminal. `Succeeded`,
 `Partial`, `Failed`, and `Cancelled` are terminal.
+
+## Job keep-alive and cancellation
+
+Jobs establish a durable keep-alive before starting work and renew it every 10 seconds.
+Losing that connection cancels execution; cancelled or expired runs cannot renew it. The
+background sweep marks records with no pulse for 60 seconds as failed on its next 30-second sweep.
+Closing the browser does not stop the execution service or its pulse.
+
+Kubernetes jobs also have a renewable 60-second execution deadline, capped by the job's
+configured maximum timeout. If the execution service crashes, or cannot establish or renew
+the pulse, Kubernetes terminates the containers. Dependency-build jobs use the same protection.
+This requires a functioning Kubernetes control plane and reachable worker node; an isolated
+node cannot be forcibly stopped until the cluster regains contact. Docker and external native
+workers receive cancellation while the host is alive, but do not have this independent
+Kubernetes deadline after a host crash.
+
+**Cancel** saves the cancelled status before removing containers, stopping waiting shards and
+preventing late completion from replacing that status. Upgrade the portal to apply the
+`AddJobRunHeartbeat` migration and apply the updated `placecontext-jobs` Role (Jobs need `patch`
+permission for pulse renewal). Existing runs from an older portal retain their original deadline.
 
 ## Artifacts
 

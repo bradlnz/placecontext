@@ -209,6 +209,41 @@ window.pcmonaco = (function () {
     if (window.monaco) registerSqlCompletion(window.monaco);
   }
 
+  let logQueryRegistered = false;
+  function registerLogQuery(monaco) {
+    if (logQueryRegistered) return;
+    logQueryRegistered = true;
+    const fields = ['job', 'project', 'run', 'status', 'level', 'stream', 'message', 'timestamp'];
+    const keywords = ['logs', 'fields', 'project', 'filter', 'where', 'stats', 'summarize', 'sort', 'limit', 'take', 'as', 'by', 'contains', '!contains', 'contains_cs', '!contains_cs', 'AND', 'OR', 'NOT', 'IN', 'ORDER BY', 'ASC', 'DESC', 'count()', 'count_distinct()', 'sum()', 'avg()', 'min()', 'max()', 'bin(5m)'];
+    monaco.languages.register({ id: 'logquery' });
+    monaco.languages.setMonarchTokensProvider('logquery', {
+      ignoreCase: true,
+      tokenizer: { root: [
+        [/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/, 'string'],
+        [/\b(?:logs|fields|project|filter|where|stats|summarize|sort|limit|take|as|by|contains_cs|contains|count|count_distinct|sum|avg|min|max|bin|AND|OR|NOT|IN|ORDER|ASC|DESC)\b/, 'keyword'],
+        [/\b(?:job|project|run|status|level|stream|message|timestamp)\b/, 'type.identifier'],
+        // Consume bare values whole so ERROR cannot be split into ERR + the OR keyword.
+        [/[a-z_][\w.]*/, 'identifier'],
+        [/-\d+[smhd]\b/, 'number'],
+        [/[=!<>~]+/, 'operator'],
+        [/[(),|]/, 'delimiter']
+      ] }
+    });
+    monaco.languages.registerCompletionItemProvider('logquery', {
+      provideCompletionItems(model, position) {
+        const word = model.getWordUntilPosition(position);
+        const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
+          startColumn: word.startColumn, endColumn: word.endColumn };
+        return { suggestions: [
+          ...fields.map(label => ({ label, kind: monaco.languages.CompletionItemKind.Field })),
+          ...keywords.map(label => ({ label, kind: monaco.languages.CompletionItemKind.Keyword })),
+          ...['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL', 'stdout', 'stderr', 'Succeeded', 'Failed']
+            .map(label => ({ label, kind: monaco.languages.CompletionItemKind.Value }))
+        ].map(item => ({ ...item, insertText: item.label, range })) };
+      }
+    });
+  }
+
   function modelKey(id, path) { return id + '::' + path; }
 
   function getOrCreateModel(monaco, id, path, value, language) {
@@ -229,7 +264,8 @@ window.pcmonaco = (function () {
     return model;
   }
 
-  async function init(id, value, language, theme, path) {
+  async function init(id, value, language, theme, path, readOnly = false, ariaLabel = null) {
+    const label = ariaLabel || (readOnly ? 'Run output' : language === 'logquery' ? 'Log query' : 'Code editor');
     // Serialize concurrent inits for the same element: a rapid file switch during initial load
     // must not spawn two racing Monaco creates, or the visible editor can end up showing the
     // previous file (or a disposed instance) instead of the requested one.
@@ -246,13 +282,17 @@ window.pcmonaco = (function () {
         // Schema may have been pushed (setSqlSchema) before the CDN finished loading — the
         // provider is cheap and guarded, so registering here always wires autocomplete up.
         registerSqlCompletion(monaco);
+        if (language === 'logquery') registerLogQuery(monaco);
         const modelPath = path || '__active__';
         const model = getOrCreateModel(monaco, id, modelPath, value, language);
         const editor = monaco.editor.create(el, {
           model: model,
           theme: shellTheme(),
           automaticLayout: true,
-          minimap: { enabled: true },
+          readOnly,
+          minimap: { enabled: !readOnly && language !== 'logquery' },
+          ariaLabel: label,
+          wordWrap: readOnly || language === 'logquery' ? 'on' : 'off',
           fontSize: 12.5,
           lineNumbers: 'on',
           scrollBeyondLastLine: false,
@@ -270,7 +310,9 @@ window.pcmonaco = (function () {
           el.innerHTML = '';
           const ta = document.createElement('textarea');
           ta.value = value || '';
+          ta.readOnly = readOnly;
           ta.spellcheck = false;
+          ta.setAttribute('aria-label', label);
           ta.style.cssText =
             'width:100%;height:100%;box-sizing:border-box;resize:none;border:none;outline:none;' +
             'background:#171717;color:#ededed;padding:10px 12px;font-size:13px;line-height:1.55;' +
@@ -385,11 +427,23 @@ window.pcmonaco = (function () {
     }
   }
 
-  return { init, openFile, closeFile, setValue, getValue, destroy, setSqlSchema };
+  function isMounted(id) {
+    const host = document.getElementById(id);
+    const node = fallbacks.get(id) || editors.get(id)?.getDomNode();
+    return !!(host && node && host.contains(node));
+  }
+
+  return { isMounted, init, openFile, closeFile, setValue, getValue, destroy, setSqlSchema };
 })();
 
-// pcdata — small helpers for the project Data page (CSV download from a data: URI).
+// pcdata — downloads for project data and on-demand run output.
 window.pcdata = {
+  async downloadStream(filename, stream) {
+    const buffer = await stream.arrayBuffer();
+    const url = URL.createObjectURL(new Blob([buffer], { type: 'application/octet-stream' }));
+    try { window.pcdata.download(filename, url); }
+    finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  },
   download(filename, dataUri) {
     const a = document.createElement('a');
     a.href = dataUri;

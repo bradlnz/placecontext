@@ -36,19 +36,24 @@ public sealed class MenuConfigService : IMenuConfigService
     internal static readonly CatalogItem[] WorkspaceCatalog =
     {
         new("dashboard", "Dashboard", "link", "/", Permission.ProjectsView, "grid", null, null),
-        new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", null, null),
-        new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", null, null),
-        new("chains", "Chains", "link", "/project/{projectId}/chains", Permission.ChainsManage, "chain", null, null),
-        new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.TriggersManage, "clock", null, null),
-        new("data", "Data", "link", "/project/{projectId}/data", Permission.DataRead, "data", null, null),
-        new("vault", "Vault", "link", "/project/{projectId}/secrets", Permission.SecretsManage, "key", null, null),
-        new("project.events", "Events", "link", "/project/{projectId}/events", Permission.EventsManage, "pulse", null, null),
-        new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", null, null),
+        new("build.chat", "Build", "link", "/project/{projectId}/build", Permission.ProjectsView, "agent", null, null),
+        new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", "Automation", null),
+        new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", "Automation", null),
+        new("chains", "Workflows", "link", "/project/{projectId}/workflows", Permission.ChainsManage, "chain", "Automation", null),
+        new("queues", "Queues", "link", "/project/{projectId}/queues", Permission.ChainsManage, "queue", "Infrastructure", null),
+        new("services", "Services", "link", "/project/{projectId}/services", Permission.SettingsManage, "box", "Infrastructure", null),
+        new("databases", "Databases", "link", "/project/{projectId}/databases", Permission.SettingsManage, "data", "Infrastructure", null),
+        new("networking", "Networking", "link", "/project/{projectId}/networking", Permission.SettingsManage, "box", "Infrastructure", null),
+        new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.TriggersManage, "clock", "Automation", null),
+        new("data", "Data", "link", "/project/{projectId}/data", Permission.DataRead, "data", "Data & storage", null),
+        new("vault", "Vault", "link", "/project/{projectId}/secrets", Permission.SecretsManage, "key", "Infrastructure", null),
+        new("project.events", "Events", "link", "/project/{projectId}/events", Permission.EventsManage, "pulse", "Automation", null),
+        new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", "Data & storage", null),
         new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null, null),
-        new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", null, null),
-        new("wiki", "Wiki", "link", "/wiki", null, "ledger", null, null),
+        new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", "Infrastructure", null),
+        new("wiki", "Wiki", "link", "/wiki", null, "ledger", "Help", null),
         new("settings", "Settings", "link", "/settings/branding", Permission.SettingsManage, "key", null, null),
-        new("about", "About", "link", "/about", null, "grid", null, null),
+        new("about", "About", "link", "/about", null, "grid", "Help", null),
     };
 
     internal sealed record CatalogItem(
@@ -138,7 +143,36 @@ public sealed class MenuConfigService : IMenuConfigService
                 cat.Id, o.Label ?? cat.DefaultLabel, cat.Kind, href, cat.Icon,
                 NormalizeSection(o.Section) ?? NormalizeSection(cat.DefaultSection), o.Order, cat.Parent));
         }
-        return items;
+        return GroupSections(items);
+    }
+
+    internal static IReadOnlyList<ResolvedMenuItem> GroupSections(IEnumerable<ResolvedMenuItem> items)
+    {
+        var result = new List<ResolvedMenuItem>();
+        var groups = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in items)
+        {
+            if (item.Parent is not null || item.Kind != "link" || string.IsNullOrWhiteSpace(item.Section))
+            {
+                result.Add(item);
+                continue;
+            }
+            var id = "section:" + item.Section;
+            if (groups.Add(id))
+            {
+                var icon = item.Section switch
+                {
+                    "Automation" => "chain",
+                    "Infrastructure" => "box",
+                    "Data & storage" => "data",
+                    "Help" => "ledger",
+                    _ => item.Icon,
+                };
+                result.Add(new(id, item.Section, "group", null, icon, null, item.Order));
+            }
+            result.Add(item with { Parent = id });
+        }
+        return result;
     }
 
     private static string? NormalizeSection(string? section) =>
@@ -170,7 +204,7 @@ public sealed class MenuConfigService : IMenuConfigService
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             return await db.Users.AsNoTracking()
                 .Where(u => u.Id == _currentUser.UserId)
-                .Select(u => u.IsDefaultAdmin)
+                .Select(u => u.IsDefaultAdmin || u.IsExternalAdmin)
                 .FirstOrDefaultAsync(ct);
         }
         catch
@@ -192,7 +226,9 @@ public sealed class MenuConfigService : IMenuConfigService
             .Where(x => knownIds.Contains(x.Id))
             .OrderBy(x => x.Order)
             .DistinctBy(x => x.Id, StringComparer.Ordinal)
-            .Select(x => new MenuItemOverride(x.Id, x.Label, x.Order, x.Visible, x.Section))
+            .Select(x => new MenuItemOverride(x.Id,
+                x.Id == "build.chat" && x.Label == "Chat" ? null : x.Label,
+                x.Order, x.Visible, x.Id == "build.chat" && x.Section == "Build" ? null : x.Section))
             .ToList();
 
         // Preserve customized order, but place newly shipped entries beside their nearest

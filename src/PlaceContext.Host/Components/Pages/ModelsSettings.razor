@@ -1,0 +1,47 @@
+@page "/settings/models"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
+@inject ModelsSettingsViewModel Vm
+@implements IDisposable
+
+<PageTitle>PlaceContext — Models</PageTitle>
+<div class="models-settings">
+    <header><div><h2>Model connections</h2><p>Connect your AI providers and choose which models are available in Build chat.</p></div><button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.Add"><AppIcon Kind="plus" /> Add connection</button></header>
+    @if (Vm.Error is not null) { <p class="danger" role="alert">@Vm.Error</p> }
+    @if (Vm.Notice is not null) { <p role="status">@Vm.Notice</p> }
+    @if (Vm.Connections.Count == 0 && !Vm.Editing) { <div class="dccard empty"><AppIcon Kind="agent" /><h3>Bring your models</h3><p>Add a provider API key or connect a local server. Your credentials stay encrypted on the server.</p><button class="dcbtn" @onclick="Vm.Add">Add your first connection</button></div> }
+    @foreach (var connection in Vm.Connections)
+    {
+        <article class="dccard connection"><div><h3>@connection.Name <small>@(connection.Enabled ? "Enabled" : "Disabled")</small></h3><p>@connection.BaseUrl</p><small>@connection.Models.Count models · @(connection.SetupHint ?? (connection.HasApiKey ? "API key saved" : "No API key"))</small></div><div><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.Edit(connection)">Edit</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.Deleting = connection.Id">Delete</button></div></article>
+    }
+    @if (Vm.Editing)
+    {
+        <section class="dccard model-editor" aria-label="Edit model connection">
+            <h3>Connection settings</h3>
+            <div class="dcfield"><label for="model-preset">Provider preset</label><select id="model-preset" class="dcinput" disabled="@Vm.Busy" @onchange="e => Vm.Preset(e.Value?.ToString() ?? string.Empty)"><option value="">Choose a preset</option>@foreach (var preset in ModelsSettingsViewModel.Presets) { <option>@preset.Name</option> }</select></div>
+            <div class="dcfield"><label for="model-name">Connection name</label><input id="model-name" class="dcinput" maxlength="100" @bind="Vm.Name" disabled="@Vm.Busy" /></div>
+            @if (Vm.IsLocalCli)
+            { <p>Uses the installed CLI and its existing sign-in on the app host. Sign in with <code>@Vm.LoginCommand</code>, then discover models. Host CLI accounts are available only to the default workspace administrator.</p> }
+            else
+            {
+            <div class="dcfield"><label for="model-protocol">API protocol</label><select id="model-protocol" class="dcinput" @bind="Vm.Protocol" disabled="@Vm.Busy"><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic Messages</option></select></div>
+            <div class="dcfield"><label for="model-url">API base URL</label><input id="model-url" class="dcinput" type="url" @bind="Vm.BaseUrl" disabled="@Vm.Busy" /><small>Include the API version path, such as /v1. Local addresses are relative to the PlaceContext server.</small></div>
+            <div class="dcfield"><label for="model-key">API key</label><input id="model-key" class="dcinput" type="password" autocomplete="new-password" @bind="Vm.ApiKey" disabled="@Vm.Busy" placeholder="@(Vm.HasApiKey ? "Leave blank to keep saved key" : "Optional for local servers")" /></div>
+            @if (Vm.HasApiKey) { <label><input type="checkbox" @bind="Vm.ClearApiKey" disabled="@Vm.Busy" /> Remove saved API key</label> }
+            }
+            <div class="dcfield"><label for="model-ids">Available model IDs</label><textarea id="model-ids" class="dcinput" rows="6" @bind="Vm.Models" disabled="@Vm.Busy" placeholder="One model ID per line"></textarea><small>Use models that support tools; image attachments also require vision support.</small></div>
+            <label><input type="checkbox" @bind="Vm.Enabled" disabled="@Vm.Busy" /> Enable connection</label>
+            <p>@(Vm.IsLocalCli ? "CLI models use the host account's usage allowance." : "Enabled models are available to signed-in project users.") Messages, attachments, memory, and tool results are sent to the selected provider.</p>
+            <footer><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.DiscoverAsync">Save &amp; discover models</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.Cancel">Cancel</button><button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveAsync">Save connection</button></footer>
+        </section>
+    }
+    @if (Vm.Deleting is not null)
+    {
+        <div class="dcmodal-overlay"><section class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="delete-model-title"><div class="dcmodal-head"><h3 id="delete-model-title">Delete model connection?</h3></div><div class="dcmodal-body">Chats using this connection will need another model. Saved conversations and memory are retained.</div><div class="dcmodal-foot"><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.Deleting = null">Cancel</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.DeleteAsync">Delete connection</button></div></section></div>
+    }
+</div>
+@code {
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnInitializedAsync() => Vm.LoadAsync();
+    public void Dispose() => Vm.Detach();
+}

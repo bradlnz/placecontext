@@ -5,10 +5,6 @@ using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Scheduling;
 
-/// <summary>One queued chart job: the whole project (TableName null) or a single table.</summary>
-public sealed record AnalyticsRefreshRequest(
-    TenantInfo Tenant, Guid ProjectId, Guid OpId, string? TableName, string? Instruction);
-
 /// <summary>
 /// The Analytics tab's work queue, drained one at a time by <see cref="AnalyticsWorkerService"/>
 /// (local-LLM inference is CPU-bound — parallel sweeps only slow each other down). A request is

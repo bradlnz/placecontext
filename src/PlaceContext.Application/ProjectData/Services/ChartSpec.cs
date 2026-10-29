@@ -4,11 +4,6 @@ using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Application.Features;
 
-/// <summary>One named series of a chart spec.</summary>
-public sealed record ChartSeries(
-    [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("values")] IReadOnlyList<double> Values);
-
 /// <summary>
 /// A declarative chart: data + form, no drawing. The LLM (or the deterministic builder) produces
 /// this and the portal renders it with Chart.js — code draws, the model only picks and shapes data,

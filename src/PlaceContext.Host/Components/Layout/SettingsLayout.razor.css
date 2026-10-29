@@ -21,7 +21,7 @@
 }
 .settings-nav-head { margin-bottom:10px; font-size:10px; font-weight:600; letter-spacing:.7px; color:var(--text-3); text-transform:uppercase; }
 .settings-link { display:block; margin-bottom:3px; padding:8px 10px; border-radius:7px; font-size:12.5px; line-height:1.35; text-decoration:none; }
-.body { flex:1; min-width:0; min-height:0; overflow-y:auto; }
+.body { flex:1; min-width:0; min-height:0; overflow-y:auto; padding:24px 24px 48px 0; box-sizing:border-box; }
 
 @media (max-width: 767px) {
     .shell {
@@ -51,7 +51,7 @@
     .settings-nav.open { display:block; }
     .settings-nav-head { margin:2px 4px 8px; }
     .settings-link { display:flex; align-items:center; min-height:44px; margin-bottom:1px; box-sizing:border-box; }
-    .body { width:100%; min-width:0; overflow:visible; }
+    .body { width:100%; min-width:0; overflow:visible; padding:0; }
 
     ::deep .page,
     ::deep .menu-settings-page,

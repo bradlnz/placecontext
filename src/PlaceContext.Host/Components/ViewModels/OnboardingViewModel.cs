@@ -14,12 +14,6 @@ public enum SetupGuideStep
     Ready,
 }
 
-public sealed record SetupDataSourceOption(
-    string Key,
-    string Title,
-    string Description,
-    string ActionLabel);
-
 /// <summary>
 /// First-login workspace guide. It discovers configured sources before asking the operator to add
 /// another one, then treats OpenSearch as a separate optional deployment decision.

@@ -4,9 +4,6 @@ using Markdig;
 
 namespace PlaceContext.Host.Wiki;
 
-/// <summary>One wiki article: its url slug, display title, one-line summary, and rendered HTML.</summary>
-public sealed record WikiArticle(string Slug, string Title, string Summary, string Html);
-
 /// <summary>
 /// The platform wiki: markdown files embedded from the Wiki/ folder at build time (see the csproj
 /// EmbeddedResource glob), parsed once into an ordered, rendered table of contents. Content-only —
@@ -18,7 +15,7 @@ public static class WikiLibrary
     private static readonly string[] Order =
     {
         "getting-started", "setup", "webhook-ingestion", "opensearch-integration", "sso-and-oauth",
-        "projects", "jobs-and-artifacts",
+        "projects", "jobs-and-artifacts", "worker-networking",
         "events-and-schedules", "charts-and-reports", "project-data", "entities-and-insights",
         "security-and-sharing", "cluster-and-nodes", "mcp-and-jobs",
     };

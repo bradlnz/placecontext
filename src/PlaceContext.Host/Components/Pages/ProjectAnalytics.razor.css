@@ -171,12 +171,6 @@
     font-size: 11px;
 }
 
-.btn-sm-danger {
-    padding: 3px 10px;
-    font-size: 11px;
-    color: var(--bad);
-}
-
 .chart-canvas-box {
     height: 340px;
     min-width: 0;

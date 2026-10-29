@@ -13,12 +13,12 @@ public interface IRunArtifactLinkRepository
     Task<IReadOnlyList<RunArtifactLink>> ListForJobAsync(Guid jobId, CancellationToken ct = default);
 
     /// <summary>The newest stored artifacts across every project (the Artifacts file viewer).</summary>
-    Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default);
+    Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default, int skip = 0, string? search = null);
 
     /// <summary>Every stored artifact for one project (newest first) — the project-scoped file viewer.
     /// <paramref name="search"/>, when given, keeps only artifacts whose Title or Kind contains it
     /// (case-insensitive) — applied before the version-grouping the UI does client-side.</summary>
-    Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default);
+    Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default, int skip = 0);
 
     /// <summary>
     /// The oldest artifacts still awaiting OCR (<c>OcrProcessedAt IS NULL</c>) whose content type is

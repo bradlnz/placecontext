@@ -20,6 +20,7 @@ public static class DependencyInjection
     {
         services.AddScoped<IDispatcher, Dispatcher>();
         services.AddScoped<PlaceContextService>();
+        services.AddScoped<NetworkFlowService>();
 
         // Pure domain services (no I/O) used by handlers.
         services.AddSingleton<DecisionTreeAssembler>();

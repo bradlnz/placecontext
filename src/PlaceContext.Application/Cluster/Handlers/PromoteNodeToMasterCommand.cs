@@ -9,17 +9,3 @@ namespace PlaceContext.Application.Cluster;
 /// includes the host-side k3s server reinstall steps (agent cannot become control-plane via the API alone).
 /// </summary>
 public sealed record PromoteNodeToMasterCommand(string NodeName) : ICommand<PromoteMasterResult>;
-
-public sealed class PromoteNodeToMasterHandler : ICommandHandler<PromoteNodeToMasterCommand, PromoteMasterResult>
-{
-    private readonly IClusterAdminPort _admin;
-
-    public PromoteNodeToMasterHandler(IClusterAdminPort admin) => _admin = admin;
-
-    public Task<PromoteMasterResult> HandleAsync(PromoteNodeToMasterCommand command, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(command.NodeName))
-            return Task.FromResult(new PromoteMasterResult("", false, "Node name is required."));
-        return _admin.PromoteToMasterAsync(command.NodeName.Trim(), ct);
-    }
-}

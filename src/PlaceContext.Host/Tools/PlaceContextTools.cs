@@ -190,7 +190,7 @@ public sealed class PlaceContextTools
         - `node`  → base `node:22-slim`, default entrypoint `index.js`, invoked `node /work/index.js`.
         - `go`    → base `golang:1.23-alpine`, default entrypoint `main.go`, invoked `go run /work/main.go`.
         - `ruby`  → base `ruby:3.3-slim`, default entrypoint `main.rb`, invoked `ruby /work/main.rb`.
-        - `dotnet`→ base `mcr.microsoft.com/dotnet/sdk:10.0`, default entrypoint `main.cs`, invoked `dotnet run /work/main.cs` (.NET 10 file-based app). The first run is slower (an implicit
+        - `dotnet`→ base `mcr.microsoft.com/dotnet/sdk:10.0.403`, default entrypoint `main.cs`, invoked `dotnet run /work/main.cs` (.NET 10 file-based app). The first run is slower (an implicit
           restore is baked once and reused afterwards). File-based apps disable reflection-based
           `System.Text.Json` by default — use a source-generated `JsonSerializerContext`, or add
           `#:property JsonSerializerIsReflectionEnabledByDefault=true` at the top of the file.
@@ -480,7 +480,7 @@ public sealed class PlaceContextTools
             });
 
     [Authorize(Policy = Permission.JobsRun)]
-    [McpServerTool(Name = "resume_job_chain"), Description("Supply missing inputs and durably resume the same paused chain run. Use inputRequest from get_job_chain_submission or get_chain_run. valuesJson is an object keyed by step index, containing declared field names and values. Repeating the same request id and values is idempotent; earlier stages never rerun.")]
+    [McpServerTool(Name = "resume_job_chain"), Description("Supply inputs or complete a human/agent hand-off and durably resume the same paused chain run. Use inputRequest from get_job_chain_submission or get_chain_run; read its instructions and current run context before responding. valuesJson is an object keyed by step index, containing declared field names and values. Human/agent steps require a fresh non-empty text response. Repeating the same request id and values is idempotent; earlier stages never rerun.")]
     public static Task<string> ResumeJobChain(IJobChainSubmissionQueue submissions, IToolCallLog log,
         Guid chainRunId, Guid inputRequestId, string valuesJson)
         => Traced(log, "resume_job_chain", chainRunId.ToString(), "resume chain with input",

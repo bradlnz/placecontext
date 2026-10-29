@@ -1,4 +1,5 @@
 @page "/observability"
+@using PlaceContext.Host.Components.ViewModels.Helpers
 @attribute [Authorize(Policy = Permission.JobsView)]
 @implements IDisposable
 @inject ObservabilityViewModel Vm
@@ -27,14 +28,15 @@ else
                     What ran, where, and how it went — across every project in the workspace.
                 </div>
             </div>
-            <button class="dcbtn" @onclick="Vm.RefreshAsync">Refresh</button>
+            <button class="dcbtn" disabled="@Vm.QueryingLogs" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /> Refresh</button>
         </div>
 
         @* Global tab strip — more lenses (events, triggers, costs) slot in here. *@
         <div class="dctabs tabs-strip">
-            <button class="dctab @(Vm.IsRunsTab ? "active" : "")" @onclick="Vm.SelectRunsTab">Job history<span class="n">@(Vm.Reports?.Count ?? 0)</span></button>
-            <button class="dctab @(Vm.IsChainsTab ? "active" : "")" @onclick="Vm.SelectChainsTab">Chains<span class="n">@(Vm.ChainReports?.Count ?? 0)</span></button>
-            <button class="dctab @(Vm.IsTracesTab ? "active" : "")" @onclick="Vm.LoadTracesAsync">Live traces<span class="n">@(Vm.LiveTraces?.Count ?? 0)</span></button>
+            <button class="dctab @(Vm.IsRunsTab ? "active" : "")" @onclick="Vm.SelectRunsTab"><AppIcon Kind="box" /> Job history<span class="n">@(Vm.Reports?.Count ?? 0)</span></button>
+            <button class="dctab @(Vm.IsLogsTab ? "active" : "")" @onclick="Vm.SelectLogsTabAsync"><AppIcon Kind="logs" /> Logs</button>
+            <button class="dctab @(Vm.IsChainsTab ? "active" : "")" @onclick="Vm.SelectChainsTab"><AppIcon Kind="chain" /> Workflows<span class="n">@(Vm.ChainReports?.Count ?? 0)</span></button>
+            <button class="dctab @(Vm.IsTracesTab ? "active" : "")" @onclick="Vm.LoadTracesAsync"><AppIcon Kind="pulse" /> Live traces<span class="n">@(Vm.LiveTraces?.Count ?? 0)</span></button>
         </div>
 
         @if (Vm.Message is not null)
@@ -42,7 +44,7 @@ else
             <div class="message-banner">@Vm.Message</div>
         }
 
-        @if (Vm.ActiveRunCount > 0)
+        @if (!Vm.IsLogsTab && Vm.ActiveRunCount > 0)
         {
             <section class="summary-strip" aria-label="Run summary">
                 <div class="summary-count"><strong>@Vm.ActiveRunCount</strong><span>runs</span></div>
@@ -55,9 +57,126 @@ else
             </section>
         }
 
+        @if (Vm.IsLogsTab)
+        {
+            <section class="dccard log-query-panel" aria-label="Log query">
+                <div class="query-title"><AppIcon Kind="logs" /><div><h3>Explore logs</h3><p>Explore events, analyze JSON fields, and summarize patterns across jobs and services.</p></div></div>
+                <form @onsubmit="Vm.QueryLogsAsync" @onsubmit:preventDefault>
+                    <label id="log-query-label">Query <span>Log analytics pipeline · Monaco editor</span></label>
+                    <div id="@ObservabilityViewModel.LogEditorId" class="query-editor" aria-labelledby="log-query-label" aria-describedby="log-query-help"></div>
+                    <div class="query-actions">
+                        <span>Latest 100 runs · up to 2,000 events per run · displays 500 matches</span>
+                        @if (Vm.CanReadServiceLogs) { <label><input type="checkbox" @bind="Vm.IncludeServiceLogs" /> Include service logs (up to 20 containers)</label> }
+                        <button type="submit" class="dcbtn primary" disabled="@Vm.QueryingLogs"><AppIcon Kind="play" /> @(Vm.QueryingLogs ? "Searching…" : "Run query")</button>
+                    </div>
+                </form>
+                <div class="query-examples">
+                    <span>Try</span>
+                    <button class="dcbtn" disabled="@Vm.QueryingLogs" @onclick='() => Vm.UseLogExampleAsync("filter level IN (WARN, ERROR, FATAL) | fields timestamp, level, job, message | sort timestamp desc | limit 100")'>Warnings &amp; errors</button>
+                    <button class="dcbtn" disabled="@Vm.QueryingLogs" @onclick='() => Vm.UseLogExampleAsync("filter timestamp >= -1h | stats count() as events by bin(5m), level | sort timestamp asc")'>Events over time</button>
+                    <button class="dcbtn" disabled="@Vm.QueryingLogs" @onclick='() => Vm.UseLogExampleAsync("filter level IN (ERROR, FATAL) | stats count() as errors by job | sort errors desc | limit 20")'>Errors by job</button>
+                    <button class="dcbtn" disabled="@Vm.QueryingLogs" @onclick='() => Vm.UseLogExampleAsync(LogAnalyticsQuery.DefaultQuery)'>All loaded logs</button>
+                </div>
+                <details class="query-help log-field-mapping">
+                    <summary>Map log fields</summary>
+                    <p>Map JSON properties into standard log fields before filtering or aggregating. Blank or missing properties keep the detected value; timestamps must be ISO dates. Original JSON fields remain queryable.</p>
+                    <div class="log-mapping-grid">
+                        @foreach (var target in Vm.LogFieldMappings.Keys)
+                        {
+                            <label for="log-map-@target">@target
+                                <input id="log-map-@target" class="dcinput" list="log-json-fields" maxlength="256"
+                                       placeholder="Auto-detect" @bind="Vm.LogFieldMappings[target]" />
+                            </label>
+                        }
+                    </div>
+                    <datalist id="log-json-fields">
+                        @foreach (var field in Vm.LogJsonFields) { <option value="@field" /> }
+                    </datalist>
+                    <button class="dcbtn" disabled="@Vm.QueryingLogs" @onclick="Vm.QueryLogsAsync">Apply mappings and run query</button>
+                </details>
+                <details id="log-query-help" class="query-help">
+                    <summary>Pipeline commands and fields</summary>
+                    <p>Start with <code>logs</code> (optional), then separate commands with <code>|</code>. Use <code>fields</code> / <code>project</code> to select columns and <code>as</code> to rename them; <code>filter</code> / <code>where</code> to match events; <code>stats</code> / <code>summarize</code> to aggregate; <code>sort</code> and <code>limit</code> / <code>take</code> to order and bound results. Commands run in sequence; select columns after filtering if the filter needs other fields.</p>
+                    <p><code>stats count() as events by job, bin(5m)</code> groups by job and UTC time bucket. Aggregates include <code>count(field)</code>, <code>count_distinct(field)</code>, <code>sum</code>, <code>avg</code>, <code>min</code>, and <code>max</code>. Numeric aggregates ignore missing or nonnumeric values. JSON messages expose fields such as <code>json.durationMs</code>: <code>stats avg(json.durationMs) as average by job</code>. Filter and sort aggregate aliases in later commands.</p>
+                    <p><code>@LogQuery.Fields</code></p>
+                    <p>Azure-style substring filters work with double or single quotes: <code>where message contains "timeout"</code>. Use <code>!contains</code> to exclude matches, or <code>contains_cs</code> / <code>!contains_cs</code> for case-sensitive matching. <code>not contains</code> is also supported. These operators work on mapped fields and JSON properties such as <code>json.event.text</code>.</p>
+                    <p>Use <code>=</code>, <code>!=</code>, <code>~</code> (contains), <code>!~</code>, <code>IN</code>, and <code>NOT IN</code>. Combine conditions with <code>AND</code>, <code>OR</code>, <code>NOT</code>, and parentheses. Other text comparisons ignore case; quote values containing spaces.</p>
+                    <p>Compare <code>timestamp</code> with <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, or <code>&lt;=</code> and an ISO timestamp or relative time such as <code>-15m</code>, <code>-1h</code>, or <code>-7d</code>. Events without an emitted timestamp do not match time comparisons and form an empty time bucket when grouped. Limits range from 1 to 500. Existing filter-only queries remain supported.</p>
+                </details>
+                @if (Vm.LogQueryError is not null) { <p class="query-error" role="alert">@Vm.LogQueryError</p> }
+            </section>
+            @if (Vm.AnalyticsResult is { } results)
+            {
+                <section class="dccard log-query-results" aria-label="Log query results" aria-busy="@Vm.QueryingLogs">
+                    <p class="query-limit">Long log values show the first 500 characters. Inspect an event to read its full raw message; queries search the full values.</p>
+                    <header><strong>@results.TotalRows result rows</strong><span>@results.Rows.Count shown · @results.MatchedEvents events matched · @Vm.LogEventCount events searched across @Vm.LogRunCount runs and @Vm.LogServiceCount services · @Vm.LogsQueriedLabel</span><label class="query-wrap"><input type="checkbox" @bind="Vm.WrapLogResults" /> Wrap lines</label></header>
+                    @if (Vm.ServiceLogsWarning is not null) { <p class="query-limit" role="status">@Vm.ServiceLogsWarning</p> }
+                    @if (Vm.LogSourcesTruncated) { <p class="query-limit">Some runs have older events outside this search window. Aggregates cover only the loaded events. Open a run to download its full logs.</p> }
+                    <div class="query-table-scroll log-events @(Vm.WrapLogResults ? "wrap-lines" : "")" tabindex="0" role="region" aria-label="Query results">
+                        <table>
+                            <thead><tr><th scope="col">#</th>@foreach (var column in results.Columns) { <th scope="col">@column</th> } @if (!results.Aggregated) { <th scope="col">Inspect</th> }</tr></thead>
+                            <tbody>
+                            @foreach (var (row, index) in results.Rows.Select((row, index) => (row, index)))
+                            {
+                                <tr><td class="log-index">@(index + 1)</td>
+                                    @foreach (var column in results.Columns)
+                                    {
+                                        <td class="@(column.ToLowerInvariant() switch { "message" => "log-message", "timestamp" => "log-time", "stream" => "log-stream", _ => "query-cell" })">
+                                            @if (column.Equals("level", StringComparison.OrdinalIgnoreCase))
+                                            { <span class="log-level @row.Cell(column).ToLowerInvariant()">@row.Cell(column)</span> }
+                                            else { @(row.Source is null ? row.Cell(column) : FormatHelper.Trunc(row.Cell(column), 500)) }
+                                        </td>
+                                    }
+                                    @if (!results.Aggregated && row.Source is { } source)
+                                    { <td><button class="dcbtn" aria-expanded="@(ReferenceEquals(Vm.SelectedLog, source) ? "true" : "false")" aria-controls="log-event-details" @onclick="() => Vm.ToggleLogEvent(source)">Inspect event</button>
+                                      @if (source.Service is { } serviceSource) { <a class="dcbtn" href="/project/@serviceSource.ProjectId/services?service=@serviceSource.Id">Service <AppIcon Kind="arrow-right" /></a> }
+                                      else if (source.Report is { } report) { <button class="dcbtn" @onclick="() => Vm.OpenRun(report)" aria-label="@($"Open run {report.Run.Id}")">@Vm.Presentation.AbbreviatedId(report.Run.Id) <AppIcon Kind="arrow-right" /></button> }</td> }
+                                </tr>
+                                @if (row.Source is { } selected && ReferenceEquals(Vm.SelectedLog, selected) && Vm.SelectedLogFields is { } fields)
+                                {
+                                    <tr class="log-detail-row"><td colspan="@(results.Columns.Count + 2)">
+                                        <section id="log-event-details" class="log-event-details" aria-label="Log event details">
+                                            <header><strong>Event @selected.Event.Index · @selected.Field("job") · @selected.Event.Stream</strong><button class="dcbtn" @onclick="Vm.CloseLogEvent">Close event</button></header>
+                                            <h4>Raw message</h4>
+                                            <RunOutput Value="@selected.Event.Message" Language="plaintext" Label="Raw log message" />
+                                            <details class="log-event-fields">
+                                                <summary>Fields (@fields.Values.Count)</summary>
+                                                <dl class="run-detail-grid">
+                                                    @foreach (var field in fields.Values)
+                                                    { <dt>@field.Key</dt><dd>@FormatHelper.Trunc(LogAnalyticsRow.Format(field.Value), 500)</dd> }
+                                                </dl>
+                                            </details>
+                                            <h4>Surrounding events</h4>
+                                            <p class="note-sm">Up to 10 events before and after, from the same run or service and stream. Includes events excluded by your query, within the loaded search window. Highlighted row is the selected event.</p>
+                                            <div class="log-context" tabindex="0" role="region" aria-label="Surrounding log events">
+                                                <table><thead><tr><th scope="col">Line</th><th scope="col">Timestamp</th><th scope="col">Level</th><th scope="col">Message</th></tr></thead><tbody>
+                                                    @foreach (var context in Vm.LogContext)
+                                                    {
+                                                        <tr class="@(ReferenceEquals(context, selected) ? "selected-event" : "")" aria-current="@(ReferenceEquals(context, selected) ? "true" : "false")">
+                                                            <td>@context.Event.Index</td><td class="log-time">@context.Event.Timestamp</td><td>@context.Event.Level</td><td class="log-message">@FormatHelper.Trunc(context.Event.Message, 500)</td>
+                                                        </tr>
+                                                    }
+                                                </tbody></table>
+                                            </div>
+                                        </section>
+                                    </td></tr>
+                                }
+                            }
+                            @if (results.Rows.Count == 0) { <tr><td colspan="@(results.Columns.Count + (results.Aggregated ? 1 : 2))" class="log-empty">No log events match this query in the search window. Adjust the conditions or run a job to produce logs.</td></tr> }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            }
+        }
+
         @if (Vm.IsRunsTab)
         {
-            @if (Vm.Reports is null or { Count: 0 })
+            @if (Vm.Reports is null)
+            {
+                @if (Vm.Message is null) { <Skeleton Kind="list" Rows="6" /> }
+            }
+            else if (Vm.Reports.Count == 0)
             {
                 <div class="dccard empty-card">
                     No job runs recorded yet — run a job from any project's Jobs tab and it appears here.
@@ -67,7 +186,7 @@ else
             {
                 <section class="dccard run-suite">
                     <header class="suite-head">
-                        <div><span class="suite-caret">⌄</span><strong>Job run catalogue</strong><span>@Vm.Reports.Count across the workspace</span></div>
+                        <div><span class="suite-caret"><AppIcon Kind="chevron-down" /></span><strong>Job run catalogue</strong><span>@Vm.Reports.Count across the workspace</span></div>
                         <span class="suite-result">@Vm.ActiveStatusCount(JobRunStatus.Succeeded) succeeded</span>
                     </header>
                     <div class="run-list">
@@ -82,7 +201,7 @@ else
                                         <span class="project-name">@rep.ProjectName</span>
                                     </div>
                                     <span class="note-sm">
-                                        ✓ @Vm.SucceededShardCount(run)@Vm.FailedShardSummary(run)
+                                        <AppIcon Kind="check" /> @Vm.SucceededShardCount(run)@Vm.FailedShardSummary(run)
                                     </span>
                                     <span class="run-time">
                                         @Vm.Presentation.DateTime(run.StartedAt)
@@ -93,7 +212,7 @@ else
                                             @Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value)
                                         </span>
                                     }
-                                    <span class="details-link">Details →</span>
+                                    <span class="details-link">Details <AppIcon Kind="arrow-right" /></span>
                                 </div>
                             </article>
                         }
@@ -104,17 +223,21 @@ else
 
         @if (Vm.IsChainsTab)
         {
-            @if (Vm.ChainReports is null or { Count: 0 })
+            @if (Vm.ChainReports is null)
+            {
+                @if (Vm.Message is null) { <Skeleton Kind="list" Rows="6" /> }
+            }
+            else if (Vm.ChainReports.Count == 0)
             {
                 <div class="dccard empty-card">
-                    No chain runs recorded yet — run a job chain from any project's Chains tab and it appears here.
+                    No workflow runs recorded yet — run a workflow from any project's Workflows tab and it appears here.
                 </div>
             }
             else
             {
                 <section class="dccard run-suite">
                     <header class="suite-head">
-                        <div><span class="suite-caret">⌄</span><strong>Chain run catalogue</strong><span>@Vm.ChainReports.Count across the workspace</span></div>
+                        <div><span class="suite-caret"><AppIcon Kind="chevron-down" /></span><strong>Workflow run catalogue</strong><span>@Vm.ChainReports.Count across the workspace</span></div>
                         <span class="suite-result">@Vm.ActiveStatusCount(JobRunStatus.Succeeded) succeeded</span>
                     </header>
                     <div class="run-list">
@@ -163,7 +286,7 @@ else
             {
                 <section class="dccard run-suite">
                     <header class="suite-head">
-                        <div><span class="suite-caret">⌄</span><strong>Live trace catalogue</strong><span>@Vm.LiveTraces.Count on this replica</span></div>
+                        <div><span class="suite-caret"><AppIcon Kind="chevron-down" /></span><strong>Live trace catalogue</strong><span>@Vm.LiveTraces.Count on this replica</span></div>
                         <span class="suite-result">@Vm.ActiveStatusCount(JobRunStatus.Succeeded) succeeded</span>
                     </header>
                     <div class="run-list">
@@ -178,7 +301,7 @@ else
                                     </div>
                                     <span class="note-sm">@t.Shards.Count shard(s)</span>
                                     <span class="run-duration">@Vm.Presentation.Milliseconds(t.DurationMs)</span>
-                                    <span class="details-link">Details →</span>
+                                    <span class="details-link">Details <AppIcon Kind="arrow-right" /></span>
                                 </div>
                             </article>
                         }
@@ -190,7 +313,9 @@ else
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "tab")] public string? PageTab { get; set; }
     [SupplyParameterFromQuery(Name = "run")] public string? RunId { get; set; }
+    [SupplyParameterFromQuery(Name = "workflowRun")] public string? WorkflowRunId { get; set; }
     [SupplyParameterFromQuery(Name = "chainRun")] public string? ChainRunId { get; set; }
     private string? _chainContextJson;
     private string? _chainContextJsonPath;
@@ -199,16 +324,19 @@ else
     {
         Vm.Attach(() => InvokeAsync(StateHasChanged));
         Vm.RunId = RunId;
-        Vm.ChainRunId = ChainRunId;
+        Vm.ChainRunId = WorkflowRunId ?? ChainRunId;
         await Vm.InitializeAsync();
     }
 
     protected override async Task OnParametersSetAsync()
     {
         Vm.RunId = RunId;
-        Vm.ChainRunId = ChainRunId;
+        Vm.ChainRunId = WorkflowRunId ?? ChainRunId;
         await Vm.ApplyDeepLinkAsync();
+        if (PageTab is not null || (RunId is null && WorkflowRunId is null && ChainRunId is null)) await Vm.RestoreTabAsync(PageTab);
     }
+
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync();
 
     public void Dispose() => Vm.Dispose();
 
@@ -268,9 +396,6 @@ else
     }
 }
 
-@* ── Chain run detail slide-out: the fan-out/fan-in pipeline — a fan-out stage stacks its branches
-   in one column, and the join is simply the next column. Clicking a step deep-links into the run
-   detail slide-out below (same query-param convention the notification bell already uses). ────── *@
 @if (Vm.OpenChain is not null)
 {
     var chainRun = Vm.OpenChain.Run;
@@ -280,13 +405,13 @@ else
             <div class="flex-fill">
                 <div class="slide-title">@chainRun.ChainName</div>
                 <div class="slide-sub">
-                    @Vm.OpenChain.ProjectName · chain run @Vm.Presentation.AbbreviatedId(chainRun.Id)
+                    @Vm.OpenChain.ProjectName · workflow run @Vm.Presentation.AbbreviatedId(chainRun.Id)
                     · @Vm.Presentation.DateTime(chainRun.StartedAt)
                 </div>
             </div>
             <button class="dcbtn btn-open-project"
-                    @onclick="@(() => Vm.OpenProject(Vm.OpenChain.ProjectId, "chains"))">Open project →</button>
-            <button class="dcslide-x" @onclick="Vm.CloseChainRun">×</button>
+                    @onclick="@(() => Vm.OpenProject(Vm.OpenChain.ProjectId, "workflows"))">Open project <AppIcon Kind="arrow-right" /></button>
+            <button aria-label="Close" class="dcslide-x" @onclick="Vm.CloseChainRun"><AppIcon Kind="close" /></button>
         </div>
         <div class="dcslide-body slide-body-scroll">
             <div class="status-line">
@@ -297,11 +422,40 @@ else
             </div>
 
             <ChainPipeline Run="chainRun" OnStepClick="Vm.OpenChainStep" />
+            @if (chainRun.Steps.Any(step => step.ActionType == PlaceContext.Domain.ValueObjects.QemuChainAction.ActionType))
+            {
+                <QemuReplay @key="chainRun.Id" Run="chainRun" />
+            }
+
+            <div class="dccard panel-card">
+                <div class="panel-title">Job logs</div>
+                <label for="chain-log-job">Underlying job</label>
+                <select id="chain-log-job" class="dcinput" value="@Vm.SelectedChainStepRunId"
+                        @onchange="e => Vm.SelectChainLogAsync(e.Value?.ToString())">
+                    <option value="">Select a job run</option>
+                    @foreach (var step in chainRun.Steps.Where(step => step.RunId.HasValue && step.RunId != Guid.Empty))
+                    {
+                        <option value="@step.RunId">@(step.Index + 1). @step.JobName · @step.Status</option>
+                    }
+                </select>
+                @if (Vm.ChainLogsError is not null)
+                {
+                    <p class="note-sm" role="alert">@Vm.ChainLogsError</p>
+                }
+                @if (Vm.ChainStepRunDetail is { } logRun)
+                {
+                    <JobRunLogs @key="logRun.Id" Run="logRun" />
+                }
+                else if (Vm.SelectedChainStepRunId is null)
+                {
+                    <p class="note-sm">Logs appear when a job starts. Select a pipeline step to inspect its output.</p>
+                }
+            </div>
 
             @if (Vm.OpenChainContextRows.Count > 0)
             {
                 <div class="dccard chain-context-panel">
-                    <div class="out-label">Accumulated chain context</div>
+                    <div class="out-label">Accumulated workflow context</div>
                     <div class="chain-context-scroll">
                         <table class="chain-context-table">
                             <thead>
@@ -341,7 +495,7 @@ else
             {
                 <div class="dccard panel-card">
                     <div class="panel-title">Pipeline output</div>
-                    <pre class="shard-json">@Vm.Presentation.Json(chainRun.FinalOutput)</pre>
+                    <RunOutput Value="@(Vm.Presentation.Json(chainRun.FinalOutput))" />
                 </div>
             }
         </div>
@@ -351,16 +505,16 @@ else
 @if (_chainContextJson is not null)
 {
     <div class="dcmodal-overlay" @onclick="CloseChainContextJson">
-        <div class="dcmodal chain-json-modal" @onclick:stopPropagation="true">
+        <div class="dcmodal chain-json-modal" role="dialog" aria-modal="true" aria-label="Workflow context JSON" @onclick:stopPropagation="true">
             <div class="dcmodal-head">
                 <div>
-                    <div class="title-14">Chain context JSON</div>
+                    <div class="title-14">Workflow context JSON</div>
                     <div class="sub-115">Path: <code>@_chainContextJsonPath</code></div>
                 </div>
-                <button class="dcslide-x" @onclick="CloseChainContextJson">×</button>
+                <button aria-label="Close" class="dcslide-x" @onclick="CloseChainContextJson"><AppIcon Kind="close" /></button>
             </div>
             <div class="dcmodal-body chain-json-body">
-                <pre class="json-pre">@_chainContextJson</pre>
+                <RunOutput Value="@(_chainContextJson)" />
             </div>
         </div>
     </div>
@@ -380,10 +534,10 @@ else
                 </div>
             </div>
             <button class="dcbtn btn-replay" title="Re-run this run's exact captured inputs"
-                    @onclick="@(() => Vm.ReplayRun(run.Id, run.ProjectId))">↻ Replay</button>
+                    @onclick="@(() => Vm.ReplayRun(run.Id, run.ProjectId))"><AppIcon Kind="refresh" /> Replay</button>
             <button class="dcbtn btn-open-project"
-                    @onclick="@(() => Vm.OpenProject(run.ProjectId, "jobs"))">Open project →</button>
-            <button class="dcslide-x" @onclick="Vm.CloseRun">×</button>
+                    @onclick="@(() => Vm.OpenProject(run.ProjectId, "jobs"))">Open project <AppIcon Kind="arrow-right" /></button>
+            <button aria-label="Close" class="dcslide-x" @onclick="Vm.CloseRun"><AppIcon Kind="close" /></button>
         </div>
         <div class="dcslide-body slide-body-scroll">
             <div class="status-line">
@@ -431,7 +585,7 @@ else
                     <dt>Execution</dt>
                     <dd>@run.Snapshot.ShardCount shard(s) · concurrency @run.Snapshot.ConcurrencyLimit</dd>
                     <dt>Network egress</dt>
-                    <dd>@(run.Snapshot.AllowNetworkEgress ? "Allowed" : "Blocked")</dd>
+                    <dd>@(run.Snapshot.Network is { } network ? $"VPC {network.Cidr} · {network.Group.Name}" : run.Snapshot.AllowNetworkEgress ? "Allowed" : "Blocked")</dd>
                 </dl>
                 @if (!string.IsNullOrWhiteSpace(run.Snapshot.Goal))
                 {
@@ -452,7 +606,7 @@ else
                             <div class="output-row">
                                 <span class="kind-tag">@art.Kind</span>
                                 <a href="@($"/runs/{art.RunId}/artifacts/{art.Id}")" target="_blank" rel="noopener"
-                                   class="output-link">@art.Title ↗</a>
+                                   class="output-link">@art.Title <AppIcon Kind="external-link" /></a>
                                 <span class="size-note">@Vm.Presentation.Bytes(art.SizeBytes)</span>
                             </div>
                         }
@@ -499,6 +653,8 @@ else
                 </div>
             }
 
+            <JobRunLogs Run="run" />
+
             @foreach (var shard in run.ShardResults)
             {
                 <div class="shard-block">
@@ -509,7 +665,7 @@ else
                     </div>
                     @if (shard.Artifact is not null)
                     {
-                        <pre class="shard-json">@Vm.Presentation.Json(shard.Artifact)</pre>
+                        <RunOutput Value="@(Vm.Presentation.Json(shard.Artifact))" />
                         @if (Vm.TryArtifactSvg(shard.Artifact, out var shardChart))
                         {
                             <div class="chart-label">chart <span class="text-dim">(from the artifact's JSON)</span></div>
@@ -521,17 +677,9 @@ else
                         <div class="artifact-dl-row">
                             @foreach (var a in shard.Artifacts)
                             {
-                                <a class="dcbtn dl-btn"
-                                   href="@ObservabilityViewModel.DataUri(a)" download="@a.Name">⬇ @a.Name</a>
+                                <ArtifactDownload CssClass="dcbtn dl-btn" Label="@a.Name" GetArtifact="@(() => a)" />
                             }
                         </div>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(shard.Log))
-                    {
-                        <details class="log-details" open="@Vm.IsFailed(shard.Outcome)">
-                            <summary class="log-summary">Log</summary>
-                            <pre class="log-pre">@shard.Log</pre>
-                        </details>
                     }
                 </div>
             }
@@ -548,14 +696,7 @@ else
                     </div>
                     @if (reduce.Artifact is not null)
                     {
-                        <pre class="reduce-json">@Vm.Presentation.Json(reduce.Artifact)</pre>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(reduce.Log))
-                    {
-                        <details class="log-details">
-                            <summary class="log-summary">Log</summary>
-                            <pre class="log-pre">@reduce.Log</pre>
-                        </details>
+                        <RunOutput Value="@(Vm.Presentation.Json(reduce.Artifact))" />
                     }
                 </div>
             }
@@ -579,9 +720,9 @@ else
             @if (liveTrace.ProjectId is { } projectId)
             {
                 <button class="dcbtn btn-open-project"
-                        @onclick="@(() => Vm.OpenProject(projectId, "jobs"))">Open project →</button>
+                        @onclick="@(() => Vm.OpenProject(projectId, "jobs"))">Open project <AppIcon Kind="arrow-right" /></button>
             }
-            <button class="dcslide-x" @onclick="Vm.CloseLiveTrace">×</button>
+            <button aria-label="Close" class="dcslide-x" @onclick="Vm.CloseLiveTrace"><AppIcon Kind="close" /></button>
         </div>
         <div class="dcslide-body slide-body-scroll">
             <div class="status-line">

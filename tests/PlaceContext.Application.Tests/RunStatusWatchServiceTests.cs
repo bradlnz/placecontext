@@ -177,6 +177,7 @@ public class RunStatusWatchServiceTests
         await ctx.Sweep();
 
         Assert.Equal(3, ctx.Notifier.Synced.Count);
+        Assert.All(ctx.Notifier.Synced, u => Assert.Equal($"/observability?tab=workflows&workflowRun={chainId}", u.Link));
         Assert.Equal("step 1/3 — extract", ctx.Notifier.Synced[0].Detail);
         Assert.Equal("step 2/3 — transform", ctx.Notifier.Synced[1].Detail);
         Assert.Equal(RunOutcome.Succeeded, ctx.Notifier.Synced[2].Outcome);

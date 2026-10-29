@@ -14,7 +14,7 @@ else
     <div class="page">
         <h2 class="page-title">API tokens</h2>
         <div class="page-sub">
-            Personal tokens authenticate you against the project data and search APIs. The raw secret is shown once when created.
+            Personal tokens authenticate you against the queue, project data, and search APIs. The raw secret is shown once when created.
         </div>
         <div class="dccard api-docs">
             <div class="add-title">Usable endpoints</div>
@@ -39,7 +39,7 @@ else
             </div>
             <div class="api-hint">
                 Include <code>Authorization: Bearer &lt;token&gt;</code> or
-                <code>X-Api-Key: &lt;token&gt;</code>, and one of <code>X-Project-Id</code> / <code>X-Project</code>.
+                <code>X-Api-Key: &lt;token&gt;</code>. Project data endpoints also need <code>X-Project-Id</code> / <code>X-Project</code>; queue endpoints use the configured project.
                 Job-run endpoints also require the job to have <strong>API invocation enabled</strong> in settings.
             </div>
         </div>

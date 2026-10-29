@@ -1,0 +1,62 @@
+#cloud-config
+users:
+  - name: workflow
+    uid: 1000
+    lock_passwd: true
+    shell: /bin/bash
+    groups: []
+    sudo: false
+disable_root: true
+ssh_pwauth: false
+package_update: true
+packages:
+  - linux-image-amd64
+  - qemu-guest-agent
+  - xserver-xorg
+  - lightdm
+  - openbox
+  - x11-utils
+  - dbus-x11
+  - chromium
+  - xdotool
+  - scrot
+write_files:
+  - path: /etc/lightdm/lightdm.conf.d/50-workflow.conf
+    permissions: '0644'
+    content: |
+      [Seat:*]
+      autologin-user=workflow
+      autologin-user-timeout=0
+      autologin-session=openbox
+      user-session=openbox
+  - path: /etc/ssh/sshd_config.d/50-workflow.conf
+    permissions: '0644'
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+runcmd:
+  - |
+    set -eu
+    test "$(id -u workflow)" != 0
+    test "$(id -g workflow)" != 0
+    if id -nG workflow | grep -qw sudo; then exit 1; fi
+    command -v setpriv
+    command -v chromium
+    command -v xdotool
+    command -v scrot
+    command -v xdpyinfo
+    command -v xprop
+    # The cloud kernel omits the virtio graphics driver; boot the full kernel.
+    kernel=$(find /boot -maxdepth 1 -name 'vmlinuz-*-amd64' ! -name '*cloud*' -printf '%f\n' | sort -V | tail -1)
+    test -n "$kernel"
+    printf 'GRUB_DEFAULT="Advanced options for Debian GNU/Linux>Debian GNU/Linux, with Linux %s"\n' "${kernel#vmlinuz-}" > /etc/default/grub.d/50-workflow.cfg
+    update-grub
+    systemctl enable lightdm
+    systemctl set-default graphical.target
+    mkdir -p /var/lib/placecontext
+    touch /var/lib/placecontext/desktop-ready /etc/cloud/cloud-init.disabled
+    echo PC_DESKTOP_READY
+power_state:
+  mode: poweroff
+  delay: now
+  condition: [test, -f, /var/lib/placecontext/desktop-ready]

@@ -29,12 +29,14 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
     private readonly ICurrentTenant _tenant;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
+    private readonly IWorkerNetworkService? _networks;
+    private readonly IPermissionService? _permissions;
 
     public ImportManifestHandler(
         IProjectRepository projects, IJobRepository jobs, IJobChainRepository chains,
         IJobTriggerRepository triggers, IEventRepository events, IDataMappingRepository mappings,
         ITenantSettingsPort tenantSettings, ICronSchedule cron, ICurrentTenant tenant,
-        IUnitOfWork uow, IClock clock)
+        IUnitOfWork uow, IClock clock, IWorkerNetworkService? networks = null, IPermissionService? permissions = null)
     {
         _projects = projects;
         _jobs = jobs;
@@ -47,6 +49,8 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
         _tenant = tenant;
         _uow = uow;
         _clock = clock;
+        _networks = networks;
+        _permissions = permissions;
     }
 
     public async Task<ImportResultView> HandleAsync(ImportManifestCommand command, CancellationToken ct = default)
@@ -55,13 +59,26 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
             throw new NotSupportedException($"Import mode '{command.Mode}' is not supported.");
 
         var m = command.Manifest;
+        if (m.WorkerNetworks.Count > 0 || m.NetworkAssignments.Count > 0)
+        {
+            if (_networks is null || _permissions is null || !await _permissions.HasAsync(Permission.SettingsManage, ct))
+                throw new UnauthorizedAccessException("Restoring worker networks requires network administration permission.");
+            foreach (var network in m.WorkerNetworks)
+                WorkerNetworkPolicy.ValidateNetwork(network.Name, network.Cidr, network.Groups);
+            foreach (var assignment in m.NetworkAssignments)
+                if (!m.WorkerNetworks.Any(network => network.Id == assignment.NetworkId
+                    && network.Groups.Any(group => group.Id == assignment.GroupId)
+                    && m.Jobs.Any(job => job.JobId == assignment.JobId && job.ProjectId == network.ProjectId)))
+                    throw new ArgumentException("The backup contains an invalid job network assignment.");
+        }
         var now = _clock.UtcNow;
         var warnings = new List<string>();
 
         var (projectMap, projectsCreated, projectsUpdated) = await ImportProjectsAsync(m.Projects, now, ct);
 
         var (jobMap, jobsCreated, jobsUpdated, jobsSkipped) =
-            await ImportJobsAsync(m.Jobs, projectMap, now, warnings, ct);
+            await ImportJobsAsync(m.Jobs.Select(job => m.NetworkAssignments.Any(assignment => assignment.JobId == job.JobId)
+                ? job with { AllowNetworkEgress = false } : job).ToArray(), projectMap, now, warnings, ct);
 
         var (chainMap, chainsCreated, chainsUpdated, chainsSkipped) =
             await ImportChainsAsync(m.JobChains, projectMap, jobMap, now, warnings, ct);
@@ -79,6 +96,21 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
             new TenantSettingsSnapshot(m.TenantSettings.TimeZoneId, m.TenantSettings.BrandingJson, m.TenantSettings.GitHubLogin), ct);
 
         await _uow.SaveChangesAsync(ct);
+        if (_networks is not null && m.WorkerNetworks.Count > 0)
+        {
+            // Imported jobs stay deny-egress if restoration stops before their VPC assignment is saved.
+            foreach (var network in m.WorkerNetworks)
+            {
+                if (!projectMap.TryGetValue(network.ProjectId, out var projectId)) continue;
+                var current = (await _networks.LoadAsync(projectId, ct)).Networks.FirstOrDefault(item => item.Name == network.Name && item.Cidr == network.Cidr);
+                var restored = network with { Id = current?.Id ?? Guid.NewGuid(), ProjectId = projectId, Version = current?.Version ?? 0,
+                    Groups = network.Groups.Concat(current?.Groups.Where(group => network.Groups.All(imported => imported.Id != group.Id)) ?? []).ToArray() };
+                await _networks.SaveAsync(restored, ct);
+                foreach (var assignment in m.NetworkAssignments.Where(item => item.NetworkId == network.Id))
+                    if (jobMap.TryGetValue(assignment.JobId, out var job))
+                        await _networks.AssignAsync(projectId, job.Id, restored.Id, assignment.GroupId, ct);
+            }
+        }
 
         return new ImportResultView(
             projectsCreated, projectsUpdated,
@@ -283,6 +315,11 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
 
     private static ChainAction? ToAction(ChainActionManifest? action) => action?.Type switch
     {
+        QemuChainAction.ActionType => new QemuChainAction(action.ImageProfile ?? "", action.Command ?? "",
+            action.OutputField ?? "qemu_result", action.MemoryMb, action.Cpus, action.TimeoutSeconds, action.AllowNetwork),
+        LoopChainAction.HumanType or LoopChainAction.AgentType => new LoopChainAction(
+            action.Type, action.Instructions ?? "", action.ResponseField ?? "", action.ResponseType ?? LoopChainAction.TextResponse,
+            action.AgentProvider ?? LoopChainAction.ExternalAgent),
         SendEmailChainAction.ActionType => new SendEmailChainAction(
             action.Recipient ?? "",
             action.RecipientName ?? "",

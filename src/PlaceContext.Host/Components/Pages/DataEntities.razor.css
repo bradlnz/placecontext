@@ -241,10 +241,6 @@
     font-size: 12px;
 }
 
-.btn-danger {
-    color: var(--bad);
-}
-
 .head-actions {
     display: flex;
     align-items: center;

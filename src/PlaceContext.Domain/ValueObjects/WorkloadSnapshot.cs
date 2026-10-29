@@ -15,7 +15,8 @@ public sealed class WorkloadSnapshot
         WorkloadSource? reduceSource,
         IReadOnlyDictionary<string, string>? reduceEnv,
         int concurrencyLimit,
-        bool allowNetworkEgress = false)
+        bool allowNetworkEgress = false,
+        WorkerNetworkPolicy? network = null)
     {
         ArgumentNullException.ThrowIfNull(mapSource);
         ArgumentNullException.ThrowIfNull(inputPayloads);
@@ -30,6 +31,7 @@ public sealed class WorkloadSnapshot
         ReduceEnv = reduceEnv;
         ConcurrencyLimit = concurrencyLimit;
         AllowNetworkEgress = allowNetworkEgress;
+        Network = network;
     }
 
     /// <summary>The workload source (image or code) that was run for each map shard.</summary>
@@ -52,13 +54,15 @@ public sealed class WorkloadSnapshot
 
     /// <summary>Whether outbound network access was permitted for this run's containers.</summary>
     public bool AllowNetworkEgress { get; }
+    public WorkerNetworkPolicy? Network { get; }
 
     /// <summary>Factory: snapshot from a job's current specs.</summary>
     public static WorkloadSnapshot From(
         MapSpec mapSpec,
         ReduceSpec? reduceSpec,
         int concurrencyLimit,
-        bool allowNetworkEgress = false)
+        bool allowNetworkEgress = false,
+        WorkerNetworkPolicy? network = null)
         => new(
             mapSpec.Source,
             mapSpec.InputPayloads,
@@ -66,5 +70,6 @@ public sealed class WorkloadSnapshot
             reduceSpec?.Source,
             reduceSpec?.Env,
             concurrencyLimit,
-            allowNetworkEgress);
+            allowNetworkEgress,
+            network);
 }

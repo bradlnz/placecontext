@@ -71,6 +71,18 @@ public static class ChainInputPayload
                 ?? throw new ArgumentException($"Inputs for step {step.Index} are required.");
             if (supplied.Any(pair => !step.Parameters.Any(p => p.Name == pair.Key)))
                 throw new ArgumentException("Unknown input field.");
+            if (request.Kind is Domain.ValueObjects.LoopChainAction.HumanType or Domain.ValueObjects.LoopChainAction.AgentType)
+                foreach (var field in step.Parameters)
+                {
+                    if (request.ResponseType == Domain.ValueObjects.LoopChainAction.YesNoResponse)
+                    {
+                        if (supplied[field.Name] is not JsonValue decision || !decision.TryGetValue<bool>(out _))
+                            throw new ArgumentException("Choose Yes or No to complete this step.");
+                    }
+                    else if (supplied[field.Name] is not JsonValue response
+                        || !response.TryGetValue<string>(out var text) || string.IsNullOrWhiteSpace(text))
+                        throw new ArgumentException("A new text response is required to complete this step.");
+                }
             var payload = Object(overrides.GetValueOrDefault(step.Index));
             foreach (var field in step.Parameters)
             {

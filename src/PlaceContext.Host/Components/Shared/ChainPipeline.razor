@@ -1,48 +1,31 @@
-@* Shared left-to-right pipeline stage visualization for a chain run: one column per stage, stage
-   boxes flow with "──▶" between columns. A stage with more than one step (a parallel fan-out group)
-   renders as stacked boxes within its column; the join is simply the next column. Used by both the
-   per-project JobChains page and the cross-project Observability "Chains" lens so the two stay
-   visually identical. Clicking a step (once it has a run id) raises OnStepClick — callers decide
-   whether that opens an inline detail panel or deep-links to the run's OTel trace. *@
+@* Shared run visualization for workflows, Observability, and queue messages. *@
 @inject ChainPipelineViewModel Vm
 @implements IDisposable
 
-<div class="pipeline">
-    @foreach (var (stage, colIndex) in Vm.Stages(Run).Select((s, i) => (s, i)))
-    {
-        if (colIndex > 0)
+@if (Vm.Layout is { } layout)
+{
+    <p class="run-layout-note">Current workflow layout · recorded results from this run. Select a job to inspect its output.</p>
+    <ChainCanvas Stages="layout" RunSteps="Vm.RunSteps" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+}
+else
+{
+    <p class="run-layout-note">Recorded steps in execution order. A matching workflow layout is unavailable.</p>
+    <div class="pipeline">
+        @foreach (var (stage, colIndex) in Vm.Stages(Run).Select((s, i) => (s, i)))
         {
-            <span class="pipe-arrow">──▶</span>
-        }
-        <div class="stage-col">
-            @foreach (var step in stage)
+            if (colIndex > 0)
             {
-                <div class="stage" style="border:1.5px solid @Vm.Border(step.Status); background:@Vm.Background(step.Status); @Vm.CursorStyle(step)"
-                     @onclick="@(() => OnStepClick.InvokeAsync(step))">
-                    <div class="stage-title" style="color:@Vm.Color(step.Status)">
-                        <span>@Vm.Icon(step.Status)</span><span>@step.JobName</span>
-                    </div>
-                    <div class="stage-sub">
-                        @Vm.Summary(step)
-                    </div>
-                    @if (!string.IsNullOrWhiteSpace(step.Provider))
-                    {
-                        <div class="stage-sub">@step.Provider@(string.IsNullOrWhiteSpace(step.ExternalId) ? "" : $" · {step.ExternalId}")</div>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(step.Error))
-                    {
-                        <div class="stage-sub" title="@step.Error">@step.Error</div>
-                    }
-                    @if (Vm.CanCancel(step))
-                    {
-                        <button class="dcbtn btn-2-8 text-bad mt-4" @onclick:stopPropagation="true"
-                                @onclick="@(() => OnStepCancel.InvokeAsync(step))">Cancel</button>
-                    }
-                </div>
+                <span class="pipe-arrow"><AppIcon Kind="arrow-right" /></span>
             }
-        </div>
-    }
-</div>
+            <div class="stage-col">
+                @foreach (var step in stage)
+                {
+                    <WorkflowRunStep Step="step" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+                }
+            </div>
+        }
+    </div>
+}
 
 @code {
     [Parameter, EditorRequired] public ChainRunView Run { get; set; } = null!;
@@ -50,5 +33,6 @@
     [Parameter] public EventCallback<ChainStepRunView> OnStepCancel { get; set; }
 
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnParametersSetAsync() => Vm.LoadAsync(Run);
     public void Dispose() => Vm.Dispose();
 }

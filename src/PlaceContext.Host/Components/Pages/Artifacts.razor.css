@@ -130,7 +130,6 @@
 .bulk-delete-btn {
     padding: 3px 10px;
     font-size: 11.5px;
-    color: var(--bad);
 }
 
 .bulk-clear-btn {
@@ -326,7 +325,6 @@
 .viewer-btn-danger {
     padding: 4px 11px;
     font-size: 11.5px;
-    color: var(--bad);
 }
 
 .viewer-btn {

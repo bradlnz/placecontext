@@ -4,17 +4,6 @@ using PlaceContext.Application.Cqrs;
 namespace PlaceContext.Application.Features;
 
 /// <summary>
-/// The materialization outcome: the created index, how many rows were copied, and whether the
-/// table held more rows than the export cap (rows beyond it were not indexed).
-/// </summary>
-public sealed record MaterializeTableIndexResult(
-    string IndexName,
-    long RowsIndexed,
-    int ColumnCount,
-    bool Truncated,
-    string SourceTable);
-
-/// <summary>
 /// Copy a project-owned Postgres table's rows into an OpenSearch index (mapping derived from the
 /// table's column types) so the data can be searched and aggregated alongside collected indices.
 /// Materializing over an existing index replaces it — the index is deleted and recreated first.

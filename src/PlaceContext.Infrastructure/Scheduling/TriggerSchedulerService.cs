@@ -41,10 +41,7 @@ public sealed class TriggerSchedulerService : BackgroundService
     // conservative default that still leaves headroom under the runner's own container/pod limits.
     private const int DrainParallelism = 4;
 
-    // A run only stays "Running" while a live in-process driver executes it — every shard pod is
-    // bounded by the job's own TimeoutSeconds. A run still Running beyond that (plus slack) is
-    // orphaned or stuck and is marked Failed against ITS OWN declared timeout (default 300s), not
-    // a blanket hour. Chains span multiple runs, so they keep a generous fixed grace.
+    // Legacy rows without a pulse retain their old timeout during a rolling upgrade.
     private const int ReapSlackSeconds = 60;
     private static readonly TimeSpan ChainOrphanGrace = TimeSpan.FromHours(1);
 
@@ -261,9 +258,8 @@ public sealed class TriggerSchedulerService : BackgroundService
     }
 
     /// <summary>
-    /// Marks runs stuck in <c>Running</c> past their job's own timeout (+slack) as <c>Failed</c> — these were
-    /// abandoned when their driving replica died mid-run, so no pod backs them and they would otherwise
-    /// stay Running forever. Cross-tenant by design and idempotent, so every replica can run it safely
+    /// Marks runs whose keep-alive expired as Failed; legacy rows use their original timeout.
+    /// A live driver pulses across all shards, so long healthy fan-outs are not mistaken for orphans. Cross-tenant by design and idempotent, so every replica can run it safely
     /// (the UPDATE is atomic; concurrent runs just no-op on already-reaped rows).
     /// </summary>
     private async Task ReapOrphanedRunsAsync(CancellationToken ct)
@@ -284,9 +280,11 @@ public sealed class TriggerSchedulerService : BackgroundService
                   WHERE r2."Status" = 'Running') bounds
             WHERE r."Id" = bounds."Id"
               AND r."Status" = 'Running'
-              AND r."StartedAt" < now() - make_interval(secs => bounds.timeout_s + @slack)
+              AND ((r."HeartbeatAt" IS NOT NULL AND r."HeartbeatAt" < now() - make_interval(secs => @pulse_timeout))
+                   OR (r."HeartbeatAt" IS NULL AND r."StartedAt" < now() - make_interval(secs => bounds.timeout_s + @slack)))
             """;
         cmd.Parameters.AddWithValue("slack", ReapSlackSeconds);
+        cmd.Parameters.AddWithValue("pulse_timeout", IJobRunHeartbeat.TimeoutSeconds);
         var reaped = await cmd.ExecuteNonQueryAsync(ct);
         if (reaped > 0)
             _log.LogWarning("Reaped {Count} orphaned job run(s) stuck in Running → Failed.", reaped);

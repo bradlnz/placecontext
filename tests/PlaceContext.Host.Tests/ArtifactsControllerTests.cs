@@ -149,14 +149,14 @@ public class ArtifactsControllerTests
 
         public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(
             int take,
-            CancellationToken ct = default
+            CancellationToken ct = default, int skip = 0, string? search = null
         ) => Empty();
 
         public Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(
             Guid projectId,
             int take,
             string? search = null,
-            CancellationToken ct = default
+            CancellationToken ct = default, int skip = 0
         ) => Empty();
 
         public Task RemoveAsync(Guid id, CancellationToken ct = default) => Task.CompletedTask;

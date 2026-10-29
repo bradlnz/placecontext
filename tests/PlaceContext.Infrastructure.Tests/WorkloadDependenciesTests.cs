@@ -203,9 +203,9 @@ public class WorkloadDependenciesTests
     {
         var files = new[] { ("main.cs", "x") };
         var recipe = WorkloadDependencies.For("dotnet", files)!;
-        var dockerfile = WorkloadDependencies.Dockerfile("mcr.microsoft.com/dotnet/sdk:10.0", recipe, files);
+        var dockerfile = WorkloadDependencies.Dockerfile("mcr.microsoft.com/dotnet/sdk:10.0.403", recipe, files);
 
-        Assert.StartsWith("FROM mcr.microsoft.com/dotnet/sdk:10.0\n", dockerfile);
+        Assert.StartsWith("FROM mcr.microsoft.com/dotnet/sdk:10.0.403\n", dockerfile);
         Assert.DoesNotContain("COPY", dockerfile);                       // no manifests to copy
         Assert.Contains("NUGET_PACKAGES=/pcw/nuget-seed", dockerfile);   // the primed cache is the payload
         Assert.Contains("ENV NUGET_FALLBACK_PACKAGES=/pcw/nuget-seed", dockerfile); // runs restore offline from it

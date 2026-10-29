@@ -4,38 +4,36 @@
 @inject ChainCanvasViewModel Vm
 @implements IDisposable
 
-<div class="chain-canvas">
+<div class="chain-canvas @(RunSteps is null ? "" : "run-canvas")">
     <div class="canvas-toolbar">
         <div>
-            <div class="toolbar-title">Pipeline canvas</div>
-            <div class="canvas-hint">Drag stages to reorder them. Drag a job onto another stage to move its path.</div>
+            <div class="toolbar-title">@(RunSteps is null ? "Workflow canvas" : "Workflow run") <span class="step-count">@Vm.Stages.Count steps</span></div>
+            <div class="canvas-hint">@(RunSteps is null ? "Drag stages to reorder. Select a step to configure it." : "Step colours show what ran, what failed, and what was skipped.")</div>
         </div>
+        @if (RunSteps is null)
+        {
         <div class="canvas-add-stage">
-            <select class="canvas-select" value="@Vm.AddJobId" @onchange="OnAddJobChanged" aria-label="Job for new stage">
-                <option value="">Choose a job…</option>
-                @foreach (var job in Jobs)
-                {
-                    <option value="@job.Id">@job.Name</option>
-                }
-            </select>
-            <button class="canvas-button primary" disabled="@(!Vm.IsAddStageEnabled)" @onclick="AddStageAsync">
-                <span>+</span> Add stage
+            <button class="canvas-button primary" @onclick="@(() => OnAddGate.InvokeAsync(Vm.Stages.Count))">
+                <span><AppIcon Kind="plus" /></span> Add step
             </button>
         </div>
+        }
     </div>
 
-    <div class="canvas-viewport">
+    <div class="canvas-viewport" tabindex="0" role="region" aria-label="Workflow canvas. Scroll horizontally to see all steps.">
         <div class="canvas-pipeline">
             <div class="start-node">
-                <span class="start-pulse"></span>
+                <AppIcon Kind="play" />
                 <span>Start</span>
             </div>
 
-            @if (Vm.Stages.Count == 0)
+            @if (Vm.Stages.Count == 0 && RunSteps is null)
             {
                 <div class="empty-canvas">
-                    <span class="empty-icon">＋</span>
-                    <span>Add a job to build the first stage</span>
+                    <span class="empty-icon"><AppIcon Kind="plus" /></span>
+                    <strong>Your workflow starts here</strong>
+                    <span>Add a job, a human, or an agent step.</span>
+                    <button class="canvas-button primary" @onclick="@(() => OnAddGate.InvokeAsync(0))"><AppIcon Kind="plus" /> Add first step</button>
                 </div>
             }
 
@@ -43,66 +41,108 @@
             {
                 var stageIndex = i;
                 var stage = Vm.Stages[stageIndex];
-                var gate = Vm.Gates.GetValueOrDefault(stageIndex);
+                var gate = Vm.Gates.GetValueOrDefault(stageIndex) ?? stage.Gate;
 
                 <div class="flow-group">
                     <div class="connector">
                         <span class="connector-line"></span>
-                        @if (gate is not null)
+                        @if (RunSteps is not null && gate is not null)
+                        {
+                            <span class="gate-node @Vm.GateClass(gate)" title="@Vm.GateTooltip(gate)">
+                                <span class="gate-content"><AppIcon Kind="@Vm.GateIcon(gate)" /><span class="gate-label">@Vm.GateLabel(gate)</span></span>
+                            </span>
+                        }
+                        else if (gate is not null)
                         {
                             <button class="gate-node @Vm.GateClass(gate)"
                                     title="@Vm.GateTooltip(gate)"
                                     @onclick="@(() => OnEditGate.InvokeAsync((stageIndex, gate)))">
-                                <span class="gate-icon">@Vm.GateIcon(gate)</span>
-                                <span class="gate-label">@Vm.GateLabel(gate)</span>
+                                <span class="gate-content"><AppIcon Kind="@Vm.GateIcon(gate)" /><span class="gate-label">@Vm.GateLabel(gate)</span></span>
                             </button>
                         }
-                        else
+                        else if (RunSteps is null)
                         {
                             <button class="gate-node gate-none" @onclick="@(() => OnAddGate.InvokeAsync(stageIndex))"
                                     title="Add a condition or delay before this stage" aria-label="Add condition">
-                                <span class="gate-icon">+</span>
+                                <span class="gate-icon"><AppIcon Kind="plus" /></span>
                             </button>
                         }
-                        <span class="connector-line arrow-line"></span>
+                        <span class="connector-line"></span><span class="connector-arrow"><AppIcon Kind="chevron-right" /></span>
                     </div>
 
+                    <div class="stage-routes @(gate is ConditionGateView ? "conditional-routes" : "")">
+                    <div class="stage-route">
+                    @if (gate is ConditionGateView)
+                    {
+                        <div class="route-label">True</div>
+                    }
                     <div class="canvas-stage @(Vm.DragOverStage == stageIndex ? "drag-over" : "")"
                          @ondragover="@(e => DragOver(stageIndex))"
                          @ondragover:preventDefault="true"
                          @ondragleave="@(() => DragLeave(stageIndex))"
                          @ondrop="@(() => DropOnStageAsync(stageIndex))"
                          @ondrop:preventDefault="true">
-                        <div class="stage-head" draggable="true"
+                        <div class="stage-head" draggable="@(RunSteps is null)"
                              @ondragstart="@(() => BeginStageDrag(stageIndex))"
                              @ondragend="EndDrag">
-                            <span class="drag-handle" title="Drag to reorder">⠿</span>
+                            @if (RunSteps is null) { <span class="drag-handle" title="Drag to reorder"><AppIcon Kind="grip" /></span> }
                             <span class="stage-num">@(stageIndex + 1)</span>
-                            <span class="stage-label">@(stage.Action is null ? "Stage" : "Action")</span>
+                            <AppIcon Kind="@ChainCanvasViewModel.StageIcon(stage)" />
+                            <span class="stage-label">@(stage.Action is LoopChainActionView loopKind ? (loopKind.Kind == "humanInput" ? "Human" : "Agent") : stage.Action is null ? "Job" : "Action")</span>
                             @if (stage.IsParallel)
                             {
-                                <span class="parallel-badge">@stage.Jobs.Count paths</span>
+                                <span class="parallel-badge"><AppIcon Kind="parallel" /> @stage.Jobs.Count parallel jobs</span>
                             }
+                            @if (RunSteps is null)
+                            {
                             <button class="stage-menu" title="Remove stage" aria-label="Remove stage"
-                                    @onclick="@(() => OnRemoveStage.InvokeAsync(stageIndex))">×</button>
+                                    @onclick="@(() => OnRemoveStage.InvokeAsync(stageIndex))"><AppIcon Kind="close" /></button>
+                            }
                         </div>
 
                         <div class="stage-paths">
+                            @if (RunSteps is not null)
+                            {
+                                @foreach (var step in RunSteps.GetValueOrDefault(stageIndex.ToString()) ?? [])
+                                {
+                                    <WorkflowRunStep Step="step" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+                                }
+                            }
+                            else
+                            {
                             @if (stage.Action is SendEmailChainActionView email)
                             {
                                 <button class="job-path" title="Edit Send Email action"
                                         @onclick="@(() => OnEditEmailAction.InvokeAsync(stageIndex))">
-                                    <span class="job-icon">✉</span>
-                                    <span class="job-name">Send email · @email.Recipient</span>
+                                    <span class="job-icon"><AppIcon Kind="mail" /></span>
+                                    <span class="node-copy"><strong>Send email</strong><small>@email.Recipient</small></span>
                                 </button>
                             }
                             else if (stage.Action is SendSmsChainActionView sms)
                             {
                                 <button class="job-path" title="Edit Send SMS action"
                                         @onclick="@(() => OnEditSmsAction.InvokeAsync(stageIndex))">
-                                    <span class="job-icon">▣</span>
-                                    <span class="job-name">Send SMS · @sms.Recipient</span>
+                                    <span class="job-icon"><AppIcon Kind="message" /></span>
+                                    <span class="node-copy"><strong>Send SMS</strong><small>@sms.Recipient</small></span>
                                 </button>
+                            }
+                            else if (stage.Action is QemuChainActionView vm)
+                            {
+                                <button class="job-path" title="Edit QEMU environment" @onclick="@(() => OnEditQemuAction.InvokeAsync(stageIndex))">
+                                    <span class="job-icon"><AppIcon Kind="vm" /></span>
+                                    <span class="node-copy"><strong>QEMU environment</strong><small>@vm.ImageProfile · @vm.MemoryMb MiB · @vm.Cpus CPU(s)</small></span>
+                                </button>
+                                <div class="node-output"><span>Result</span><code>@vm.OutputField</code></div>
+                            }
+                            else if (stage.Action is LoopChainActionView loop)
+                            {
+                                <button class="job-path loop-path @(loop.Kind == "humanInput" ? "human-path" : "agent-path")"
+                                        title="Edit step instructions" @onclick="@(() => OnEditLoopAction.InvokeAsync(stageIndex))">
+                                    <span class="job-icon" aria-hidden="true"><AppIcon Kind="@(loop.Kind == "humanInput" ? "human" : "agent")" /></span>
+                                    <span class="node-copy"><strong>@loop.DisplayName</strong><small>@loop.Instructions</small></span>
+                                </button>
+                                <div class="node-output"><span>Response</span><code>@loop.ResponseField</code></div>
+                                <span class="handoff-badge">Waits for a response</span>
                             }
                             @foreach (var (job, branchIndex) in stage.Jobs.Select((job, index) => (job, index)))
                             {
@@ -110,15 +150,16 @@
                                      @ondragstart="@(() => BeginPathDrag(stageIndex, branchIndex))"
                                      @ondragstart:stopPropagation="true"
                                      @ondragend="EndDrag">
-                                    <span class="job-icon">◆</span>
+                                    <span class="job-icon"><AppIcon Kind="code" /></span>
                                     <span class="job-name" title="@job.JobName">@job.JobName</span>
                                     <button class="path-remove" title="Remove path"
-                                            @onclick="@(() => OnRemovePath.InvokeAsync((stageIndex, branchIndex)))">×</button>
+                                            @onclick="@(() => OnRemovePath.InvokeAsync((stageIndex, branchIndex)))"><AppIcon Kind="close" /></button>
                                 </div>
+                            }
                             }
                         </div>
 
-                        @if (stage.Action is null && Vm.PathPickerStage == stageIndex)
+                        @if (RunSteps is null && stage.Action is null && Vm.PathPickerStage == stageIndex)
                         {
                             <div class="path-picker">
                                     <select class="canvas-select" value="@Vm.PathJobId" @onchange="OnPathJobChanged" aria-label="Job for new path">
@@ -130,14 +171,14 @@
                                 </select>
                                 <button class="picker-confirm" disabled="@(!Vm.IsPathEnabled)"
                                         @onclick="@(() => ConfirmPathAsync(stageIndex))">Add</button>
-                                <button class="picker-cancel" @onclick="ClosePathPicker">×</button>
+                                <button aria-label="Close" class="picker-cancel" @onclick="ClosePathPicker"><AppIcon Kind="close" /></button>
                             </div>
                         }
-                        else if (stage.Action is null)
+                        else if (RunSteps is null && stage.Action is null)
                         {
                             <button class="add-path" @onclick="@(() => OpenPathPicker(stageIndex))">
-                                <span class="plus-ring">+</span>
-                                <span>Add path</span>
+                                <span class="plus-ring"><AppIcon Kind="plus" /></span>
+                                <span>Add parallel job</span>
                             </button>
                         }
 
@@ -153,34 +194,63 @@
                             <div class="wait-strip">Wait @wg.DurationSeconds.ToString("0.#") seconds</div>
                         }
                     </div>
+                    </div>
+                    @if (gate is ConditionGateView condition)
+                    {
+                        <div class="stage-route">
+                            <div class="route-label">False</div>
+                            <div class="canvas-stage false-route">
+                                @if ((stage.ElseBranch ?? condition.ElseBranch) is { Count: > 0 } other)
+                                {
+                                    <WorkflowBranchPreview Stages="other" RunSteps="RunSteps" PathPrefix="@($"{stageIndex}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+                                }
+                                else
+                                {
+                                    <p>Continue without running this step.</p>
+                                }
+                                @if (RunSteps is null)
+                                {
+                                    <button class="canvas-button" @onclick="@(() => OnEditGate.InvokeAsync((stageIndex, condition)))">Edit false path</button>
+                                }
+                            </div>
+                        </div>
+                        <span class="route-join"><AppIcon Kind="branch" /> Rejoin</span>
+                    }
+                    </div>
                 </div>
             }
 
             @if (Vm.Stages.Count > 0)
             {
-                <div class="finish-connector"><span></span><b>›</b></div>
-                <div class="finish-node">Output</div>
+                <div class="finish-connector"><span></span><span class="connector-arrow"><AppIcon Kind="chevron-right" /></span></div>
+                <div class="finish-node"><AppIcon Kind="file" /> Output</div>
             }
         </div>
     </div>
 
     <div class="canvas-legend">
-        <span><i class="legend-dot stage-dot"></i> job stage</span>
-        <span><i class="legend-dot condition-dot"></i> condition</span>
-        <span><i class="legend-dot wait-dot"></i> delay</span>
-        <span class="legend-help">Drop a job card on a stage to join it as a parallel path.</span>
+        <span><AppIcon Kind="code" /> job stage</span>
+        <span><AppIcon Kind="human" /> human</span>
+        <span><AppIcon Kind="agent" /> agent</span>
+        <span><AppIcon Kind="split" /> condition</span>
+        <span><AppIcon Kind="clock" /> delay</span>
+        <span class="legend-help">Parallel jobs run together. Conditions select the true or false path, then rejoin.</span>
     </div>
 </div>
 
 @code {
     [Parameter, EditorRequired] public IReadOnlyList<JobChainStageView> Stages { get; set; } = Array.Empty<JobChainStageView>();
     [Parameter] public IReadOnlyList<JobView> Jobs { get; set; } = Array.Empty<JobView>();
+    [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps { get; set; }
+    [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
+    [Parameter] public EventCallback<ChainStepRunView> OnStepCancel { get; set; }
     [Parameter] public Dictionary<int, ChainGateView> Gates { get; set; } = new();
     [Parameter] public EventCallback<int> OnAddGate { get; set; }
     [Parameter] public EventCallback<(int StageIndex, ChainGateView Gate)> OnEditGate { get; set; }
-    [Parameter] public EventCallback<Guid> OnAddStage { get; set; }
     [Parameter] public EventCallback<int> OnEditEmailAction { get; set; }
     [Parameter] public EventCallback<int> OnEditSmsAction { get; set; }
+    [Parameter] public EventCallback<int> OnEditLoopAction { get; set; }
+    [Parameter] public EventCallback<int> OnEditQemuAction { get; set; }
     [Parameter] public EventCallback<(int StageIndex, Guid JobId)> OnAddPath { get; set; }
     [Parameter] public EventCallback<(int SourceIndex, int TargetIndex)> OnMoveStage { get; set; }
     [Parameter] public EventCallback<(int SourceStage, int SourceBranch, int TargetStage)> OnMovePath { get; set; }
@@ -189,12 +259,7 @@
 
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override void OnParametersSet() => Vm.SetParameters(Stages, Jobs, Gates);
-    private void OnAddJobChanged(ChangeEventArgs args) => Vm.SetAddJobId(args.Value?.ToString());
     private void OnPathJobChanged(ChangeEventArgs args) => Vm.SetPathJobId(args.Value?.ToString());
-    private async Task AddStageAsync()
-    {
-        if (Vm.ConsumeAddStageJob() is { } jobId) await OnAddStage.InvokeAsync(jobId);
-    }
     private void OpenPathPicker(int stageIndex) => Vm.OpenPathPicker(stageIndex);
     private void ClosePathPicker() => Vm.ClosePathPicker();
     private async Task ConfirmPathAsync(int stageIndex)
@@ -207,6 +272,7 @@
     private void DragLeave(int stageIndex) => Vm.DragLeave(stageIndex);
     private async Task DropOnStageAsync(int targetStage)
     {
+        if (RunSteps is not null) return;
         if (Vm.ConsumePathDrop(targetStage) is { } path)
             await OnMovePath.InvokeAsync(path);
         else if (Vm.ConsumeStageDrop(targetStage) is { } stage)

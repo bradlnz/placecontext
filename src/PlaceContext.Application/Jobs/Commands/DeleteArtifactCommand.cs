@@ -7,9 +7,3 @@ public sealed record DeleteArtifactCommand(Guid ArtifactId) : ICommand<bool>, IR
 {
     string IRequiresPermission.RequiredPermission => PlaceContext.Application.Ports.Permission.ArtifactsDelete;
 }
-
-/// <summary>Permanently removes many artifacts at once (bulk selection). Returns the number actually deleted.</summary>
-public sealed record DeleteArtifactsCommand(IReadOnlyList<Guid> ArtifactIds) : ICommand<int>, IRequiresPermission
-{
-    string IRequiresPermission.RequiredPermission => PlaceContext.Application.Ports.Permission.ArtifactsDelete;
-}

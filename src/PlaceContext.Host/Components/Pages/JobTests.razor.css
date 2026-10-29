@@ -406,7 +406,6 @@
     animation: spin .7s linear infinite;
 }
 
-.danger { color: var(--bad); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 720px) {

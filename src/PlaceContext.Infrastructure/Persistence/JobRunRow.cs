@@ -13,6 +13,7 @@ public sealed class JobRunRow : ITenantOwned
     public Guid ProjectId { get; set; }
     public string Status { get; set; } = "";
     public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset? HeartbeatAt { get; set; }
     public DateTimeOffset? FinishedAt { get; set; }
 
     /// <summary>Denormalized shard counts — populated at write time so list queries never load ShardResultsJson.</summary>

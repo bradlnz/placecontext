@@ -82,6 +82,7 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
     public string? SyncMessage;
     public bool SavingDashboard;
     public bool GeneratingCharts;
+    public bool ChartsRequested;
     public Guid? EditingDashboardId;
     public Guid? Refreshing;
     public Guid? Replicating;
@@ -125,6 +126,8 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
         Ui.Set("Data Search", "OpenSearch · queries · charts");
         Loading = true;
         InitialLoadComplete = false;
+        GeneratedCharts.Clear();
+        ChartsRequested = false;
         CloseRecordPanel();
         try
         {
@@ -145,11 +148,12 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
                         : DefaultIndex(Indices).Name;
             if (!string.IsNullOrWhiteSpace(RequestedQuery))
                 QueryText = RequestedQuery;
+            Loading = false;
+            InitialLoadComplete = true;
+            NotifyStateChanged();
             await LoadFieldsAsync();
             if (!string.IsNullOrWhiteSpace(RequestedQuery))
                 await SearchAsync();
-            else
-                await GenerateChartsAsync();
             Error = null;
         }
         catch (Exception ex)
@@ -354,7 +358,8 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
         Page = 1;
         Result = null;
         await LoadFieldsAsync();
-        await GenerateChartsAsync();
+        GeneratedCharts.Clear();
+        ChartsRequested = false;
     }
 
     public Task OpenRecordPanelAsync(OpenSearchHitView hit)
@@ -378,6 +383,7 @@ public sealed class OpenSearchDataViewModel : PageViewModel, IDisposable
         if (string.IsNullOrWhiteSpace(IndexPattern) || Fields.Count == 0)
             return;
         GeneratingCharts = true;
+        ChartsRequested = true;
         GeneratedCharts = new();
         RenderedGeneratedCharts.Clear();
         try

@@ -55,6 +55,8 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
 
     public async Task<WorkloadRunResult> RunAsync(WorkloadRunRequest request, CancellationToken ct = default)
     {
+        if (request.Network is not null)
+            throw new InvalidOperationException("This job requires a worker VPC. Run it on Kubernetes workers with Kube-OVN; Docker cannot enforce this assignment.");
         // ── Resolve image and optional code-work-dir ──────────────────────────────────────────────
         string image;
         string? workDir = null;          // host-side temp dir for code source
@@ -204,6 +206,8 @@ public sealed class DockerWorkloadRunner : IWorkloadRunner
         finally
         {
             _output?.Complete(request.CorrelationId);
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await CancelAsync(request.CorrelationId, cleanup.Token);
             try { Directory.Delete(hostOutDir, recursive: true); } catch { /* best-effort */ }
             if (request.ArtifactMounts.Count > 0)
                 try { Directory.Delete(mountDir, recursive: true); } catch { /* best-effort */ }

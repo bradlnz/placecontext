@@ -38,16 +38,21 @@ public sealed class EfRunArtifactLinkRepository : IRunArtifactLinkRepository
         return rows.Select(ToDomain).ToList();
     }
 
-    public async Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default)
+    public async Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(int take, CancellationToken ct = default, int skip = 0, string? search = null)
     {
-        var rows = await _db.RunArtifacts.AsNoTracking()
+        var query = _db.RunArtifacts.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(r => EF.Functions.ILike(r.Title, $"%{search}%") || EF.Functions.ILike(r.Kind, $"%{search}%"));
+        var rows = await query
             .OrderByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.Id)
+            .Skip(Math.Max(0, skip))
             .Take(Math.Clamp(take, 1, 5000))
             .ToListAsync(ct);
         return rows.Select(ToDomain).ToList();
     }
 
-    public async Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(Guid projectId, int take, string? search = null, CancellationToken ct = default, int skip = 0)
     {
         var query = _db.RunArtifacts.AsNoTracking().Where(r => r.ProjectId == projectId);
         if (!string.IsNullOrWhiteSpace(search))
@@ -58,6 +63,8 @@ public sealed class EfRunArtifactLinkRepository : IRunArtifactLinkRepository
         }
         var rows = await query
             .OrderByDescending(r => r.CreatedAt)
+            .ThenByDescending(r => r.Id)
+            .Skip(Math.Max(0, skip))
             .Take(Math.Clamp(take, 1, 20000))
             .ToListAsync(ct);
         return rows.Select(ToDomain).ToList();

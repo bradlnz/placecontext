@@ -63,6 +63,8 @@ public sealed partial class ProjectDataViewModel : PageViewModel
 
     public async Task AfterRenderAsync()
     {
+        if (ShowNewView || ShowTableModal || SqlEditorActiveTable is not null)
+            await PushSqlSchemaAsync();
         if (ShowNewView && ViewMonaco && !ViewMonacoReady)
         {
             ViewMonacoReady = true;
@@ -176,8 +178,6 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     public async Task LoadAsync()
     {
         await RefreshTablesAsync();
-        await LoadIndicesAsync();
-        await PushSqlSchemaAsync();
         NotifyStateChanged();
     }
 

@@ -58,16 +58,3 @@ public sealed class SearchController : ControllerBase
         return Ok(SearchApiMapper.ToResponse(results, projectId, limit));
     }
 }
-
-public sealed record SearchApiResponse(
-    string Query,
-    Guid ProjectId,
-    int Count,
-    IReadOnlyList<SearchApiHitResponse> Hits);
-
-public sealed record SearchApiHitResponse(
-    string Kind,
-    Guid ProjectId,
-    string Title,
-    string Subtitle,
-    string Url);

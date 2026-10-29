@@ -40,7 +40,7 @@ A practical Proxmox layout is:
 - [Tailscale](https://tailscale.com/kb/1017/install) when a worker or operator is outside the home LAN.
 
 This works well for backup verification, media processing, document indexing, sensor rollups, and
-scheduled reports. Job chains can coordinate those tasks across machines and pass each stage's
+scheduled reports. Job workflows can coordinate those tasks across machines and pass each stage's
 output to the next stage.
 
 A single Proxmox host is not HA. Production uses three k3s server VMs spread across independent
@@ -99,6 +99,10 @@ verified recovery plan.
 
 ## Optional integrations
 
+- In **Infrastructure → Services**, open an app name for its details, start/stop/restart controls,
+  logs, and assigned databases. **Open app** launches a running web app through platform sign-in.
+  Create a database from the **Databases** page and select its owning app; connection variables
+  are supplied automatically when the app restarts.
 - Follow [OpenSearch integration](/wiki/opensearch-integration) to connect searchable indices,
   enable SQL and aggregations, and optionally configure a collector trigger.
 - Follow [SSO and OAuth](/wiki/sso-and-oauth) to use PlaceContext sign-in in another platform or to
@@ -110,7 +114,7 @@ verified recovery plan.
 - **Branding** changes the workspace name, logo, accent, and dark-mode colours.
 - **Menu** controls navigation labels, order, and visibility.
 - **Artifacts** controls the file categories shown on the Artifacts page.
-- **Communications** connects email and SMS delivery for chain actions. Jobs and users see
+- **Communications** connects email and SMS delivery for workflow actions. Jobs and users see
   the generic Email or SMS channel rather than needing to choose a delivery provider.
 - **Connections** configures project-specific PostgreSQL and OpenSearch services.
 - **MCP servers** connects extra tools that jobs may use.

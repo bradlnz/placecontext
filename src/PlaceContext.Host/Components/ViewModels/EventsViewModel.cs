@@ -3,6 +3,8 @@ using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Host;
+using System.Text.Json;
+using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -35,6 +37,22 @@ public sealed class EventsViewModel : PageViewModel
     public string EmitPayload { get; set; } = "";
     public bool EmitBusy { get; private set; }
     public string? EmitError { get; private set; }
+    public string Tab { get; set; } = "activity";
+    public bool IsActivityTab => Tab == "activity";
+    public bool IsTypesTab => Tab == "types";
+    public bool IsSubscriptionsTab => Tab == "subscriptions";
+    public void SelectActivityTab() => Tab = "activity";
+    public void SelectTypesTab() => Tab = "types";
+    public void SelectSubscriptionsTab() => Tab = "subscriptions";
+    public string Search { get; set; } = "";
+    public string Source { get; set; } = "";
+    public string Scope { get; set; } = "project";
+    public string SubscriptionEvent { get; set; } = "";
+    public IEnumerable<EventOccurrenceView> FilteredLog => (Log ?? []).Where(item =>
+        MatchesActivity(item, ProjectId, Scope, Source, Search));
+    public IEnumerable<TriggerView> EventSubscriptions => (Triggers ?? []).Where(trigger =>
+        trigger.Kind == TriggerKinds.Event && (SubscriptionEvent.Length == 0
+            || string.Equals(trigger.EventName, SubscriptionEvent, StringComparison.OrdinalIgnoreCase)));
     public int CustomTypeCount => Types?.Count(type => !type.IsBuiltIn) ?? 0;
     public int ActiveSubscriptionCount =>
         Triggers?.Count(trigger => trigger.Enabled && trigger.Kind == TriggerKinds.Event) ?? 0;
@@ -56,7 +74,7 @@ public sealed class EventsViewModel : PageViewModel
         try
         {
             await ReloadAsync();
-            _ui.Set("Events", "workspace activity and event types");
+            _ui.Set("Events", "activity, event types, and job subscriptions");
         }
         catch (Exception ex)
         {
@@ -72,13 +90,49 @@ public sealed class EventsViewModel : PageViewModel
 
     public async Task ReloadAsync()
     {
-        var types = _service.ListEventTypesAsync();
-        var log = _service.ListEventOccurrencesAsync(50);
-        var triggers = _service.ListTriggersAsync(ProjectId);
-        await Task.WhenAll(types, log, triggers);
-        Types = await types;
-        Log = await log;
-        Triggers = await triggers;
+        Types = await _service.ListEventTypesAsync();
+        Log = await _service.ListEventOccurrencesAsync(100);
+        Triggers = await _service.ListTriggersAsync(ProjectId);
+    }
+
+    public async Task RefreshAsync()
+    {
+        try { await ReloadAsync(); Message = null; }
+        catch (Exception ex) { Message = ex.Message; MessageIsError = true; }
+        NotifyStateChanged();
+    }
+
+    public void ShowSubscriptions(string name)
+    {
+        SubscriptionEvent = name;
+        Tab = "subscriptions";
+    }
+
+    public static bool MatchesActivity(EventOccurrenceView item, Guid projectId, string scope, string source, string search) =>
+        (scope == "workspace" || item.ProjectId == projectId)
+        && (source.Length == 0 || string.Equals(item.Source, source, StringComparison.OrdinalIgnoreCase))
+        && (search.Length == 0 || item.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || item.Payload?.Contains(search, StringComparison.OrdinalIgnoreCase) == true);
+
+    public static Guid? OriginRunId(EventOccurrenceView occurrence)
+    {
+        if (occurrence.Name != BuiltInEvents.JobCompleted || occurrence.Source != "Domain") return null;
+        return Guid.TryParse(PayloadField(occurrence.Payload, "runId"), out var id) ? id : null;
+    }
+
+    public static string? Outcome(EventOccurrenceView occurrence) => occurrence.Name == BuiltInEvents.JobCompleted
+        ? PayloadField(occurrence.Payload, "status") : null;
+
+    private static string? PayloadField(string? payload, string field)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payload ?? "{}");
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString() : null;
+        }
+        catch (JsonException) { return null; }
     }
 
     public int SubscriberCount(string? name) =>
@@ -198,4 +252,6 @@ public sealed class EventsViewModel : PageViewModel
     }
 
     public void OpenJobs() => _navigation.NavigateTo($"/project/{ProjectId}/jobs");
+    public void OpenSubscription(TriggerView trigger) =>
+        _navigation.NavigateTo($"/project/{trigger.ProjectId}/jobs?job={trigger.JobId}&tab=triggers");
 }

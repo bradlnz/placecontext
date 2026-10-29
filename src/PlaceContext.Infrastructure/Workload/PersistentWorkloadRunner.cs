@@ -23,6 +23,9 @@ public sealed class PersistentWorkloadRunner(
         if (!inlineRust && (request.Image is null || !_options.PersistentRunnerImages.Contains(request.Image, StringComparer.Ordinal)))
             return await fallback.RunAsync(request, ct);
 
+        if (request.Network is not null)
+            throw new InvalidOperationException("Persistent workers cannot enforce a per-job VPC. Use a sandboxed Kubernetes workload for this job.");
+
         if ((!inlineRust && request.CodeFiles is not null) || request.ArtifactMounts.Count != 0)
             throw new InvalidOperationException("Persistent Rust jobs require inline Rust source or a registered migration image, without reduce mounts.");
         if (!request.Env.TryGetValue("OSSEN_JOB", out var stage) || string.IsNullOrWhiteSpace(stage))

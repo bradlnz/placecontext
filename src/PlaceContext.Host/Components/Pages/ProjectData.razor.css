@@ -1979,8 +1979,8 @@
 }
 
 .studio-query-delete:hover {
-    color: #ff6b6b;
-    background: color-mix(in srgb, #ff6b6b 12%, var(--ch-panel-2));
+    color: var(--ch-text);
+    background: var(--ch-panel-2);
 }
 
 .studio-materialize {

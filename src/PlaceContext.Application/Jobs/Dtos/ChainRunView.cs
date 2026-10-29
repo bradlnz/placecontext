@@ -16,6 +16,7 @@ public sealed record ChainRunView(
     DateTimeOffset StartedAt,
     DateTimeOffset? FinishedAt)
 {
+    public Guid ProjectId { get; init; }
     public ChainInputRequest? InputRequest { get; init; }
     private IReadOnlyList<IReadOnlyList<ChainStepRunView>>? _stepsByStage;
 

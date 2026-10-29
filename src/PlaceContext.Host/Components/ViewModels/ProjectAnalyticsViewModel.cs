@@ -41,6 +41,8 @@ public sealed class ProjectAnalyticsViewModel(
 
     public async Task LoadAsync(Guid projectId)
     {
+        if (ProjectId != projectId)
+            _sqlSchemaPushed = false;
         ProjectId = projectId;
         ui.Set("Analytics", "charts over the project's data");
         await ReloadAsync();
@@ -70,7 +72,7 @@ public sealed class ProjectAnalyticsViewModel(
 
     public async Task RenderAsync()
     {
-        if (!_sqlSchemaPushed)
+        if (ShowSqlEditor && !_sqlSchemaPushed)
         {
             _sqlSchemaPushed = true;
             await SqlSchemaHelper.PushAsync(service, js, ProjectId, includeIndexes: true);

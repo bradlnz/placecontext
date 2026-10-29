@@ -46,7 +46,15 @@ public sealed class CreateJobChainHandler : ICommandHandler<CreateJobChainComman
     /// job id should fail at definition time, not at run time.</summary>
     internal static async Task ValidateStepsAsync(IJobRepository jobs, JobChain chain, CancellationToken ct)
     {
-        foreach (var jobId in chain.StepJobIds.Distinct())
+        var stages = new Stack<ChainStage>(chain.Stages);
+        var jobIds = new HashSet<Guid>();
+        while (stages.TryPop(out var stage))
+        {
+            jobIds.UnionWith(stage.JobIds);
+            foreach (var branch in stage.ElseBranch ?? (stage.Gate as ConditionGate)?.ElseBranch ?? [])
+                stages.Push(branch);
+        }
+        foreach (var jobId in jobIds)
         {
             var job = await jobs.GetByIdAsync(jobId, ct)
                 ?? throw new InvalidOperationException($"Chain step references unknown job {jobId}.");

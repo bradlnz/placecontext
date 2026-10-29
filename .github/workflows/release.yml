@@ -33,7 +33,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 10.0.x
+          global-json-file: global.json
 
       - name: Test the release contract
         run: dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj --configuration Release --filter FullyQualifiedName~ReleaseInstallerContractTests

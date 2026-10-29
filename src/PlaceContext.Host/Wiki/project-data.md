@@ -17,9 +17,9 @@ PlaceContext's system tables.
 
 ## Data map
 
-The **Data map** connects job or chain output to a project table.
+The **Data map** connects job or workflow output to a project table.
 
-1. Drag the canvas to arrange jobs, chains, and tables.
+1. Drag the canvas to arrange jobs, workflows, and tables.
 2. Drag a source's **+** handle onto a table, or click **New mapping**.
 3. Choose the row path and map output fields to typed columns.
 4. Enable the mapping.

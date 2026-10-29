@@ -6,6 +6,10 @@ namespace PlaceContext.Infrastructure.Workload;
 /// </summary>
 public sealed class WorkloadRunnerOptions
 {
+    /// <summary>Optional kubeconfig for local development; in-cluster service-account credentials are used in production.</summary>
+    public string? KubeConfigPath { get; set; }
+    /// <summary>Enable only on a cluster running Kube-OVN with NetworkPolicy enforcement.</summary>
+    public bool KubeOvnEnabled { get; set; }
     /// <summary>Exact trusted image references routed to permanent native workers; no fallback on failure.</summary>
     public string[] PersistentRunnerImages { get; set; } = [];
     /// <summary>Stable per-pod URLs, so cancellation reaches the worker that owns the run.</summary>
@@ -183,7 +187,7 @@ public sealed class WorkloadRunnerOptions
         // warm image once so sealed (no-network) runs restore offline from the baked fallback.
         ["dotnet"] = new RuntimeDefinition
         {
-            BaseImage = "mcr.microsoft.com/dotnet/sdk:10.0",
+            BaseImage = "mcr.microsoft.com/dotnet/sdk:10.0.403",
             InvokeCommand = new[] { "dotnet", "run", "/work/{entrypoint}" },
             DefaultEntrypoint = "main.cs",
             SandboxMemory = "1g",

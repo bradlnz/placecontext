@@ -24,7 +24,38 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
 
     public void SelectRecords() => ViewTab = "records";
 
-    public void SelectGraph() => ViewTab = "graph";
+    public async Task SelectGraph()
+    {
+        ViewTab = "graph";
+        if (Entity is null || GraphLoading || BrainGraph is not null)
+            return;
+        GraphLoading = true;
+        var version = _loadVersion;
+        NotifyStateChanged();
+        try
+        {
+            var rows = await _svc.ExecuteProjectDataAsync(
+                ProjectId, $"SELECT * FROM \"{Entity.TableName.Replace("\"", "\"\"")}\" LIMIT 500");
+            if (version != _loadVersion) return;
+            Rows = rows;
+            await BuildSectionGraphAsync();
+        }
+        catch (Exception ex) { if (version == _loadVersion) Error = ex.Message; }
+        finally { if (version == _loadVersion) { GraphLoading = false; NotifyStateChanged(); } }
+    }
+
+    public bool GraphLoading { get; private set; }
+    public bool InsightsLoading { get; private set; }
+
+    public async Task LoadInsightsAsync()
+    {
+        if (InsightsLoading) return;
+        var version = _loadVersion;
+        InsightsLoading = true;
+        NotifyStateChanged();
+        try { await BuildInsightsAsync(); }
+        finally { if (version == _loadVersion) { InsightsLoading = false; NotifyStateChanged(); } }
+    }
 
     public bool IsChartInput(string type) => type == "checkbox";
 
@@ -70,6 +101,7 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
 
     private bool _defaultsTried;
     private bool _sqlSchemaPushed;
+    private int _loadVersion;
 
     public IReadOnlyList<ProjectChartView> EntityCharts() =>
         Charts
@@ -147,7 +179,7 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
     {
         if (ViewTab != "analytics")
             return;
-        if (!_sqlSchemaPushed)
+        if (ShowChartEditor && !_sqlSchemaPushed)
         {
             _sqlSchemaPushed = true;
             await SqlSchemaHelper.PushAsync(_svc, _js, ProjectId, includeIndexes: true);
@@ -230,54 +262,50 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
 
     public async Task LoadAsync()
     {
+        var version = ++_loadVersion;
         Error = null;
         Open = null;
         Loaded = false;
+        Entity = null;
+        Rows = null;
+        Page = null;
+        _pageRowsCache = null;
+        BrainGraph = null;
+        GraphLoading = false;
+        InsightsLoading = false;
+        Insights.Clear();
+        Charts = Array.Empty<ProjectChartView>();
+        _defaultsTried = false;
+        _sqlSchemaPushed = false;
+        ShowChartEditor = false;
+        ViewTab = "records";
+        FocusKey = RecordKey;
         try
         {
-            AllEntities = await _svc.ListDataEntitiesAsync(ProjectId);
+            var entities = await _svc.ListDataEntitiesAsync(ProjectId);
+            if (version != _loadVersion) return;
+            AllEntities = entities;
             Entity = AllEntities.FirstOrDefault(e =>
                 string.Equals(e.Name, EntityName, StringComparison.OrdinalIgnoreCase)
             );
             if (Entity is null)
                 return;
-            Rows = await _svc.ExecuteProjectDataAsync(
-                ProjectId,
-                $"SELECT * FROM \"{Entity.TableName}\" LIMIT 500"
-            );
-            try
-            {
-                Charts = await _svc.ListProjectChartsAsync(ProjectId);
-            }
-            catch { }
-
-            FocusKey = null;
-            if (
-                RecordKey is { Length: > 0 } recordKey
-                && Rows is not null
-                && Rows.Rows.Any(r =>
-                    r.Any(v => string.Equals(v, recordKey, StringComparison.OrdinalIgnoreCase))
-                )
-            )
-            {
-                FocusKey = recordKey;
-                ViewTab = "graph";
-            }
-            await BuildInsightsAsync();
-            await BuildSectionGraphAsync();
-
             Search = "";
             PageNum = 1;
+            Loaded = true;
+            NotifyStateChanged();
             await LoadRecordsPageAsync();
+            if (version != _loadVersion) return;
+            if (!string.IsNullOrWhiteSpace(RecordKey))
+                await SelectGraph();
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            if (version == _loadVersion) Error = ex.Message;
         }
         finally
         {
-            Loaded = true;
-            NotifyStateChanged();
+            if (version == _loadVersion) { Loaded = true; NotifyStateChanged(); }
         }
     }
 }

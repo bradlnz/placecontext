@@ -33,7 +33,7 @@
 .chart-type-btn { padding:2px 8px; font-size:10.5px }
 .flex-1 { flex:1 }
 .btn-11 { padding:3px 10px; font-size:11px }
-.btn-11-del { padding:3px 10px; font-size:11px; color:var(--bad) }
+.btn-11-del { padding:3px 10px; font-size:11px }
 .chart-canvas-box { height:300px; padding:10px 8px 6px }
 .graph-card { border-radius:10px; overflow:hidden; margin-bottom:14px; padding:12px }
 .focus-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:12px }

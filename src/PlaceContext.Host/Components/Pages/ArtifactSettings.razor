@@ -31,8 +31,8 @@
                 var rowIndex = index;
                 <div class="rule">
                     <div class="rule-order">
-                        <button class="dcbtn move" disabled="@(rowIndex == 0)" @onclick="() => Vm.Move(rowIndex, -1)">↑</button>
-                        <button class="dcbtn move" disabled="@(rowIndex == Vm.Rows.Count - 1)" @onclick="() => Vm.Move(rowIndex, 1)">↓</button>
+                        <button aria-label="Move up" class="dcbtn move" disabled="@(rowIndex == 0)" @onclick="() => Vm.Move(rowIndex, -1)"><AppIcon Kind="arrow-up" /></button>
+                        <button aria-label="Move down" class="dcbtn move" disabled="@(rowIndex == Vm.Rows.Count - 1)" @onclick="() => Vm.Move(rowIndex, 1)"><AppIcon Kind="arrow-down" /></button>
                     </div>
                     <div class="rule-fields">
                         <label>

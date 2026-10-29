@@ -37,12 +37,12 @@ public sealed class FocusedPageViewModelTests
     }
 
     [Fact]
-    public void Entity_browse_tab_and_form_presentation_are_vm_decisions()
+    public async Task Entity_browse_tab_and_form_presentation_are_vm_decisions()
     {
         var vm = new EntityBrowseViewModel(null!, null!);
 
         Assert.True(vm.IsRecordsTab);
-        vm.SelectGraph();
+        await vm.SelectGraph();
         Assert.True(vm.IsGraphTab);
         vm.SelectRecords();
         Assert.True(vm.IsRecordsTab);

@@ -62,6 +62,8 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     public IReadOnlyList<ProjectTableInfo> EntityTables { get; private set; } =
         Array.Empty<ProjectTableInfo>();
     public Dictionary<Guid, EntityChart> EntityCharts { get; } = new();
+    public bool EntityChartsLoading { get; private set; }
+    public string? EntityChartsError { get; private set; }
     public ParameterPromptState RunPrompt { get; } = new();
     public JobChainView? RunPromptChain { get; private set; }
     public List<(int Index, JobView Job)> RunPromptSteps { get; } = new();
@@ -76,10 +78,10 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     public bool IsFilter(string filter) => Filter == filter;
 
     public string ShardSummary(JobRunDetailView run) =>
-        $"✓{run.ShardResults.Count(s => s.Outcome == "Succeeded")}"
+        $"{run.ShardResults.Count(s => s.Outcome == "Succeeded")} succeeded"
         + (
             run.ShardResults.Any(s => s.Outcome == "Failed")
-                ? $" ✗{run.ShardResults.Count(s => s.Outcome == "Failed")}"
+                ? $" · {run.ShardResults.Count(s => s.Outcome == "Failed")} failed"
                 : ""
         );
 
@@ -151,7 +153,6 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
             if (Entities.Count > 0)
             {
                 EntityTables = await _service.ListProjectDataTablesAsync(projectId);
-                await LoadEntityChartsAsync();
             }
             NotifyStateChanged();
         }
@@ -266,14 +267,14 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         var chainRunId = Guid.NewGuid();
         var err = _ops.TryRun(
             chain.ProjectId,
-            $"Run chain — {chain.Name}",
-            $"/project/{chain.ProjectId}/chains",
+            $"Run workflow — {chain.Name}",
+            $"/observability?tab=workflows&workflowRun={chainRunId}",
             async (sp, ct) =>
             {
                 var result = await sp
                     .GetRequiredService<PlaceContextService>()
                     .RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
-                return $"chain finished — {result.Status}";
+                return $"workflow finished — {result.Status}";
             },
             correlationKey: RunStatusWatchService.ChainRunKey(chainRunId)
         );
@@ -311,10 +312,25 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
             _ => "var(--text-3)",
         };
 
-    private async Task LoadEntityChartsAsync()
+    public async Task LoadEntityChartsAsync()
+    {
+        if (EntityChartsLoading) return;
+        EntityChartsLoading = true;
+        EntityChartsError = null;
+        NotifyStateChanged();
+        try { await BuildEntityChartsAsync(); }
+        finally
+        {
+            EntityChartsLoading = false;
+            NotifyStateChanged();
+        }
+    }
+
+    private async Task BuildEntityChartsAsync()
     {
         foreach (var entity in Entities.Take(6))
         {
+            if (entity.ProjectId != CurrentProjectId) return;
             if (EntityCharts.ContainsKey(entity.Id))
                 continue;
             try
@@ -323,6 +339,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
                     entity.ProjectId,
                     entity.TableName
                 );
+                if (entity.ProjectId != CurrentProjectId) return;
                 var column = entity
                     .Relations.Select(relation => relation.Column)
                     .Concat(
@@ -344,6 +361,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
                     entity.ProjectId,
                     $"SELECT \"{column.Replace("\"", "")}\"::text, count(*) FROM \"{entity.TableName.Replace("\"", "")}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 4"
                 );
+                if (entity.ProjectId != CurrentProjectId) return;
                 if (result.Rows.Count == 0)
                     continue;
                 var max = result.Rows.Max(row => long.TryParse(row[1], out var count) ? count : 0);
@@ -362,7 +380,10 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
                         .ToList()
                 );
             }
-            catch { }
+            catch (Exception ex)
+            {
+                if (entity.ProjectId == CurrentProjectId) EntityChartsError = ex.Message;
+            }
         }
     }
 

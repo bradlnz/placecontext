@@ -146,6 +146,37 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task Crm_admin_access_is_refreshed_without_granting_bootstrap_ownership()
+    {
+        var (auth, db) = NewService();
+        var viewer = await auth.GetOrCreateExternalUserAsync("crm@example.com", "CRM", UserRole.Viewer);
+        var admin = await auth.GetOrCreateExternalUserAsync("crm@example.com", "CRM", UserRole.Admin);
+        Assert.Equal(viewer.Id, admin.Id);
+        Assert.Equal("Admin", admin.Role);
+        var row = await db.Users.SingleAsync(u => u.Id == admin.Id);
+        Assert.True(row.IsExternalAdmin);
+        Assert.False(row.IsDefaultAdmin);
+        Assert.Equal("Viewer", row.Role);
+        var downgraded = await auth.GetOrCreateExternalUserAsync("crm@example.com", "CRM", UserRole.Viewer);
+        Assert.False(row.IsExternalAdmin);
+        Assert.Equal("Viewer", downgraded.Role);
+    }
+
+    [Fact]
+    public async Task Crm_role_changes_preserve_local_bootstrap_ownership()
+    {
+        var (auth, db) = NewService();
+        var owner = await auth.CreateFirstAdminAsync("owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+        await auth.GetOrCreateExternalUserAsync("owner@example.com", "CRM", UserRole.Admin);
+        var user = await auth.GetOrCreateExternalUserAsync("owner@example.com", "CRM", UserRole.Viewer);
+        Assert.Equal(owner!.Id, user.Id);
+        Assert.Equal("Owner", user.Role);
+        var row = await db.Users.SingleAsync(u => u.Id == user.Id);
+        Assert.True(row.IsDefaultAdmin);
+        Assert.False(row.IsExternalAdmin);
+    }
+
+    [Fact]
     public async Task CreateFirstAdmin_refuses_once_the_tenant_is_already_configured()
     {
         var (auth, _) = NewService();

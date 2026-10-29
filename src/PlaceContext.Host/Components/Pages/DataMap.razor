@@ -226,7 +226,7 @@ else
             }
             @if (Vm.EditId.HasValue)
             {
-                <button class="dcbtn" style="color:var(--bad)" disabled="@Vm.Saving" @onclick="() => Vm.DeleteMappingAsync()">Delete</button>
+                <button class="dcbtn" disabled="@Vm.Saving" @onclick="() => Vm.DeleteMappingAsync()">Delete</button>
             }
             <button class="dcbtn" @onclick="Vm.CloseEditor">Cancel</button>
             <button class="dcbtn primary" disabled="@Vm.Saving" @onclick="() => Vm.SaveMappingAsync()">

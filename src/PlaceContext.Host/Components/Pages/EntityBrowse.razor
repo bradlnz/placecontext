@@ -86,7 +86,7 @@
                             <option value="pie">pie</option>
                         </select>
                         <button class="dcbtn primary run-save-btn" disabled="@Vm.ChartBusy" @onclick="@(() => Vm.SaveEntityChartAsync(Vm.GetChartSqlAsync))">
-                            @(Vm.ChartBusy ? "Running…" : "▶ Run & save")
+                            <AppIcon Kind="play" /> @(Vm.ChartBusy ? "Running…" : "Run & save")
                         </button>
                         @if (Vm.ChartError is not null)
                         {
@@ -118,8 +118,8 @@
                                     }
                                 </span>
                                 <span class="flex-1"></span>
-                                <button class="dcbtn btn-11" @onclick="@(() => Vm.RefreshChartAsync(chart))">↻</button>
-                                <button class="dcbtn btn-11-del" @onclick="@(() => Vm.DeleteChartAsync(chart))">✕</button>
+                                <button aria-label="Refresh" class="dcbtn btn-11" @onclick="@(() => Vm.RefreshChartAsync(chart))"><AppIcon Kind="refresh" /></button>
+                                <button aria-label="Remove" class="dcbtn btn-11-del" @onclick="@(() => Vm.DeleteChartAsync(chart))"><AppIcon Kind="close" /></button>
                             </div>
                             <div class="chart-canvas-box">
                                 <canvas id="@Vm.ChartCanvasIdentifier(chart.TableName)"></canvas>
@@ -132,7 +132,11 @@
 
         @if (Vm.IsGraphTab)
         {
-            @if (Vm.BrainGraph is { Nodes.Count: > 0 })
+            @if (Vm.GraphLoading)
+            {
+                <Skeleton Kind="detail" Rows="7" />
+            }
+            else if (Vm.BrainGraph is { Nodes.Count: > 0 })
             {
                 <div class="dccard graph-card">
                     <GraphCanvas Graph="Vm.BrainGraph" Height="520" NodeUrl="Vm.NodeUrl" Searchable="true" AllowFullscreen="true" />
@@ -159,6 +163,13 @@
                     Nothing linked yet — run a job whose output mentions these records and the graph fills in.
                 </div>
             }
+        }
+
+        @if (Vm.IsRecordsTab && Vm.Insights.Count == 0)
+        {
+            <button class="dcbtn" disabled="@Vm.InsightsLoading" @onclick="Vm.LoadInsightsAsync">
+                @(Vm.InsightsLoading ? "Loading insights…" : "Load insights")
+            </button>
         }
 
         @if (Vm.IsRecordsTab && Vm.Insights.Count > 0)
@@ -273,7 +284,7 @@
             @if (!Vm.Editing && Vm.Open is not null)
             {
                 <button class="dcbtn graph-toggle-btn" style="@(Vm.ShowGraph ? "color:var(--brand-2); border-color:var(--brand-2)" : "")"
-                        @onclick="@(() => Vm.ShowGraph = !Vm.ShowGraph)">◉ Graph</button>
+                        @onclick="@(() => Vm.ShowGraph = !Vm.ShowGraph)"><AppIcon Kind="data.graph" /> Graph</button>
                 <AuthorizeView Policy="@Permission.DataWrite">
                     <Authorized>
                         <button class="dcbtn graph-toggle-btn" @onclick="() => Vm.StartEditAsync()">Edit</button>
@@ -281,7 +292,7 @@
                     </Authorized>
                 </AuthorizeView>
             }
-            <button class="dcslide-x" @onclick="() => Vm.CloseRecordPanel()">×</button>
+            <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseRecordPanel()"><AppIcon Kind="close" /></button>
         </div>
         <div class="dcslide-body record-body">
             @if (Vm.EditError is not null)
@@ -377,7 +388,7 @@
                                 {
                                     <span class="ellipsis" style="color:@(i == 0 ? "var(--text)" : "var(--text-3)")">@(i < r.Count ? r[i] : "")</span>
                                 }
-                                <span class="related-arrow">→</span>
+                                <span class="related-arrow"><AppIcon Kind="arrow-right" /></span>
                             </a>
                         }
                     }
@@ -395,7 +406,7 @@
                             <span class="link-kind">@link.Kind</span>
                             <span class="ellipsis">@link.DisplayValue</span>
                             <span class="link-meta">@link.TableName · @link.ColumnName · @link.RowKey</span>
-                            <span aria-hidden="true">→</span>
+                            <span aria-hidden="true"><AppIcon Kind="arrow-right" /></span>
                         </a>
                     }
                 </div>

@@ -91,6 +91,25 @@ public sealed class ChainInputResumeTests
                 var queue = new DbJobChainSubmissionQueue(db, tenant, new CurrentUser(), encryptor, new Permissions());
                 await Assert.ThrowsAsync<InvalidOperationException>(() => queue.ResumeAsync(run.Id, request.Id, values.Replace(":0", ":1")));
             }
+            await using (var db = new AppDbContext(options, tenant))
+            {
+                var queue = new DbJobChainSubmissionQueue(db, tenant, new CurrentUser(), encryptor, new Permissions());
+                Assert.Equal("Waiting", await queue.ResumeAsync(run.Id, request.Id, values));
+                var next = new ChainInputRequest(Guid.NewGuid(), new[] { new ChainInputStep(0, "Agent in the loop",
+                    new[] { new JobParameterDto("agent_response") }) }, Kind: LoopChainAction.AgentType);
+                await using (var workerDb = new AppDbContext(options, tenant))
+                {
+                    var row = await workerDb.ChainRuns.SingleAsync();
+                    row.Status = "AwaitingInput";
+                    row.InputRequest = encryptor.Protect(JsonSerializer.Serialize(next), IDataEncryptor.Purpose.ChainRun);
+                    await workerDb.SaveChangesAsync();
+                }
+                Assert.Equal("Waiting", await queue.ResumeAsync(run.Id, next.Id, "{\"0\":{\"agent_response\":\"Verified\"}}"));
+                await using var check = new AppDbContext(options, tenant);
+                var saved = await new EfChainRunRepository(check, encryptor).GetByIdAsync(run.Id);
+                Assert.Contains("Verified", saved!.ContinuationOverridesJson);
+                Assert.Equal(next.Id, JsonSerializer.Deserialize<ChainInputRequest>(saved.InputRequestJson!)!.Id);
+            }
             await using var services = new ServiceCollection()
                 .AddScoped(_ => new AppDbContext(options, tenant)).BuildServiceProvider();
             using var worker = new ChainContinuationWorker(services.GetRequiredService<IServiceScopeFactory>(),

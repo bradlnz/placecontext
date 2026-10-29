@@ -32,8 +32,8 @@
         {
             <article class="menu-row @(!row.Visible ? "muted" : "")">
                 <div class="row-move">
-                    <button class="dcbtn move" disabled="@(idx == 0)" @onclick="() => Vm.Move(idx, -1)">↑</button>
-                    <button class="dcbtn move" disabled="@(idx >= Vm.Workspace.Count - 1)" @onclick="() => Vm.Move(idx, 1)">↓</button>
+                    <button aria-label="Move up" class="dcbtn move" disabled="@(idx == 0)" @onclick="() => Vm.Move(idx, -1)"><AppIcon Kind="arrow-up" /></button>
+                    <button aria-label="Move down" class="dcbtn move" disabled="@(idx >= Vm.Workspace.Count - 1)" @onclick="() => Vm.Move(idx, 1)"><AppIcon Kind="arrow-down" /></button>
                 </div>
                 <div class="menu-item-body">
                     <div class="menu-item-head">
@@ -41,8 +41,8 @@
                         <span>@row.Id</span>
                     </div>
                     <div class="field-grid">
-                        <input class="dcinput" @bind="row.Label" placeholder="Use default" />
-                        <input class="dcinput" @bind="row.Section" placeholder="No section heading" />
+                        <input class="dcinput" @bind="row.Label" placeholder="Use default" aria-label="@($"{row.DefaultLabel} label")" />
+                        <input class="dcinput" @bind="row.Section" placeholder="Default group" aria-label="@($"{row.DefaultLabel} group")" />
                     </div>
                 </div>
                 <label class="visible-toggle">

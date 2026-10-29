@@ -1,0 +1,22 @@
+# Optional: apply only on the Kube-OVN cluster used by PlaceContext workers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: placecontext-worker-networks
+rules:
+  - apiGroups: [kubeovn.io]
+    resources: [vpcs, subnets]
+    verbs: [get, create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: placecontext-worker-networks
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: placecontext-worker-networks
+subjects:
+  - kind: ServiceAccount
+    name: placecontext
+    namespace: placecontext

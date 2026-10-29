@@ -16,21 +16,3 @@ public interface IUserApiTokenService
     /// </summary>
     Task<AuthUser?> ValidateAsync(string rawToken, CancellationToken ct = default);
 }
-
-/// <summary>Metadata for a stored token — never includes the raw secret.</summary>
-public sealed record UserApiTokenView(
-    Guid Id,
-    string Name,
-    string TokenPrefix,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset? LastUsedAt,
-    DateTimeOffset? ExpiresAt);
-
-/// <summary>Result of minting a token — <see cref="RawToken"/> is shown once then discarded.</summary>
-public sealed record CreatedUserApiToken(
-    Guid Id,
-    string Name,
-    string RawToken,
-    string TokenPrefix,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset? ExpiresAt);

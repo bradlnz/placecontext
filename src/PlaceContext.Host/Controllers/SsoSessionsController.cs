@@ -118,7 +118,7 @@ public sealed class SsoSessionsController : ControllerBase
                 throw new JsonException("The identity response is incomplete.");
 
             var user = await _auth.GetOrCreateExternalUserAsync(
-                identity.Email, identity.Name ?? "", UserRole.Viewer, HttpContext.RequestAborted);
+                identity.Email, identity.Name ?? "", ExternalRole(identity.Role), HttpContext.RequestAborted);
             await AuthController.SignInAsync(HttpContext, user);
             return Redirect(loginState.ReturnUrl);
         }
@@ -135,6 +135,10 @@ public sealed class SsoSessionsController : ControllerBase
             return LoginError("External sign-in returned an invalid identity.");
         }
     }
+
+    internal static UserRole ExternalRole(string? role)
+        => role?.Trim().ToLowerInvariant() is "admin" or "administrator" or "owner"
+            ? UserRole.Admin : UserRole.Viewer;
 
     private SsoOptions? GetOptions()
     {
@@ -240,5 +244,6 @@ public sealed class SsoSessionsController : ControllerBase
     private sealed record SsoIdentity(
         [property: JsonPropertyName("sub")] string Subject,
         [property: JsonPropertyName("email")] string Email,
-        [property: JsonPropertyName("name")] string? Name);
+        [property: JsonPropertyName("name")] string? Name,
+        [property: JsonPropertyName("role")] string? Role);
 }

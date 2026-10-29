@@ -267,7 +267,7 @@ public sealed partial class ProjectDataViewModel
     {
         if (_sqlSchemaPushed || !SqlEditorMonaco)
             return;
-        await SqlSchemaHelper.PushAsync(_svc, _js, ProjectId, includeIndexes: true);
         _sqlSchemaPushed = true;
+        await SqlSchemaHelper.PushAsync(_svc, _js, ProjectId, includeIndexes: true);
     }
 }

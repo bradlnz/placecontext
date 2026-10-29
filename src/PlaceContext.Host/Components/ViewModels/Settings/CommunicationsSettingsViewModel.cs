@@ -23,11 +23,6 @@ public enum CommunicationProviderKind
     Twilio,
 }
 
-public sealed record CommunicationKindOption(
-    CommunicationProviderKind Kind,
-    CommunicationChannel Channel
-);
-
 public sealed class CommunicationsSettingsViewModel(
     IServiceScopeFactory ScopeFactory,
     PortalUiState Ui

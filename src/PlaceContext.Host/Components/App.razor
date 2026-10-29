@@ -26,7 +26,8 @@
     <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" /></noscript>
     @* Blazor scoped-CSS bundle: per-component <Name>.razor.css files compile into this. Component
        classes resolve --var() values from the #dcshell ancestor's cascade below. *@
-    <link rel="stylesheet" href="PlaceContext.Host.styles.css?v=3" />
+    <link rel="stylesheet" href="PlaceContext.Host.styles.css?v=5" />
+    <link rel="stylesheet" href="resource-catalogue.css?v=1" />
     @* prerender:false — with prerender on, every page ran its whole data load twice (once for
        the throwaway static render, again when the circuit connects). One load, one render. *@
     <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
@@ -114,6 +115,19 @@
         .dcskel-row { display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid var(--border); }
         @@media (prefers-reduced-motion: reduce) { .dcskel { animation-duration:2.4s; } }
         .dcbar { height:100%; width:0; border-radius:99px; transition:width .6s cubic-bezier(.4,0,.2,1); }
+        .log-events table { width:100%; border-collapse:collapse; font-size:11px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace }
+        .log-events th { position:sticky; top:0; z-index:1; background:var(--card); color:var(--text-3); font-size:10px; font-family:var(--font-sans); text-align:left; font-weight:650 }
+        .log-events th, .log-events td { padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top }
+        .log-events td { color:var(--text-2) }
+        .log-events tbody tr:hover { background:var(--card-2) }
+        .log-events .log-index, .log-events .log-time, .log-events .log-stream { width:1%; white-space:nowrap; color:var(--text-3) }
+        .log-events .log-level { font-size:10px; font-weight:650 }
+        .log-events .log-level.error, .log-events .log-level.fatal { color:var(--bad) }
+        .log-events .log-level.warn { color:var(--warn) }
+        .log-events .log-level.info { color:var(--brand-2) }
+        .log-events .log-message { white-space:pre; min-width:240px }
+        .log-events.wrap-lines .log-message { white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; max-width:700px }
+        .log-events .log-empty { height:120px; text-align:center; vertical-align:middle; color:var(--text-3); font:12px var(--font-sans) }
         .dcnav { position:relative; display:flex; align-items:center; gap:9px; padding:7px 9px; border:none; cursor:pointer;
             border-radius:3px; font-size:12.5px; font-weight:500; font-family:inherit; text-align:left; transition:background .12s;
             color:var(--text-2); background:transparent; width:100%; }
@@ -139,8 +153,10 @@
         .dcsearch-trigger { display:flex; align-items:center; gap:7px; padding:6px 10px; background:var(--card-2); border:1px solid var(--border); border-radius:3px; color:var(--text-3); font-size:12px; min-width:220px; cursor:pointer; }
         .dcsearch-trigger:hover { border-color:var(--border-2); color:var(--text-2); }
         .dcsearch-trigger kbd { margin-left:auto; font-family:var(--font-sans); font-size:10.5px; color:var(--text-3); border:1px solid var(--border); border-radius:4px; padding:0 4px; }
-        .dcsearch-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:flex-start; justify-content:center; padding-top:12vh; z-index:50; }
-        .dcsearch-modal { width:560px; max-width:92vw; background:var(--panel); border:1px solid var(--border-2); border-radius:14px; overflow:hidden; overscroll-behavior:contain; box-shadow:0 24px 70px rgba(0,0,0,.55); }
+        .dcsearch-overlay { z-index:50; }
+        .dcsearch-modal { width:min(560px, 100vw); }
+        .dcsearch-modal .dcsearch-results { flex:1; min-height:0; max-height:none; overflow-y:auto; }
+
         .dcsearch-input { width:100%; border:none; border-bottom:1px solid var(--border); background:transparent; color:var(--text); font-size:15px; padding:16px 18px; outline:none; }
         .dcsearch-results { max-height:52vh; overflow-y:auto; }
         .dcsearch-hit { display:flex; align-items:center; gap:12px; padding:11px 18px; cursor:pointer; border-bottom:1px solid var(--border); text-align:left; width:100%; background:transparent; border-left:none; border-right:none; border-top:none; }
@@ -198,11 +214,12 @@
         .dcseg button:hover { color:var(--text-2); }
         .dcseg button.on { background:var(--panel); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.25); }
 
-        .dcmodal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
-        .dcmodal { width:480px; max-width:94vw; max-height:86vh; max-height:86dvh; background:var(--panel); border:1px solid var(--border-2); border-radius:14px;
-            box-shadow:0 24px 70px rgba(0,0,0,.55); display:flex; flex-direction:column; overflow:hidden; }
+        /* Dialogs share a full-height right-hand pane, including nested editors. */
+        .dcmodal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:stretch; justify-content:flex-end; padding:0; z-index:50; }
+        .dcmodal { width:560px; max-width:100vw; height:100vh; height:100dvh; max-height:100dvh; background:var(--panel); border:0; border-left:1px solid var(--border-2); border-radius:0;
+            box-shadow:-16px 0 48px rgba(0,0,0,.3); display:flex; flex-direction:column; overflow:hidden; }
         .dcmodal-head { display:flex; align-items:flex-start; gap:10px; padding:15px 18px; border-bottom:1px solid var(--border); flex:none; }
-        .dcmodal-body { padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:13px; }
+        .dcmodal-body { padding:18px; overflow-y:auto; flex:1; min-height:0; overscroll-behavior:contain; display:flex; flex-direction:column; gap:13px; }
         .dcmodal-foot { display:flex; align-items:center; gap:8px; justify-content:flex-end; padding:13px 18px; border-top:1px solid var(--border); background:var(--card); flex:none; }
 
         @@keyframes dcflashkf { 0% { background:var(--brand-bg); } 100% { background:transparent; } }
@@ -286,7 +303,7 @@
         .dcbtn.primary { border-radius:3px; }
         .dcbtn.danger { border-radius:3px; }
         .dcslide { border-radius:0; }
-        .dcmodal { border-radius:3px; }
+        .dcmodal { border-radius:0; }
 
         .section-shell {
             background:var(--panel);
@@ -323,7 +340,7 @@
     <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
     <script defer src="placecontext.js?v=8"></script>
     <script defer src="pcgraph.js?v=4"></script>
-    <script defer src="pcmonaco.js?v=5"></script>
+    <script defer src="pcmonaco.js?v=9"></script>
     <script defer src="pcchart.js?v=6"></script>
     <script defer src="pcstudio.js?v=1"></script>
     <script defer src="pcmap.js?v=3"></script>

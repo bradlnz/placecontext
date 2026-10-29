@@ -46,6 +46,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IDataEncryptor? _encryptor;
     private readonly IObjectStore? _objectStore;
     private readonly IOpenSearchConnectionResolver? _openSearchConnections;
+    private readonly IWorkerNetworkService? _networks;
+    private readonly IJobRunHeartbeat? _heartbeat;
+    private WorkerNetworkPolicy? _network;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
     private IReadOnlyDictionary<string, string> _mcpEnv = new Dictionary<string, string>();
 
@@ -69,8 +72,11 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IMcpConnectionRepository? mcpRepo = null,
         IDataEncryptor? encryptor = null,
         IObjectStore? objectStore = null,
-        IOpenSearchConnectionResolver? openSearchConnections = null)
+        IOpenSearchConnectionResolver? openSearchConnections = null,
+        IWorkerNetworkService? networks = null,
+        IJobRunHeartbeat? heartbeat = null)
     {
+        _heartbeat = heartbeat;
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
         _postActions = postActions;
@@ -81,6 +87,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         _encryptor = encryptor;
         _objectStore = objectStore;
         _openSearchConnections = openSearchConnections;
+        _networks = networks;
         _jobs = jobs;
         _runs = runs;
         _runner = runner;
@@ -153,7 +160,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         }
 
         // Snapshot the effective spec onto the run at start-time (captures AllowNetworkEgress too).
-        var snapshot = WorkloadSnapshot.From(effectiveMap, effectiveReduce, concurrency, allowEgress);
+        _network = _networks is null ? null : await _networks.ResolveAsync(job.ProjectId, job.Id, ct);
+        var snapshot = WorkloadSnapshot.From(effectiveMap, effectiveReduce, concurrency, allowEgress, _network);
         var startedAt = _clock.UtcNow;
         var run = JobRun.Start(job.Id, job.ProjectId, startedAt, snapshot, command.RunId,
             command.AttemptNumber, command.OriginalRunId);
@@ -162,24 +170,77 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         await _runs.AddAsync(run, ct);
         await _uow.SaveChangesAsync(ct);
 
-        // ---- MAP PHASE: fan-out shards with bounded concurrency ----
-        var shardResults = await RunMapShardsAsync(job, effectiveMap, concurrency, allowEgress, run.Id, ct);
-
-        // ---- REDUCE PHASE (optional) ----
-        ReduceResult? reduceResult = null;
-        if (effectiveReduce is { } reduceSpec)
+        using var execution = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using var pulseStop = CancellationTokenSource.CreateLinkedTokenSource(execution.Token);
+        Exception? pulseError = null;
+        var heartbeat = Task.CompletedTask;
+        var finishedAt = startedAt;
+        try
         {
-            reduceResult = await RunReduceStepAsync(job, run.Id, shardResults, reduceSpec, allowEgress, ct);
+            if (_heartbeat is not null)
+            {
+                using var establish = CancellationTokenSource.CreateLinkedTokenSource(execution.Token);
+                establish.CancelAfter(TimeSpan.FromSeconds(IJobRunHeartbeat.IntervalSeconds));
+                if (!await _heartbeat.PulseAsync(run.Id, establish.Token))
+                    throw new InvalidOperationException("Job keep-alive could not be established.");
+                heartbeat = MaintainPulseAsync();
+            }
+
+            var shardResults = await RunMapShardsAsync(job, effectiveMap, concurrency, allowEgress, run.Id, execution.Token);
+            execution.Token.ThrowIfCancellationRequested();
+            ReduceResult? reduceResult = effectiveReduce is { } reduceSpec
+                ? await RunReduceStepAsync(job, run.Id, shardResults, reduceSpec, allowEgress, execution.Token) : null;
+            execution.Token.ThrowIfCancellationRequested();
+
+            var latest = await _runs.GetByIdAsync(run.Id, execution.Token);
+            if (latest is { Status: not JobRunStatus.Running }) return JobViewMapper.ToDetailView(latest);
+            finishedAt = _clock.UtcNow;
+            run.Complete(shardResults, reduceResult, finishedAt);
+            await _runs.UpdateAsync(run, execution.Token);
+            await _uow.SaveChangesAsync(execution.Token);
+        }
+        catch (Exception ex)
+        {
+            // Cancellation and runner faults must not leave a durable Running record behind.
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var latest = await _runs.GetByIdAsync(run.Id, cleanup.Token);
+            if (latest is { Status: not JobRunStatus.Running }) return JobViewMapper.ToDetailView(latest);
+            if (latest is not null)
+            {
+                if (ct.IsCancellationRequested) latest.Cancel(_clock.UtcNow);
+                else latest.Complete([new ShardResult(0, -1, WorkloadOutcome.Failed, null,
+                    pulseError is null ? ex.Message : "Job keep-alive lost: " + pulseError.Message)], null, _clock.UtcNow);
+                await _runs.UpdateAsync(latest, cleanup.Token);
+                await _uow.SaveChangesAsync(cleanup.Token);
+            }
+            throw;
+        }
+        finally
+        {
+            await pulseStop.CancelAsync();
+            await heartbeat;
         }
 
-        // ---- AGGREGATE + PERSIST ----
-        // Commit the terminal status FIRST and on its own, so the run can never linger in "Running"
-        // (and artifacts can never be blocked) behind the slow, best-effort enrichment below — local
-        // CPU LLM organize/embed can take minutes.
-        var finishedAt = _clock.UtcNow;
-        run.Complete(shardResults, reduceResult, finishedAt);
-        await _runs.UpdateAsync(run, ct);
-        await _uow.SaveChangesAsync(ct);
+        async Task MaintainPulseAsync()
+        {
+            try
+            {
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(IJobRunHeartbeat.IntervalSeconds));
+                while (await timer.WaitForNextTickAsync(pulseStop.Token))
+                {
+                    using var pulse = CancellationTokenSource.CreateLinkedTokenSource(pulseStop.Token);
+                    pulse.CancelAfter(TimeSpan.FromSeconds(IJobRunHeartbeat.IntervalSeconds));
+                    if (!await _heartbeat!.PulseAsync(run.Id, pulse.Token))
+                        throw new InvalidOperationException("Run was cancelled or its keep-alive expired.");
+                }
+            }
+            catch (OperationCanceledException) when (pulseStop.IsCancellationRequested) { }
+            catch (Exception ex)
+            {
+                pulseError = ex;
+                await execution.CancelAsync();
+            }
+        }
 
         // Record the terminal status + wall-clock as OTel metrics and span tags.
         var status = run.Status.ToString();
@@ -271,7 +332,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             var request = BuildRequest(map.Source, resolvedPayload, MergeMcpEnv(MergeSecrets(map.Env)),
                 Array.Empty<(string, string)>(), correlationId, allowEgress, job.TimeoutSeconds);
 
-            var result = await _runner.RunAsync(request, ct);
+            var result = await _runner.RunAsync(request with { Network = _network }, ct);
             var outcome = job.ExitCodePolicy.Classify(result.ExitCode);
             var log = CombineLog(result.Stdout, result.Stderr);
 
@@ -387,7 +448,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var request = BuildRequest(reduceSpec.Source, "{}", MergeMcpEnv(MergeSecrets(reduceSpec.Env)),
             artifactMounts, correlationId, allowEgress, job.TimeoutSeconds);
 
-        var result = await _runner.RunAsync(request, ct);
+        var result = await _runner.RunAsync(request with { Network = _network }, ct);
         var succeeded = job.ExitCodePolicy.SuccessCodes.Contains(result.ExitCode);
         var log = CombineLog(result.Stdout, result.Stderr);
 

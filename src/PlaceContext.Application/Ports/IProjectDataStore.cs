@@ -1,51 +1,5 @@
 namespace PlaceContext.Application.Ports;
 
-/// <summary>One table in a project's own database. Read-only tables are system-written (e.g.
-/// job run results): the project can SELECT them but not modify, rename, or drop them.</summary>
-public sealed record ProjectTableInfo(string Name, long RowEstimate, bool ReadOnly = false, bool IsView = false);
-
-/// <summary>One column in a create-table request. Type is a Postgres type chosen from a safe allow-list.</summary>
-public sealed record ProjectColumnSpec(string Name, string Type, bool NotNull, bool PrimaryKey);
-
-/// <summary>One existing column of a project table, as the database reports it.</summary>
-public sealed record ProjectColumnInfo(string Name, string Type, bool NotNull, bool PrimaryKey);
-
-/// <summary>
-/// The outcome of one SQL execution against a project's database: the last result set (if any),
-/// rows affected by writes, and whether the result was cut at the row cap.
-/// </summary>
-public sealed record ProjectQueryResult(
-    IReadOnlyList<string> Columns,
-    IReadOnlyList<IReadOnlyList<string?>> Rows,
-    int AffectedRows,
-    bool Truncated);
-
-/// <summary>
-/// One page of a project table's rows, optionally filtered by a case-insensitive search across
-/// every column (each cast to text). <see cref="TotalCount"/> is the count over the WHERE clause
-/// (i.e. matching the search, not the whole table) so "showing X–Y of Z" is always accurate.
-/// </summary>
-public sealed record ProjectTablePageResult(
-    IReadOnlyList<string> Columns,
-    IReadOnlyList<IReadOnlyList<string?>> Rows,
-    long TotalCount,
-    int Page,
-    int PageSize);
-
-/// <summary>
-/// A whole-table read for external tooling (e.g. materialising a table into OpenSearch).
-/// <see cref="ColumnTypes"/> holds each column's Postgres type name (parallel to <see cref="Columns"/>);
-/// date/timestamp columns are already emitted as ISO-8601 (UTC) so they index cleanly, and
-/// everything else is its text form. <see cref="Truncated"/> is true when the table holds more
-/// rows than the cap that was requested.
-/// </summary>
-public sealed record ProjectTableReadResult(
-    IReadOnlyList<string> Columns,
-    IReadOnlyList<string> ColumnTypes,
-    IReadOnlyList<IReadOnlyList<string?>> Rows,
-    long TotalCount,
-    bool Truncated);
-
 /// <summary>
 /// Each project's own database: a private, isolated namespace of tables the project can create,
 /// fill, and query with SQL. Isolation is the store's job — a project's SQL must never be able to

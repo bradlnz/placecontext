@@ -80,7 +80,7 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
         ? DockDetails ? "min-height:0; height:100%" : "flex:1; min-height:0"
         : $"height:{Height}px";
     public string DetailStyle => $"max-height:{Height - 20}px";
-    public string FullscreenLabel => Fullscreen ? "✕ Exit full screen" : "⛶ Full screen";
+    public string FullscreenLabel => Fullscreen ? "Exit full screen" : "Full screen";
     public bool HasMoreGraphNodes => _graph is not null && _renderedNodeCount < _graph.Nodes.Count;
 
     public string ShortLabel(string label)

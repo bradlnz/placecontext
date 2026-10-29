@@ -15,7 +15,7 @@
 else
 {
     <div class="page">
-        <button class="dcbtn back-btn" @onclick="@(() => Vm.BackToProjects())">← All projects</button>
+        <button class="dcbtn back-btn" @onclick="@(() => Vm.BackToProjects())"><AppIcon Kind="arrow-left" /> All projects</button>
 
         <div class="header-row">
             <div>
@@ -120,7 +120,7 @@ else
                             <span class="decision-q">@d.Question</span>
                             <span class="meta-mono">@Vm.DecisionDate(d.DecidedAt)</span>
                         </div>
-                        <div class="decision-choice">→ @d.Choice</div>
+                        <div class="decision-choice"><AppIcon Kind="arrow-right" /> @d.Choice</div>
                         @if (Vm.HasDecisionRationale(d))
                         {
                             <div class="decision-rationale">@d.Rationale</div>

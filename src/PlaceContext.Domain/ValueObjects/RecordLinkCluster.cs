@@ -8,5 +8,3 @@ public sealed record RecordLinkCluster(
     string NormalizedValue,
     string DisplayValue,
     IReadOnlyList<RecordLinkClusterOccurrence> Occurrences);
-
-public sealed record RecordLinkClusterOccurrence(string TableName, string ColumnName, string RowKey);

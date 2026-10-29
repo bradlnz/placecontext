@@ -1,0 +1,232 @@
+@page "/project/{ProjectId:guid}/networking"
+@attribute [Authorize(Policy = Permission.SettingsManage)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@implements IDisposable
+@inject NetworkingViewModel Vm
+
+<PageTitle>PlaceContext — Networking</PageTitle>
+<div class="networking-page">
+    <nav class="networking-breadcrumb" aria-label="Breadcrumb"><span>Infrastructure</span><AppIcon Kind="chevron-right" /><span aria-current="page">Networking</span></nav>
+    <header class="networking-heading">
+        <div><h2>Networking</h2><p>Manage private networks and traffic rules for your workers.</p></div>
+        <div class="networking-actions">
+            <button class="dcbtn" disabled="@Vm.Busy" aria-label="Refresh networking" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /></button>
+            @if (Vm.Tab == "security-groups")
+            { <button class="dcbtn" disabled="@(Vm.Busy || Vm.SelectedGroup is null)" @onclick="Vm.EditSelectedGroup"><AppIcon Kind="edit" /> Edit security group</button>
+              <button class="dcbtn primary" disabled="@(Vm.Busy || !Vm.State.Networks.Any(network => network.Groups.Count < 20 && (Vm.NetworkFilter.Length == 0 || network.Id.ToString() == Vm.NetworkFilter)))" @onclick="Vm.CreateGroup"><AppIcon Kind="plus" /> Create security group</button> }
+            else if (Vm.Tab == "vpcs")
+            { <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="() => Vm.Edit()"><AppIcon Kind="plus" /> Create VPC</button> }
+        </div>
+    </header>
+    <nav class="dctabs networking-tabs" aria-label="Networking sections">
+        <a class="dctab @(Vm.Tab == "vpcs" ? "active" : "")" aria-current="@(Vm.Tab == "vpcs" ? "page" : null)" href="@Vm.TabUrl("vpcs")">VPCs (@Vm.State.Networks.Count)</a>
+        <a class="dctab @(Vm.Tab == "security-groups" ? "active" : "")" aria-current="@(Vm.Tab == "security-groups" ? "page" : null)" href="@Vm.TabUrl("security-groups")">Security groups (@Vm.State.Networks.Sum(network => network.Groups.Count))</a>
+        <a class="dctab @(Vm.Tab == "flow" ? "active" : "")" aria-current="@(Vm.Tab == "flow" ? "page" : null)" href="@Vm.TabUrl("flow")">Network flow</a>
+        <a class="dctab @(Vm.Tab == "assignments" ? "active" : "")" aria-current="@(Vm.Tab == "assignments" ? "page" : null)" href="@Vm.TabUrl("assignments")">Job assignments (@Vm.State.Assignments.Count)</a>
+    </nav>
+    @if (Vm.Error is not null) { <p role="alert" class="danger">@Vm.Error</p> }
+    @if (Vm.Busy) { <Skeleton Kind="list" Rows="3" /> }
+    else
+    {
+        @if (Vm.Tab == "flow")
+        {
+            @if (Vm.SelectedGroupNetwork is { } flowNetwork && Vm.SelectedGroup is { } flowGroup)
+            {
+                <section class="dccard flow-section">
+                    <header class="flow-toolbar">
+                        <div><h3>Network flow</h3><p>Saved rules for new connections. Select a rule to prepare a test.</p></div>
+                        <div class="dcfield"><label for="flow-network">VPC</label><select id="flow-network" class="dcinput" value="@flowNetwork.Id" @onchange="e => Vm.SelectFlowNetwork(e.Value?.ToString())">@foreach (var network in Vm.State.Networks) { <option value="@network.Id">@network.Name</option> }</select></div>
+                        <div class="dcfield"><label for="flow-group">Security group</label><select id="flow-group" class="dcinput" value="@flowGroup.Id" @onchange="e => Vm.SelectFlowGroup(e.Value?.ToString())">@foreach (var group in flowNetwork.Groups) { <option value="@group.Id">@group.Name</option> }</select></div>
+                        <button class="dcbtn" @onclick="Vm.EditSelectedGroup"><AppIcon Kind="edit" /> Edit rules</button>
+                    </header>
+                    <div class="flow-viewport" tabindex="0" role="region" aria-label="Network flow canvas: inbound sources, workloads, and outbound destinations">
+                        <div class="flow-canvas">
+                            <div class="flow-column"><h4>Inbound sources</h4>
+                                @foreach (var rule in flowGroup.Rules.Where(rule => rule.Direction == "ingress"))
+                                {
+                                    <button class="flow-node @(Vm.FlowResult?.Matches.Contains(rule) == true ? "matched" : "")" @onclick="() => Vm.SelectFlowRule(rule)"><strong>@rule.Cidr</strong><span>@rule.Protocol · ports @rule.FromPort–@rule.ToPort</span><small>Allowed inbound →</small></button>
+                                }
+                                <div class="flow-deny @(Vm.FlowResult is { Allowed: false, Direction: "ingress" } ? "matched-deny" : "")"><strong>All other inbound traffic</strong><span>Blocked by default</span></div>
+                            </div>
+                            <div class="flow-connector" aria-label="Inbound traffic direction"><span>Inbound</span><span class="flow-arrow">→</span></div>
+                            <div class="flow-workloads">
+                                <span class="flow-vpc-label">VPC · @flowNetwork.Name</span><code>@flowNetwork.Cidr</code>
+                                <div class="flow-group-node"><AppIcon Kind="cluster" /><h4>@flowGroup.Name</h4><small>Security group</small></div>
+                                <h4>Assigned jobs (@Vm.FlowJobs.Count())</h4>
+                                @foreach (var job in Vm.FlowJobs) { <a class="flow-job" href="@($"/project/{ProjectId}/jobs")">@job.Name</a> }
+                                @if (!Vm.FlowJobs.Any()) { <p>No jobs assigned. You can still test this group.</p> }
+                                <small>Replies to allowed connections are permitted.</small>
+                            </div>
+                            <div class="flow-connector" aria-label="Outbound traffic direction"><span>Outbound</span><span class="flow-arrow">→</span></div>
+                            <div class="flow-column"><h4>Outbound destinations</h4>
+                                @foreach (var rule in flowGroup.Rules.Where(rule => rule.Direction == "egress"))
+                                {
+                                    <button class="flow-node @(Vm.FlowResult?.Matches.Contains(rule) == true ? "matched" : "")" @onclick="() => Vm.SelectFlowRule(rule)"><strong>@rule.Cidr</strong><span>@rule.Protocol · ports @rule.FromPort–@rule.ToPort</span><small>Allowed outbound →</small></button>
+                                }
+                                <div class="flow-deny @(Vm.FlowResult is { Allowed: false, Direction: "egress" } ? "matched-deny" : "")"><strong>All other outbound traffic</strong><span>Blocked by default</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <footer class="networking-footer">This canvas shows saved security-group rules, not live packets. A permitted path also needs working routes and a reachable destination.</footer>
+                </section>
+                <section class="dccard flow-section flow-test" aria-labelledby="flow-test-title">
+                    <header><h3 id="flow-test-title">Test a flow</h3><p>Check an IPv4 address against saved rules, or open one TCP connection from a temporary worker in this VPC.</p></header>
+                    <div class="flow-test-fields">
+                        <div class="dcfield"><label for="test-direction">Direction</label><select id="test-direction" class="dcinput" disabled="@Vm.TestingFlow" @bind="Vm.TestDirection" @bind:after="Vm.ClearFlowResult"><option value="egress">Outbound</option><option value="ingress">Inbound</option></select></div>
+                        <div class="dcfield"><label for="test-protocol">Protocol</label><select id="test-protocol" class="dcinput" disabled="@Vm.TestingFlow" @bind="Vm.TestProtocol" @bind:after="Vm.ClearFlowResult"><option>TCP</option><option>UDP</option></select></div>
+                        <div class="dcfield"><label for="test-address">@(Vm.TestDirection == "egress" ? "Destination IPv4 address" : "Source IPv4 address")</label><input id="test-address" class="dcinput" placeholder="10.20.0.10" disabled="@Vm.TestingFlow" @bind="Vm.TestAddress" @bind:after="Vm.ClearFlowResult" /></div>
+                        <div class="dcfield"><label for="test-port">Destination port</label><input id="test-port" class="dcinput" type="number" min="1" max="65535" disabled="@Vm.TestingFlow" @bind="Vm.TestPort" @bind:after="Vm.ClearFlowResult" /></div>
+                    </div>
+                    <div class="networking-actions"><button class="dcbtn" disabled="@Vm.TestingFlow" @onclick="() => Vm.TestFlowAsync(false)">Check rules</button><button class="dcbtn primary" disabled="@(Vm.TestingFlow || Vm.TestDirection != "egress" || Vm.TestProtocol != "TCP")" @onclick="() => Vm.TestFlowAsync(true)">Run outbound TCP test</button>@if (Vm.TestingFlow) { <button class="dcbtn" @onclick="Vm.CancelFlow">Cancel test</button> }</div>
+                    <p class="networking-note">Live tests require a configured VPC worker and can take up to two minutes to start. The connection waits up to 8 seconds and sends no application data. Inbound and UDP tests check rules only.</p>
+                    @if (Vm.TestingFlow) { <p role="status">Testing the flow…</p> }
+                    @if (Vm.FlowError is not null) { <p role="alert" class="danger">@Vm.FlowError</p> }
+                    @if (Vm.FlowResult is { } result)
+                    {
+                        <div class="flow-result @(result.Allowed ? "allowed" : "blocked")" role="status">
+                            <h4>@result.Status</h4><p><strong>@(result.Allowed ? "Allowed by saved rules" : "Blocked by saved rules")</strong> · @(result.Direction == "egress" ? "Outbound" : "Inbound") @result.Protocol · @result.Address:@result.Port</p>
+                            <p>@result.Message</p>
+                            @if (result.ElapsedMs is { } elapsed) { <p>Connection attempt: @elapsed.ToString("0.0") ms</p> }
+                            @if (result.SourceAddress is { } source && source != "0.0.0.0") { <p>Worker source address: <code>@source</code></p> }
+                            <small>@result.NetworkName / @result.GroupName · configuration version @result.Version · @result.CheckedAt.ToString("u")</small>
+                        </div>
+                    }
+                </section>
+            }
+            else { <div class="dccard networking-empty"><h3>No network to display</h3><p>Create a VPC and security group to view traffic rules and test a flow.</p><a href="@Vm.TabUrl("vpcs")">Open VPCs</a></div> }
+        }
+        else
+        {
+        <section class="dccard networking-catalogue">
+            <div class="networking-toolbar">
+                <label class="networking-search"><AppIcon Kind="data.search" /><input class="dcinput" aria-label="Search networking" placeholder="Search by name, address, or ID" @bind="Vm.Search" @bind:event="oninput" /></label>
+                @if (Vm.Tab == "security-groups")
+                { <select class="dcinput" aria-label="Filter by VPC" @bind="Vm.NetworkFilter"><option value="">All VPCs</option>@foreach (var network in Vm.State.Networks) { <option value="@network.Id">@network.Name</option> }</select> }
+            </div>
+            <div class="networking-scroll" tabindex="0" role="region" aria-label="Networking list">
+                @if (Vm.Tab == "vpcs")
+                {
+                    <table><thead><tr><th>Name</th><th>IPv4 CIDR</th><th>Security groups</th><th>Assigned jobs</th><th>Actions</th></tr></thead><tbody>
+                    @foreach (var network in Vm.VisibleNetworks)
+                    {
+                        <tr @key="network.Id"><td><button class="networking-link" @onclick="() => Vm.Edit(network)">@network.Name</button><small class="networking-id">@network.Id</small></td><td><code>@network.Cidr</code></td><td>@network.Groups.Count</td><td>@Vm.State.Assignments.Count(item => item.NetworkId == network.Id)</td><td><button class="dcbtn" @onclick="() => Vm.Edit(network)"><AppIcon Kind="data.search" /> View VPC</button><button class="dcbtn" disabled="@Vm.State.Assignments.Any(item => item.NetworkId == network.Id)" title="Remove job assignments before deleting" @onclick="() => Vm.RequestDelete(network)"><AppIcon Kind="trash" /> Delete</button></td></tr>
+                    }
+                    </tbody></table>
+                    @if (!Vm.VisibleNetworks.Any()) { <div class="networking-empty"><h3>@(Vm.State.Networks.Count == 0 ? "No VPCs" : "No matching VPCs")</h3><p>Create a private address range for your jobs.</p></div> }
+                }
+                else if (Vm.Tab == "security-groups")
+                {
+                    <table class="networking-groups"><thead><tr><th><span class="visually-hidden">Select</span></th><th>Security group name</th><th>Security group ID</th><th>VPC</th><th>Inbound rules</th><th>Outbound rules</th></tr></thead><tbody>
+                    @foreach (var item in Vm.VisibleGroups)
+                    {
+                        <tr @key="item.Group.Id" class="@(Vm.SelectedGroupId == item.Group.Id ? "selected" : "")">
+                            <td><input type="radio" name="selected-security-group" aria-label="@($"Select {item.Group.Name}")" checked="@(Vm.SelectedGroupId == item.Group.Id)" @onchange="() => Vm.SelectGroup(item.Group.Id)" /></td>
+                            <td><button class="networking-link" @onclick="() => Vm.SelectGroup(item.Group.Id)">@item.Group.Name</button></td>
+                            <td><code>@item.Group.Id</code></td><td>@item.Network.Name</td><td>@item.Group.Rules.Count(rule => rule.Direction == "ingress")</td><td>@item.Group.Rules.Count(rule => rule.Direction == "egress")</td>
+                        </tr>
+                    }
+                    </tbody></table>
+                    @if (!Vm.VisibleGroups.Any()) { <div class="networking-empty"><h3>No matching security groups</h3><p>@(Vm.State.Networks.Count == 0 ? "Create a VPC first. It includes a default group that blocks all traffic." : "Create a security group or adjust your filters.")</p></div> }
+                }
+                else
+                {
+                    <table><thead><tr><th>Job</th><th>VPC / security group</th><th>Actions</th></tr></thead><tbody>
+                    @foreach (var job in Vm.VisibleJobs)
+                    { <tr @key="job.Id"><td>@job.Name</td><td>@Vm.AssignmentLabel(job.Id)</td><td><button class="dcbtn" @onclick="() => Vm.Assign(job)">Assign network</button></td></tr> }
+                    </tbody></table>
+                    @if (!Vm.VisibleJobs.Any()) { <div class="networking-empty"><h3>No matching jobs</h3><p>Create a job before assigning it to a network.</p></div> }
+                }
+            </div>
+            <footer class="networking-footer">@(Vm.Tab == "vpcs" ? "VPC names and address ranges are locked after creation. Delete an unassigned VPC to replace it." : Vm.Tab == "security-groups" ? "Unmatched inbound and outbound traffic is blocked. Replies to allowed connections are permitted." : "Assignments and rule changes apply to new runs, including replays. Assigned groups replace the job’s network on/off setting.")</footer>
+        </section>
+        }
+        @if (Vm.Tab == "security-groups" && Vm.SelectedGroup is { } groupDetails)
+        {
+            <section class="dccard networking-details" aria-label="Selected security group">
+                <header class="networking-heading"><div><h3>@groupDetails.Name</h3><p>@groupDetails.Id · VPC: @Vm.SelectedGroupNetwork!.Name</p></div><button class="dcbtn" @onclick="Vm.EditSelectedGroup"><AppIcon Kind="edit" /> Edit rules</button></header>
+                <div class="dctabs networking-tabs" role="tablist" aria-label="Security group rules">
+                    <button id="inbound-tab" class="dctab @(Vm.RuleTab == "ingress" ? "active" : "")" role="tab" aria-selected="@(Vm.RuleTab == "ingress")" aria-controls="security-rules" @onclick='() => Vm.SelectRuleTab("ingress")'>Inbound rules (@groupDetails.Rules.Count(rule => rule.Direction == "ingress"))</button>
+                    <button id="outbound-tab" class="dctab @(Vm.RuleTab == "egress" ? "active" : "")" role="tab" aria-selected="@(Vm.RuleTab == "egress")" aria-controls="security-rules" @onclick='() => Vm.SelectRuleTab("egress")'>Outbound rules (@groupDetails.Rules.Count(rule => rule.Direction == "egress"))</button>
+                </div>
+                <div id="security-rules" role="tabpanel" aria-labelledby="@(Vm.RuleTab == "ingress" ? "inbound-tab" : "outbound-tab")">
+                    <div class="networking-scroll" tabindex="0" role="region" aria-label="Security group rule list">
+                        <table><thead><tr><th>Protocol</th><th>Port range</th><th>@(Vm.RuleTab == "ingress" ? "Source" : "Destination")</th></tr></thead><tbody>
+                        @foreach (var rule in groupDetails.Rules.Where(rule => rule.Direction == Vm.RuleTab))
+                        { <tr><td>@rule.Protocol</td><td>@(rule.FromPort == rule.ToPort ? rule.FromPort.ToString() : $"{rule.FromPort}–{rule.ToPort}")</td><td><code>@rule.Cidr</code></td></tr> }
+                        </tbody></table>
+                    </div>
+                    @if (!groupDetails.Rules.Any(rule => rule.Direction == Vm.RuleTab)) { <div class="networking-empty"><p>No @(Vm.RuleTab == "ingress" ? "inbound" : "outbound") rules. New connections in this direction are blocked.</p></div> }
+                </div>
+            </section>
+        }
+        <p class="networking-note">VPC jobs require workers configured for private networking. The first assigned run provisions its network. Internet access and DNS require a configured gateway and matching rules.</p>
+    }
+</div>
+
+@if (Vm.ShowEditor)
+{
+    <div class="dcmodal-overlay" @onclick="Vm.CloseEditor"><div class="dcmodal dcslide networking-pane" role="dialog" aria-modal="true" aria-labelledby="network-title" @onclick:stopPropagation>
+        <div class="dcmodal-head"><h3 id="network-title">@(Vm.EditingGroup ? (Vm.CreatingGroup ? "Create security group" : "Edit security group") : Vm.Version == 0 ? "Create VPC" : "VPC details")</h3><button class="dcslide-x" aria-label="Close network editor" disabled="@Vm.Busy" @onclick="Vm.CloseEditor"><AppIcon Kind="close" /></button></div>
+        <div class="dcmodal-body">
+            @if (!Vm.EditingGroup)
+            {
+                <div class="dcfield"><label for="network-name">Name</label><input id="network-name" class="dcinput" disabled="@(Vm.Version > 0)" maxlength="80" @bind="Vm.Name" /></div>
+                <div class="dcfield"><label for="network-cidr">Private IPv4 CIDR</label><input id="network-cidr" class="dcinput" disabled="@(Vm.Version > 0)" @bind="Vm.Cidr" /><small>VPC names and address ranges are locked until deletion. Each VPC has one subnet.</small></div>
+                <p class="networking-note">@(Vm.Version == 0 ? "A default security group blocks all traffic until you add rules in the Security groups tab." : "Manage traffic rules in the Security groups tab.")</p>
+            }
+            else if (Vm.CreatingGroup)
+            {
+                <div class="dcfield"><label for="group-network">VPC</label><select id="group-network" class="dcinput" value="@Vm.EditId" @onchange="e => Vm.ChangeGroupNetwork(e.Value?.ToString())">@foreach (var network in Vm.State.Networks.Where(network => network.Groups.Count < 20)) { <option value="@network.Id">@network.Name (@network.Cidr)</option> }</select></div>
+            }
+            else { <p class="networking-note">VPC: @Vm.Name · @Vm.Cidr</p> }
+            @if (Vm.EditingGroup && Vm.Group is { } selected)
+            {
+                <div class="dcfield"><label for="group-name">Group name</label><input id="group-name" class="dcinput" maxlength="80" @bind="selected.Name" /></div>
+                <p>Rules allow traffic. No rules means no inbound or outbound connections. Replies to allowed connections are permitted.</p>
+                <div class="networking-scroll"><table class="networking-editor-rules"><thead><tr><th>Direction</th><th>Protocol</th><th>Ports</th><th>CIDR</th><th>Action</th></tr></thead><tbody>
+                @foreach (var rule in selected.Rules)
+                {
+                    <tr><td>@(rule.Direction == "ingress" ? "Inbound" : "Outbound")</td><td>@rule.Protocol</td><td>@rule.FromPort–@rule.ToPort</td><td>@rule.Cidr</td><td><button class="dcbtn" disabled="@Vm.Busy" aria-label="Remove rule" @onclick="() => Vm.RemoveRule(rule)"><AppIcon Kind="trash" /></button></td></tr>
+                }
+                </tbody></table></div>
+                <fieldset><legend>Add allowed traffic</legend>
+                    <div class="dcfield"><label for="rule-direction">Direction</label><select id="rule-direction" class="dcinput" @bind="Vm.Direction"><option value="ingress">Inbound</option><option value="egress">Outbound</option></select></div>
+                    <div class="dcfield"><label for="rule-protocol">Protocol</label><select id="rule-protocol" class="dcinput" @bind="Vm.Protocol"><option>TCP</option><option>UDP</option></select></div>
+                    <div class="dcfield"><label for="rule-cidr">Source / destination CIDR</label><input id="rule-cidr" class="dcinput" @bind="Vm.RuleCidr" /></div>
+                    <div class="networking-ports"><div class="dcfield"><label for="rule-from">First port</label><input id="rule-from" class="dcinput" type="number" min="1" max="65535" @bind="Vm.FromPort" /></div><div class="dcfield"><label for="rule-to">Last port</label><input id="rule-to" class="dcinput" type="number" min="1" max="65535" @bind="Vm.ToPort" /></div></div>
+                    <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.AddRule">Add rule</button>
+                </fieldset>
+            }
+            @if (Vm.FormError is not null) { <p role="alert" class="danger">@Vm.FormError</p> }
+        </div><div class="dcmodal-foot"><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.CloseEditor">Cancel</button>@if (Vm.EditingGroup || Vm.Version == 0) { <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveAsync">@(Vm.EditingGroup ? "Save security group" : "Save VPC")</button> }</div>
+    </div></div>
+}
+@if (Vm.ShowAssignment)
+{
+    <div class="dcmodal-overlay" @onclick="Vm.CloseEditor"><div class="dcmodal dcslide" role="dialog" aria-modal="true" aria-labelledby="assignment-title" @onclick:stopPropagation>
+        <div class="dcmodal-head"><h3 id="assignment-title">Assign job network</h3><button class="dcslide-x" aria-label="Close assignment" disabled="@Vm.Busy" @onclick="Vm.CloseEditor"><AppIcon Kind="close" /></button></div>
+        <div class="dcmodal-body">
+            <div class="dcfield"><label for="assigned-network">VPC</label><select id="assigned-network" class="dcinput" @bind="Vm.AssignedNetwork"><option value="">Use job network setting</option>@foreach (var network in Vm.State.Networks) { <option value="@network.Id">@network.Name (@network.Cidr)</option> }</select></div>
+            @if (Vm.AssignedNetwork.Length > 0) { <div class="dcfield"><label for="assigned-group">Security group</label><select id="assigned-group" class="dcinput" @bind="Vm.AssignedGroup"><option value="">Choose a security group</option>@foreach (var group in Vm.AssignmentGroups) { <option value="@group.Id">@group.Name</option> }</select></div> }
+            <p>This applies to the next run. Workers that cannot enforce the assigned VPC will reject the job.</p>
+            @if (Vm.FormError is not null) { <p role="alert" class="danger">@Vm.FormError</p> }
+        </div><div class="dcmodal-foot"><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.CloseEditor">Cancel</button><button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.SaveAssignmentAsync">Save assignment</button></div>
+    </div></div>
+}
+
+@if (Vm.Deleting is { } deleting)
+{
+    <div class="dcmodal-overlay" @onclick="Vm.CancelDelete"><div class="dcmodal networking-pane" role="dialog" aria-modal="true" aria-labelledby="delete-vpc-title" @onclick:stopPropagation>
+        <div class="dcmodal-head"><h3 id="delete-vpc-title">Delete VPC configuration?</h3><button class="dcslide-x" aria-label="Close delete confirmation" disabled="@Vm.Busy" @onclick="Vm.CancelDelete"><AppIcon Kind="close" /></button></div>
+        <div class="dcmodal-body"><p>Delete <strong>@deleting.Name</strong> (@deleting.Cidr) and its security groups? This cannot be undone.</p><p>All job assignments must be removed first. Running jobs keep their captured policy. Provisioned cluster resources are retained for those runs and require operator cleanup when unused.</p>@if (Vm.FormError is not null) { <p role="alert" class="danger">@Vm.FormError</p> }</div>
+        <div class="dcmodal-foot"><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.CancelDelete">Cancel</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.DeleteAsync">Delete VPC</button></div>
+    </div></div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId, Tab);
+    public void Dispose() => Vm.DisposePage();
+}

@@ -46,6 +46,7 @@ public sealed class ProjectViewModel : PageViewModel
     public bool RequirementsDirty =>
         !string.Equals(RequirementsDraft, RequirementsSaved, StringComparison.Ordinal);
     public bool ScrollPending { get; private set; }
+    private int _loadVersion;
 
     public bool HasDecisionRationale(DecisionView decision) =>
         !string.IsNullOrWhiteSpace(decision.Rationale) && decision.Rationale != "(none)";
@@ -62,16 +63,27 @@ public sealed class ProjectViewModel : PageViewModel
 
     public async Task LoadAsync(Guid id)
     {
+        var version = ++_loadVersion;
+        Overview = null;
+        Timeline = null;
+        Decisions = null;
+        Requirements = null;
+        RequirementsDraft = RequirementsSaved = "";
+        Message = null;
         Id = id;
         var query = System.Web.HttpUtility.ParseQueryString(new Uri(_navigation.Uri).Query);
         Tab = NormalizeTab(query["tab"]);
         await LoadOverviewAsync();
-        _ = LoadDetailsAsync();
+        if (version != _loadVersion) return;
+        await LoadDetailsAsync();
     }
 
     private async Task LoadOverviewAsync()
     {
-        Overview = await _service.GetProjectOverviewAsync(Id);
+        var version = _loadVersion;
+        var overview = await _service.GetProjectOverviewAsync(Id);
+        if (version != _loadVersion) return;
+        Overview = overview;
         _ui.Set(Overview.Name, $"{Overview.Path} · {Overview.Status}");
         ScrollPending = true;
         NotifyStateChanged();
@@ -79,54 +91,67 @@ public sealed class ProjectViewModel : PageViewModel
 
     private async Task LoadDetailsAsync()
     {
-        var timeline = LoadTimelineAsync();
-        var requirements = LoadRequirementsAsync();
-        var decisions = LoadDecisionsAsync();
-        await Task.WhenAll(timeline, requirements, decisions);
+        var version = _loadVersion;
+        if (Tab == Tabs.Requirements && Requirements is null)
+            await LoadRequirementsAsync();
+        if (Tab == Tabs.Activity)
+        {
+            if (Timeline is null) await LoadTimelineAsync();
+            if (version != _loadVersion) return;
+            if (Decisions is null) await LoadDecisionsAsync();
+        }
         NotifyStateChanged();
     }
 
     private async Task LoadTimelineAsync()
     {
+        var version = _loadVersion;
         try
         {
-            Timeline = await _service.GetTimelineAsync(Id, 8);
+            var timeline = await _service.GetTimelineAsync(Id, 8);
+            if (version == _loadVersion) Timeline = timeline;
         }
         catch (Exception ex)
         {
-            Message = $"Could not load timeline: {ex.Message}";
+            if (version == _loadVersion) Message = $"Could not load timeline: {ex.Message}";
         }
     }
 
     private async Task LoadRequirementsAsync()
     {
+        var version = _loadVersion;
         try
         {
-            Requirements = await _service.GetProjectRequirementsAsync(Id);
+            var requirements = await _service.GetProjectRequirementsAsync(Id);
+            if (version != _loadVersion) return;
+            Requirements = requirements;
             RequirementsDraft = RequirementsSaved = Requirements.Markdown;
         }
         catch (Exception ex)
         {
-            Message = $"Could not load requirements: {ex.Message}";
+            if (version == _loadVersion) Message = $"Could not load requirements: {ex.Message}";
         }
     }
 
     private async Task LoadDecisionsAsync()
     {
+        var version = _loadVersion;
         try
         {
-            Decisions = await _service.GetDecisionsAsync(Id);
+            var decisions = await _service.GetDecisionsAsync(Id);
+            if (version == _loadVersion) Decisions = decisions;
         }
         catch (Exception ex)
         {
-            Message = $"Could not load decisions: {ex.Message}";
+            if (version == _loadVersion) Message = $"Could not load decisions: {ex.Message}";
         }
     }
 
-    public void SwitchTab(string tab)
+    public async Task SwitchTab(string tab)
     {
         Tab = NormalizeTab(tab);
         NotifyStateChanged();
+        await LoadDetailsAsync();
     }
 
     public async Task SaveRequirementsAsync()

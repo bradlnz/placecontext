@@ -16,6 +16,8 @@ public sealed class ApiTokensSettingsViewModel(IUserApiTokenService tokens, Port
     public IReadOnlyList<ApiEndpoint> UsableEndpoints { get; } =
         new[]
         {
+            new ApiEndpoint("POST", "/api/v1/queues/{queueId}/messages", "Submit a JSON object to a workflow queue (requires permission to run jobs)."),
+            new ApiEndpoint("GET", "/api/v1/queues/{queueId}/messages/{trackingId}", "Check a queued message and its chain run."),
             new ApiEndpoint(
                 "GET",
                 "/api/v1/entities",

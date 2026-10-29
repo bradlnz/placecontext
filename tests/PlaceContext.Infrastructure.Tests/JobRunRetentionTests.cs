@@ -47,6 +47,26 @@ public sealed class JobRunRetentionTests
             .MinAsync(r => r.StartedAt));
     }
 
+    [Fact]
+    public async Task Late_worker_cannot_overwrite_a_cancelled_run()
+    {
+        var tenant = new Tenant(Guid.NewGuid());
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString("N")).Options;
+        await using var worker = new AppDbContext(options, tenant);
+        var row = Row(tenant.TenantId, DateTimeOffset.UtcNow, "Running");
+        worker.JobRuns.Add(row);
+        await worker.SaveChangesAsync();
+        await using var canceller = new AppDbContext(options, tenant);
+        var cancelled = await canceller.JobRuns.SingleAsync();
+        cancelled.Status = "Cancelled";
+        cancelled.FinishedAt = DateTimeOffset.UtcNow;
+        await canceller.SaveChangesAsync();
+
+        row.Status = "Succeeded";
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => worker.SaveChangesAsync());
+        Assert.Equal("Cancelled", await canceller.JobRuns.AsNoTracking().Select(r => r.Status).SingleAsync());
+    }
+
     private static JobRunRow Row(Guid tenantId, DateTimeOffset startedAt, string status) => new()
     {
         Id = Guid.NewGuid(),
