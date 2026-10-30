@@ -3,6 +3,7 @@
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @using PlaceContext.Application.AgentWorkflows
 @inject AgentWorkflowsViewModel Vm
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <PageTitle>PlaceContext — Agent Store</PageTitle>
@@ -14,13 +15,13 @@
         </div>
         <div class="store-header-actions">
             <a class="dui-btn dui-btn-ghost dui-btn-sm profiles-link" href="@Vm.DashboardsUrl" aria-label="Data profiles"><AppIcon Kind="data.analytics" /><span>Data profiles</span></a>
-            <a class="dui-btn dui-btn-primary dui-btn-sm new-agent" href="@Vm.BuildUrl"><AppIcon Kind="plus" /><span>Build an agent</span></a>
+            <a class="dui-btn dui-btn-primary dui-btn-sm new-agent" href="@Vm.BuildUrl"><AppIcon Kind="plus" /><span>Build custom</span></a>
         </div>
     </header>
 
     <div class="store-navigation">
       <nav class="dui-tabs dui-tabs-box dui-tabs-sm store-tabs" aria-label="Agent Store views">
-        <button class="dui-tab @(!Vm.ShowHistory ? "dui-tab-active" : "")" aria-pressed="@(!Vm.ShowHistory ? "true" : "false")" disabled="@Vm.Busy" @onclick="() => ShowHistory(false)"><AppIcon Kind="grid" /> Browse agents <span class="dui-badge dui-badge-sm dui-badge-soft">@Vm.UseCaseCount</span></button>
+        <button class="dui-tab @(!Vm.ShowHistory ? "dui-tab-active" : "")" aria-pressed="@(!Vm.ShowHistory ? "true" : "false")" disabled="@Vm.Busy" @onclick="() => ShowHistory(false)"><AppIcon Kind="grid" /> Mini apps <span class="dui-badge dui-badge-sm dui-badge-soft">@Vm.UseCaseCount</span></button>
         <button @ref="_historyTab" class="dui-tab @(Vm.ShowHistory ? "dui-tab-active" : "")" aria-pressed="@(Vm.ShowHistory ? "true" : "false")" disabled="@Vm.Busy" @onclick="() => ShowHistory(true)"><AppIcon Kind="history" /> Run history @if (Vm.Workspace is { Runs.Count: > 0 } history) { <span class="dui-badge dui-badge-sm dui-badge-soft">@history.Runs.Count</span> }</button>
       </nav>
         <span class="store-tabs-note"><AppIcon Kind="data" /> Uses your project context</span>
@@ -31,7 +32,7 @@
         @if (Vm.Workspace is { } workspace)
         {
             <div class="store-heading">
-                <div><h2>@(Vm.ShowHistory ? "Agent activity" : "Agent catalogue")</h2><p>@(Vm.ShowHistory ? "Review the latest 50 runs and their results." : "Choose an outcome and review the project data it can use.")</p></div>
+                <div><h2>@(Vm.ShowHistory ? "Workflow activity" : "Mini apps")</h2><p>@(Vm.ShowHistory ? "Review recent runs and their results." : "Choose a mini app, connect project data and generate a named workflow.")</p></div>
             </div>
 
             <div class="catalogue-layout @(Vm.Selected is null ? "" : "has-selection")">
@@ -41,7 +42,7 @@
                         <div class="catalogue-panel-heading"><h3>Recent runs <span>@workspace.Runs.Count</span></h3><button class="dui-btn dui-btn-ghost dui-btn-sm" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /> Refresh</button></div>
                         @if (workspace.Runs.Count == 0)
                         {
-                            <div class="store-empty"><span class="empty-symbol"><AppIcon Kind="history" /></span><h3>Your agent activity will appear here</h3><p>Choose an agent and review its project context to get started.</p><button class="dui-btn dui-btn-outline dui-btn-sm" disabled="@Vm.Busy" @onclick="() => ShowHistory(false)">Browse agents <AppIcon Kind="arrow-right" /></button></div>
+                            <div class="store-empty"><span class="empty-symbol"><AppIcon Kind="history" /></span><h3>Your workflow activity will appear here</h3><p>Choose a mini app and connect a source to prepare a workflow.</p><button class="dui-btn dui-btn-outline dui-btn-sm" disabled="@Vm.Busy" @onclick="() => ShowHistory(false)">Browse mini apps <AppIcon Kind="arrow-right" /></button></div>
                         }
                         @foreach (var run in workspace.Runs)
                         {
@@ -79,16 +80,16 @@
                                         <div class="agent-card-top"><span class="row-symbol @IndustryTone(agent.Industry)"><AppIcon Kind="@AgentIcon(agent)" /></span><span class="dui-badge dui-badge-soft dui-badge-sm agent-category">@IndustryLabel(agent.Industry)</span></div>
                                         <div class="agent-card-copy"><h3 class="dui-card-title">@useCase.Name</h3><p class="agent-outcome">@agent.Outcome</p><span class="agent-list-team">@IndustryLabel(agent.Industry)</span></div>
                                         <div class="agent-card-context"><AppIcon Kind="data" /><span>@agent.DataSources.FirstOrDefault()</span></div>
-                                        <div class="dui-card-actions agent-card-actions"><span class="agent-source-count" title="@string.Join(", ", agent.DataSources)">@agent.DataSources.Count suggested source types</span><button class="dui-btn dui-btn-sm @(Vm.Selected?.UseCaseId == useCase.Id ? "dui-btn-primary" : "dui-btn-soft")" disabled="@Vm.Busy" aria-label="Use @useCase.Name" aria-pressed="@(Vm.Selected?.UseCaseId == useCase.Id ? "true" : "false")" @onclick="() => OpenAgentAsync(agent)">@(Vm.Selected?.UseCaseId == useCase.Id ? "Selected" : "Use agent")<AppIcon Kind="@(Vm.Selected?.UseCaseId == useCase.Id ? "check" : "arrow-right")" /></button></div>
+                                        <div class="dui-card-actions agent-card-actions"><span class="agent-source-count" title="@string.Join(", ", agent.DataSources)">@agent.DataSources.Count suggested source types</span><button class="dui-btn dui-btn-sm @(Vm.Selected?.UseCaseId == useCase.Id ? "dui-btn-primary" : "dui-btn-soft")" disabled="@Vm.Busy" aria-label="Use @useCase.Name" aria-pressed="@(Vm.Selected?.UseCaseId == useCase.Id ? "true" : "false")" @onclick="() => OpenAgentAsync(agent)">@(Vm.Selected?.UseCaseId == useCase.Id ? "Selected" : "Connect")<AppIcon Kind="@(Vm.Selected?.UseCaseId == useCase.Id ? "check" : "arrow-right")" /></button></div>
                                     </div>
                                 </article>
                             }
                             @if (!Vm.VisibleUseCases.Any())
                             {
-                                <div class="store-empty"><span class="empty-symbol"><AppIcon Kind="data.search" /></span><h3>No agents match these filters</h3><p>Try another outcome, team or data source.</p><button class="dui-btn dui-btn-outline dui-btn-sm" @onclick="Vm.ClearFilters">Clear filters</button></div>
+                                <div class="store-empty"><span class="empty-symbol"><AppIcon Kind="data.search" /></span><h3>No mini apps match these filters</h3><p>Try another outcome, team or data source.</p><button class="dui-btn dui-btn-outline dui-btn-sm" @onclick="Vm.ClearFilters">Clear filters</button></div>
                             }
                         </div>
-                        <footer class="catalogue-footer"><span>@Vm.VisibleUseCases.Count() of @Vm.UseCaseCount agents</span><span><AppIcon Kind="check" /> Context checks use no AI tokens</span></footer>
+                        <footer class="catalogue-footer"><span>@Vm.VisibleUseCases.Count() of @Vm.UseCaseCount mini apps</span><span><AppIcon Kind="check" /> Context checks use no AI tokens</span></footer>
                     }
                 </section>
 
@@ -96,13 +97,45 @@
                 {
                     var summary = Vm.SelectedVariants.FirstOrDefault(x => x.Paid) ?? selected;
                     <aside class="dui-card dui-card-border agent-detail" aria-labelledby="agent-detail-title" @key="selected.Id">
-                        <div class="inspector-toolbar"><span>AGENT WORKSPACE</span><button class="dui-btn dui-btn-ghost dui-btn-sm store-icon-button" aria-label="Close agent details" title="Close agent details" disabled="@Vm.Busy" @onclick="CloseDetailsAsync"><AppIcon Kind="close" /></button></div>
+                        <div class="inspector-toolbar"><span>MINI APP SETUP</span><button class="dui-btn dui-btn-ghost dui-btn-sm store-icon-button" aria-label="Close agent details" title="Close agent details" disabled="@Vm.Busy" @onclick="CloseDetailsAsync"><AppIcon Kind="close" /></button></div>
                         <div class="inspector-heading">
                             <span class="detail-symbol @IndustryTone(selected.Industry)"><AppIcon Kind="@AgentIcon(selected)" /></span>
                             <span class="dui-badge dui-badge-soft dui-badge-sm detail-category">@IndustryLabel(selected.Industry)</span>
                             <h2 id="agent-detail-title" tabindex="-1" @ref="_detailHeading">@selected.UseCaseName</h2>
                             <p>@summary.Description</p>
                         </div>
+                        <section class="mini-app-launcher" aria-label="Generate a workflow from this mini app">
+                            <div class="mini-step-heading"><span>1</span><strong>Connect your data</strong></div>
+                            @if (Vm.PreparingContext)
+                            {
+                                <p class="context-note" role="status">Finding available project connectors…</p>
+                            }
+                            else if (Vm.ConnectorSources.Count > 0)
+                            {
+                                <label for="mini-app-connector">Project connector</label>
+                                <select id="mini-app-connector" class="dui-select dui-select-sm mini-connector" value="@Vm.ConnectedSourceName" disabled="@Vm.Busy"
+                                        @onchange="e => Vm.ConnectSource(e.Value?.ToString())">
+                                    <option value="">Choose a source</option>
+                                    @foreach (var source in Vm.ConnectorSources)
+                                    {
+                                        <option value="@source.Name">@source.Name · @source.Kind</option>
+                                    }
+                                </select>
+                                <p class="mini-connector-note">Only connected project sources are listed. Data coverage and freshness must be verified in Build.</p>
+                            }
+                            else
+                            {
+                                <p class="mini-connector-note">No matching connector is available for this mini app yet.</p>
+                                <a class="dui-btn dui-btn-outline dui-btn-sm" href="/project/@ProjectId/data"><AppIcon Kind="data" /> Connect project data</a>
+                            }
+                            <div class="mini-step-heading"><span>2</span><strong>Generate a workflow</strong></div>
+                            <button type="button" class="dui-btn dui-btn-primary mini-generate" disabled="@(!Vm.CanGenerateWorkflow)" @onclick="Vm.AskWorkflowName">
+                                <AppIcon Kind="workflow" /> Generate workflow
+                            </button>
+                            <p class="mini-connector-note">You'll be asked for a name. Build prepares an editable draft; nothing runs automatically.</p>
+                        </section>
+                        <details class="mini-app-advanced">
+                            <summary><AppIcon Kind="sliders" /> Advanced options and source evidence <AppIcon Kind="chevron-down" /></summary>
                         <div class="dui-tabs dui-tabs-box dui-tabs-sm agent-variants" aria-label="Agent mode">
                             @foreach (var variant in Vm.SelectedVariants)
                             {
@@ -206,6 +239,7 @@
                             }
                         </div>
                         <footer class="inspector-footer"><AppIcon Kind="about" /><span>@(selected.Paid ? "AI plans propose actions for review." : "Checks confirm input presence, not source accuracy.")</span></footer>
+                        </details>
                     </aside>
                 }
             </div>
@@ -213,6 +247,24 @@
         else if (Vm.Busy) { <Skeleton Kind="cards" Rows="3" /> }
         else { <button class="dui-btn dui-btn-outline dui-btn-sm" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /> Reload Agent Store</button> }
     </div>
+    @if (Vm.NamingWorkflow)
+    {
+        <div class="mini-name-overlay">
+            <section role="dialog" aria-modal="true" aria-labelledby="mini-workflow-name-title" class="dui-card mini-name-dialog">
+                <form @onsubmit="SubmitNamedWorkflow" @onsubmit:preventDefault>
+                    <div class="mini-step-heading"><span>3</span><strong id="mini-workflow-name-title">Name your workflow</strong></div>
+                    <p>Give this mini app a name you recognise. The selected source will be checked again in Build.</p>
+                    <label for="mini-workflow-name">Workflow name</label>
+                    <input id="mini-workflow-name" class="dui-input" @ref="_workflowNameInput" @bind="Vm.WorkflowName" @bind:event="oninput" maxlength="100" minlength="3" required aria-describedby="mini-workflow-name-hint" />
+                    <small id="mini-workflow-name-hint">3–100 characters. Nothing is deployed or executed yet.</small>
+                    <div class="mini-name-actions">
+                        <button type="button" class="dui-btn dui-btn-ghost" @onclick="Vm.CancelWorkflowName">Cancel</button>
+                        <button type="submit" class="dui-btn dui-btn-primary" disabled="@(Vm.WorkflowNameError is not null)"><AppIcon Kind="workflow" /> Continue to Build</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    }
 </div>
 
 @code {
@@ -223,10 +275,19 @@
     private string? _focusedAgent;
     private bool _focusRequested;
     private bool _listView;
+    private ElementReference _workflowNameInput;
+    private bool _workflowDialogFocused;
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId);
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (Vm.NamingWorkflow && !_workflowDialogFocused)
+        {
+            _workflowDialogFocused = true;
+            await _workflowNameInput.FocusAsync();
+            return;
+        }
+        if (!Vm.NamingWorkflow) _workflowDialogFocused = false;
         if (!_focusRequested && _focusedAgent == Vm.Selected?.Id) return;
         _focusRequested = false;
         _focusedAgent = Vm.Selected?.Id;
@@ -244,6 +305,12 @@
     {
         Vm.CloseDetails();
         if (Vm.Selected is null) await (Vm.ShowHistory ? _historyTab : _search).FocusAsync();
+    }
+    private void SubmitNamedWorkflow()
+    {
+        if (Vm.WorkflowName.Trim().Length < 3) return;
+        var url = Vm.NamedWorkflowDraftUrl;
+        if (url is not null) Navigation.NavigateTo(url);
     }
     private static string IndustryLabel(string industry) => industry == "Enterprise communications" ? "Phone systems" : industry;
     private static string IndustryTone(string industry) => industry switch { "Enterprise communications" => "tone-cyan", "Service operations" => "tone-violet", "Retail" => "tone-amber", "Professional services" => "tone-violet", "Property operations" => "tone-green", _ => "" };

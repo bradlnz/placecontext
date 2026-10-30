@@ -138,4 +138,67 @@ public sealed class AgentWorkflowsViewModelTests
         Assert.Equal(secondProject, vm.ProjectId); Assert.Null(vm.Result); Assert.Null(vm.Selected);
         vm.Dispose(); vm.Dispose();
     }
+    [Fact]
+    public async Task Mini_app_uses_one_authorised_connector_then_asks_for_a_name_without_running()
+    {
+        var service = new AgentWorkflowUiStub();
+        using var vm = new AgentWorkflowsViewModel(service, new PortalUiState());
+        var projectId = Guid.NewGuid();
+        await vm.LoadAsync(projectId);
+        await vm.SelectUseCaseAsync(service.Workflow);
+        Assert.Equal("Clients", vm.ConnectedSourceName); // only one matched source
+        Assert.True(vm.CanGenerateWorkflow);
+        Assert.False(vm.NamingWorkflow);
+        Assert.False(vm.ProjectContextApplied);
+        Assert.False(vm.HasContext);
+        vm.AskWorkflowName();
+        Assert.True(vm.NamingWorkflow);
+        vm.WorkflowName = "Customer follow up";
+        var draft = Uri.UnescapeDataString(Assert.IsType<string>(vm.NamedWorkflowDraftUrl));
+        Assert.Contains("Customer follow up", draft);
+        Assert.Contains("Clients", draft);
+        Assert.Contains("verifying", draft, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(projectId.ToString(), draft);
+        Assert.DoesNotContain("Customer from project data", draft);
+        Assert.DoesNotContain("One candidate client record", draft);
+        Assert.Equal(0, service.Runs);
+        vm.WorkflowName = "ab";
+        Assert.Null(vm.NamedWorkflowDraftUrl);
+        vm.WorkflowName = new string('x', 101);
+        Assert.Null(vm.NamedWorkflowDraftUrl);
+        vm.CancelWorkflowName();
+        Assert.Null(vm.NamedWorkflowDraftUrl);
+        Assert.False(vm.NamingWorkflow);
+    }
+
+    [Fact]
+    public async Task Multiple_project_connectors_require_an_explicit_selection_and_reset_between_apps()
+    {
+        var service = new AgentWorkflowUiStub();
+        service.Preparation = service.Preparation with { Sources =
+        [
+            new("Clients", "Project table", null, "Client records"),
+            new("Calls", "Project table", null, "Call records")
+        ] };
+        using var vm = new AgentWorkflowsViewModel(service, new PortalUiState());
+        await vm.LoadAsync(Guid.NewGuid());
+        await vm.SelectUseCaseAsync(service.Workflow);
+        Assert.Equal(2, vm.ConnectorSources.Count);
+        Assert.Empty(vm.ConnectedSourceName);
+        Assert.False(vm.CanGenerateWorkflow);
+        vm.ConnectSource("Unapproved third-party API");
+        Assert.False(vm.CanGenerateWorkflow);
+        vm.ConnectSource("Calls");
+        Assert.True(vm.CanGenerateWorkflow);
+        vm.AskWorkflowName();
+        vm.WorkflowName = "Phone service insights";
+        Assert.Contains("Calls", Uri.UnescapeDataString(vm.NamedWorkflowDraftUrl!));
+        await vm.SelectAsync(service.Workflow);
+        Assert.Equal("Calls", vm.ConnectedSourceName);
+        vm.CloseDetails();
+        Assert.False(vm.CanGenerateWorkflow);
+        Assert.False(vm.NamingWorkflow);
+        Assert.Equal(0, service.Runs);
+    }
+
 }

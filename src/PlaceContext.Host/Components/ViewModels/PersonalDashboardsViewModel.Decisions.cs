@@ -22,6 +22,14 @@ public sealed partial class PersonalDashboardsViewModel
     private CancellationTokenSource? _decisionStop;
 
     public DashboardSignal? FocusedSignal => Signals.FirstOrDefault(x => x.ChartId == FocusedChartId);
+    public IReadOnlyList<DashboardIndicatorProfile> IndicatorProfiles => DashboardIndicatorProfiles.Create(
+        new DashboardSnapshot(SelectedCharts.Where(chart =>
+            VisibleProfiles.Any(profile => profile.ChartId == chart.Id)).ToArray()),
+        AssessedAt, Targets);
+    public int MeasuredIndicatorCount => IndicatorProfiles.Sum(profile =>
+        profile.Indicators.Count(indicator => indicator.Measurement is not null));
+    public int IndicatorValueCount => IndicatorProfiles.Sum(profile =>
+        profile.Indicators.Sum(indicator => indicator.Measurement?.Count ?? 0));
     public int MeasuredSignalCount => Signals.Count(x => x.Measurement is not null);
     public int MeasuredValueCount => Signals.Sum(x => x.Measurement?.Count ?? 0);
     public int ReadySignalCount => Signals.Count(x => !RequiresData(x));

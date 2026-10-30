@@ -191,3 +191,27 @@ summary:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 4px
     .workspace-symbol { display: none; }
     .profiles-link { display: none; }
 }
+
+/* A two-action mini-app setup is the default; manual fields are available on demand. */
+.mini-app-launcher { padding: 18px 20px 20px; display: grid; gap: 10px; border-top: 1px solid var(--ws-border); }
+.mini-step-heading { display: flex; align-items: center; gap: 10px; color: var(--ws-text); font-size: 14px; }
+.mini-step-heading > span { display: grid; place-items: center; width: 25px; height: 25px; flex: none; border-radius: 50%; background: var(--ws-accent-bg); color: var(--ws-accent); font-size: 12px; font-weight: 700; }
+.mini-app-launcher label,.mini-name-dialog label { font-size: 12px; font-weight: 600; color: var(--ws-text); }
+.mini-connector { width: 100%; min-height: 42px; }
+.mini-connector-note { margin: 0 0 8px; line-height: 1.65; font-size: 12px; color: var(--ws-muted); }
+.mini-generate { min-height: 43px; width: 100%; }
+.mini-app-advanced { border-top: 1px solid var(--ws-border); }
+.mini-app-advanced > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 15px 20px; color: var(--ws-muted); font-size: 12px; }
+.mini-app-advanced > summary > ::deep svg:last-child { margin-left: auto; }
+.mini-app-advanced > summary::-webkit-details-marker { display: none; }
+.mini-name-overlay { position: fixed; inset: 0; z-index: 150; display: grid; place-items: center; padding: 16px; background: rgba(0,0,0,.65); }
+.mini-name-dialog { width: min(460px,100%); padding: 26px; background: var(--ws-panel); border: 1px solid var(--ws-border); box-shadow: 0 25px 75px rgba(0,0,0,.32); }
+.mini-name-dialog form { display: grid; gap: 14px; }
+.mini-name-dialog p,.mini-name-dialog small { margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.7; }
+.mini-name-dialog .dui-input { width: 100%; }
+.mini-name-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 6px; }
+@media (max-width: 640px) {
+ .mini-app-launcher { padding: 16px 18px; }
+ .mini-name-dialog { padding: 20px; }
+ .mini-name-actions > .dui-btn { flex: 1; }
+}

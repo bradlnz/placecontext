@@ -12,6 +12,57 @@ public sealed class AgentWorkflowsViewModel(IAgentWorkflows workflows, PortalUiS
     public AgentRun? Result { get; private set; }
     public AgentPreparation? Preparation { get; private set; }
     public bool ProjectContextApplied { get; private set; }
+    // Connector selection is a reference to an authorised source, never copied record data.
+    public string ConnectedSourceName { get; private set; } = "";
+    public string WorkflowName { get; set; } = "";
+    public bool NamingWorkflow { get; private set; }
+    public IReadOnlyList<AgentContextSource> ConnectorSources => Preparation?.Sources
+        .Where(source => !string.IsNullOrWhiteSpace(source.Name) && source.Name.Length <= 160
+            && !source.Name.Any(char.IsControl))
+        .GroupBy(source => source.Name, StringComparer.Ordinal)
+        .Where(group => group.Count() == 1)
+        .Select(group => group.Single()).Take(20).ToArray() ?? [];
+    public bool CanGenerateWorkflow => !Busy && Selected is not null
+        && ConnectorSources.Any(source => source.Name == ConnectedSourceName);
+    public string? WorkflowNameError => string.IsNullOrWhiteSpace(WorkflowName) || WorkflowName.Trim().Length < 3
+        ? "Enter at least 3 characters." : WorkflowName.Trim().Length > 100
+            ? "Use a name of 100 characters or fewer." : null;
+    public string? NamedWorkflowDraftUrl
+    {
+        get
+        {
+            if (!CanGenerateWorkflow || !NamingWorkflow || WorkflowNameError is not null || Selected is null)
+                return null;
+            var source = ConnectorSources.First(source => source.Name == ConnectedSourceName);
+            var template = Workspace?.Workflows.FirstOrDefault(x => x.UseCaseId == Selected.UseCaseId && x.Paid) ?? Selected;
+            // Pass the source reference only. Build rechecks scope and consent; no source samples go in the URL.
+            var request = $"Create a workflow named \"{WorkflowName.Trim()}\" from the \"{template.UseCaseName}\" mini app. " +
+                $"Use the existing project source connector \"{source.Name}\" ({source.Kind}) only after verifying " +
+                "its current project permissions, available schema and data freshness. " +
+                $"Objective: {template.Outcome} Expected outputs: {string.Join("; ", template.Deliverables.Take(3))}. " +
+                "Build the smallest testable draft, with measured indicators and Jev review steps. " +
+                "Ask only for essential missing details. Do not execute external actions or enable a schedule without approval.";
+            return $"{BuildUrl}?prompt={Uri.EscapeDataString(request)}";
+        }
+    }
+    public void ConnectSource(string? sourceName)
+    {
+        if (Busy) return;
+        ConnectedSourceName = ConnectorSources.Any(source => source.Name == sourceName) ? sourceName! : "";
+        NamingWorkflow = false;
+        WorkflowName = "";
+    }
+    public void AskWorkflowName()
+    {
+        if (!CanGenerateWorkflow || Selected is null) return;
+        WorkflowName = Selected.UseCaseName;
+        NamingWorkflow = true;
+    }
+    public void CancelWorkflowName()
+    {
+        NamingWorkflow = false;
+        WorkflowName = "";
+    }
     public bool PreparingContext { get; private set; }
     public Dictionary<string, string> Inputs { get; } = [];
     public string Industry { get; set; } = "";
@@ -44,7 +95,7 @@ public sealed class AgentWorkflowsViewModel(IAgentWorkflows workflows, PortalUiS
     public void Browse(AgentBrowseFilter filter) { Filter = filter; ShowHistory = false; }
     public void ClearFilters() { Search = Industry = ""; Browse(AgentBrowseFilter.All); }
     public void ToggleHistory() => ShowHistory = !ShowHistory;
-    public void CloseDetails() { if (!Busy) { Selected = null; Result = null; Preparation = null; ProjectContextApplied = false; } }
+    public void CloseDetails() { if (!Busy) { Selected = null; Result = null; Preparation = null; ProjectContextApplied = false; ConnectedSourceName = ""; CancelWorkflowName(); } }
     public static string IndustryIcon(AgentWorkflow workflow) => workflow.Industry switch
     {
         "Enterprise communications" => "mic", "Service operations" => "message",
@@ -79,7 +130,7 @@ public sealed class AgentWorkflowsViewModel(IAgentWorkflows workflows, PortalUiS
         if (ProjectId == projectId && Workspace is not null) return;
         ProjectId = projectId;
         Workspace = null;
-        Selected = null; Result = null; Preparation = null; ProjectContextApplied = false;
+        Selected = null; Result = null; Preparation = null; ProjectContextApplied = false; ConnectedSourceName = ""; CancelWorkflowName();
         Inputs.Clear(); Industry = Search = ""; Filter = AgentBrowseFilter.All; ShowHistory = false;
         ui.Set("Build", "Agent Store");
         await RefreshAsync();
@@ -123,7 +174,7 @@ public sealed class AgentWorkflowsViewModel(IAgentWorkflows workflows, PortalUiS
     {
         if (Busy) return;
         Selected = workflow; Result = null; Error = null; _requestId = null; _requestInput = null;
-        Preparation = null; ProjectContextApplied = false;
+        Preparation = null; ProjectContextApplied = false; ConnectedSourceName = ""; CancelWorkflowName();
         Inputs.Clear();
         foreach (var field in workflow.InputFields) Inputs[field] = "";
     }
@@ -141,11 +192,13 @@ public sealed class AgentWorkflowsViewModel(IAgentWorkflows workflows, PortalUiS
         var previousInputs = Inputs.ToDictionary(x => x.Key, x => x.Value);
         var previousPreparation = Preparation;
         var previousApplied = ProjectContextApplied;
+        var previousConnector = ConnectedSourceName;
         Select(workflow);
         if (previous?.UseCaseId == workflow.UseCaseId && previousPreparation is not null)
         {
             Preparation = previousPreparation;
             ProjectContextApplied = previousApplied;
+            ConnectSource(previousConnector);
             foreach (var field in workflow.InputFields)
                 if (previousInputs.TryGetValue(field, out var value)) Inputs[field] = value;
             return;
@@ -157,7 +210,13 @@ public sealed class AgentWorkflowsViewModel(IAgentWorkflows workflows, PortalUiS
     {
         if (Selected is null) return;
         PreparingContext = true;
-        try { Preparation = await workflows.PrepareAsync(ProjectId, Selected.Id, _stop.Token); }
+        try
+        {
+            Preparation = await workflows.PrepareAsync(ProjectId, Selected.Id, _stop.Token);
+            // Auto-select only an unambiguous single source. Multiple sources require a deliberate choice.
+            var choices = ConnectorSources;
+            ConnectedSourceName = choices.Count == 1 ? choices[0].Name : "";
+        }
         finally { PreparingContext = false; }
     });
 
