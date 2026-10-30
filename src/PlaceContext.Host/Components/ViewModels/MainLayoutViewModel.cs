@@ -94,6 +94,15 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public string RootPath =>
         _configuration["PlaceContext:RootPath"] ?? Directory.GetCurrentDirectory();
     public string Title => ActiveNavigationTitle() ?? _ui.Title;
+    public string HeaderTitle
+    {
+        get
+        {
+            var path = GetCurrentPath();
+            return path == $"/project/{CurrentProjectId}/build/workflows"
+                || path == $"/project/{CurrentProjectId}/dashboards" ? "Workspace" : Title;
+        }
+    }
     public string Subtitle => _ui.Sub;
     public Guid? CurrentProjectId => _ui.CurrentProjectId;
     public string? CurrentProjectName => _ui.CurrentProjectName;
@@ -198,7 +207,8 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         : "/" + href;
 
     public NavLinkMatch MatchFor(string? href) =>
-        href == "/" ? NavLinkMatch.All : NavLinkMatch.Prefix;
+        href == "/" || href == $"/project/{CurrentProjectId}/build"
+            ? NavLinkMatch.All : NavLinkMatch.Prefix;
 
     public bool PathMatches(string? href) => PathMatches(GetCurrentPath(), href);
 

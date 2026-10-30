@@ -200,8 +200,8 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
 
 ## Screenshots
 
-Agent Store and data profiles below are local previews rendered from the actual portal components
-using sample project data.
+Agent Store and data profiles below show the actual portal and application shell running locally
+with sample project data and fixture services.
 
 ![Agent Store preparing project context for an enterprise phone agent](docs/images/agent-store-context.png)
 
@@ -299,8 +299,9 @@ privately as described in [SECURITY.md](SECURITY.md).
 
 ### Agent Store and data profiles
 
-**Agent Store** starts with an outcome and the data already available in the project. Choose
-an agent, review the matching sources, and select **Use project data**. Manual context is
+**Agent Store** starts with a searchable catalogue grouped by team, with run history in a
+separate view. Choose an outcome to open its context inspector, review the matching project
+sources, and select **Use project data**. Manual context is
 available when something essential is missing. Discovery reads bounded samples from explicitly
 matched project tables; it does not call a model, scan unrelated tables or contact external
 systems. **Continue in Build** opens an editable request to configure the agent, without copying
@@ -314,9 +315,11 @@ input presence. Standalone AI plan runs retain development-only subscription sim
 configured provider requirements; they propose actions for review rather than execute them.
 See the [Agent Store guide](src/PlaceContext.Host/Wiki/agent-store.md) for source names and scope.
 
-**Data profiles** opens an immediate overview of up to 12 available chart snapshots. Switch
-between **Overview**, **Needs attention** and **Explore values**, select a source, and inspect
-its displayed patterns, freshness, evidence checks and suggested questions. Save private named
+**Data profiles** opens a visual overview of up to 12 available chart snapshots, with a summary
+of freshness, confidence and evidence needing attention. **Overview** and **Needs attention**
+show chart panels together; **Explore values** opens a focused chart and its exact displayed
+values. Select a panel to inspect confidence, evidence checks and suggested questions alongside
+the charts. Save private named
 views, choose and reorder source charts, or explore without saving a layout first. Saved views
 and questions remain encrypted and scoped to the current tenant, project and user.
 

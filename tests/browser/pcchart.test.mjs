@@ -24,6 +24,7 @@ function setup({ lazy = false } = {}) {
   }
   const context = {
     console, queueMicrotask,
+    getComputedStyle: el => ({ getPropertyValue: name => el.tokens?.[name] ?? '' }),
     setTimeout(callback) { timers.set(++nextTimer, callback); return nextTimer; },
     clearTimeout(id) { timers.delete(id); },
     IntersectionObserver: class {
@@ -34,6 +35,7 @@ function setup({ lazy = false } = {}) {
     MutationObserver: class {
       constructor(callback) { this.callback = callback; }
       observe(target, options) { observers.push({ callback: this.callback, options }); }
+      disconnect() { const i = observers.findIndex(observer => observer.callback === this.callback); if (i >= 0) observers.splice(i, 1); }
     },
     document: {
       documentElement: {},
@@ -54,6 +56,11 @@ function setup({ lazy = false } = {}) {
   return {
     api: context.pcchart, instances, scripts,
     canvas(id) { const el = { id }; elements.set(id, el); mutate('childList'); return el; },
+    shell(theme, tokens) {
+      const shell = { theme, tokens, getAttribute: () => shell.theme };
+      elements.set('dcshell', shell); mutate('childList'); return shell;
+    },
+    theme(shell, theme, tokens) { shell.theme = theme; shell.tokens = tokens; mutate('attributes', 'data-theme'); },
     rename(el, id) {
       elements.delete(el.id);
       el.id = id;
@@ -121,4 +128,20 @@ test('concurrent renders share the fingerprinted library load and destroy cancel
   h.show();
   assert.ok(h.instances.has(kept));
   assert.equal(h.instances.has(removed), false);
+});
+
+test('theme changes redraw charts when the interactive shell mounts after the renderer loads', async () => {
+  const h = setup();
+  const shell = h.shell('dark', { '--text-3': '#9ba6bc', '--font-sans': 'Inter, system-ui, sans-serif' });
+  const canvas = h.canvas('chart');
+  await h.api.render('chart', spec);
+  h.show();
+  assert.equal(h.instances.get(canvas).config.options.scales.x.ticks.color, '#9ba6bc');
+
+  h.theme(shell, 'light', { '--text-3': '#626c82', '--font-sans': 'Inter, system-ui, sans-serif' });
+  await new Promise(resolve => queueMicrotask(resolve));
+  const ticks = h.instances.get(canvas).config.options.scales.x.ticks;
+  assert.equal(ticks.color, '#626c82');
+  assert.equal(ticks.font.family, 'Inter, system-ui, sans-serif');
+  assert.equal(h.instances.size, 1);
 });

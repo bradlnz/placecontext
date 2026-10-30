@@ -61,6 +61,11 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
     }
     public DashboardDataProfile? FocusedProfile => VisibleProfiles.FirstOrDefault(x => x.ChartId == FocusedChartId);
     public DashboardChart? FocusedChart => SelectedCharts.FirstOrDefault(x => x.Id == FocusedChartId);
+    public IReadOnlyList<DashboardDataProfile> DisplayedProfiles => Lens == DashboardLens.Explore
+        ? FocusedProfile is { } focused ? [focused] : [] : VisibleProfiles;
+    public IReadOnlyList<DashboardChart> DisplayedCharts => DisplayedProfiles
+        .Select(profile => SelectedCharts.FirstOrDefault(chart => chart.Id == profile.ChartId))
+        .OfType<DashboardChart>().ToArray();
     private readonly CancellationTokenSource _stop = new();
     private readonly Dictionary<Guid, string> _rendered = [];
     private Task _operation = Task.CompletedTask;
@@ -124,7 +129,8 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
     public void Focus(Guid chartId)
     {
         if (Busy || !VisibleProfiles.Any(x => x.ChartId == chartId) || FocusedChartId == chartId) return;
-        FocusedChartId = chartId; Analysis = null; _rendered.Clear();
+        FocusedChartId = chartId; Analysis = null;
+        if (Lens == DashboardLens.Explore) _rendered.Clear();
     }
     public void UseSuggestion(string question)
     {
@@ -188,12 +194,13 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
 
     public async Task RenderAsync()
     {
-        var charts = FocusedChart is { } focused && (!_rendered.TryGetValue(focused.Id, out var spec) || spec != focused.Spec.ToJson())
-            ? new[] { focused } : [];
+        var charts = DisplayedCharts.Where(chart => !_rendered.TryGetValue(chart.Id, out var spec)
+            || spec != chart.Spec.ToJson()).ToArray();
         if (charts.Length == 0) return;
         try
         {
-            await js.InvokeVoidAsync("pcchart.renderAll", charts.Select(x => new { id = CanvasId(x.Id), spec = x.Spec.ToJson() }).ToArray());
+            var entries = charts.Select(x => new { id = CanvasId(x.Id), spec = x.Spec.ToJson() }).ToArray();
+            await js.InvokeVoidAsync("pcchart.renderAll", new object[] { entries });
             foreach (var chart in charts) _rendered[chart.Id] = chart.Spec.ToJson();
         }
         catch (JSException) { }

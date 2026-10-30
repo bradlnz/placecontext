@@ -4,6 +4,9 @@
 
 Open **Agent Store** beside Build. Search by outcome, team or source and choose an agent.
 Each outcome appears once; context readiness and the optional AI plan are modes of that agent.
+The catalogue uses compact rows and team filters, with an agent workspace beside it. On a
+small screen the selected workspace appears first. **Browse agents** and **Run history**
+switch between discovery and recent results without losing the selected agent.
 
 ## Start with project data
 
@@ -12,6 +15,9 @@ or perform an external action. Review the candidate sources, then choose **Use p
 to add them to the run. **Add or edit context** is available when something is missing or needs
 correcting. Supporting policies and targets are optional for the enterprise use cases; missing
 supporting evidence limits the conclusions an agent can draw.
+The source list shows candidate samples. Expand a source for its scope and timestamp, or open
+**Review prepared context** to inspect the complete prepared payload. Selecting project data
+and starting a run remain separate actions.
 
 Preparation requires permission to read project data. It uses explicit table-name matches,
 including common underscore, hyphen and case variations. If several sources match one input,

@@ -300,3 +300,113 @@ body {
     grid-template-columns:repeat(auto-fit, minmax(250px, 1fr));
     gap:14px;
 }
+
+/* Shared workbench surfaces. These tokens also theme the surrounding shell so the
+   Agent Store and data canvas read as one workspace. Tenant brand overrides survive. */
+#dcshell:has(.product-workspace),
+html[data-pc-theme] #dcshell:has(.product-workspace) {
+    --menu-width:216px;
+    --ws-bg:var(--tenant-bg,#11131a);
+    --ws-panel:var(--tenant-panel,#191c25);
+    --ws-raised:#222632;
+    --ws-hover:#292e3d;
+    --ws-border:#343b4c;
+    --ws-text:var(--tenant-text,#f0f2f8);
+    --ws-muted:#bdc5d6;
+    --ws-subtle:#9ba6bc;
+    --ws-accent:var(--tenant-accent,#afa2ff);
+    --ws-accent-solid:var(--tenant-accent,#7256db);
+    --ws-on-accent:#fff;
+    --ws-accent-bg:color-mix(in srgb, var(--ws-accent) 12%, transparent);
+    --ws-cyan:#6dd5e5;
+    --ws-good:#73d8ad;
+    --ws-warn:#edbf6d;
+    --ws-bad:#f294a4;
+    --bg:var(--ws-bg); --bg-tilt:var(--ws-bg);
+    --panel:var(--ws-panel); --card:var(--ws-panel);
+    --card-2:var(--ws-raised); --hover:var(--ws-hover);
+    --border:var(--ws-border); --border-2:#485269;
+    --text:var(--ws-text); --text-2:var(--ws-muted);
+    --text-3:var(--ws-subtle); --text-4:var(--ws-subtle);
+    --brand:var(--ws-accent); --brand-2:var(--ws-accent);
+    --brand-bg:var(--ws-accent-bg); --brand-fg:var(--ws-on-accent);
+    --good:var(--ws-good); --warn:var(--ws-warn); --bad:var(--ws-bad);
+    --good-bg:color-mix(in srgb,var(--ws-good) 10%,transparent);
+    --warn-bg:color-mix(in srgb,var(--ws-warn) 10%,transparent);
+    --bad-bg:color-mix(in srgb,var(--ws-bad) 10%,transparent);
+    --button-bg:var(--ws-raised); --button-hover:var(--ws-hover);
+    --button-border:var(--ws-border); --button-text:var(--ws-text);
+    --ch-bg:var(--ws-bg); --ch-panel:var(--ws-panel); --ch-panel-2:var(--ws-raised);
+    --ch-border:var(--ws-border); --ch-border-2:var(--border-2);
+    --ch-text:var(--ws-text); --ch-text-2:var(--ws-muted); --ch-text-3:var(--ws-subtle);
+}
+#dcshell[data-theme="light"]:has(.product-workspace),
+html[data-pc-theme="light"] #dcshell:has(.product-workspace) {
+    --ws-bg:var(--tenant-bg,#f5f6fa);
+    --ws-panel:var(--tenant-panel,#fff);
+    --ws-raised:#f1f3f8;
+    --ws-hover:#e9ecf4;
+    --ws-border:#dce0e9;
+    --ws-text:var(--tenant-text,#202534);
+    --ws-muted:#515d73;
+    --ws-subtle:#626c82;
+    --ws-accent:var(--tenant-accent,#6750bd);
+    --ws-accent-solid:var(--tenant-accent,#7256db);
+    --ws-cyan:#087d94;
+    --ws-good:#187450;
+    --ws-warn:#8f6014;
+    --ws-bad:#b34359;
+    --border-2:#b9c1d2;
+}
+.product-workspace {
+    color:var(--ws-text);
+    background:var(--ws-bg);
+    font-size:13px;
+    line-height:1.5;
+    letter-spacing:0;
+    container-type:inline-size;
+}
+.product-workspace :where(button,input,select,textarea) { font-family:inherit; }
+.product-workspace :where(button,a,input,select,textarea,summary):focus-visible {
+    outline:2px solid var(--ws-accent);
+    outline-offset:3px;
+}
+.product-workspace :where(h1,h2,h3,h4,p) { overflow-wrap:anywhere; }
+.product-workspace ::selection { background:var(--ws-accent-bg); }
+#dcshell:has(.product-workspace) .sidebar { background:var(--ws-panel); }
+#dcshell:has(.product-workspace) .brand-row { min-height:54px; padding:12px 16px; }
+#dcshell:has(.product-workspace) .brand-logo { width:27px; height:27px; }
+#dcshell:has(.product-workspace) .org-name { margin-top:3px; font-size:10px; letter-spacing:0; }
+#dcshell:has(.product-workspace) .nav-list { padding:14px 10px; gap:3px; }
+#dcshell:has(.product-workspace) .nav-list .dcnav {
+    min-height:36px; padding:8px 10px; gap:10px;
+    border-radius:6px; font-size:12.5px; font-weight:500;
+}
+#dcshell:has(.product-workspace) .nav-list .dcnav.active { color:var(--ws-accent); }
+#dcshell:has(.product-workspace) .nav-list .dcnav .bar { display:none; }
+#dcshell:has(.product-workspace) .nav-list .nav-child { min-height:32px; font-size:12px; padding:6px 10px; }
+#dcshell:has(.product-workspace) .nav-section { font-size:10px; font-weight:600; letter-spacing:.07em; padding:16px 10px 6px; }
+#dcshell:has(.product-workspace) .nav-children { margin-left:18px; padding-left:8px; }
+#dcshell:has(.product-workspace) .topbar { gap:16px; min-height:54px; height:54px; }
+#dcshell:has(.product-workspace) .topbar-sub { display:none; }
+#dcshell:has(.product-workspace) .dcsearch-trigger { min-width:0; width:230px; border-radius:6px; padding:7px 9px; }
+#dcshell:has(.product-workspace) .dcsearch-trigger .dcsearch-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#dcshell:has(.product-workspace) .running-badge { padding:4px 7px; border:none; background:transparent; font-size:11px; }
+#dcshell:has(.product-workspace) .running-dot { animation:none; }
+#dcshell:has(.product-workspace) .switcher-pill,
+#dcshell:has(.product-workspace) .icon-btn { border-radius:6px; }
+#dcshell:has(.product-workspace) .user-bar { border-top:1px solid var(--ws-border); padding:13px 16px; }
+#dcshell:has(.product-workspace) .user-avatar { border-radius:50%; width:30px; height:30px; background:var(--ws-accent-bg); color:var(--ws-accent); }
+@media (max-width:1150px) and (min-width:951px) {
+    #dcshell:has(.product-workspace) .dcsearch-trigger { width:170px; }
+    #dcshell:has(.product-workspace) .running-badge { display:none; }
+}
+@media (max-width:950px) {
+    #dcshell:has(.product-workspace) .dcsearch-trigger { width:36px; height:36px; min-width:36px; padding:0; justify-content:center; }
+    #dcshell:has(.product-workspace) .dcsearch-trigger .dcsearch-text,
+    #dcshell:has(.product-workspace) .dcsearch-trigger kbd { display:none; }
+    #dcshell:has(.product-workspace) .nav-list .dcnav { min-height:42px; }
+}
+@media (prefers-reduced-motion:reduce) {
+    .product-workspace *, .product-workspace *::before, .product-workspace *::after { transition:none !important; animation:none !important; }
+}

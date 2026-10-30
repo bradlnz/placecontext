@@ -13,6 +13,8 @@ window.pcchart = (function () {
   const specs = {};    // canvas id → spec (for theme re-render)
   const observed = {}; // canvas id → canvas waiting for IntersectionObserver
   let chartLoader = null;
+  let themeShell = null;
+  let themeObserver = null;
 
   function ensureChart() {
     if (typeof window.Chart !== 'undefined') return Promise.resolve(window.Chart);
@@ -45,6 +47,8 @@ window.pcchart = (function () {
       grid: v('--border', dark ? '#1d232b' : '#e5e9ed'),     // recessive hairlines
       tooltipBg: v('--card-2', dark ? '#161a1f' : '#f4f6f8'),
       tooltipInk: v('--text', dark ? '#e8ebef' : '#101620'),
+      // Canvas fonts cannot resolve CSS var() expressions as DOM text does.
+      font: v('--font-sans', 'Inter, system-ui, -apple-system, sans-serif'),
     };
   }
 
@@ -72,7 +76,7 @@ window.pcchart = (function () {
   }
 
   function config(spec, t) {
-    const font = { family: "var(--font-sans)", size: 11 };
+    const font = { family: t.font, size: 11 };
     const many = spec.type === 'pie' || spec.series.length > 1; // one series needs no legend — the title names it
     return {
       type: spec.type === 'pie' ? 'doughnut' : spec.type,
@@ -163,6 +167,7 @@ window.pcchart = (function () {
     reconcileQueued = true;
     queueMicrotask(() => {
       reconcileQueued = false;
+      observeTheme();
       for (const id of Object.keys(specs)) {
         const el = document.getElementById(id);
         const chartEl = charts[id]?.canvas;
@@ -189,11 +194,19 @@ window.pcchart = (function () {
 
   // Theme flips re-render every live chart with the new tokens (dark is its own selected palette,
   // not an automatic flip of the light one).
-  const shell = document.getElementById('dcshell');
-  if (shell && window.MutationObserver) {
-    new MutationObserver(() => Object.keys(charts).forEach(draw))
-      .observe(shell, { attributes: true, attributeFilter: ['data-theme'] });
+  function observeTheme() {
+    const shell = document.getElementById('dcshell');
+    if (shell === themeShell) return;
+    themeObserver?.disconnect();
+    themeShell = shell;
+    // Interactive rendering can mount the shell after this module has loaded.
+    // The DOM reconciler also calls this when a shell is added or replaced.
+    if (shell && window.MutationObserver) {
+      themeObserver = new MutationObserver(() => Object.keys(charts).forEach(draw));
+      themeObserver.observe(shell, { attributes: true, attributeFilter: ['data-theme'] });
+    }
   }
+  observeTheme();
 
   function renderCore(id, specJson) {
     try { specs[id] = typeof specJson === 'string' ? JSON.parse(specJson) : specJson; }

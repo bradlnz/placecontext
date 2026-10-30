@@ -1,240 +1,229 @@
 @page "/project/{ProjectId:guid}/build/workflows"
 @attribute [Authorize(Policy = Permission.ChainsManage)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
+@using PlaceContext.Application.AgentWorkflows
 @inject AgentWorkflowsViewModel Vm
 @implements IDisposable
 
 <PageTitle>PlaceContext — Agent Store</PageTitle>
-<div class="agent-store" aria-busy="@Vm.Busy">
+<div class="agent-store product-workspace" aria-busy="@Vm.Busy">
     <header class="store-header">
         <div class="store-header-start">
-            <a class="store-icon-button" href="@Vm.BuildUrl" aria-label="Back to Build" title="Back to Build"><AppIcon Kind="arrow-left" /></a>
-            <h1 class="store-title">Agent Store</h1>
+            <span class="workspace-symbol"><AppIcon Kind="agent" /></span>
+            <div class="store-breadcrumb"><a href="@Vm.BuildUrl">Build</a><AppIcon Kind="chevron-right" /><h1>Agent Store</h1></div>
         </div>
         <div class="store-header-actions">
-            <a class="store-toolbar-button" href="@Vm.DashboardsUrl" aria-label="Data profiles"><AppIcon Kind="data.graph" /><span>Data profiles</span></a>
-            <button class="store-toolbar-button @(Vm.ShowHistory ? "selected" : "")" disabled="@Vm.Busy" aria-label="Run history" aria-expanded="@Vm.ShowHistory" aria-controls="agent-run-history" @onclick="Vm.ToggleHistory"><AppIcon Kind="history" /><span>Run history</span></button>
+            <a class="store-toolbar-button profiles-link" href="@Vm.DashboardsUrl" aria-label="Data profiles"><AppIcon Kind="data.analytics" /><span>Data profiles</span></a>
+            <a class="store-primary new-agent" href="@Vm.BuildUrl"><AppIcon Kind="plus" /><span>Build an agent</span></a>
         </div>
     </header>
+
+    <nav class="store-tabs" aria-label="Agent Store views">
+        <button class="@(!Vm.ShowHistory ? "selected" : "")" aria-pressed="@(!Vm.ShowHistory)" disabled="@Vm.Busy" @onclick="() => ShowHistory(false)"><AppIcon Kind="grid" /> Browse agents <span>@Vm.UseCaseCount</span></button>
+        <button @ref="_historyTab" class="@(Vm.ShowHistory ? "selected" : "")" aria-pressed="@Vm.ShowHistory" disabled="@Vm.Busy" @onclick="() => ShowHistory(true)"><AppIcon Kind="history" /> Run history @if (Vm.Workspace is { Runs.Count: > 0 } history) { <span>@history.Runs.Count</span> }</button>
+        <span class="store-tabs-note"><AppIcon Kind="data" /> Uses your project context</span>
+    </nav>
+
     <div class="store-content">
-        @if (Vm.Error is not null)
-        {
-            <p class="store-error" role="alert">@Vm.Error</p>
-        }
+        @if (Vm.Error is not null) { <p class="store-error" role="alert"><AppIcon Kind="warning" /> @Vm.Error</p> }
         @if (Vm.Workspace is { } workspace)
         {
-            @if (Vm.ShowHistory)
-            {
-                <section id="agent-run-history" class="store-history" aria-labelledby="agent-history-heading">
-                    <div class="history-heading"><h2 id="agent-history-heading">Recent agent runs</h2><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync">Refresh</button></div>
-                    <p>The latest 50 runs in this project. Opening a result does not start another run.</p>
-                    @if (workspace.Runs.Count == 0) { <div class="store-empty"><p>No agent runs yet. Start with a context check.</p></div> }
-                    @foreach (var run in workspace.Runs)
+            <div class="store-heading">
+                <div><h2>@(Vm.ShowHistory ? "Agent activity" : "Agent catalogue")</h2><p>@(Vm.ShowHistory ? "Review the latest 50 runs and their results." : "Find a job for your team. Start with existing project data.")</p></div>
+                <span class="workspace-label"><span></span> Project workspace</span>
+            </div>
+
+            <div class="catalogue-layout @(Vm.Selected is null ? "" : "has-selection")">
+                <section class="catalogue-panel" aria-label="@(Vm.ShowHistory ? "Run history" : "Agent catalogue")">
+                    @if (Vm.ShowHistory)
                     {
-                        <article class="history-row" @key="run.Id"><div><strong>@Vm.WorkflowName(run.AgentId)</strong><small>@AgentWorkflowsViewModel.StartedLabel(run) · @AgentWorkflowsViewModel.StatusLabel(run)</small></div><div><span>@AgentWorkflowsViewModel.TokenLabel(run)</span><small>@AgentWorkflowsViewModel.CreditLabel(run)</small></div><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => OpenResult(run)">View result</button></article>
-                    }
-                </section>
-            }
-            @if (Vm.Selected is null)
-            {
-                <section class="store-intro" aria-labelledby="agent-store-intro">
-                    <span class="store-intro-icon"><AppIcon Kind="agent" /></span>
-                    <h2 id="agent-store-intro">What should your agents handle?</h2>
-                    <p>Choose an outcome. Find relevant data in this project, review the context,<br />and turn it into an agent with Build.</p>
-                </section>
-                <div class="outcome-picks" aria-label="Agent starting points">
-                    @foreach (var suggested in Vm.SuggestedAgents)
-                    {
-                        <button class="outcome-pick" disabled="@Vm.Busy" @onclick="() => OpenAgentAsync(suggested)">
-                            <span class="outcome-pick-icon"><AppIcon Kind="@AgentWorkflowsViewModel.IndustryIcon(suggested)" /></span>
-                            <span class="outcome-pick-copy"><strong>@suggested.UseCaseName</strong><span>@suggested.IntendedFor</span></span>
-                            <span class="outcome-pick-arrow"><AppIcon Kind="arrow-right" /></span>
-                        </button>
-                    }
-                </div>
-            }
-            <section class="store-discovery" aria-labelledby="agent-catalogue-heading">
-                <div class="discovery-controls">
-                    <label class="store-search"><AppIcon Kind="data.search" /><span class="visually-hidden">Find an agent by outcome or data source</span><input @ref="_search" placeholder="Find an outcome, team or data source…" @bind="Vm.Search" @bind:event="oninput" /></label>
-                    <label class="industry-select">Team or industry<select @bind="Vm.Industry"><option value="">All industries</option>@foreach (var industry in Vm.Industries) { <option value="@industry">@industry</option> }</select></label>
-                </div>
-                <div class="section-heading">
-                    <h2 id="agent-catalogue-heading">Explore agents <span>@Vm.VisibleUseCases.Count() of @Vm.UseCaseCount outcomes</span></h2>
-                    <div class="access-filters" aria-label="Agent availability">
-                        <button class="@(Vm.Filter == AgentBrowseFilter.All ? "selected" : "")" aria-pressed="@(Vm.Filter == AgentBrowseFilter.All)" @onclick="() => Vm.Browse(AgentBrowseFilter.All)">All agents</button>
-                        <button class="@(Vm.Filter == AgentBrowseFilter.Free ? "selected" : "")" aria-pressed="@(Vm.Filter == AgentBrowseFilter.Free)" @onclick="() => Vm.Browse(AgentBrowseFilter.Free)">Local checks</button>
-                        @if (workspace.SimulationEnabled)
+                        <div class="catalogue-panel-heading"><h3>Recent runs <span>@workspace.Runs.Count</span></h3><button class="store-toolbar-button" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /> Refresh</button></div>
+                        @if (workspace.Runs.Count == 0)
                         {
-                            <button class="@(Vm.Filter == AgentBrowseFilter.Subscribed ? "selected" : "")" aria-pressed="@(Vm.Filter == AgentBrowseFilter.Subscribed)" @onclick="() => Vm.Browse(AgentBrowseFilter.Subscribed)">Enabled agents</button>
+                            <div class="store-empty"><span class="empty-symbol"><AppIcon Kind="history" /></span><h3>Your agent activity will appear here</h3><p>Choose an agent and review its project context to get started.</p><button class="store-toolbar-button bordered" disabled="@Vm.Busy" @onclick="() => ShowHistory(false)">Browse agents <AppIcon Kind="arrow-right" /></button></div>
                         }
-                    </div>
-                </div>
-                <div class="catalogue-layout @(Vm.Selected is null ? "" : "has-selection")">
-                    <div class="agent-grid">
-                        @foreach (var useCase in Vm.VisibleUseCases)
+                        @foreach (var run in workspace.Runs)
                         {
-                            var agent = useCase.Summary;
-                            <article class="agent-card @(Vm.Selected?.UseCaseId == useCase.Id ? "selected" : "")" @key="useCase.Id">
-                                <div class="agent-card-top"><span class="agent-card-icon"><AppIcon Kind="@AgentWorkflowsViewModel.IndustryIcon(agent)" /></span><span class="agent-industry">@agent.Industry</span></div>
-                                <h3><button class="agent-name" disabled="@Vm.Busy" @onclick="() => OpenAgentAsync(agent)">@useCase.Name</button></h3>
-                                <p>@agent.Outcome</p>
-                                <div class="source-tags" aria-label="Relevant data sources">@foreach (var source in agent.DataSources.Take(3)) { <span>@source</span> }</div>
-                                <div class="agent-card-footer">
-                                    <span>@(useCase.Variants.Any(x => Vm.Subscribed(x.Id)) ? "Enabled in this workspace" : agent.IntendedFor)</span>
-                                    <button class="agent-open" disabled="@Vm.Busy" aria-label="Explore @useCase.Name" @onclick="() => OpenAgentAsync(agent)">Use agent <AppIcon Kind="arrow-right" /></button>
-                                </div>
+                            <article class="history-row" @key="run.Id">
+                                <span class="row-symbol"><AppIcon Kind="history" /></span>
+                                <div class="history-copy"><strong>@Vm.WorkflowName(run.AgentId)</strong><small>@AgentWorkflowsViewModel.StartedLabel(run)</small></div>
+                                <span class="run-status">@AgentWorkflowsViewModel.StatusLabel(run)</span>
+                                <button class="store-toolbar-button" disabled="@Vm.Busy" @onclick="() => OpenResult(run)">View <AppIcon Kind="chevron-right" /></button>
                             </article>
                         }
-                        @if (!Vm.VisibleUseCases.Any())
-                        {
-                            <div class="store-empty"><AppIcon Kind="data.search" /><h3>No matching agents</h3><p>Try a different outcome or source, or start a new agent in Build.</p><button class="dcbtn" @onclick="Vm.ClearFilters">Clear filters</button> <a class="dcbtn" href="@Vm.BuildUrl">Open Build</a></div>
-                        }
-                    </div>
-                    @if (Vm.Selected is { } selected)
+                    }
+                    else
                     {
-                        <aside class="agent-detail" aria-labelledby="agent-detail-title" @key="selected.Id">
-                            <div class="agent-detail-header"><span>@selected.Industry</span><button class="store-icon-button" aria-label="Close agent details" disabled="@Vm.Busy" @onclick="CloseDetailsAsync"><AppIcon Kind="close" /></button></div>
+                        <div class="catalogue-controls">
+                            <label class="store-search"><AppIcon Kind="data.search" /><span class="visually-hidden">Find an agent by outcome or data source</span><input @ref="_search" placeholder="Search agents, teams or data…" @bind="Vm.Search" @bind:event="oninput" disabled="@Vm.Busy" /></label>
+                            <label class="availability-select"><span class="visually-hidden">Agent availability</span><select value="@Vm.Filter" disabled="@Vm.Busy" @onchange="SetAvailability"><option value="@AgentBrowseFilter.All">All agents</option><option value="@AgentBrowseFilter.Free">Local checks</option>@if (workspace.SimulationEnabled) { <option value="@AgentBrowseFilter.Subscribed">Enabled agents</option> }</select></label>
+                        </div>
+                        <nav class="category-filters" aria-label="Agent categories">
+                            <button class="@(Vm.Industry.Length == 0 ? "selected" : "")" aria-pressed="@(Vm.Industry.Length == 0)" disabled="@Vm.Busy" @onclick='() => Vm.Industry = ""'>All teams <span>@Vm.UseCaseCount</span></button>
+                            @foreach (var industry in Vm.Industries)
+                            {
+                                <button class="@(Vm.Industry == industry ? "selected" : "")" aria-pressed="@(Vm.Industry == industry)" disabled="@Vm.Busy" @onclick="() => Vm.Industry = industry">@IndustryLabel(industry)<span>@workspace.Workflows.Where(x => x.Industry == industry).Select(x => x.UseCaseId).Distinct().Count()</span></button>
+                            }
+                        </nav>
+                        <div class="catalogue-columns" aria-hidden="true"><span>AGENT / OUTCOME</span><span>SUGGESTED CONTEXT</span><span></span></div>
+                        <div class="agent-list">
+                            @foreach (var useCase in Vm.VisibleUseCases)
+                            {
+                                var agent = useCase.Summary;
+                                <button class="agent-row @(Vm.Selected?.UseCaseId == useCase.Id ? "selected" : "")" disabled="@Vm.Busy" aria-pressed="@(Vm.Selected?.UseCaseId == useCase.Id)" @onclick="() => OpenAgentAsync(agent)" @key="useCase.Id">
+                                    <span class="agent-row-main">
+                                        <span class="row-symbol @IndustryTone(agent.Industry)"><AppIcon Kind="@AgentIcon(agent)" /></span>
+                                        <span class="agent-row-copy"><strong>@useCase.Name</strong><span class="agent-outcome">@agent.Outcome</span><span class="agent-team">@IndustryLabel(agent.Industry)</span></span>
+                                    </span>
+                                    <span class="agent-row-context" title="@string.Join(", ", agent.DataSources)"><AppIcon Kind="data" /><span>@agent.DataSources.Count source types</span></span>
+                                    <span class="row-chevron"><AppIcon Kind="chevron-right" /></span>
+                                </button>
+                            }
+                            @if (!Vm.VisibleUseCases.Any())
+                            {
+                                <div class="store-empty"><span class="empty-symbol"><AppIcon Kind="data.search" /></span><h3>No agents match these filters</h3><p>Try another outcome, team or data source.</p><button class="store-toolbar-button bordered" @onclick="Vm.ClearFilters">Clear filters</button></div>
+                            }
+                        </div>
+                        <footer class="catalogue-footer"><span>@Vm.VisibleUseCases.Count() of @Vm.UseCaseCount agents</span><span><AppIcon Kind="check" /> Context checks use no AI tokens</span></footer>
+                    }
+                </section>
+
+                @if (Vm.Selected is { } selected)
+                {
+                    var summary = Vm.SelectedVariants.FirstOrDefault(x => x.Paid) ?? selected;
+                    <aside class="agent-detail" aria-labelledby="agent-detail-title" @key="selected.Id">
+                        <div class="inspector-toolbar"><span>AGENT WORKSPACE</span><button class="store-icon-button" aria-label="Close agent details" title="Close agent details" disabled="@Vm.Busy" @onclick="CloseDetailsAsync"><AppIcon Kind="close" /></button></div>
+                        <div class="inspector-heading">
+                            <span class="detail-symbol @IndustryTone(selected.Industry)"><AppIcon Kind="@AgentIcon(selected)" /></span>
+                            <span class="detail-category">@IndustryLabel(selected.Industry)</span>
                             <h2 id="agent-detail-title" tabindex="-1" @ref="_detailHeading">@selected.UseCaseName</h2>
-                            <p class="agent-description">@selected.Description</p>
-                            <div class="agent-variants" aria-label="Agent mode">
-                                @foreach (var variant in Vm.SelectedVariants)
+                            <p>@summary.Description</p>
+                        </div>
+                        <div class="agent-variants" aria-label="Agent mode">
+                            @foreach (var variant in Vm.SelectedVariants)
+                            {
+                                <button class="@(selected.Id == variant.Id ? "selected" : "")" disabled="@Vm.Busy" aria-pressed="@(selected.Id == variant.Id)" @onclick="() => SelectVariantAsync(variant)"><AppIcon Kind="@(variant.Paid ? "agent" : "check")" />@(variant.Paid ? "AI plan" : "Context check")</button>
+                            }
+                        </div>
+
+                        @if (Vm.Result is { } result)
+                        {
+                            <section class="detail-result" aria-live="polite"><div class="section-heading"><h3>Run result</h3><span class="state-badge">@AgentWorkflowsViewModel.StatusLabel(result)</span></div><small>@AgentWorkflowsViewModel.StartedLabel(result)</small>
+                                @if (Vm.ReadinessResult is { } readiness) { <p>@readiness.Summary</p>@if (readiness.MissingFields.Count > 0) { <p><strong>Missing:</strong> @string.Join(", ", readiness.MissingFields)</p> } }
+                                else if (result.Output is not null) { <pre>@result.Output</pre> }
+                                @if (!string.IsNullOrWhiteSpace(result.Notice)) { <p>@result.Notice</p> }
+                                @if (selected.Paid) { <small>@AgentWorkflowsViewModel.TokenLabel(result) · @AgentWorkflowsViewModel.CreditLabel(result)</small> }
+                            </section>
+                        }
+
+                        <section class="project-context" aria-labelledby="agent-project-context">
+                            <div class="section-heading"><h3 id="agent-project-context">Project context</h3><span class="state-badge @(Vm.ProjectContextApplied ? "adopted" : "")">@(Vm.PreparingContext ? "Finding sources" : Vm.ProjectContextApplied ? "Selected" : Vm.HasPreparedContext ? "Review needed" : "Not connected")</span></div>
+                            @if (Vm.PreparingContext)
+                            {
+                                <p class="context-note" role="status">Checking accessible project sources…</p><div class="context-skeleton dcskel"></div>
+                            }
+                            else if (Vm.Preparation is { } preparation)
+                            {
+                                @if (preparation.Sources.Count > 0)
                                 {
-                                    <button class="@(selected.Id == variant.Id ? "selected" : "")" disabled="@Vm.Busy" aria-pressed="@(selected.Id == variant.Id)" @onclick="() => SelectVariantAsync(variant)">@(variant.Paid ? "AI plan" : "Context readiness")</button>
-                                }
-                            </div>
-                            <section class="detail-section" aria-labelledby="agent-project-context">
-                                <h3 id="agent-project-context"><AppIcon Kind="data.graph" /> Project context</h3>
-                                @if (Vm.PreparingContext)
-                                {
-                                    <div class="context-summary" role="status"><p class="context-status">Finding relevant project data…</p><p>No model request is made while preparing context.</p></div>
-                                }
-                                else if (Vm.Preparation is { } preparation)
-                                {
-                                    <div class="context-summary">
-                                        <p class="context-status">@(Vm.ProjectContextApplied ? "Project context selected" : Vm.HasPreparedContext ? "Candidate context found" : "Connect the context this agent needs")</p>
-                                        <p>@preparation.Notice</p>
-                                        @if (preparation.Sources.Count > 0)
+                                    <div class="context-sources">
+                                        @foreach (var source in preparation.Sources)
                                         {
-                                            <ul class="context-sources">
-                                                @foreach (var source in preparation.Sources)
-                                                {
-                                                    <li><strong>@source.Name</strong><small>@source.Kind · @AgentWorkflowsViewModel.ContextTimestamp(source)</small><small>@source.Summary</small></li>
-                                                }
-                                            </ul>
+                                            <details class="source-row"><summary><span class="source-icon"><AppIcon Kind="data" /></span><span class="source-copy"><strong>@source.Name</strong><small>@source.Kind · sampled</small></span><AppIcon Kind="chevron-down" /></summary><p>@source.Summary</p><small>@AgentWorkflowsViewModel.ContextTimestamp(source)</small></details>
                                         }
                                     </div>
-                                    @if (Vm.HasPreparedContext)
+                                }
+                                @if (Vm.HasPreparedContext)
+                                {
+                                    <p class="sample-notice"><AppIcon Kind="about" /> Bounded samples. Freshness and full coverage are unverified.</p>
+                                    @if (!Vm.ProjectContextApplied)
                                     {
-                                        <details class="context-review">
-                                            <summary>Review prepared context</summary>
-                                            <dl class="context-preview">@foreach (var entry in preparation.Inputs.Where(x => !string.IsNullOrWhiteSpace(x.Value))) { <div><dt>@AgentWorkflowsViewModel.FieldLabel(entry.Key)</dt><dd>@entry.Value</dd></div> }</dl>
-                                        </details>
-                                        @if (!Vm.ProjectContextApplied)
-                                        {
-                                            <div class="detail-actions"><button class="store-primary" disabled="@Vm.Busy" @onclick="Vm.UseProjectContext"><AppIcon Kind="check" /> Use project data</button></div>
-                                            <p class="context-note">Confirm these sources match the task. Selecting them does not run the agent.</p>
-                                        }
+                                        <button class="@(selected.Paid && !Vm.CanRunAiPlan ? "store-secondary" : "store-primary") context-primary" disabled="@Vm.Busy" @onclick="Vm.UseProjectContext"><AppIcon Kind="check" /> Use project data</button><p class="action-hint">Review the sources, then select them. The agent runs separately.</p>
                                     }
                                 }
                                 else
                                 {
-                                    <div class="context-summary"><p>Project context has not been prepared.</p><button class="store-toolbar-button" disabled="@Vm.Busy" @onclick="Vm.PrepareContextAsync">Find project data <AppIcon Kind="arrow-right" /></button></div>
+                                    <div class="context-empty"><span class="source-icon"><AppIcon Kind="data" /></span><div><strong>Find the right source with Build</strong><p>No matching context is ready to use in this project.</p></div></div>
                                 }
-                                @if (Vm.ProjectContextApplied && Vm.MissingContextFields.Count > 0)
-                                {
-                                    <p class="required-context"><strong>Still needed:</strong> @string.Join(", ", Vm.MissingContextFields.Select(AgentWorkflowsViewModel.FieldLabel)). Add the missing context below or let Build help connect it.</p>
-                                }
-                                <details class="context-editor">
-                                    <summary>@(Vm.ProjectContextApplied && Vm.MissingContextFields.Count > 0 ? "Add missing context" : "Add or edit context")</summary>
-                                    <p class="context-note">Use project data first, or provide the details you want this agent to use. Keep credentials in the vault.</p>
-                                    @foreach (var field in selected.InputFields)
-                                    {
-                                        <label for="@($"agent-input-{field}")">@AgentWorkflowsViewModel.FieldLabel(field) @if (!selected.RequiredInputFields.Contains(field)) { <span class="input-hint">Optional supporting context</span> }</label>
-                                        <textarea id="@($"agent-input-{field}")" class="dcinput" rows="3" maxlength="5000" value="@Vm.Inputs[field]" @oninput="e => Vm.SetInput(field, e.Value?.ToString())" disabled="@Vm.Busy" aria-describedby="@($"agent-hint-{field}")"></textarea>
-                                        <small id="@($"agent-hint-{field}")" class="input-hint">@(selected.InputHints.TryGetValue(field, out var hint) ? hint : "Add context relevant to this outcome.")</small>
-                                    }
+                                <details class="context-review"><summary>Review prepared context <AppIcon Kind="chevron-down" /></summary><p>@preparation.Notice</p>
+                                    @if (Vm.HasPreparedContext) { <dl class="context-preview">@foreach (var entry in preparation.Inputs.Where(x => !string.IsNullOrWhiteSpace(x.Value))) { <div><dt>@AgentWorkflowsViewModel.FieldLabel(entry.Key)</dt><dd>@entry.Value</dd></div> }</dl> }
                                 </details>
-                            </section>
-                            <section class="detail-section">
-                                <h3>What this run returns</h3>
-                                <ul>@foreach (var deliverable in selected.Deliverables) { <li>@deliverable</li> }</ul>
-                                <p>@selected.ExecutionScope</p>
-                            </section>
-                            @if ((!Vm.HasContext && !Vm.HasPreparedContext) || (selected.Paid && !Vm.CanRunAiPlan))
-                            {
-                                <div class="detail-actions"><a class="store-primary" href="@Vm.BuildAgentUrl"><AppIcon Kind="agent" /> Set up this agent in Build</a></div>
-                                <p class="context-note">Build starts with the use case. Review and send the draft to inspect your project and configure the workflow.</p>
                             }
                             else
                             {
-                                @if (Vm.HasContext)
-                                {
-                                    <div class="detail-actions"><button class="store-primary" disabled="@(!Vm.CanStart)" @onclick="Vm.RunAsync"><AppIcon Kind="play" /> @(Vm.Busy && !Vm.PreparingContext ? "Running…" : selected.Paid ? "Run AI plan" : "Check context readiness")</button></div>
-                                }
-                                @if (selected.Paid && Vm.MissingContextFields.Count > 0)
-                                {
-                                    <p class="context-note">Add @string.Join(", ", Vm.MissingContextFields.Select(AgentWorkflowsViewModel.FieldLabel)) before requesting an AI plan.</p>
-                                }
-                                <div class="detail-actions"><a class="store-secondary" href="@Vm.BuildAgentUrl"><AppIcon Kind="agent" /> Continue with this agent in Build</a></div>
+                                <button class="store-secondary" disabled="@Vm.Busy" @onclick="Vm.PrepareContextAsync"><AppIcon Kind="data.search" /> Find project data</button>
                             }
+
+                            @if (Vm.ProjectContextApplied && Vm.MissingContextFields.Count > 0)
+                            {
+                                <p class="required-context"><AppIcon Kind="warning" /><span><strong>Still needed:</strong> @string.Join(", ", Vm.MissingContextFields.Select(AgentWorkflowsViewModel.FieldLabel))</span></p>
+                            }
+                            @if ((!Vm.HasContext && !Vm.HasPreparedContext) || (selected.Paid && !Vm.CanRunAiPlan))
+                            {
+                                <a class="store-primary context-primary" href="@Vm.BuildAgentUrl"><AppIcon Kind="agent" /> Set up this agent in Build <AppIcon Kind="arrow-right" /></a>
+                                <p class="action-hint">Opens an editable setup request.</p>
+                            }
+                            else if (Vm.HasContext)
+                            {
+                                <button class="store-primary context-primary" disabled="@(!Vm.CanStart)" @onclick="Vm.RunAsync"><AppIcon Kind="play" /> @(Vm.Busy && !Vm.PreparingContext ? "Running…" : selected.Paid ? "Run AI plan" : "Check context readiness")</button>
+                                <a class="store-secondary build-continuation" href="@Vm.BuildAgentUrl">Continue in Build <AppIcon Kind="arrow-right" /></a>
+                            }
+                            else if (Vm.HasPreparedContext)
+                            {
+                                <a class="store-secondary build-continuation" href="@Vm.BuildAgentUrl">Continue in Build <AppIcon Kind="arrow-right" /></a>
+                            }
+                            @if (selected.Paid && Vm.MissingContextFields.Count > 0 && Vm.HasContext) { <p class="context-note">Add @string.Join(", ", Vm.MissingContextFields.Select(AgentWorkflowsViewModel.FieldLabel)) before running an AI plan.</p> }
+
+                            <details class="context-editor"><summary><span><AppIcon Kind="edit" /> @(Vm.ProjectContextApplied && Vm.MissingContextFields.Count > 0 ? "Add missing context" : "Add or edit context")</span><AppIcon Kind="chevron-down" /></summary>
+                                <p class="context-note">Provide only what is missing or needs correcting. Keep credentials in the vault.</p>
+                                @foreach (var field in selected.InputFields)
+                                {
+                                    <label for="@($"agent-input-{field}")">@AgentWorkflowsViewModel.FieldLabel(field) @if (!selected.RequiredInputFields.Contains(field)) { <span>Optional</span> }</label>
+                                    <textarea id="@($"agent-input-{field}")" rows="3" maxlength="5000" value="@Vm.Inputs[field]" @oninput="e => Vm.SetInput(field, e.Value?.ToString())" disabled="@Vm.Busy" aria-describedby="@($"agent-hint-{field}")"></textarea>
+                                    <small id="@($"agent-hint-{field}")" class="input-hint">@(selected.InputHints.TryGetValue(field, out var hint) ? hint : "Add context relevant to this outcome.")</small>
+                                }
+                            </details>
+                        </section>
+
+                        <div class="agent-notes">
+                            <details class="detail-disclosure"><summary>What you’ll get <AppIcon Kind="chevron-down" /></summary><ul>@foreach (var deliverable in selected.Deliverables) { <li>@deliverable</li> }</ul><p>@selected.ExecutionScope</p></details>
+                            <details class="detail-disclosure"><summary>How this agent works <AppIcon Kind="chevron-down" /></summary><ol>@foreach (var step in selected.Steps) { <li>@step</li> }</ol></details>
                             @if (selected.Paid)
                             {
-                                <div class="access-note">
+                                <details class="detail-disclosure access-note" open="@(!Vm.CanRunAiPlan)"><summary>AI plan access <span class="access-label">@(Vm.CanRunAiPlan ? "Simulation enabled" : "Set up in Build")</span><AppIcon Kind="chevron-down" /></summary>
                                     @if (workspace.SimulationEnabled)
                                     {
-                                        <p>AI plans use local subscription simulation: @AgentWorkflowsViewModel.PriceLabel(selected) @AgentWorkflowsViewModel.PriceUnit(selected). No payments collected. Provider charges may apply; Jev usage is excluded from demo credits.</p>
-                                        @if (Vm.CanManageSubscriptions)
-                                        {
-                                            <button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.ToggleSubscriptionAsync(selected)">@(Vm.Subscribed(selected.Id) ? "Disable simulated access" : "Enable simulated access")</button>
-                                        }
-                                        else if (!Vm.Subscribed(selected.Id))
-                                        {
-                                            <p>An administrator can enable simulated access on this host.</p>
-                                        }
+                                        <p>Local subscription simulation: @AgentWorkflowsViewModel.PriceLabel(selected) @AgentWorkflowsViewModel.PriceUnit(selected). No payments collected. Provider charges may apply; Jev usage is excluded from demo credits.</p>
+                                        @if (Vm.CanManageSubscriptions) { <button class="store-secondary" disabled="@Vm.Busy" @onclick="() => Vm.ToggleSubscriptionAsync(selected)">@(Vm.Subscribed(selected.Id) ? "Disable simulated access" : "Enable simulated access")</button> }
+                                        else if (!Vm.Subscribed(selected.Id)) { <p>An administrator can enable simulated access on this host.</p> }
                                     }
-                                    else
-                                    {
-                                        <p>Standalone AI plan runs are not enabled on this host. Context checks are local; Build can help configure the agent in your project.</p>
-                                    }
-                                </div>
+                                    else { <p>Standalone AI plans are not enabled on this host. Continue in Build to configure a project workflow.</p> }
+                                </details>
                             }
-                            @if (Vm.Result is { } result)
-                            {
-                                <section class="detail-result" aria-live="polite">
-                                    <h3>@AgentWorkflowsViewModel.StatusLabel(result)</h3>
-                                    <small>Run started @AgentWorkflowsViewModel.StartedLabel(result)</small>
-                                    @if (Vm.ReadinessResult is { } readiness)
-                                    {
-                                        <p>@readiness.Summary</p>
-                                        @if (readiness.MissingFields.Count > 0) { <p><strong>Missing context:</strong> @string.Join(", ", readiness.MissingFields)</p> }
-                                    }
-                                    else if (result.Output is not null) { <pre>@result.Output</pre> }
-                                    @if (!string.IsNullOrWhiteSpace(result.Notice)) { <p>@result.Notice</p> }
-                                    @if (selected.Paid) { <small>@AgentWorkflowsViewModel.TokenLabel(result) · @AgentWorkflowsViewModel.CreditLabel(result)</small> }
-                                </section>
-                            }
-                            <details class="process-details"><summary>How this agent works</summary><ol>@foreach (var step in selected.Steps) { <li>@step</li> }</ol></details>
-                        </aside>
-                    }
-                </div>
-            </section>
-            <a class="store-context-link" href="@Vm.DashboardsUrl"><span><strong>Understand the data behind your agents</strong><small>Open data profiles to review evidence, coverage and confidence.</small></span><AppIcon Kind="arrow-right" /></a>
-            <p class="store-footnote">Project context is prepared from accessible data and needs your review. Context checks verify required information is present; they do not validate the source data or perform external actions.</p>
+                        </div>
+                        <footer class="inspector-footer"><AppIcon Kind="about" /><span>@(selected.Paid ? "AI plans propose actions for review." : "Checks confirm input presence, not source accuracy.")</span></footer>
+                    </aside>
+                }
+                else
+                {
+                    <aside class="start-panel" aria-labelledby="store-start-heading">
+                        <div class="start-panel-heading"><span class="detail-symbol"><AppIcon Kind="agent" /></span><span class="detail-category">GETTING STARTED</span><h3 id="store-start-heading">Start with project data</h3><p>Select an agent to review available sources and prepare its context.</p></div>
+                        <ol class="start-steps"><li><span>1</span><div><strong>Pick an outcome</strong><p>Choose a job for your team.</p></div></li><li><span>2</span><div><strong>Review project context</strong><p>Inspect available sources and fill any gaps.</p></div></li><li><span>3</span><div><strong>Check, then build</strong><p>Check the inputs or configure your agent in Build.</p></div></li></ol>
+                        <a class="start-data-link" href="@Vm.DashboardsUrl"><AppIcon Kind="data.analytics" /><span><strong>Explore your data profiles</strong><small>Sources, confidence and next questions</small></span><AppIcon Kind="arrow-right" /></a>
+                        <p class="start-footnote">You review the context before it is used. No agent starts automatically.</p>
+                    </aside>
+                }
+            </div>
         }
-        else if (Vm.Busy)
-        {
-            <Skeleton Kind="cards" Rows="3" />
-        }
-        else
-        {
-            <button class="dcbtn" @onclick="Vm.RefreshAsync">Reload Agent Store</button>
-        }
+        else if (Vm.Busy) { <Skeleton Kind="cards" Rows="3" /> }
+        else { <button class="store-secondary" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /> Reload Agent Store</button> }
     </div>
 </div>
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
     private ElementReference _search;
+    private ElementReference _historyTab;
     private ElementReference _detailHeading;
     private string? _focusedAgent;
     private bool _focusRequested;
@@ -247,25 +236,21 @@
         _focusedAgent = Vm.Selected?.Id;
         if (_focusedAgent is not null) await _detailHeading.FocusAsync();
     }
-    private Task OpenAgentAsync(PlaceContext.Application.AgentWorkflows.AgentWorkflow agent)
+    private void ShowHistory(bool show) { if (!Vm.Busy && Vm.ShowHistory != show) Vm.ToggleHistory(); }
+    private void SetAvailability(ChangeEventArgs args)
     {
-        _focusRequested = true;
-        return Vm.SelectUseCaseAsync(agent);
+        if (!Vm.Busy && Enum.TryParse<AgentBrowseFilter>(args.Value?.ToString(), out var filter)) Vm.Browse(filter);
     }
-    private Task SelectVariantAsync(PlaceContext.Application.AgentWorkflows.AgentWorkflow agent)
-    {
-        _focusRequested = true;
-        return Vm.SelectAsync(agent);
-    }
-    private void OpenResult(PlaceContext.Application.AgentWorkflows.AgentRun run)
-    {
-        _focusRequested = true;
-        Vm.OpenResult(run);
-    }
+    private Task OpenAgentAsync(AgentWorkflow agent) { _focusRequested = true; return Vm.SelectUseCaseAsync(agent); }
+    private Task SelectVariantAsync(AgentWorkflow agent) { _focusRequested = true; return Vm.SelectAsync(agent); }
+    private void OpenResult(AgentRun run) { _focusRequested = true; Vm.OpenResult(run); }
     private async Task CloseDetailsAsync()
     {
         Vm.CloseDetails();
-        if (Vm.Selected is null) await _search.FocusAsync();
+        if (Vm.Selected is null) await (Vm.ShowHistory ? _historyTab : _search).FocusAsync();
     }
+    private static string IndustryLabel(string industry) => industry == "Enterprise communications" ? "Phone systems" : industry;
+    private static string IndustryTone(string industry) => industry switch { "Enterprise communications" => "tone-cyan", "Service operations" => "tone-violet", "Retail" => "tone-amber", "Professional services" => "tone-violet", "Property operations" => "tone-green", _ => "" };
+    private static string AgentIcon(AgentWorkflow agent) => agent.UseCaseId switch { "call-abandonment" => "queue", "phone-inventory" => "data.entities", "call-routing" => "branch", "call-quality" => "pulse", "telephony-cost" => "ledger", _ => AgentWorkflowsViewModel.IndustryIcon(agent) };
     public void Dispose() => Vm.Dispose();
 }

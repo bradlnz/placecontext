@@ -43,13 +43,16 @@ unsaved project overview selects up to 12 charts; **Choose data** lets you chang
 You can inspect sources before creating a saved dashboard. **Save this view** keeps your layout
 and question private to your account in this project.
 
-- **Overview** puts profiles that need attention first, then older snapshots.
-- **Needs attention** focuses on unusable, stale or structurally ambiguous evidence.
-- **Explore values** follows your saved chart order and gives the chart more prominence.
+- **Overview** displays a grid of saved charts, with profiles that need attention first, then older snapshots.
+- **Needs attention** narrows the chart grid to unusable, stale or structurally ambiguous evidence.
+- **Explore values** opens one selected chart and its values table, with a source selector in saved chart order.
 
-Select a profile to see its source reference, generation time, displayed minimum and maximum,
-and evidence checks. Expand a check for the reason and next investigation. Use the data table
-to inspect the exact displayed values; chart categories are not source row counts.
+The summary strip shows actual profile counts, attention checks, current snapshots and combined
+snapshot confidence. Search filters visible panels without changing the saved source selection.
+Select a chart title to inspect its source reference, generation time, displayed minimum and
+maximum, and evidence checks in the details panel. Expand a check for the reason and next
+investigation. **Explore values** opens the exact displayed values; chart categories are not
+source row counts. Refresh reloads saved snapshots and does not rerun source queries.
 
 ### Confidence and freshness
 

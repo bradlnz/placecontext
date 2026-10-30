@@ -202,4 +202,50 @@ public sealed class PersonalDashboardsViewModelTests
         Assert.Equal("Not available", PersonalDashboardsViewModel.ValueAt(series, 2));
         Assert.Equal("Not available", PersonalDashboardsViewModel.ValueAt(null, 0));
     }
+
+    [Fact]
+    public async Task Overview_renders_visible_panels_as_one_js_batch_and_explore_renders_only_the_selected_source()
+    {
+        var service = new DashboardUiStub();
+        service.Charts = [service.Charts[0] with { GeneratedAt = DateTimeOffset.UtcNow.AddDays(-10), Source = "historic_queues" },
+            service.Charts[1] with { Source = "live_calls" }];
+        var js = new DashboardTestJs();
+        using var vm = new PersonalDashboardsViewModel(service, new PortalUiState(), js);
+        await vm.LoadAsync(Guid.NewGuid());
+
+        await vm.RenderAsync();
+        Assert.Equal(vm.VisibleProfiles.Select(x => PersonalDashboardsViewModel.CanvasId(x.ChartId)), js.LastRenderedIds);
+        Assert.Equal(2, js.LastRenderedIds.Count);
+        await vm.RenderAsync();
+        Assert.Equal(1, js.Renders);
+
+        vm.Question = "Are displayed values positive?";
+        await vm.AnalyzeAsync();
+        Assert.True(vm.AnalysisCurrent);
+        vm.Focus(service.Charts[1].Id);
+        Assert.Equal(service.Charts[1].Id, vm.FocusedChartId);
+        Assert.Null(vm.Analysis);
+        await vm.RenderAsync();
+        Assert.Equal(1, js.Renders);
+
+        vm.SetLens(DashboardLens.NeedsAttention);
+        await vm.RenderAsync();
+        Assert.Equal(PersonalDashboardsViewModel.CanvasId(service.Charts[0].Id), Assert.Single(js.LastRenderedIds));
+        vm.SetLens(DashboardLens.Explore);
+        vm.Focus(service.Charts[1].Id);
+        await vm.RenderAsync();
+        Assert.Equal(PersonalDashboardsViewModel.CanvasId(service.Charts[1].Id), Assert.Single(js.LastRenderedIds));
+
+        vm.SetLens(DashboardLens.Overview);
+        vm.ProfileSearch = "live_calls";
+        await vm.RenderAsync();
+        Assert.Equal(PersonalDashboardsViewModel.CanvasId(service.Charts[1].Id), Assert.Single(js.LastRenderedIds));
+        var renders = js.Renders;
+        vm.ProfileSearch = "missing source";
+        await vm.RenderAsync();
+        Assert.Empty(vm.DisplayedCharts);
+        Assert.Equal(renders, js.Renders);
+        Assert.Equal(2, vm.ChartIds.Count);
+        Assert.Equal(1, service.Analyses);
+    }
 }
