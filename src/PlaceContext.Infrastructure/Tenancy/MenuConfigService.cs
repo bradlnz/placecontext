@@ -37,7 +37,7 @@ public sealed class MenuConfigService : IMenuConfigService
     {
         new("dashboard", "Dashboard", "link", "/", Permission.ProjectsView, "grid", null, null),
         new("build.chat", "Build", "link", "/project/{projectId}/build", Permission.ProjectsView, "agent", null, null),
-        new("build.library", "Workflow store", "link", "/project/{projectId}/build/workflows", Permission.ChainsManage, "chain", null, null),
+        new("build.library", "Agent Store", "link", "/project/{projectId}/build/workflows", Permission.ChainsManage, "agent", null, null),
         new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", "Automation", null),
         new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", "Automation", null),
         new("chains", "Workflows", "link", "/project/{projectId}/workflows", Permission.ChainsManage, "chain", "Automation", null),
@@ -47,7 +47,7 @@ public sealed class MenuConfigService : IMenuConfigService
         new("data", "Data", "link", "/project/{projectId}/data", Permission.DataRead, "data", "Data & storage", null),
         new("vault", "Vault", "link", "/project/{projectId}/secrets", Permission.SecretsManage, "key", "Infrastructure", null),
         new("project.events", "Events", "link", "/project/{projectId}/events", Permission.EventsManage, "pulse", "Automation", null),
-        new("dashboards", "My dashboards", "link", "/project/{projectId}/dashboards", Permission.DataRead, "data.graph", "Data & storage", null),
+        new("dashboards", "Data profiles", "link", "/project/{projectId}/dashboards", Permission.DataRead, "data.graph", "Data & storage", null),
         new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", "Data & storage", null),
         new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null, null),
         new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", "Infrastructure", null),

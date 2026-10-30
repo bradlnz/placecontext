@@ -378,6 +378,39 @@ public sealed class BuildChatTests
     }
 
     [Fact]
+    public async Task Agent_handoff_prefills_without_sending_and_preserves_existing_drafts()
+    {
+        var vm = new BuildChatViewModel(null!, null!, null!, new PortalUiState(), new NoJs());
+        Assert.True(await vm.UseAgentRequestAsync(" Review abandoned calls "));
+        Assert.Equal("Review abandoned calls", vm.Draft);
+        Assert.Empty(vm.Conversation.Messages);
+        Assert.False(vm.Busy);
+        Assert.False(await vm.UseAgentRequestAsync("Replace my draft"));
+        Assert.Equal("Review abandoned calls", vm.Draft);
+        vm.Draft = "";
+        Assert.False(await vm.UseAgentRequestAsync(new string('x', 4001)));
+        Assert.Equal("", vm.Draft);
+        Assert.False(await vm.UseAgentRequestAsync("   "));
+    }
+
+    [Fact]
+    public async Task Agent_handoff_starts_a_new_draft_without_changing_a_background_run()
+    {
+        var vm = new BuildChatViewModel(null!, null!, null!, new PortalUiState(), new NoJs());
+        var previous = vm.Conversation;
+        previous.ProjectId = Guid.NewGuid();
+        previous.Status = BuildRunStatus.Running;
+        previous.Messages.Add(new JsonObject { ["role"] = "user", ["content"] = "Earlier task" });
+        Assert.True(await vm.UseAgentRequestAsync("Review number ownership"));
+        Assert.NotSame(previous, vm.Conversation);
+        Assert.Equal(previous.ProjectId, vm.Conversation.ProjectId);
+        Assert.Equal(BuildRunStatus.Running, previous.Status);
+        Assert.Single(previous.Messages);
+        Assert.Empty(vm.Conversation.Messages);
+        Assert.Equal("Review number ownership", vm.Draft);
+    }
+
+    [Fact]
     public async Task New_chat_renders_quick_picks_with_edit_before_send_guidance()
     {
         await using var fixture = new Fixture(); await fixture.SeedAsync();

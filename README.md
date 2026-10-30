@@ -200,6 +200,13 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
 
 ## Screenshots
 
+Agent Store and data profiles below are local previews rendered from the actual portal components
+using sample project data.
+
+![Agent Store preparing project context for an enterprise phone agent](docs/images/agent-store-context.png)
+
+![Data profiles showing source confidence, freshness and evidence checks](docs/images/data-profiles.png)
+
 ![PlaceContext dashboard with populated charts](docs/images/dashboard-charts.png)
 
 ![Job code editor](docs/images/job-code-editor.png)
@@ -290,17 +297,39 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the develo
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations. Please report vulnerabilities
 privately as described in [SECURITY.md](SECURITY.md).
 
-### Workflow store and personal dashboards
+### Agent Store and data profiles
 
-Open **Build → Workflow store** to browse industry workflows, filter free or subscribed
-agents, and view process details and token pricing. Subscriptions remain a local simulation.
-**My dashboards** lets each user save named layouts of up to 12 existing project charts,
-reorder them, inspect their values, and ask Jev a yes/no question about the selected data.
-Layouts and saved questions are encrypted and scoped to the current tenant, project and user.
+**Agent Store** starts with an outcome and the data already available in the project. Choose
+an agent, review the matching sources, and select **Use project data**. Manual context is
+available when something essential is missing. Discovery reads bounded samples from explicitly
+matched project tables; it does not call a model, scan unrelated tables or contact external
+systems. **Continue in Build** opens an editable request to configure the agent, without copying
+project records into the link or automatically sending the request.
 
-Dashboards show saved chart snapshots, with generation timestamps; refreshing loads the latest
-saved snapshots and does not rerun the source query. Create or update charts in **Analytics**.
-Jev receives only the selected chart values and timestamps, and reports an estimated probability
-with an evidence fingerprint. Stale snapshots must be refreshed before analysis. Chart data can
-be sampled or incomplete, so this is not a full-data audit. Set `TYPESAFE_API_KEY` in the project vault to use Jev (host `PlaceContext:TypeSafe`
-or environment settings are the fallback); provider usage is not included in simulated agent credits.
+The catalogue covers abandoned calls, phone-number ownership, routing and failover, call-quality
+incidents, phone-service cost exceptions, support escalations, stock replenishment, client
+onboarding and maintenance triage. Enterprise cases can start with their core dataset; supporting
+policies and targets are optional and stay unknown when absent. Local context checks verify
+input presence. Standalone AI plan runs retain development-only subscription simulation and
+configured provider requirements; they propose actions for review rather than execute them.
+See the [Agent Store guide](src/PlaceContext.Host/Wiki/agent-store.md) for source names and scope.
+
+**Data profiles** opens an immediate overview of up to 12 available chart snapshots. Switch
+between **Overview**, **Needs attention** and **Explore values**, select a source, and inspect
+its displayed patterns, freshness, evidence checks and suggested questions. Save private named
+views, choose and reorder source charts, or explore without saving a layout first. Saved views
+and questions remain encrypted and scoped to the current tenant, project and user.
+
+Confidence is derived from the available evidence, with a reason beside each band. Current
+means generated within 24 hours; aging means within 7 days. These are review defaults, not
+source service-level agreements. Chart snapshots do not preserve source row counts, null rates
+or verified sampling coverage, so confidence is capped at Medium. Missing or unusable evidence
+is Unknown; stale or structurally ambiguous evidence is Low. Reloading retrieves the latest
+saved snapshots; regenerate source charts in **Analytics** to obtain new values.
+
+Suggested questions populate an editable draft. Sending to Jev shares only the selected chart
+snapshots and returns an estimated probability of a yes/no answer with an evidence fingerprint.
+That estimate does not increase the data confidence level. Changed or missing source charts
+invalidate the assessment. Set `TYPESAFE_API_KEY` in the project vault to use Jev (host
+`PlaceContext:TypeSafe` or environment settings are the fallback); provider usage is separate
+from simulated agent credits. See [Charts and analytics](src/PlaceContext.Host/Wiki/charts-and-reports.md).

@@ -15,8 +15,13 @@ public sealed class AgentWorkflowServiceTests
     {
         await using var f = new AgentWorkflowFixture(); await f.SeedAsync(); var service = f.Service();
         var workspace = await service.LoadAsync(f.ProjectId);
-        Assert.Equal(6, workspace.Workflows.Count);
-        Assert.Equal(3, workspace.Workflows.Count(x => !x.Paid));
+        Assert.Equal(9, workspace.Workflows.Select(x => x.UseCaseId).Distinct().Count());
+        Assert.All(workspace.Workflows.GroupBy(x => x.UseCaseId), group =>
+        {
+            Assert.Single(group.Where(x => x.Paid));
+            Assert.Single(group.Where(x => !x.Paid));
+            Assert.Single(group.Select(x => x.UseCaseName).Distinct());
+        });
         Assert.DoesNotContain("Instruction", JsonSerializer.Serialize(workspace));
         var result = await service.RunAsync(f.ProjectId, "services-checklist", Guid.NewGuid(), Input);
         Assert.Equal(AgentRunStatus.Completed, result.Status);

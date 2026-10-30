@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Hosting.Internal;
 using Microsoft.Extensions.Options;
+using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.AgentWorkflows;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
@@ -18,6 +19,7 @@ internal sealed class AgentWorkflowFixture : IAsyncDisposable
     public AgentTestModel Model { get; } = new();
     public AgentTestReviewer Reviewer { get; } = new();
     public AgentTestPermissions Permissions { get; } = new();
+    public AgentTestProjectData Data { get; } = new();
     public AgentWorkflowOptions Options { get; } = new() { SimulateSubscriptions = true };
     public HostingEnvironment Environment { get; } = new() { EnvironmentName = Environments.Development };
     public FakeClock Clock { get; } = new(DateTimeOffset.UtcNow);
@@ -37,7 +39,8 @@ internal sealed class AgentWorkflowFixture : IAsyncDisposable
     public AgentWorkflowService Service(Guid? tenantId = null)
     {
         var tenant = new FakeCurrentTenant(tenantId ?? TenantId);
-        var provider = new ServiceCollection().AddScoped(_ => new AppDbContext(DbOptions, tenant)).BuildServiceProvider();
+        var provider = new ServiceCollection().AddScoped(_ => new AppDbContext(DbOptions, tenant))
+            .AddSingleton<IProjectDataStore>(Data).BuildServiceProvider();
         _providers.Add(provider);
         return new(provider.GetRequiredService<IServiceScopeFactory>(), tenant, new AgentTestUser(), Permissions,
             Microsoft.Extensions.Options.Options.Create(Options), Environment, Model, Model, Reviewer, _encryption, Clock);

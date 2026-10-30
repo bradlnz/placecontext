@@ -48,7 +48,7 @@ public sealed class PersonalDashboardService(IServiceScopeFactory scopes, ICurre
         {
             var raw = encryption.Unprotect(row.Html, IDataEncryptor.Purpose.Chart);
             if (!raw.TrimStart().StartsWith('{') || ChartSpec.TryParse(raw) is not { } spec) continue;
-            charts.Add(new(row.Id, spec.Title ?? row.TableName, spec, row.GeneratedAt));
+            charts.Add(new(row.Id, spec.Title ?? row.TableName, spec, row.GeneratedAt, row.TableName));
         }
         return charts;
     }

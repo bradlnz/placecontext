@@ -19,6 +19,10 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
     public string Draft { get; set; } = "";
     public static IReadOnlyList<(string Title, string Description, string Icon, string Prompt)> QuickPicks { get; } =
     [
+        ("Understand phone operations", "Investigate queues, routing and service costs.", "chain",
+            "Help me build an enterprise phone operations agent. First inspect the project's available data and workflows, then identify which questions the evidence can support: abandoned calls, number ownership, routing, call quality or service costs. Ask only for missing essential context. Explain source coverage and uncertainty, propose an evidence-linked review workflow, and ask before changing any phone service or contacting anyone."),
+        ("Understand my data", "Explore profiles, confidence and what needs attention.", "data.graph",
+            "Help me understand the data already available in this project. Inspect sources and existing charts, identify useful profiles, and explain freshness, coverage and missing evidence. Suggest questions supported by the data and the next investigation for weak evidence. Distinguish observed facts, assumptions and model estimates. Ask before creating or changing a workflow."),
         ("Compare grocery prices", "Compare Coles and Woolworths for your postcode.", "vm",
             "Build a grocery price comparison workflow for Coles and Woolworths in Australia. Ask me for the product name and confirm the postcode (default 4101). Inspect existing jobs and workflows first and reuse what fits. Use QEMU Live preview frames and Jev to verify prices, pack sizes and availability. Compare matching products by unit price, link the evidence, and mark any unverified price clearly."),
         ("Check a website", "Give a browser a task and verify what happened.", "check",
@@ -37,6 +41,25 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
     {
         if (!CanUseQuickPick) return false;
         Draft = prompt;
+        return true;
+    }
+    public async Task<bool> UseAgentRequestAsync(string? prompt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt)) return false;
+        if (prompt.Length > 4000)
+        {
+            Notice = "This agent request is too long. Choose the agent again from Agent Store.";
+            return false;
+        }
+        if (NavigationLocked || Listening) return false;
+        if (!string.IsNullOrWhiteSpace(Draft) || Images.Count > 0)
+        {
+            Notice = "Your current draft is still here. Send or clear it before bringing an agent request into Build.";
+            return false;
+        }
+        if (Conversation.Messages.Count > 0 || Busy) await NewAsync();
+        if (!UseQuickPick(prompt.Trim())) return false;
+        Notice = "Agent request ready. Review it, then send when you are ready to build.";
         return true;
     }
     public string Memory { get; set; } = "";

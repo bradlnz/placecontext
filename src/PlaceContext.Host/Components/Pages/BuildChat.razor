@@ -32,7 +32,7 @@
                             </div>
             </div>
             <div class="chat-header-actions">
-                <a class="chat-toolbar-button" href="@($"/project/{ProjectId}/build/workflows")"><AppIcon Kind="chain" /><span>Workflow store</span></a>
+                <a class="chat-toolbar-button" href="@($"/project/{ProjectId}/build/workflows")"><AppIcon Kind="agent" /><span>Agent Store</span></a>
                 <button class="chat-toolbar-button @(Vm.ShowMemory ? "selected" : "")" aria-label="Project memory" title="Project memory" aria-expanded="@Vm.ShowMemory" aria-controls="@(Vm.ViewId + "-build-memory")" @onclick="() => Vm.ShowMemory = !Vm.ShowMemory"><AppIcon Kind="ledger" /><span>Memory</span></button>
                 @if (Vm.Conversation.Messages.Count > 0)
                 { <button class="chat-icon-button delete-chat" aria-label="Delete conversation" title="Delete conversation" disabled="@Vm.Locked" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button> }
@@ -144,13 +144,24 @@
 @code {
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "conversation")] public Guid? ConversationId { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "prompt")] public string? AgentPrompt { get; set; }
     private ElementReference _composer;
+    private (Guid ProjectId, string? Prompt)? _handledAgentRequest;
     private async Task UseQuickPickAsync(string prompt)
     {
         if (Vm.UseQuickPick(prompt)) await _composer.FocusAsync();
     }
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
-    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId, ConversationId);
+    protected override async Task OnParametersSetAsync()
+    {
+        await Vm.LoadAsync(ProjectId, ConversationId);
+        var request = (ProjectId, AgentPrompt);
+        if (_handledAgentRequest != request)
+        {
+            _handledAgentRequest = request;
+            if (ConversationId is null) await Vm.UseAgentRequestAsync(AgentPrompt);
+        }
+    }
     protected override Task OnAfterRenderAsync(bool firstRender) => firstRender ? Vm.InitializeBrowserAsync() : Task.CompletedTask;
     public ValueTask DisposeAsync() => Vm.DisposePageAsync();
 }

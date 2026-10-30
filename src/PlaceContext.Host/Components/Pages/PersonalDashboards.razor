@@ -1,59 +1,196 @@
 @page "/project/{ProjectId:guid}/dashboards"
 @attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
+@using PlaceContext.Application.Dashboards
 @inject PersonalDashboardsViewModel Vm
 @implements IDisposable
 
-<PageTitle>PlaceContext — My dashboards</PageTitle>
-<div class="personal-dashboards" aria-busy="@Vm.Busy">
-    <header class="dashboard-header"><div><a class="back-link" href="/project/@ProjectId/build/workflows">← Workflow store</a><span class="eyebrow">YOUR DATA, YOUR PERSPECTIVE</span><h1>My dashboards<span class="private-badge">Private to you</span></h1><p>A space for the numbers that matter. A second look from Jev.</p></div><button class="primary-button" disabled="@Vm.Busy" @onclick="Vm.New">+ New dashboard</button></header>
-    @if (Vm.Error is not null) { <p class="dashboard-error" role="alert">@Vm.Error</p> }
-    @if (Vm.Notice is not null) { <p class="dashboard-notice" role="status">@Vm.Notice</p> }
-    @if (Vm.Saved.Count > 0)
-    {
-        <nav class="dashboard-tabs" aria-label="Your dashboards">@foreach (var dashboard in Vm.Saved) { <button class="@(Vm.Selected?.Id == dashboard.Id ? "active" : "")" aria-pressed="@(Vm.Selected?.Id == dashboard.Id)" disabled="@Vm.Busy" @onclick="() => Vm.Open(dashboard)">@dashboard.Name</button> }</nav>
-    }
-    @if (Vm.Editing)
-    {
-        <section class="dashboard-editor"><div class="editor-heading"><h2>Make it yours</h2><span>Choose up to 12 charts, then arrange them below.</span></div><label for="dashboard-name">Dashboard name</label><input id="dashboard-name" class="dcinput" maxlength="100" @bind="Vm.Name" disabled="@Vm.Busy" />
-            <div class="chart-picker">@foreach (var chart in Vm.Charts) { <label class="chart-choice"><input type="checkbox" checked="@Vm.ChartIds.Contains(chart.Id)" disabled="@(Vm.Busy || (!Vm.ChartIds.Contains(chart.Id) && Vm.ChartIds.Count >= 12))" @onchange="() => Vm.Toggle(chart.Id)" /><span><strong>@chart.Name</strong><small>@chart.Spec.Type · @chart.Spec.Labels.Count categories</small></span></label> }</div>
-            @if (Vm.Charts.Count == 0) { <p>No saved charts yet. <a href="/project/@ProjectId/analytics">Create your first chart</a> from your project data.</p> }
-            @if (Vm.MissingCharts) { <p>A saved chart is no longer available. <button class="dcbtn" @onclick="() => { foreach (var id in Vm.ChartIds.Except(Vm.SelectedCharts.Select(x => x.Id)).ToArray()) Vm.Toggle(id); }">Remove missing charts</button></p> }
-            <label for="dashboard-question">A question for Jev <span>(optional)</span></label><textarea id="dashboard-question" class="dcinput" rows="2" maxlength="1000" placeholder="Does one category account for more than half of the total?" @bind="Vm.Question" disabled="@Vm.Busy"></textarea>
-            <div class="editor-actions"><button class="primary-button" disabled="@(Vm.Busy || Vm.ChartIds.Count == 0 || Vm.MissingCharts)" @onclick="Vm.SaveAsync">Save dashboard</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.Cancel">Cancel</button><a href="/project/@ProjectId/analytics">Create or update charts ↗</a></div>
+<PageTitle>PlaceContext — Data profiles</PageTitle>
+<div class="profile-workspace" aria-busy="@Vm.Busy">
+    <header class="workspace-header">
+        <div class="header-start"><a class="toolbar-button" href="/project/@ProjectId/build">← Build</a><h1>Data profiles</h1></div>
+        <div class="header-actions">
+            <a class="toolbar-button" href="/project/@ProjectId/build/workflows"><AppIcon Kind="agent" /> Agent Store</a>
+            <button class="toolbar-button" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync">Reload snapshots</button>
+            <button class="toolbar-button" disabled="@Vm.Busy" @onclick="Vm.New"><AppIcon Kind="plus" /> New view</button>
+        </div>
+    </header>
+
+    <div class="workspace-content">
+        @if (Vm.Error is not null) { <p class="workspace-notice error" role="alert">@Vm.Error</p> }
+        @if (Vm.Notice is not null) { <p class="workspace-notice" role="status">@Vm.Notice</p> }
+
+        <section class="view-heading" aria-label="Dashboard view">
+            <div>
+                <span class="section-label">PROJECT DATA · PRIVATE VIEW</span><h2>@Vm.Name</h2>
+                <p>@(Vm.IsPreview ? "Profiles prepared from your saved charts. Explore now, save this view when it is useful." : "See what your data shows, how much to trust it, and what to investigate next.")</p>
+                @if (Vm.IsPreview && Vm.Charts.Count > Vm.ChartIds.Count) { <small class="preview-scope">Showing @Vm.ChartIds.Count of @Vm.Charts.Count snapshots. Choose data to change this view.</small> }
+            </div>
+            <div class="view-actions">
+                @if (Vm.Saved.Count > 0)
+                {
+                    <label for="saved-dashboard" class="visually-hidden">Saved dashboard</label>
+                    <select id="saved-dashboard" class="view-select" value="@(Vm.Selected?.Id.ToString() ?? "overview")" disabled="@(Vm.Busy || Vm.Editing)" @onchange="e => Vm.OpenSaved(e.Value?.ToString())">
+                        <option value="overview">Project overview · unsaved</option>
+                        @foreach (var dashboard in Vm.Saved) { <option value="@dashboard.Id">@dashboard.Name</option> }
+                    </select>
+                }
+                @if (!Vm.Editing && Vm.ChartIds.Count > 0)
+                {
+                    @if (Vm.IsPreview) { <button class="primary-button" disabled="@(Vm.Busy || Vm.MissingCharts)" @onclick="Vm.SaveAsync">Save this view</button> }
+                    <button class="toolbar-button" disabled="@Vm.Busy" @onclick="Vm.Edit">Choose data</button>
+                    @if (Vm.Selected is not null) { <button class="icon-button" aria-label="Delete saved view" title="Delete saved view" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button> }
+                }
+            </div>
         </section>
-    }
-    else if (Vm.Selected is not null)
-    {
-        <div class="dashboard-toolbar"><h2>@Vm.Name</h2><div><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync">Refresh snapshots</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.Edit">Customize</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = true">Delete</button></div></div>
-        @if (Vm.ConfirmDelete) { <div class="delete-confirm" role="alert"><span>Delete this dashboard layout?</span><button class="dcbtn danger" disabled="@Vm.Busy" @onclick="Vm.DeleteAsync">Delete dashboard</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = false">Keep it</button></div> }
-        @if (Vm.MissingCharts) { <p class="dashboard-error">A chart is no longer available. Customize this dashboard to choose another.</p> }
-    }
-    else if (!Vm.Busy)
-    {
-        <section class="dashboard-empty"><span class="empty-icon"><AppIcon Kind="data.graph" /></span><h2>A clearer view starts here.</h2><p>Choose your saved charts, arrange your dashboard,<br />and ask Jev to assess what the data supports.</p><button class="primary-button" @onclick="Vm.New">Create your first dashboard</button></section>
-    }
-    <div class="dashboard-grid">
-        @foreach (var chart in Vm.SelectedCharts)
+
+        @if (Vm.ConfirmDelete)
         {
-            <article class="chart-tile" @key="chart.Id"><header><div><span class="eyebrow">@chart.Spec.Type CHART</span><h3>@chart.Name</h3></div>@if (Vm.Editing) { <div class="tile-actions"><button class="dcbtn" aria-label="Move @chart.Name earlier" disabled="@(Vm.Busy || Vm.ChartIds.IndexOf(chart.Id) == 0)" @onclick="() => Vm.Move(chart.Id, -1)">↑</button><button class="dcbtn" aria-label="Move @chart.Name later" disabled="@(Vm.Busy || Vm.ChartIds.IndexOf(chart.Id) == Vm.ChartIds.Count - 1)" @onclick="() => Vm.Move(chart.Id, 1)">↓</button><button class="dcbtn" aria-label="Remove @chart.Name" disabled="@Vm.Busy" @onclick="() => Vm.Toggle(chart.Id)">×</button></div> }</header>
-                <div class="chart-canvas"><canvas id="@PersonalDashboardsViewModel.CanvasId(chart.Id)" role="img" aria-label="@chart.Name. Values are available in the data table below."></canvas></div>
-                <footer>Snapshot · @chart.GeneratedAt.ToLocalTime().ToString("g")</footer>
-                <details class="chart-data"><summary>View chart data</summary><div class="table-scroll"><table><thead><tr><th>Category</th>@foreach (var series in chart.Spec.Series) { <th>@series.Name</th> }</tr></thead><tbody>@for (var i = 0; i < chart.Spec.Labels.Count; i++) { var index = i; <tr><th>@chart.Spec.Labels[index]</th>@foreach (var series in chart.Spec.Series) { <td>@series.Values[index].ToString("N2")</td> }</tr> }</tbody></table></div></details>
-            </article>
+            <div class="delete-confirm" role="alert"><span>Delete this saved view? Source charts will remain available.</span><button class="toolbar-button danger" disabled="@Vm.Busy" @onclick="Vm.DeleteAsync">Delete view</button><button class="toolbar-button" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = false">Keep view</button></div>
+        }
+        @if (Vm.Editing)
+        {
+            <section class="view-editor" aria-labelledby="view-editor-title">
+                <div class="section-heading"><h3 id="view-editor-title">Choose the data in this view</h3><span>Up to 12 chart snapshots</span></div>
+                <label for="dashboard-name">View name</label><input id="dashboard-name" class="dcinput" maxlength="100" @bind="Vm.Name" disabled="@Vm.Busy" />
+                <div class="chart-picker">
+                    @foreach (var chart in Vm.Charts)
+                    {
+                        <label class="chart-choice"><input type="checkbox" checked="@Vm.ChartIds.Contains(chart.Id)" disabled="@(Vm.Busy || (!Vm.ChartIds.Contains(chart.Id) && Vm.ChartIds.Count >= 12))" @onchange="() => Vm.Toggle(chart.Id)" /><span><strong>@chart.Name</strong><small>@(chart.Source ?? "Source not recorded")</small></span></label>
+                    }
+                </div>
+                @if (Vm.Charts.Count == 0) { <p>No saved charts yet. <a href="/project/@ProjectId/analytics">Create a source chart</a> to start profiling.</p> }
+                @if (Vm.ChartIds.Count > 0)
+                {
+                    <ol class="selected-order" aria-label="Chart order">
+                        @foreach (var chart in Vm.SelectedCharts)
+                        {
+                            <li @key="chart.Id"><span>@chart.Name</span><div><button class="icon-button" aria-label="Move @chart.Name earlier" disabled="@(Vm.Busy || Vm.ChartIds.IndexOf(chart.Id) == 0)" @onclick="() => Vm.Move(chart.Id, -1)">↑</button><button class="icon-button" aria-label="Move @chart.Name later" disabled="@(Vm.Busy || Vm.ChartIds.IndexOf(chart.Id) == Vm.ChartIds.Count - 1)" @onclick="() => Vm.Move(chart.Id, 1)">↓</button><button class="icon-button" aria-label="Remove @chart.Name" disabled="@Vm.Busy" @onclick="() => Vm.Toggle(chart.Id)">×</button></div></li>
+                        }
+                    </ol>
+                }
+                @if (Vm.MissingCharts) { <p class="missing-note">@Vm.MissingChartIds.Count selected chart(s) are unavailable. <button class="toolbar-button" disabled="@Vm.Busy" @onclick="Vm.RemoveMissing">Remove missing charts</button></p> }
+                <div class="editor-actions"><button class="primary-button" disabled="@(Vm.Busy || Vm.ChartIds.Count == 0 || Vm.MissingCharts || string.IsNullOrWhiteSpace(Vm.Name))" @onclick="Vm.SaveAsync">Save view</button><button class="toolbar-button" disabled="@Vm.Busy" @onclick="Vm.Cancel">Cancel</button><a class="toolbar-button" href="/project/@ProjectId/analytics">Manage source charts ↗</a></div>
+            </section>
+        }
+
+        @if (Vm.ChartIds.Count > 0)
+        {
+            <div class="confidence-summary" aria-label="Combined evidence assessment">
+                <span class="confidence-band @PersonalDashboardsViewModel.BandClass(Vm.Profile.Confidence)">@Vm.Profile.Confidence confidence</span>
+                <span>@Vm.Profile.Charts.Count profiles · @Vm.Profile.NeedsAttentionCount need attention</span>
+                <p>@Vm.Profile.ConfidenceReason</p>
+            </div>
+            @if (Vm.MissingCharts) { <p class="workspace-notice error" role="alert">@Vm.MissingChartIds.Count selected chart(s) are unavailable. Choose data to restore or remove them. Jev analysis is paused until the view is complete.</p> }
+            <nav class="view-lenses" aria-label="Data profile views">
+                <button class="@(Vm.Lens == DashboardLens.Overview ? "selected" : "")" aria-pressed="@(Vm.Lens == DashboardLens.Overview)" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.Overview)">Overview</button>
+                <button class="@(Vm.Lens == DashboardLens.NeedsAttention ? "selected" : "")" aria-pressed="@(Vm.Lens == DashboardLens.NeedsAttention)" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.NeedsAttention)">Needs attention <span>@Vm.Profile.NeedsAttentionCount</span></button>
+                <button class="@(Vm.Lens == DashboardLens.Explore ? "selected" : "")" aria-pressed="@(Vm.Lens == DashboardLens.Explore)" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.Explore)">Explore values</button>
+            </nav>
+
+            <div class="profile-layout">
+                <aside class="profile-rail" aria-label="Data profiles">
+                    <label for="profile-search" class="visually-hidden">Find a data profile</label><input id="profile-search" class="profile-search" placeholder="Find a source or measure…" @bind="Vm.ProfileSearch" @bind:event="oninput" disabled="@Vm.Busy" />
+                    <p class="rail-order">@(Vm.Lens == DashboardLens.Explore ? "YOUR SELECTED ORDER" : "ATTENTION FIRST")</p>
+                    <div class="profile-list">
+                        @foreach (var item in Vm.VisibleProfiles)
+                        {
+                            <button class="profile-item @(Vm.FocusedChartId == item.ChartId ? "active" : "")" aria-pressed="@(Vm.FocusedChartId == item.ChartId)" disabled="@Vm.Busy" @onclick="() => Vm.Focus(item.ChartId)" @key="item.ChartId">
+                                <strong>@item.Name</strong><span class="source-name">@(item.Source ?? "Source not recorded")</span>
+                                <span class="profile-meta"><span class="confidence-band @PersonalDashboardsViewModel.BandClass(item.Confidence)">@item.Confidence</span><span>@item.Freshness snapshot</span></span>
+                                <small>@item.LabelCount categories · @item.SeriesCount measures</small>
+                            </button>
+                        }
+                        @if (Vm.VisibleProfiles.Count == 0) { <p class="rail-empty">@(Vm.Lens == DashboardLens.NeedsAttention ? "No available profiles need attention in this view." : "No profiles match this search.")</p> }
+                    </div>
+                    <p class="rail-note">Profiles describe saved chart snapshots. No model call is needed to explore them.</p>
+                </aside>
+
+                <section class="profile-detail @(Vm.Lens == DashboardLens.Explore ? "explore" : "")" aria-label="Selected data profile">
+                    @if (Vm.FocusedProfile is { } profile && Vm.FocusedChart is { } chart)
+                    {
+                        <header class="profile-heading">
+                            <div><span class="section-label">@(profile.Source ?? "SOURCE NOT RECORDED")</span><h3>@profile.Name</h3><p>@profile.Freshness snapshot · @(profile.GeneratedAt == default ? "Generation time unknown" : profile.GeneratedAt.ToLocalTime().ToString("g"))</p></div>
+                            <a class="toolbar-button" href="/project/@ProjectId/analytics">Inspect source ↗</a>
+                        </header>
+                        <div class="profile-insight">
+                            <span class="confidence-band @PersonalDashboardsViewModel.BandClass(profile.Confidence)">@profile.Confidence confidence</span>
+                            @if (profile.CanSummarize && profile.Series.FirstOrDefault() is { } signal)
+                            {
+                                @if (signal.Minimum == signal.Maximum) { <p>All displayed <strong>@signal.Name</strong> values are <strong>@signal.Maximum.ToString("N2")</strong>.</p> }
+                                else { <p><strong>@signal.MaximumLabel</strong> has the highest displayed <strong>@signal.Name</strong> value at <strong>@signal.Maximum.ToString("N2")</strong>. <strong>@signal.MinimumLabel</strong> is lowest at <strong>@signal.Minimum.ToString("N2")</strong>.</p> }
+                            }
+                            <span class="confidence-reason">@profile.ConfidenceReason</span>
+                        </div>
+
+                        <section class="evidence-section" aria-labelledby="evidence-checks-title">
+                            <div class="section-heading"><h4 id="evidence-checks-title">What supports this view</h4><span>Assessed @Vm.AssessedAt.ToLocalTime().ToString("t")</span></div>
+                            <div class="evidence-checks">
+                                @foreach (var check in profile.Checks)
+                                {
+                                    <details class="evidence-check @PersonalDashboardsViewModel.CheckClass(check.State)" open="@(check.State == DashboardCheckState.Attention)">
+                                        <summary><span class="check-state">@check.State</span><strong>@check.Name</strong></summary><p>@check.Reason</p><span class="next-step">@check.NextStep</span>
+                                    </details>
+                                }
+                            </div>
+                        </section>
+
+                        <section class="chart-panel" aria-label="Snapshot values" @key="chart.Id">
+                            <div class="section-heading"><h4>Explore the snapshot</h4><span>@profile.ValueCount displayed values</span></div>
+                            <div class="chart-canvas"><canvas id="@PersonalDashboardsViewModel.CanvasId(chart.Id)" role="img" aria-label="@chart.Name. Values are available in the data table below."></canvas></div>
+                            <details class="chart-data"><summary>Show the values behind this chart</summary><div class="table-scroll"><table><caption>@chart.Name — saved chart values</caption><thead><tr><th scope="col">Category</th>@foreach (var series in chart.Spec.Series.OfType<ChartSeries>().Take(profile.SeriesCount)) { <th scope="col">@series.Name</th> }</tr></thead><tbody>
+                                @for (var i = 0; i < Math.Min(chart.Spec.Labels.Count, ChartSpec.MaxLabels); i++)
+                                {
+                                    var index = i;
+                                    <tr><th scope="row">@chart.Spec.Labels[index]</th>@foreach (var series in chart.Spec.Series.OfType<ChartSeries>().Take(profile.SeriesCount)) { <td>@PersonalDashboardsViewModel.ValueAt(series, index)</td> }</tr>
+                                }
+                            </tbody></table></div></details>
+                            @if (profile.Series.Count > 1)
+                            {
+                                <div class="series-ranges">@foreach (var series in profile.Series) { <p><strong>@series.Name</strong><span>@series.Minimum.ToString("N2") – @series.Maximum.ToString("N2")</span><small>@series.ValueCount values · @series.ZeroCount zeros</small></p> }</div>
+                            }
+                        </section>
+                    }
+                    else
+                    {
+                        <div class="focus-empty"><AppIcon Kind="data.graph" /><h3>@(Vm.Lens == DashboardLens.NeedsAttention ? "Nothing to investigate here yet" : "Choose a profile to explore")</h3><p>Select a source to inspect its evidence, visible patterns and next steps.</p><button class="toolbar-button" disabled="@Vm.Busy" @onclick='() => { Vm.ProfileSearch = ""; Vm.SetLens(DashboardLens.Overview); }'>Show all profiles</button></div>
+                    }
+                </section>
+            </div>
+
+            <section class="investigation" aria-labelledby="investigation-title">
+                <div class="section-heading"><h3 id="investigation-title"><AppIcon Kind="agent" /> Ask a question of this data</h3><span>@Vm.SelectedCharts.Count() saved snapshots</span></div>
+                @if (Vm.FocusedProfile is { SuggestedQuestions.Count: > 0 } focused)
+                {
+                    <div class="suggested-questions" aria-label="Suggested investigations">@foreach (var question in focused.SuggestedQuestions) { <button disabled="@Vm.Busy" @onclick="() => UseSuggestionAsync(question)">@question <span aria-hidden="true">↗</span></button> }</div>
+                }
+                <form class="question-composer" @onsubmit="Vm.AnalyzeAsync" @onsubmit:preventDefault>
+                    <label for="jev-question" class="visually-hidden">Yes or no question for Jev</label><textarea @ref="_question" id="jev-question" class="question-input" rows="2" maxlength="1000" @bind="Vm.Question" @bind:event="oninput" disabled="@Vm.Busy" placeholder="Ask a yes/no question about the displayed evidence…"></textarea>
+                    <div class="composer-actions"><span>Jev · selected snapshots only</span><button class="send-button" type="submit" disabled="@(!Vm.CanAnalyze)" aria-label="Analyze question with Jev" title="Analyze question with Jev"><AppIcon Kind="arrow-up" /></button></div>
+                </form>
+                <p class="composer-note">Sending shares these chart values with your configured Jev service. Its estimate answers your question; it does not raise the data confidence level. Provider usage may apply.</p>
+                @if (Vm.AnalysisCurrent && Vm.Analysis is { } analysis)
+                {
+                    <div class="analysis-result" role="status"><span class="section-label">JEV ASSESSMENT</span><h4>@analysis.Verdict</h4><p>@analysis.Question</p><strong>@analysis.Probability.ToString("P0") estimated probability of “yes”</strong><small>@analysis.AnalyzedAt.ToLocalTime().ToString("g") · Evidence @analysis.Fingerprint[..Math.Min(analysis.Fingerprint.Length, 12)]</small></div>
+                }
+            </section>
+            <details class="confidence-method"><summary>How profiles and confidence work</summary><p>@DashboardDataProfile.Scope</p><p>Current means generated within 24 hours; aging means within 7 days. These are default review windows, not a source service-level agreement. Missing, future-dated or stale snapshots and ambiguous labels need attention. Coverage is unverified, so confidence is capped at Medium. Reloading retrieves saved snapshots; regenerate source charts in Analytics to get newer values.</p></details>
+        }
+        else if (!Vm.Busy && !Vm.Editing)
+        {
+            <section class="workspace-empty"><span><AppIcon Kind="data.graph" /></span><h2>Your data becomes the starting point.</h2><p>Profiles appear automatically when this project has saved chart snapshots. Connect a workflow to your data, then inspect its sources, evidence and confidence here.</p><div><a class="primary-button" href="/project/@ProjectId/build">Build a data workflow</a><a class="toolbar-button" href="/project/@ProjectId/analytics">Open Analytics ↗</a></div></section>
         }
     </div>
-    @if (Vm.ChartIds.Count > 0)
-    {
-        <section class="jev-panel"><div class="jev-heading"><span class="jev-mark">J</span><div><span class="eyebrow">ANOTHER PERSPECTIVE</span><h2>Ask Jev</h2></div></div><p>Ask a yes/no question about the charts above. Jev assesses the saved values and timestamps. Charts may be sampled or out of date; this is a judgment, not a complete data audit.</p>
-            @if (!Vm.Editing) { <label for="jev-question">Your question</label><textarea id="jev-question" class="dcinput" rows="2" maxlength="1000" @bind="Vm.Question" @bind:event="oninput" disabled="@Vm.Busy" placeholder="Does one category account for more than half of the total?"></textarea> }
-            <div class="jev-actions"><button class="primary-button" disabled="@(Vm.Busy || Vm.MissingCharts || string.IsNullOrWhiteSpace(Vm.Question))" @onclick="Vm.AnalyzeAsync">@(Vm.Busy ? "Working…" : "Analyze with Jev")</button><small>Selected chart data is sent to your configured Jev service. Provider usage may apply.</small></div>
-            @if (Vm.AnalysisCurrent && Vm.Analysis is { } analysis) { <div class="jev-result" aria-live="polite"><strong>@analysis.Verdict</strong><p>@analysis.Question</p><span>@analysis.Probability.ToString("P0") estimated probability of “yes” · @analysis.AnalyzedAt.ToLocalTime().ToString("g")</span><small>Evidence: @analysis.Fingerprint[..12] · @(Vm.SelectedCharts.Count()) saved chart snapshots</small></div> }
-        </section>
-    }
 </div>
+
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    private ElementReference _question;
+    private async Task UseSuggestionAsync(string question)
+    {
+        Vm.UseSuggestion(question);
+        await _question.FocusAsync();
+    }
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId);
     protected override Task OnAfterRenderAsync(bool firstRender) => Vm.RenderAsync();

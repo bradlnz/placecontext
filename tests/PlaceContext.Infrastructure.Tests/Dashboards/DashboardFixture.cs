@@ -38,7 +38,7 @@ internal sealed class DashboardFixture : IAsyncDisposable
         await using var db = Db(tenant);
         var projectId = project ?? Project;
         if (!await db.Projects.AnyAsync(x => x.Id == projectId)) db.Projects.Add(new() { Id = projectId, Name = "Test project" });
-        var chart = new DashboardChart(Guid.NewGuid(), "Orders", new ChartSpec("bar", "Orders", ["A", "B"], [new ChartSeries("Count", [20, 5])]), Clock.UtcNow);
+        var chart = new DashboardChart(Guid.NewGuid(), "Orders", new ChartSpec("bar", "Orders", ["A", "B"], [new ChartSeries("Count", [20, 5])]), Clock.UtcNow, "orders");
         db.ProjectCharts.Add(new() { Id = chart.Id, ProjectId = projectId, TableName = "orders",
             Html = Encryption.Protect(chart.Spec.ToJson(), IDataEncryptor.Purpose.Chart), GeneratedAt = chart.GeneratedAt });
         await db.SaveChangesAsync(); return chart;

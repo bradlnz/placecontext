@@ -15,7 +15,7 @@ public static class WikiLibrary
     private static readonly string[] Order =
     {
         "getting-started", "setup", "webhook-ingestion", "opensearch-integration", "sso-and-oauth",
-        "projects", "jobs-and-artifacts", "worker-networking",
+        "projects", "agent-store", "jobs-and-artifacts", "worker-networking",
         "events-and-schedules", "charts-and-reports", "project-data", "entities-and-insights",
         "security-and-sharing", "cluster-and-nodes", "mcp-and-jobs",
     };
