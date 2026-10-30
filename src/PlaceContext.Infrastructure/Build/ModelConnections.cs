@@ -114,12 +114,12 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
     {
         var response = await CompleteCoreAsync(connectionId, model,
             new JsonArray(new JsonObject { ["role"] = "system", ["content"] = instruction },
-                new JsonObject { ["role"] = "user", ["content"] = input }), new JsonArray(), ct);
+                new JsonObject { ["role"] = "user", ["content"] = input }), new JsonArray(), ct, isolated: true);
         return new(response.Message["content"]?.GetValue<string>() ?? "", model, response.InputTokens, response.OutputTokens);
     }
 
     private async Task<(JsonObject Message, long? InputTokens, long? OutputTokens)> CompleteCoreAsync(
-        Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct)
+        Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, bool isolated = false)
     {
         await CheckAsync(false, ct);
         if (!await permissions.HasAsync(Permission.ProjectsView, ct)) throw new UnauthorizedAccessException("Project access is required.");
@@ -130,6 +130,12 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
         {
             await CheckLocalCliAsync(ct);
             if (cli is null) throw new InvalidOperationException("Local CLI support is unavailable on this host.");
+            if (isolated)
+            {
+                // Library runs must not inherit a Build conversation's model session.
+                await using var session = new LocalCliModels();
+                return (await session.CompleteAsync(row.Protocol, model, messages, tools, ct), null, null);
+            }
             return (await cli.CompleteAsync(row.Protocol, model, messages, tools, ct), null, null);
         }
         var protocol = ModelProtocols.Get(row.Protocol);

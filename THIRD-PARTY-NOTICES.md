@@ -37,6 +37,8 @@ the project manifests (`src/*/*.csproj`) — those files are authoritative.
 |---|---|
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) (loaded from jsDelivr CDN) | MIT |
 | [Chart.js](https://github.com/chartjs/Chart.js) (bundled at `wwwroot/vendor/`) | MIT |
+| [noVNC 1.7.0](https://github.com/novnc/noVNC/tree/v1.7.0) (bundled for Live preview, including its license and authors) | MPL-2.0 |
+| [pako](https://github.com/nodeca/pako) (bundled with noVNC, license included) | MIT / Zlib |
 | [Geist / Geist Mono](https://vercel.com/font) typefaces (Google Fonts) | SIL OFL 1.1 |
 
 If you believe a required notice is missing, please open an issue.

@@ -119,6 +119,7 @@ public sealed class AgentWorkflowService(IServiceScopeFactory scopes, ICurrentTe
                 {
                     row.InputTokens = completion.InputTokens;
                     row.OutputTokens = completion.OutputTokens;
+                    // shortcut: Jev usage is unavailable; reconcile all providers before enabling real billing.
                     row.DemoCredits = ((decimal)completion.InputTokens.Value + completion.OutputTokens.Value) / 1000m;
                     db.UsageRecords.Add(new() { Id = Guid.NewGuid(), ProjectId = projectId, Model = completion.Model,
                         InputTokens = completion.InputTokens.Value, OutputTokens = completion.OutputTokens.Value,
