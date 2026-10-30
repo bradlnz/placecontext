@@ -47,7 +47,7 @@ and question private to your account in this project.
 - **Needs attention** narrows the chart grid to unusable, stale or structurally ambiguous evidence.
 - **Explore values** opens one selected chart and its values table, with a source selector in saved chart order.
 
-The summary strip shows actual profile counts, attention checks, current snapshots and combined
+The summary cards show actual profile counts, attention checks, current snapshots and combined
 snapshot confidence. Search filters visible panels without changing the saved source selection.
 Select a chart title to inspect its source reference, generation time, displayed minimum and
 maximum, and evidence checks in the details panel. Expand a check for the reason and next
@@ -77,7 +77,7 @@ dashboard does not rerun the source query.
 
 Suggested questions are grounded in the selected profile's displayed categories and measures.
 Choosing a suggestion fills the question box; it does not make a model request. Edit the
-yes/no question and send it when ready. Jev receives the chart snapshots selected for the view,
+yes/no question and select **Ask Jev** when ready. Jev receives the chart snapshots selected for the view,
 not unseen source rows. Its probability estimates the answer to your question and remains
 separate from the evidence confidence band.
 

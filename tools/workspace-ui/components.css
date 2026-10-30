@@ -1,0 +1,35 @@
+/* Compile only the prefixed daisyUI components below. No Tailwind reset, global
+   theme, automatic source scan or unrelated utility classes enter the portal. */
+@layer pc-workspace-reset, daisyui, utilities;
+@tailwind utilities source(none);
+
+/* The component library expects neutral form controls. Keep that reset local and
+   in a lower layer so actual daisyUI variants always provide the final style. */
+@layer pc-workspace-reset {
+  .product-workspace :where(button, input, select, textarea) {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+  }
+  .product-workspace :where(button) {
+    appearance: button;
+    background: transparent;
+    border: 0;
+  }
+}
+
+@source inline("dui-card dui-card-border dui-card-body dui-card-title dui-card-actions dui-card-sm");
+@source inline("dui-btn dui-btn-xs dui-btn-sm dui-btn-primary dui-btn-secondary dui-btn-neutral dui-btn-ghost dui-btn-outline dui-btn-soft dui-btn-square dui-btn-circle dui-btn-error dui-btn-success");
+@source inline("dui-badge dui-badge-sm dui-badge-soft dui-badge-outline dui-badge-ghost dui-badge-neutral dui-badge-primary dui-badge-secondary dui-badge-accent dui-badge-info dui-badge-success dui-badge-warning dui-badge-error");
+@source inline("dui-tabs dui-tabs-box dui-tabs-border dui-tabs-sm dui-tab dui-tab-active dui-tab-disabled");
+@source inline("dui-stats dui-stat dui-stat-title dui-stat-value dui-stat-desc dui-stat-figure dui-stat-actions");
+@source inline("dui-input dui-input-sm dui-select dui-select-sm dui-textarea dui-textarea-sm dui-checkbox dui-checkbox-sm dui-checkbox-primary");
+@source inline("dui-join dui-join-item dui-table dui-table-sm dui-alert dui-alert-soft dui-alert-info dui-alert-warning dui-alert-error dui-divider");
+
+@plugin "daisyui" {
+  themes: false;
+  root: ".product-workspace";
+  include: button, card, badge, tab, stat, input, select, textarea, checkbox, join, table, alert, divider;
+  prefix: "dui-";
+  logs: false;
+}

@@ -4,9 +4,11 @@
 
 Open **Agent Store** beside Build. Search by outcome, team or source and choose an agent.
 Each outcome appears once; context readiness and the optional AI plan are modes of that agent.
-The catalogue uses compact rows and team filters, with an agent workspace beside it. On a
-small screen the selected workspace appears first. **Browse agents** and **Run history**
-switch between discovery and recent results without losing the selected agent.
+The catalogue opens as a grid of outcome cards with team filters. Switch between **Grid**
+and **List** to change the presentation without losing your selected agent or reviewed
+context. Selecting an agent opens its workspace beside the catalogue; on a small screen
+the workspace appears first. **Browse agents** and **Run history** switch between discovery
+and recent results without losing the selected agent.
 
 ## Start with project data
 

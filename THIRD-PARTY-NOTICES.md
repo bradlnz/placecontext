@@ -4,7 +4,8 @@ PlaceContext is open-source software licensed under the MIT License
 (see [LICENSE](LICENSE)). Instance data and jobs remain the operator's property.
 It builds on the following third-party software. Each component is the property of
 its respective authors and is used under the license noted. Version numbers track
-the project manifests (`src/*/*.csproj`) — those files are authoritative.
+the project manifests (`src/*/*.csproj` and `tools/workspace-ui/package.json`) —
+those files are authoritative.
 
 ## .NET (server, portal, MCP)
 
@@ -37,6 +38,8 @@ the project manifests (`src/*/*.csproj`) — those files are authoritative.
 |---|---|
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) (loaded from jsDelivr CDN) | MIT |
 | [Chart.js](https://github.com/chartjs/Chart.js) (bundled at `wwwroot/vendor/`) | MIT |
+| [daisyUI 5.7.50](https://github.com/saadeghi/daisyui) (prefixed workspace components bundled at `wwwroot/vendor/workspace-daisyui.css`; license included) | MIT |
+| [Tailwind CSS 4.3.3](https://github.com/tailwindlabs/tailwindcss) (build tool for the workspace component bundle; license included) | MIT |
 | [noVNC 1.7.0](https://github.com/novnc/noVNC/tree/v1.7.0) (bundled for Live preview, including its license and authors) | MPL-2.0 |
 | [pako](https://github.com/nodeca/pako) (bundled with noVNC, license included) | MIT / Zlib |
 | [Geist / Geist Mono](https://vercel.com/font) typefaces (Google Fonts) | SIL OFL 1.1 |

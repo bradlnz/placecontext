@@ -1,0 +1,14 @@
+{
+  "name": "placecontext-workspace-ui",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pinned CSS components for the Agent Store and Data profiles",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.3",
+    "daisyui": "5.7.50",
+    "tailwindcss": "4.3.3"
+  }
+}

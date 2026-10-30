@@ -307,16 +307,18 @@ body {
 html[data-pc-theme] #dcshell:has(.product-workspace) {
     --menu-width:216px;
     --ws-bg:var(--tenant-bg,#11131a);
-    --ws-panel:var(--tenant-panel,#191c25);
-    --ws-raised:#222632;
-    --ws-hover:#292e3d;
-    --ws-border:#343b4c;
+    --ws-panel:var(--tenant-panel,#1c2029);
+    --ws-raised:#252a36;
+    --ws-hover:#2d3341;
+    --ws-border:#353d4d;
     --ws-text:var(--tenant-text,#f0f2f8);
     --ws-muted:#bdc5d6;
     --ws-subtle:#9ba6bc;
     --ws-accent:var(--tenant-accent,#afa2ff);
-    --ws-accent-solid:var(--tenant-accent,#7256db);
-    --ws-on-accent:#fff;
+    --ws-accent-solid:var(--tenant-accent,#afa2ff);
+    --ws-on-accent:#20153d;
+    --ws-on-status:#102126;
+    --ws-shadow:0 2px 8px rgba(0,0,0,.12);
     --ws-accent-bg:color-mix(in srgb, var(--ws-accent) 12%, transparent);
     --ws-cyan:#6dd5e5;
     --ws-good:#73d8ad;
@@ -352,13 +354,44 @@ html[data-pc-theme="light"] #dcshell:has(.product-workspace) {
     --ws-subtle:#626c82;
     --ws-accent:var(--tenant-accent,#6750bd);
     --ws-accent-solid:var(--tenant-accent,#7256db);
-    --ws-cyan:#087d94;
+    --ws-on-accent:#fff;
+    --ws-on-status:#fff;
+    --ws-shadow:0 2px 8px rgba(30,40,70,.035);
+    --ws-cyan:#08758a;
     --ws-good:#187450;
     --ws-warn:#8f6014;
     --ws-bad:#b34359;
     --border-2:#b9c1d2;
 }
 .product-workspace {
+    --color-base-100:var(--ws-panel);
+    --color-base-200:var(--ws-raised);
+    --color-base-300:var(--ws-border);
+    --color-base-content:var(--ws-text);
+    --color-primary:var(--ws-accent);
+    --color-primary-content:var(--ws-on-accent);
+    --color-secondary:var(--ws-cyan);
+    --color-secondary-content:var(--ws-on-status);
+    --color-accent:var(--ws-good);
+    --color-accent-content:var(--ws-on-status);
+    --color-neutral:var(--ws-muted);
+    --color-neutral-content:var(--ws-panel);
+    --color-info:var(--ws-cyan);
+    --color-info-content:var(--ws-on-status);
+    --color-success:var(--ws-good);
+    --color-success-content:var(--ws-on-status);
+    --color-warning:var(--ws-warn);
+    --color-warning-content:var(--ws-on-status);
+    --color-error:var(--ws-bad);
+    --color-error-content:var(--ws-on-status);
+    --radius-selector:.5rem;
+    --radius-field:.625rem;
+    --radius-box:1rem;
+    --size-selector:.25rem;
+    --size-field:.28125rem;
+    --dui-border-width:1px;
+    --depth:0;
+    --noise:0;
     color:var(--ws-text);
     background:var(--ws-bg);
     font-size:13px;
@@ -366,6 +399,14 @@ html[data-pc-theme="light"] #dcshell:has(.product-workspace) {
     letter-spacing:0;
     container-type:inline-size;
 }
+.product-workspace :where(.dui-card,.dui-stats) { background:var(--color-base-100); box-shadow:var(--ws-shadow); }
+.product-workspace :where(.dui-card-body) { --dui-card-p:1.25rem; }
+.product-workspace :where(.dui-badge) { font-weight:500; }
+/* Let component variants, hover and disabled states override the portal's base link color. */
+.product-workspace a.dui-btn { color:revert-layer; }
+/* Keep low-emphasis tabs readable in both themes. */
+.product-workspace .dui-tabs-box > .dui-tab:not(.dui-tab-active) { color:var(--ws-muted); }
+.product-workspace .dui-tabs-box > .dui-tab.dui-tab-active { color:var(--ws-accent); font-weight:600; }
 .product-workspace :where(button,input,select,textarea) { font-family:inherit; }
 .product-workspace :where(button,a,input,select,textarea,summary):focus-visible {
     outline:2px solid var(--ws-accent);
@@ -402,6 +443,7 @@ html[data-pc-theme="light"] #dcshell:has(.product-workspace) {
     #dcshell:has(.product-workspace) .running-badge { display:none; }
 }
 @media (max-width:950px) {
+    .product-workspace { --size-field:.3125rem; }
     #dcshell:has(.product-workspace) .dcsearch-trigger { width:36px; height:36px; min-width:36px; padding:0; justify-content:center; }
     #dcshell:has(.product-workspace) .dcsearch-trigger .dcsearch-text,
     #dcshell:has(.product-workspace) .dcsearch-trigger kbd { display:none; }

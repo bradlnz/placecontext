@@ -299,8 +299,9 @@ privately as described in [SECURITY.md](SECURITY.md).
 
 ### Agent Store and data profiles
 
-**Agent Store** starts with a searchable catalogue grouped by team, with run history in a
-separate view. Choose an outcome to open its context inspector, review the matching project
+**Agent Store** starts with a searchable card catalogue grouped by team, with a compact list
+option and run history in a separate view. Switching between Grid and List preserves the
+selected agent and its context. Choose an outcome to open its context inspector, review the matching project
 sources, and select **Use project data**. Manual context is
 available when something essential is missing. Discovery reads bounded samples from explicitly
 matched project tables; it does not call a model, scan unrelated tables or contact external
@@ -315,8 +316,12 @@ input presence. Standalone AI plan runs retain development-only subscription sim
 configured provider requirements; they propose actions for review rather than execute them.
 See the [Agent Store guide](src/PlaceContext.Host/Wiki/agent-store.md) for source names and scope.
 
-**Data profiles** opens a visual overview of up to 12 available chart snapshots, with a summary
-of freshness, confidence and evidence needing attention. **Overview** and **Needs attention**
+Both workspaces use locally bundled, prefixed daisyUI components for consistent cards, tabs,
+controls and status badges in light and dark themes. See the [workspace style guide](tools/workspace-ui/README.md)
+for the pinned component build.
+
+**Data profiles** opens a visual overview of up to 12 available chart snapshots, with stat cards
+for freshness, confidence and evidence needing attention. **Overview** and **Needs attention**
 show chart panels together; **Explore values** opens a focused chart and its exact displayed
 values. Select a panel to inspect confidence, evidence checks and suggested questions alongside
 the charts. Save private named

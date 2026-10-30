@@ -6,13 +6,13 @@
 @implements IDisposable
 
 <PageTitle>PlaceContext — Data profiles</PageTitle>
-<div class="profile-workspace product-workspace" aria-busy="@Vm.Busy">
+<div class="profile-workspace product-workspace" aria-busy="@(Vm.Busy ? "true" : "false")">
     <header class="workspace-header">
         <div class="header-start"><span class="workspace-mark"><AppIcon Kind="data.analytics" /></span><h1>Data profiles</h1><span class="header-divider"></span><span class="header-context">Project data</span></div>
         <div class="header-actions">
-            <a class="toolbar-button store-link" href="/project/@ProjectId/build/workflows"><AppIcon Kind="agent" /><span>Agent Store</span></a>
-            <button class="toolbar-button" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync" title="Reload saved snapshots; source queries are not rerun"><AppIcon Kind="refresh" /><span class="refresh-label">Refresh</span></button>
-            <button class="toolbar-button outlined" disabled="@Vm.Busy" @onclick="Vm.New"><AppIcon Kind="plus" /><span>New view</span></button>
+            <a class="dui-btn dui-btn-ghost dui-btn-sm toolbar-button store-link" href="/project/@ProjectId/build/workflows"><AppIcon Kind="agent" /><span>Agent Store</span></a>
+            <button class="dui-btn dui-btn-ghost dui-btn-sm toolbar-button" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync" title="Reload saved snapshots; source queries are not rerun"><AppIcon Kind="refresh" /><span class="refresh-label">Refresh</span></button>
+            <button class="dui-btn dui-btn-outline dui-btn-sm toolbar-button" disabled="@Vm.Busy" @onclick="Vm.New"><AppIcon Kind="plus" /><span>New view</span></button>
         </div>
     </header>
 
@@ -22,7 +22,7 @@
 
         <section class="view-heading" aria-label="Dashboard view">
             <div class="view-title">
-                <div class="view-title-line"><h2>@Vm.Name</h2><span class="privacy-label"><AppIcon Kind="human" /> Private</span></div>
+                <div class="view-title-line"><h2>@Vm.Name</h2><span class="dui-badge dui-badge-soft dui-badge-sm privacy-label"><AppIcon Kind="human" /> Private</span></div>
                 <p>Saved charts, evidence checks, and questions to investigate.</p>
                 @if (Vm.IsPreview && Vm.Charts.Count > Vm.ChartIds.Count) { <small class="preview-scope">Showing @Vm.ChartIds.Count of @Vm.Charts.Count snapshots. Choose data to change this view.</small> }
             </div>
@@ -30,33 +30,33 @@
                 @if (Vm.Saved.Count > 0)
                 {
                     <label for="saved-dashboard" class="visually-hidden">Saved view</label>
-                    <select id="saved-dashboard" class="view-select" value="@(Vm.Selected?.Id.ToString() ?? "overview")" disabled="@(Vm.Busy || Vm.Editing)" @onchange="e => Vm.OpenSaved(e.Value?.ToString())">
+                    <select id="saved-dashboard" class="dui-select dui-select-sm view-select" value="@(Vm.Selected?.Id.ToString() ?? "overview")" disabled="@(Vm.Busy || Vm.Editing)" @onchange="e => Vm.OpenSaved(e.Value?.ToString())">
                         <option value="overview">Project overview · unsaved</option>
                         @foreach (var dashboard in Vm.Saved) { <option value="@dashboard.Id">@dashboard.Name</option> }
                     </select>
                 }
                 @if (!Vm.Editing && Vm.ChartIds.Count > 0)
                 {
-                    <button class="toolbar-button outlined" disabled="@Vm.Busy" @onclick="Vm.Edit"><AppIcon Kind="settings" /> Choose data</button>
-                    @if (Vm.IsPreview) { <button class="primary-button" disabled="@(Vm.Busy || Vm.MissingCharts)" @onclick="Vm.SaveAsync">Save view</button> }
-                    @if (Vm.Selected is not null) { <button class="icon-button" aria-label="Delete saved view" title="Delete saved view" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button> }
+                    <button class="dui-btn dui-btn-outline dui-btn-sm toolbar-button" disabled="@Vm.Busy" @onclick="Vm.Edit"><AppIcon Kind="settings" /> Choose data</button>
+                    @if (Vm.IsPreview) { <button class="dui-btn dui-btn-primary dui-btn-sm primary-button" disabled="@(Vm.Busy || Vm.MissingCharts)" @onclick="Vm.SaveAsync">Save view</button> }
+                    @if (Vm.Selected is not null) { <button class="dui-btn dui-btn-ghost dui-btn-sm dui-btn-square icon-button" aria-label="Delete saved view" title="Delete saved view" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button> }
                 }
             </div>
         </section>
 
         @if (Vm.ConfirmDelete)
         {
-            <div class="delete-confirm" role="alert"><span>Delete this saved view? Source charts will remain available.</span><button class="toolbar-button danger" disabled="@Vm.Busy" @onclick="Vm.DeleteAsync">Delete view</button><button class="toolbar-button" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = false">Keep view</button></div>
+            <div class="delete-confirm" role="alert"><span>Delete this saved view? Source charts will remain available.</span><button class="dui-btn dui-btn-soft dui-btn-error dui-btn-sm toolbar-button" disabled="@Vm.Busy" @onclick="Vm.DeleteAsync">Delete view</button><button class="dui-btn dui-btn-ghost dui-btn-sm toolbar-button" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = false">Keep view</button></div>
         }
         @if (Vm.Editing)
         {
-            <section class="view-editor" aria-labelledby="view-editor-title">
+            <section class="dui-card dui-card-border view-editor" aria-labelledby="view-editor-title">
                 <div class="section-heading"><h3 id="view-editor-title">Choose the data in this view</h3><span>@Vm.ChartIds.Count / 12 snapshots</span></div>
-                <label for="dashboard-name">View name</label><input id="dashboard-name" class="view-name-input" maxlength="100" @bind="Vm.Name" disabled="@Vm.Busy" />
+                <label for="dashboard-name">View name</label><input id="dashboard-name" class="dui-input dui-input-sm view-name-input" maxlength="100" @bind="Vm.Name" disabled="@Vm.Busy" />
                 <div class="chart-picker">
                     @foreach (var chart in Vm.Charts)
                     {
-                        <label class="chart-choice @(Vm.ChartIds.Contains(chart.Id) ? "selected" : "")"><input type="checkbox" checked="@Vm.ChartIds.Contains(chart.Id)" disabled="@(Vm.Busy || (!Vm.ChartIds.Contains(chart.Id) && Vm.ChartIds.Count >= 12))" @onchange="() => Vm.Toggle(chart.Id)" /><span><strong>@chart.Name</strong><small>@(chart.Source ?? "Source not recorded")</small></span></label>
+                        <label class="dui-card dui-card-border chart-choice @(Vm.ChartIds.Contains(chart.Id) ? "selected" : "")"><input class="dui-checkbox dui-checkbox-primary dui-checkbox-sm" type="checkbox" checked="@Vm.ChartIds.Contains(chart.Id)" disabled="@(Vm.Busy || (!Vm.ChartIds.Contains(chart.Id) && Vm.ChartIds.Count >= 12))" @onchange="() => Vm.Toggle(chart.Id)" /><span><strong>@chart.Name</strong><small>@(chart.Source ?? "Source not recorded")</small></span></label>
                     }
                 </div>
                 @if (Vm.Charts.Count == 0) { <p>No saved charts yet. <a href="/project/@ProjectId/analytics">Create a source chart</a> to start profiling.</p> }
@@ -65,31 +65,31 @@
                     <ol class="selected-order" aria-label="Chart order">
                         @foreach (var chart in Vm.SelectedCharts)
                         {
-                            <li @key="chart.Id"><span>@chart.Name</span><div><button class="icon-button" aria-label="Move @chart.Name earlier" disabled="@(Vm.Busy || Vm.ChartIds.IndexOf(chart.Id) == 0)" @onclick="() => Vm.Move(chart.Id, -1)"><AppIcon Kind="arrow-up" /></button><button class="icon-button" aria-label="Move @chart.Name later" disabled="@(Vm.Busy || Vm.ChartIds.IndexOf(chart.Id) == Vm.ChartIds.Count - 1)" @onclick="() => Vm.Move(chart.Id, 1)"><AppIcon Kind="arrow-down" /></button><button class="icon-button" aria-label="Remove @chart.Name" disabled="@Vm.Busy" @onclick="() => Vm.Toggle(chart.Id)"><AppIcon Kind="close" /></button></div></li>
+                            <li @key="chart.Id"><span>@chart.Name</span><div><button class="dui-btn dui-btn-ghost dui-btn-sm dui-btn-square icon-button" aria-label="Move @chart.Name earlier" disabled="@(Vm.Busy || Vm.ChartIds.IndexOf(chart.Id) == 0)" @onclick="() => Vm.Move(chart.Id, -1)"><AppIcon Kind="arrow-up" /></button><button class="dui-btn dui-btn-ghost dui-btn-sm dui-btn-square icon-button" aria-label="Move @chart.Name later" disabled="@(Vm.Busy || Vm.ChartIds.IndexOf(chart.Id) == Vm.ChartIds.Count - 1)" @onclick="() => Vm.Move(chart.Id, 1)"><AppIcon Kind="arrow-down" /></button><button class="dui-btn dui-btn-ghost dui-btn-sm dui-btn-square icon-button" aria-label="Remove @chart.Name" disabled="@Vm.Busy" @onclick="() => Vm.Toggle(chart.Id)"><AppIcon Kind="close" /></button></div></li>
                         }
                     </ol>
                 }
-                @if (Vm.MissingCharts) { <p class="missing-note">@Vm.MissingChartIds.Count selected chart(s) are unavailable. <button class="toolbar-button" disabled="@Vm.Busy" @onclick="Vm.RemoveMissing">Remove missing charts</button></p> }
-                <div class="editor-actions"><button class="primary-button" disabled="@(Vm.Busy || Vm.ChartIds.Count == 0 || Vm.MissingCharts || string.IsNullOrWhiteSpace(Vm.Name))" @onclick="Vm.SaveAsync">Save view</button><button class="toolbar-button" disabled="@Vm.Busy" @onclick="Vm.Cancel">Cancel</button><a class="toolbar-button" href="/project/@ProjectId/analytics">Manage source charts <AppIcon Kind="external-link" /></a></div>
+                @if (Vm.MissingCharts) { <p class="missing-note">@Vm.MissingChartIds.Count selected chart(s) are unavailable. <button class="dui-btn dui-btn-ghost dui-btn-sm toolbar-button" disabled="@Vm.Busy" @onclick="Vm.RemoveMissing">Remove missing charts</button></p> }
+                <div class="dui-card-actions editor-actions"><button class="dui-btn dui-btn-primary dui-btn-sm primary-button" disabled="@(Vm.Busy || Vm.ChartIds.Count == 0 || Vm.MissingCharts || string.IsNullOrWhiteSpace(Vm.Name))" @onclick="Vm.SaveAsync">Save view</button><button class="dui-btn dui-btn-ghost dui-btn-sm toolbar-button" disabled="@Vm.Busy" @onclick="Vm.Cancel">Cancel</button><a class="dui-btn dui-btn-ghost dui-btn-sm toolbar-button" href="/project/@ProjectId/analytics">Manage source charts <AppIcon Kind="external-link" /></a></div>
             </section>
         }
 
         @if (Vm.ChartIds.Count > 0)
         {
             <section class="summary-strip" aria-label="Snapshot summary">
-                <div class="summary-cell"><span class="metric-label"><AppIcon Kind="dashboard" /> Data profiles</span><div class="metric-value">@Vm.Profile.Charts.Count<span>in this view</span></div></div>
-                <button class="summary-cell attention-metric" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.NeedsAttention)"><span class="metric-label"><AppIcon Kind="warning" /> Needs attention</span><div class="metric-value">@Vm.Profile.NeedsAttentionCount<span>review evidence <AppIcon Kind="arrow-right" /></span></div></button>
-                <div class="summary-cell"><span class="metric-label"><AppIcon Kind="clock" /> Current snapshots</span><div class="metric-value">@Vm.Profile.CurrentCount<span>generated within 24h</span></div></div>
-                <div class="summary-cell confidence-metric"><span class="metric-label"><AppIcon Kind="data.entities" /> Snapshot confidence</span><div class="metric-value @PersonalDashboardsViewModel.BandClass(Vm.Profile.Confidence)">@Vm.Profile.Confidence<span>coverage unverified</span></div></div>
+                <div class="dui-stats dui-card dui-card-border summary-cell"><div class="dui-stat"><div class="dui-stat-figure metric-icon"><AppIcon Kind="dashboard" /></div><span class="dui-stat-title">Data profiles</span><strong class="dui-stat-value">@Vm.Profile.Charts.Count</strong><span class="dui-stat-desc">Saved chart snapshots</span></div></div>
+                <button class="dui-stats dui-card dui-card-border summary-cell attention-metric" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.NeedsAttention)"><div class="dui-stat"><div class="dui-stat-figure metric-icon"><AppIcon Kind="warning" /></div><span class="dui-stat-title">Needs attention</span><strong class="dui-stat-value">@Vm.Profile.NeedsAttentionCount</strong><span class="dui-stat-desc">Review evidence <AppIcon Kind="arrow-right" /></span></div></button>
+                <div class="dui-stats dui-card dui-card-border summary-cell"><div class="dui-stat"><div class="dui-stat-figure metric-icon current-icon"><AppIcon Kind="clock" /></div><span class="dui-stat-title">Current snapshots</span><strong class="dui-stat-value">@Vm.Profile.CurrentCount</strong><span class="dui-stat-desc">Generated within 24 hours</span></div></div>
+                <div class="dui-stats dui-card dui-card-border summary-cell confidence-metric"><div class="dui-stat"><div class="dui-stat-figure metric-icon"><AppIcon Kind="data.entities" /></div><span class="dui-stat-title">Snapshot confidence</span><strong class="dui-stat-value @PersonalDashboardsViewModel.BandClass(Vm.Profile.Confidence)">@Vm.Profile.Confidence</strong><span class="dui-stat-desc">Source coverage unverified</span></div></div>
             </section>
             @if (Vm.MissingCharts) { <p class="workspace-notice error" role="alert">@Vm.MissingChartIds.Count selected chart(s) are unavailable. Choose data to restore or remove them. Jev analysis is paused until the view is complete.</p> }
             <div class="view-toolbar">
-                <nav class="view-lenses" aria-label="Data profile views">
-                    <button class="@(Vm.Lens == DashboardLens.Overview ? "selected" : "")" aria-pressed="@(Vm.Lens == DashboardLens.Overview)" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.Overview)"><AppIcon Kind="dashboard" />Overview</button>
-                    <button class="@(Vm.Lens == DashboardLens.NeedsAttention ? "selected" : "")" aria-pressed="@(Vm.Lens == DashboardLens.NeedsAttention)" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.NeedsAttention)"><AppIcon Kind="warning" />Needs attention <span>@Vm.Profile.NeedsAttentionCount</span></button>
-                    <button class="@(Vm.Lens == DashboardLens.Explore ? "selected" : "")" aria-pressed="@(Vm.Lens == DashboardLens.Explore)" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.Explore)"><AppIcon Kind="logs" />Explore values</button>
+                <nav class="dui-tabs dui-tabs-box dui-tabs-sm view-lenses" aria-label="Data profile views">
+                    <button class="dui-tab @(Vm.Lens == DashboardLens.Overview ? "dui-tab-active" : "")" aria-pressed="@(Vm.Lens == DashboardLens.Overview ? "true" : "false")" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.Overview)"><AppIcon Kind="dashboard" />Overview</button>
+                    <button class="dui-tab @(Vm.Lens == DashboardLens.NeedsAttention ? "dui-tab-active" : "")" aria-pressed="@(Vm.Lens == DashboardLens.NeedsAttention ? "true" : "false")" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.NeedsAttention)"><AppIcon Kind="warning" />Needs attention <span class="dui-badge dui-badge-soft dui-badge-sm">@Vm.Profile.NeedsAttentionCount</span></button>
+                    <button class="dui-tab @(Vm.Lens == DashboardLens.Explore ? "dui-tab-active" : "")" aria-pressed="@(Vm.Lens == DashboardLens.Explore ? "true" : "false")" disabled="@Vm.Busy" @onclick="() => Vm.SetLens(DashboardLens.Explore)"><AppIcon Kind="logs" />Explore values</button>
                 </nav>
-                <label class="profile-search"><AppIcon Kind="data.search" /><span class="visually-hidden">Find a data profile</span><input id="profile-search" placeholder="Find a source or measure…" @bind="Vm.ProfileSearch" @bind:event="oninput" disabled="@Vm.Busy" /></label>
+                <label class="dui-input dui-input-sm profile-search"><AppIcon Kind="data.search" /><span class="visually-hidden">Find a data profile</span><input id="profile-search" placeholder="Find a source or measure…" @bind="Vm.ProfileSearch" @bind:event="oninput" disabled="@Vm.Busy" /></label>
             </div>
 
             <div class="profile-layout">
@@ -97,17 +97,17 @@
                     <div class="canvas-heading"><span>@(Vm.Lens == DashboardLens.NeedsAttention ? "Evidence to review" : Vm.Lens == DashboardLens.Explore ? "Explore a snapshot" : "Your data at a glance")</span><small>@(Vm.Lens == DashboardLens.Explore ? "Saved source order" : "Attention first") · @Vm.VisibleProfiles.Count profiles</small></div>
                     @if (Vm.Lens == DashboardLens.Explore && Vm.VisibleProfiles.Count > 0)
                     {
-                        <label class="source-selector">Source profile<select value="@Vm.FocusedChartId" disabled="@Vm.Busy" @onchange="SelectProfile">@foreach (var profile in Vm.VisibleProfiles) { <option value="@profile.ChartId">@profile.Name</option> }</select></label>
+                        <label class="source-selector">Source profile<select class="dui-select dui-select-sm" value="@Vm.FocusedChartId" disabled="@Vm.Busy" @onchange="SelectProfile">@foreach (var profile in Vm.VisibleProfiles) { <option value="@profile.ChartId">@profile.Name</option> }</select></label>
                     }
                     <div class="chart-grid @(Vm.Lens == DashboardLens.Explore ? "explore" : "")">
                         @foreach (var profile in Vm.DisplayedProfiles)
                         {
                             var chart = Vm.SelectedCharts.First(x => x.Id == profile.ChartId);
-                            <article class="chart-panel @(Vm.FocusedChartId == profile.ChartId ? "selected" : "")" @key="profile.ChartId">
-                                <header class="panel-heading"><button class="panel-select" disabled="@Vm.Busy" aria-pressed="@(Vm.FocusedChartId == profile.ChartId)" @onclick="() => SelectProfileAsync(profile.ChartId)"><h3>@profile.Name</h3><AppIcon Kind="chevron-right" /></button><span class="confidence-band @PersonalDashboardsViewModel.BandClass(profile.Confidence)">@profile.Confidence confidence</span></header>
-                                <div class="panel-context"><span title="@(profile.Source ?? "Source not recorded")"><AppIcon Kind="data" />@(profile.Source ?? "Source not recorded")</span><span class="freshness @profile.Freshness.ToString().ToLowerInvariant()">@profile.Freshness</span></div>
+                            <article class="dui-card dui-card-border chart-panel @(Vm.FocusedChartId == profile.ChartId ? "selected" : "")" @key="profile.ChartId">
+                                <header class="panel-heading"><button class="panel-select" disabled="@Vm.Busy" aria-pressed="@(Vm.FocusedChartId == profile.ChartId ? "true" : "false")" @onclick="() => SelectProfileAsync(profile.ChartId)"><h3 class="dui-card-title">@profile.Name</h3><AppIcon Kind="chevron-right" /></button><span class="dui-badge dui-badge-soft dui-badge-sm confidence-band @ConfidenceBadge(profile.Confidence)">@profile.Confidence confidence</span></header>
+                                <div class="panel-context"><span title="@(profile.Source ?? "Source not recorded")"><AppIcon Kind="data" />@(profile.Source ?? "Source not recorded")</span><span class="dui-badge dui-badge-soft dui-badge-sm freshness @FreshnessBadge(profile.Freshness)">@profile.Freshness</span></div>
                                 <div class="chart-canvas"><canvas id="@PersonalDashboardsViewModel.CanvasId(chart.Id)" role="img" aria-label="@chart.Name. Exact displayed values are in this panel's data table."></canvas></div>
-                                <div class="panel-footer"><span>@profile.LabelCount categories <i>·</i> @profile.SeriesCount measures</span><button class="text-button" disabled="@Vm.Busy" @onclick="() => ExploreProfile(profile.ChartId)">Explore values <AppIcon Kind="arrow-right" /></button></div>
+                                <div class="dui-card-actions panel-footer"><span>@profile.LabelCount categories <i>·</i> @profile.SeriesCount measures</span><button class="dui-btn dui-btn-ghost dui-btn-sm text-button" disabled="@Vm.Busy" @onclick="() => ExploreProfile(profile.ChartId)">Explore values <AppIcon Kind="arrow-right" /></button></div>
                                 <details class="chart-data" open="@(Vm.Lens == DashboardLens.Explore)"><summary>Displayed values <span>@profile.ValueCount values</span></summary><div class="table-scroll"><table><caption>@chart.Name — saved snapshot</caption><thead><tr><th scope="col">Category</th>@foreach (var series in chart.Spec.Series.OfType<ChartSeries>().Take(profile.SeriesCount)) { <th scope="col">@series.Name</th> }</tr></thead><tbody>
                                     @for (var i = 0; i < Math.Min(chart.Spec.Labels.Count, ChartSpec.MaxLabels); i++)
                                     {
@@ -120,19 +120,20 @@
                     </div>
                     @if (Vm.VisibleProfiles.Count == 0)
                     {
-                        <div class="focus-empty"><AppIcon Kind="@(Vm.Lens == DashboardLens.NeedsAttention ? "check" : "data.search")" /><h3>@(Vm.Lens == DashboardLens.NeedsAttention && string.IsNullOrWhiteSpace(Vm.ProfileSearch) ? "No profiles need attention" : "No matching profiles")</h3><p>@(Vm.Lens == DashboardLens.NeedsAttention ? "Available snapshots have no attention checks in this view. Source coverage is still unverified." : "Try another source, chart name or measure.")</p><button class="toolbar-button outlined" disabled="@Vm.Busy" @onclick='() => { Vm.ProfileSearch = ""; Vm.SetLens(DashboardLens.Overview); }'>Show all profiles</button></div>
+                        <div class="focus-empty"><AppIcon Kind="@(Vm.Lens == DashboardLens.NeedsAttention ? "check" : "data.search")" /><h3>@(Vm.Lens == DashboardLens.NeedsAttention && string.IsNullOrWhiteSpace(Vm.ProfileSearch) ? "No profiles need attention" : "No matching profiles")</h3><p>@(Vm.Lens == DashboardLens.NeedsAttention ? "Available snapshots have no attention checks in this view. Source coverage is still unverified." : "Try another source, chart name or measure.")</p><button class="dui-btn dui-btn-outline dui-btn-sm toolbar-button" disabled="@Vm.Busy" @onclick='() => { Vm.ProfileSearch = ""; Vm.SetLens(DashboardLens.Overview); }'>Show all profiles</button></div>
                     }
                     <p class="canvas-scope"><AppIcon Kind="clock" /> Saved snapshots · Assessed @Vm.AssessedAt.ToLocalTime().ToString("t")<a href="/project/@ProjectId/analytics">Manage sources <AppIcon Kind="external-link" /></a></p>
                 </section>
 
-                <aside id="profile-inspector" class="profile-inspector" aria-label="Profile evidence and investigation">
+                <aside id="profile-inspector" class="dui-card dui-card-border profile-inspector" aria-label="Profile evidence and investigation">
+                    <div class="dui-card-body inspector-body">
                     @if (Vm.FocusedProfile is { } inspected)
                     {
                         <div class="inspector-header"><span class="section-label">PROFILE DETAILS</span><a class="back-to-panels" href="#profile-panels">Back to charts ↑</a></div>
-                        <h3 class="inspector-title" tabindex="-1" @ref="_inspectorHeading">@inspected.Name</h3>
+                        <h3 class="dui-card-title inspector-title" tabindex="-1" @ref="_inspectorHeading">@inspected.Name</h3>
                         <div class="inspector-source"><AppIcon Kind="data" /><span>@(inspected.Source ?? "Source not recorded")</span></div>
-                        <section class="confidence-card" aria-label="Evidence confidence">
-                            <div class="confidence-card-heading"><span class="confidence-band @PersonalDashboardsViewModel.BandClass(inspected.Confidence)">@inspected.Confidence confidence</span><span class="snapshot-label">Snapshot</span></div>
+                        <section class="dui-card dui-card-border confidence-card" aria-label="Evidence confidence">
+                            <div class="confidence-card-heading"><span class="dui-badge dui-badge-soft dui-badge-sm confidence-band @ConfidenceBadge(inspected.Confidence)">@inspected.Confidence confidence</span><span class="snapshot-label">Snapshot</span></div>
                             <p>@inspected.ConfidenceReason</p>
                             <div class="confidence-scale" aria-label="Confidence level @inspected.Confidence of Unknown, Low, Medium, High"><span class="@(inspected.Confidence == DashboardConfidence.Unknown ? "active unknown" : "")">Unknown</span><span class="@(inspected.Confidence == DashboardConfidence.Low ? "active low" : "")">Low</span><span class="@(inspected.Confidence == DashboardConfidence.Medium ? "active medium" : "")">Medium</span><span class="@(inspected.Confidence == DashboardConfidence.High ? "active high" : "")">High</span></div>
                         </section>
@@ -144,9 +145,9 @@
                             <div class="section-heading"><h4 id="evidence-checks-title">Evidence checks</h4><span>@inspected.Checks.Count(x => x.State == DashboardCheckState.Pass)/@inspected.Checks.Count pass</span></div>
                             @foreach (var check in inspected.Checks)
                             {
-                                <details class="evidence-check @PersonalDashboardsViewModel.CheckClass(check.State)"><summary><span class="check-dot"></span><strong>@check.Name</strong><span class="check-state">@check.State</span><AppIcon Kind="chevron-down" /></summary><p>@check.Reason</p><span class="next-step">@check.NextStep</span></details>
+                                <details class="evidence-check @PersonalDashboardsViewModel.CheckClass(check.State)"><summary><span class="check-dot"></span><strong>@check.Name</strong><span class="dui-badge dui-badge-soft dui-badge-sm check-state @CheckBadge(check.State)">@check.State</span><AppIcon Kind="chevron-down" /></summary><p>@check.Reason</p><span class="next-step">@check.NextStep</span></details>
                             }
-                            <a class="source-action" href="/project/@ProjectId/analytics">@(inspected.NeedsAttention ? "Review source in Analytics" : "Inspect source in Analytics")<AppIcon Kind="external-link" /></a>
+                            <a class="dui-btn dui-btn-soft dui-btn-primary dui-btn-sm source-action" href="/project/@ProjectId/analytics">@(inspected.NeedsAttention ? "Review source in Analytics" : "Inspect source in Analytics")<AppIcon Kind="external-link" /></a>
                             <p class="snapshot-time">Generated @(inspected.GeneratedAt == default ? "at an unknown time" : inspected.GeneratedAt.ToLocalTime().ToString("g"))</p>
                         </section>
                     }
@@ -155,28 +156,29 @@
                         <div class="inspector-placeholder"><AppIcon Kind="data.entities" /><h3>Select a profile</h3><p>Inspect its confidence, evidence checks and next steps here.</p></div>
                     }
                     <section class="investigation" aria-labelledby="investigation-title">
-                        <div class="section-heading"><h3 id="investigation-title"><AppIcon Kind="agent" /> Investigate with Jev</h3><span class="ai-label">AI</span></div>
+                        <div class="section-heading"><h3 id="investigation-title"><AppIcon Kind="agent" /> Investigate with Jev</h3><span class="dui-badge dui-badge-soft dui-badge-primary dui-badge-sm ai-label">AI</span></div>
                         @if (Vm.FocusedProfile is { SuggestedQuestions.Count: > 0 } focused)
                         {
-                            <details class="suggested-questions"><summary>Suggested questions <span>@focused.SuggestedQuestions.Count</span></summary><div>@foreach (var question in focused.SuggestedQuestions) { <button disabled="@Vm.Busy" @onclick="() => UseSuggestionAsync(question)">@question<AppIcon Kind="arrow-up" /></button> }</div></details>
+                            <details class="suggested-questions"><summary>Suggested questions <span>@focused.SuggestedQuestions.Count</span></summary><div>@foreach (var question in focused.SuggestedQuestions) { <button class="dui-btn dui-btn-ghost dui-btn-sm" disabled="@Vm.Busy" @onclick="() => UseSuggestionAsync(question)">@question<AppIcon Kind="arrow-up" /></button> }</div></details>
                         }
                         <form class="question-composer" @onsubmit="Vm.AnalyzeAsync" @onsubmit:preventDefault>
-                            <label for="jev-question" class="visually-hidden">Yes or no question for Jev</label><textarea @ref="_question" id="jev-question" class="question-input" rows="3" maxlength="1000" @bind="Vm.Question" @bind:event="oninput" disabled="@Vm.Busy" placeholder="Ask a yes/no question about this data…"></textarea>
-                            <div class="composer-actions"><span>@Vm.SelectedCharts.Count() selected snapshots</span><button class="send-button" type="submit" disabled="@(!Vm.CanAnalyze)" aria-label="Analyze question with Jev" title="Analyze question with Jev"><AppIcon Kind="arrow-up" /></button></div>
+                            <label for="jev-question" class="visually-hidden">Yes or no question for Jev</label><textarea @ref="_question" id="jev-question" class="dui-textarea question-input" rows="3" maxlength="1000" @bind="Vm.Question" @bind:event="oninput" disabled="@Vm.Busy" placeholder="Ask a yes/no question about this data…"></textarea>
+                            <div class="composer-actions"><span>@Vm.SelectedCharts.Count() selected snapshots</span><button class="dui-btn dui-btn-primary dui-btn-sm send-button" type="submit" disabled="@(!Vm.CanAnalyze)" aria-label="Analyze question with Jev" title="Analyze question with Jev">Ask Jev <AppIcon Kind="arrow-up" /></button></div>
                         </form>
                         <p class="composer-note">Uses your configured Jev service. Sending shares selected chart values; provider usage may apply.</p>
                         @if (Vm.AnalysisCurrent && Vm.Analysis is { } analysis)
                         {
-                            <div class="analysis-result" role="status"><span class="section-label">JEV ASSESSMENT</span><h4>@analysis.Verdict</h4><p>@analysis.Question</p><strong>@analysis.Probability.ToString("P0") estimated probability of “yes”</strong><p class="analysis-scope">This estimate answers the question. It does not change data confidence.</p><small>@analysis.AnalyzedAt.ToLocalTime().ToString("g") · Evidence @analysis.Fingerprint[..Math.Min(analysis.Fingerprint.Length, 12)]</small></div>
+                            <div class="dui-card dui-card-border analysis-result" role="status"><span class="section-label">JEV ASSESSMENT</span><h4>@analysis.Verdict</h4><p>@analysis.Question</p><strong>@analysis.Probability.ToString("P0") estimated probability of “yes”</strong><p class="analysis-scope">This estimate answers the question. It does not change data confidence.</p><small>@analysis.AnalyzedAt.ToLocalTime().ToString("g") · Evidence @analysis.Fingerprint[..Math.Min(analysis.Fingerprint.Length, 12)]</small></div>
                         }
                     </section>
+                    </div>
                 </aside>
             </div>
             <details class="confidence-method"><summary><AppIcon Kind="about" /> About profiles, freshness and confidence</summary><p>@DashboardDataProfile.Scope</p><p>@Vm.Profile.ConfidenceReason</p><p>Current means generated within 24 hours; aging means within 7 days. These are default review windows, not a source service-level agreement. Missing, future-dated or stale snapshots and ambiguous labels need attention. Coverage is unverified, so confidence is capped at Medium. Refresh retrieves saved snapshots; regenerate source charts in Analytics to get newer values. Exploring profiles does not call a model.</p></details>
         }
         else if (!Vm.Busy && !Vm.Editing)
         {
-            <section class="workspace-empty"><span class="empty-icon"><AppIcon Kind="data.analytics" /></span><h2>Bring your data into focus</h2><p>Saved charts become profiles automatically, with a visual overview, evidence checks and confidence for every source.</p><div class="empty-steps"><span><b>1</b> Connect your data</span><AppIcon Kind="arrow-right" /><span><b>2</b> Save a source chart</span><AppIcon Kind="arrow-right" /><span><b>3</b> Explore its profile</span></div><div class="empty-actions"><a class="primary-button" href="/project/@ProjectId/build"><AppIcon Kind="plus" /> Build a data workflow</a><a class="toolbar-button outlined" href="/project/@ProjectId/analytics">Open Analytics <AppIcon Kind="external-link" /></a></div></section>
+            <section class="dui-card dui-card-border workspace-empty"><span class="empty-icon"><AppIcon Kind="data.analytics" /></span><h2>Bring your data into focus</h2><p>Saved charts become profiles automatically, with a visual overview, evidence checks and confidence for every source.</p><div class="empty-steps"><span><b>1</b> Connect your data</span><AppIcon Kind="arrow-right" /><span><b>2</b> Save a source chart</span><AppIcon Kind="arrow-right" /><span><b>3</b> Explore its profile</span></div><div class="dui-card-actions empty-actions"><a class="dui-btn dui-btn-primary dui-btn-sm primary-button" href="/project/@ProjectId/build"><AppIcon Kind="plus" /> Build a data workflow</a><a class="dui-btn dui-btn-outline dui-btn-sm toolbar-button" href="/project/@ProjectId/analytics">Open Analytics <AppIcon Kind="external-link" /></a></div></section>
         }
         else if (Vm.Busy && Vm.ChartIds.Count == 0)
         {
@@ -187,6 +189,21 @@
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    private static string ConfidenceBadge(DashboardConfidence confidence) => confidence switch
+    {
+        DashboardConfidence.Low => "dui-badge-warning", DashboardConfidence.Medium => "dui-badge-info",
+        DashboardConfidence.High => "dui-badge-success", _ => "dui-badge-neutral"
+    };
+    private static string FreshnessBadge(DashboardFreshness freshness) => freshness switch
+    {
+        DashboardFreshness.Current => "dui-badge-success", DashboardFreshness.Stale => "dui-badge-warning",
+        _ => "dui-badge-neutral"
+    };
+    private static string CheckBadge(DashboardCheckState state) => state switch
+    {
+        DashboardCheckState.Pass => "dui-badge-success", DashboardCheckState.Attention => "dui-badge-warning",
+        DashboardCheckState.Caution => "dui-badge-warning", _ => "dui-badge-neutral"
+    };
     private ElementReference _question;
     private ElementReference _inspectorHeading;
     private async Task UseSuggestionAsync(string question)
