@@ -816,29 +816,23 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
         || ct.Contains("svg")
         || ct.StartsWith("video/");
 
-    // Stroke-style file icons matching the sidebar's icon set — no emoji.
+    // File previews use the same locally bundled Lucide catalogue as navigation and actions.
     public static RenderFragment FileIcon(string ct, int size) =>
         builder =>
         {
-            var inner = ct switch
+            var kind = ct switch
             {
-                var c when c.StartsWith("image/") =>
-                    "<rect x='3' y='4' width='18' height='16' rx='2'></rect><circle cx='8.5' cy='9.5' r='1.7'></circle><path d='M21 15.5l-4.5-4.5L6 21.5'></path>",
-                "application/pdf" =>
-                    "<path d='M6 2h8l5 5v15H6V2Z'></path><path d='M14 2v5h5'></path><path d='M9 13.5h6M9 17h6'></path>",
-                var c when c.StartsWith("video/") =>
-                    "<rect x='2.5' y='5' width='13' height='14' rx='2'></rect><path d='M15.5 10l6-3.5v11l-6-3.5'></path>",
-                var c when c.Contains("html") =>
-                    "<circle cx='12' cy='12' r='9'></circle><path d='M3 12h18M12 3c2.8 2.6 4 5.7 4 9s-1.2 6.4-4 9c-2.8-2.6-4-5.7-4-9s1.2-6.4 4-9Z'></path>",
-                var c when c.Contains("csv") =>
-                    "<rect x='3' y='4' width='18' height='16' rx='2'></rect><path d='M3 9.5h18M3 15h18M9 4v16M15 4v16'></path>",
-                var c when c.Contains("json") =>
-                    "<path d='M8 3c-2 0-3 1-3 3v3c0 1.4-.8 2.3-2 3 1.2.7 2 1.6 2 3v3c0 2 1 3 3 3'></path><path d='M16 3c2 0 3 1 3 3v3c0 1.4.8 2.3 2 3-1.2.7-2 1.6-2 3v3c0 2-1 3-3 3'></path>",
-                _ => "<path d='M6 2h8l5 5v15H6V2Z'></path><path d='M14 2v5h5'></path>",
+                var c when c.StartsWith("image/", StringComparison.OrdinalIgnoreCase) => "file-image",
+                var c when c.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) => "file-text",
+                var c when c.StartsWith("video/", StringComparison.OrdinalIgnoreCase) => "file-video",
+                var c when c.Contains("html", StringComparison.OrdinalIgnoreCase) => "globe",
+                var c when c.Contains("csv", StringComparison.OrdinalIgnoreCase) => "table",
+                var c when c.Contains("json", StringComparison.OrdinalIgnoreCase) => "file-json",
+                _ => "file",
             };
             builder.AddMarkupContent(
                 0,
-                $"<svg width='{size}' height='{size}' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'>{inner}</svg>"
+                MainLayoutIconCatalog.Markup(kind, size, "file-type-icon")
             );
         };
 

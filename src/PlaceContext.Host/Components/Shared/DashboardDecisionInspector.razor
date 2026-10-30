@@ -1,0 +1,96 @@
+@using PlaceContext.Application.Dashboards
+@using System.Globalization
+
+@if (Vm.FocusedSignal is { } signal)
+{
+    var decision = Vm.DecisionFor(signal.Id);
+    <section class="decision-inspector" aria-label="Measured signal and next decision">
+        <div class="decision-heading"><span><AppIcon Kind="decision" />NEXT DECISION</span><span class="dui-badge dui-badge-soft dui-badge-sm @($"dui-badge-{Vm.DecisionTone(signal)}")">@Vm.DecisionLabel(signal)</span></div>
+        <h4>@signal.Proposal</h4>
+        <p class="next-action">@(decision?.NextAction ?? signal.Rationale)</p>
+        @if (decision?.Probability is { } probability)
+        {
+            <div class="support-heading"><span>Jev support</span><strong>@probability.ToString("P0")</strong></div>
+            <div class="support-meter" role="meter" aria-label="Jev support for the proposed review step" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@((probability * 100).ToString("0.##", CultureInfo.InvariantCulture))"><span style="@($"width:{(probability * 100).ToString("0.##", CultureInfo.InvariantCulture)}%")"></span></div>
+            <p class="support-note">Support for this review step. Data confidence is assessed separately.</p>
+        }
+        @if (!Vm.RequiresData(signal))
+        {
+            <button class="dui-btn dui-btn-primary dui-btn-sm decision-action" disabled="@(!Vm.CanEvaluateDecisions)" @onclick="() => Vm.EvaluateSignalAsync(signal.Id)">
+                <AppIcon Kind="decision" />@(decision is null ? "Evaluate with Jev" : decision.Status == DashboardDecisionStatus.Unavailable ? "Retry Jev" : "Recheck decision")
+            </button>
+        }
+        else
+        {
+            <a class="dui-btn dui-btn-outline dui-btn-sm decision-action" href="/project/@Vm.ProjectId/analytics"><AppIcon Kind="refresh" />Refresh source evidence</a>
+        }
+
+        @if (signal.Measurement is { } measured)
+        {
+            <section class="measured-values" aria-label="Measured values in chart units">
+                <div class="measurement-heading"><AppIcon Kind="measure" /><strong>@signal.SeriesName</strong><span>chart units</span></div>
+                <dl>
+                    <div><dt>Minimum</dt><dd>@PersonalDashboardsViewModel.FormatMeasure(measured.Minimum)</dd></div>
+                    <div><dt>Maximum</dt><dd>@PersonalDashboardsViewModel.FormatMeasure(measured.Maximum)</dd></div>
+                    <div><dt>Mean</dt><dd>@PersonalDashboardsViewModel.FormatMeasure(measured.Mean)</dd></div>
+                    <div><dt>Median</dt><dd>@PersonalDashboardsViewModel.FormatMeasure(measured.Median)</dd></div>
+                </dl>
+                <p>@measured.Count displayed values · spread @PersonalDashboardsViewModel.FormatMeasure(measured.Range)</p>
+            </section>
+        }
+
+        <div class="target-heading"><span><AppIcon Kind="target" />Watch target</span><button class="dui-btn dui-btn-ghost dui-btn-sm" disabled="@Vm.Busy" @onclick="Vm.EditTarget">@(signal.Target is null ? "Add target" : "Edit target")</button></div>
+        @if (signal.Target is { } target)
+        {
+            <div class="target-summary @(signal.TargetBreached == true ? "breached" : "")">
+                <strong>@PersonalDashboardsViewModel.TargetLabel(target)</strong>
+                <span>@signal.SeriesName</span>
+                @if (signal.ObservedTargetValue is { } observed)
+                {
+                    <p><AppIcon Kind="@(signal.TargetBreached == true ? "warning" : "check-circle")" />@(signal.TargetBreached == true ? "Outside target" : "Within target") · measured @PersonalDashboardsViewModel.FormatTargetValue(observed)</p>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="target-note">@(Vm.RequiresData(signal) ? "Resolve the evidence gap before relying on this signal." : "Distribution review is ready. Add a target when you have a defined operating limit.")</p>
+        }
+        @if (Vm.TargetEditorOpen)
+        {
+            <form class="target-editor" @onsubmit="Vm.ApplyTarget" @onsubmit:preventDefault>
+                <label for="watch-series">Measure</label>
+                <select id="watch-series" class="dui-select dui-select-sm" @bind="Vm.TargetSeries" disabled="@Vm.Busy">
+                    @foreach (var series in Vm.FocusedChart!.Spec.Series.Where(x => !string.IsNullOrWhiteSpace(x.Name)).Select(x => x.Name).Distinct())
+                    {
+                        <option value="@series">@series</option>
+                    }
+                </select>
+                <div class="target-fields">
+                    <label for="watch-statistic">Statistic<select id="watch-statistic" class="dui-select dui-select-sm" @bind="Vm.TargetStatistic" disabled="@Vm.Busy">@foreach (var statistic in Enum.GetValues<DashboardMeasureStatistic>()) { <option value="@statistic">@statistic</option> }</select></label>
+                    <label for="watch-direction">Target<select id="watch-direction" class="dui-select dui-select-sm" @bind="Vm.TargetDirection" disabled="@Vm.Busy"><option value="@DashboardTargetDirection.AtMost">At most</option><option value="@DashboardTargetDirection.AtLeast">At least</option></select></label>
+                </div>
+                <label for="watch-threshold">Value in chart units</label>
+                <input id="watch-threshold" class="dui-input dui-input-sm" type="number" step="any" @bind="Vm.TargetThreshold" disabled="@Vm.Busy" required />
+                @if (Vm.TargetError is not null) { <p class="target-error" role="alert">@Vm.TargetError</p> }
+                <div class="target-actions"><button class="dui-btn dui-btn-primary dui-btn-sm" type="submit" disabled="@Vm.Busy">Apply target</button><button class="dui-btn dui-btn-ghost dui-btn-sm" type="button" disabled="@Vm.Busy" @onclick="Vm.CancelTarget">Cancel</button></div>
+                @if (signal.Target is not null) { <button class="dui-btn dui-btn-ghost dui-btn-sm remove-target" type="button" disabled="@Vm.Busy" @onclick="Vm.RemoveTarget"><AppIcon Kind="trash" />Remove target</button> }
+            </form>
+        }
+        <details class="decision-evidence">
+            <summary>Decision evidence<AppIcon Kind="chevron-down" /></summary>
+            <h5>Measured basis</h5><p>@(decision?.Rationale ?? signal.Rationale)</p>
+            <h5>@(decision?.Probability is not null ? "Question assessed by Jev" : "Question for Jev")</h5><p>@(decision?.Question ?? signal.Question)</p>
+            @if (decision is not null)
+            {
+                <span>Assessed @decision.EvaluatedAt.ToLocalTime().ToString("g")</span>
+                @if (!string.IsNullOrWhiteSpace(decision.Model)) { <span>Model @decision.Model</span> }
+                <span>Evidence @decision.Fingerprint[..Math.Min(12, decision.Fingerprint.Length)]</span>
+            }
+            <p class="evidence-scope">Measurements and the proposed step are calculated locally. Jev supplies the support score. Results are for this view and are cleared when its evidence or targets change.</p>
+        </details>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public PersonalDashboardsViewModel Vm { get; set; } = default!;
+}

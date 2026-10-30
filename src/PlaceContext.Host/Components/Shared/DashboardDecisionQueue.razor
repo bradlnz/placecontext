@@ -1,0 +1,74 @@
+@using PlaceContext.Application.Dashboards
+
+<section class="decision-queue" aria-label="Measured decision queue">
+    <header class="queue-heading">
+        <div><h3>Decision queue</h3><p>Small next steps, grounded in measured evidence.</p></div>
+        <span class="dui-badge dui-badge-soft dui-badge-sm">@Vm.VisibleSignals.Count signals</span>
+    </header>
+    @foreach (var signal in Vm.VisibleSignals)
+    {
+        var decision = Vm.DecisionFor(signal.Id);
+        var tone = Vm.DecisionTone(signal);
+        <article class="dui-card dui-card-border decision-row @(Vm.FocusedChartId == signal.ChartId ? "selected" : "")" @key="signal.Id">
+            <div class="dui-card-body">
+                <div class="decision-row-heading">
+                    <span class="decision-symbol @tone"><AppIcon Kind="@Vm.DecisionIcon(signal)" /></span>
+                    <button class="decision-select" disabled="@Vm.Busy" aria-label="Inspect decision for @signal.ChartName"
+                            aria-pressed="@(Vm.FocusedChartId == signal.ChartId ? "true" : "false")"
+                            @onclick="() => OnInspect.InvokeAsync(signal.ChartId)">
+                        <strong>@signal.ChartName</strong><span>@signal.SeriesName</span>
+                    </button>
+                    <span class="dui-badge dui-badge-soft dui-badge-sm @($"dui-badge-{tone}")">@Vm.DecisionLabel(signal)</span>
+                </div>
+                <h4>@signal.Proposal</h4>
+                @if (signal.Measurement is { } measured)
+                {
+                    <dl class="decision-measurements">
+                        <div><dt>Displayed maximum</dt><dd>@PersonalDashboardsViewModel.FormatMeasure(measured.Maximum)</dd><span>@measured.MaximumLabel</span></div>
+                        <div><dt>Displayed median</dt><dd>@PersonalDashboardsViewModel.FormatMeasure(measured.Median)</dd><span>@measured.Count measured values</span></div>
+                        @if (signal.Target is { } target && signal.ObservedTargetValue is { } observed)
+                        {
+                            <div class="@(signal.TargetBreached == true ? "breached" : "")"><dt>@PersonalDashboardsViewModel.TargetLabel(target)</dt><dd>@PersonalDashboardsViewModel.FormatTargetValue(observed)</dd><span>@(signal.TargetBreached == true ? "Outside target" : "Within target") · chart units</span></div>
+                        }
+                    </dl>
+                }
+                <p class="decision-next">@(decision?.NextAction ?? signal.Rationale)</p>
+                <div class="decision-row-footer">
+                    <span class="judgment-caption">
+                        @if (decision?.Probability is { } probability)
+                        {
+                            <AppIcon Kind="decision" /><span>Jev support <strong>@probability.ToString("P0")</strong></span>
+                        }
+                        else
+                        {
+                            <AppIcon Kind="@(Vm.RequiresData(signal) ? "refresh" : decision?.Status == DashboardDecisionStatus.Unavailable ? "warning" : "measure")" /><span>@(Vm.RequiresData(signal) ? "Refresh evidence first" : decision?.Status == DashboardDecisionStatus.Unavailable ? "Jev unavailable · retry review" : "Measured locally · awaiting Jev")</span>
+                        }
+                    </span>
+                    <div class="dui-card-actions">
+                        <button class="dui-btn dui-btn-ghost dui-btn-sm" disabled="@Vm.Busy" @onclick="() => OnInspect.InvokeAsync(signal.ChartId)">Evidence<AppIcon Kind="chevron-right" /></button>
+                        @if (Vm.RequiresData(signal))
+                        {
+                            <a class="dui-btn dui-btn-outline dui-btn-sm" href="/project/@Vm.ProjectId/analytics">Review source<AppIcon Kind="external-link" /></a>
+                        }
+                        else
+                        {
+                            <button class="dui-btn dui-btn-soft dui-btn-primary dui-btn-sm" disabled="@(!Vm.CanEvaluateDecisions)" @onclick="() => Vm.EvaluateSignalAsync(signal.Id)">
+                                <AppIcon Kind="decision" />@(decision is null ? "Evaluate" : decision.Status == DashboardDecisionStatus.Unavailable ? "Retry Jev" : "Recheck")
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </article>
+    }
+    @if (Vm.VisibleSignals.Count == 0)
+    {
+        <div class="queue-empty"><AppIcon Kind="data.search" /><h4>No signals match this view</h4><p>Choose source charts or clear the search to see measured signals.</p></div>
+    }
+    <p class="queue-scope"><AppIcon Kind="about" />Jev decides what deserves review. Source changes stay in their own workflows.</p>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public PersonalDashboardsViewModel Vm { get; set; } = default!;
+    [Parameter] public EventCallback<Guid> OnInspect { get; set; }
+}

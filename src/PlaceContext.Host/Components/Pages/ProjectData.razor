@@ -33,14 +33,14 @@
             @if (Vm.SidebarPane == SidebarPane.Tables)
             {
                 <button class="studio-new-table" @onclick="() => Vm.StartNewTable()">
-                    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>New table
+                    <AppIcon Kind="plus" Size="14" />New table
                 </button>
                 @if (Vm.MaterializeMessage is not null)
                 {
                     <div class="studio-note">@Vm.MaterializeMessage</div>
                 }
                 <div class="studio-search">
-                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+                    <AppIcon Kind="search" Size="14" />
                     <input type="text" placeholder="Search tables" @bind="_tableFilter" @bind:event="oninput" />
                 </div>
                 <div class="studio-resource-list">
@@ -59,10 +59,7 @@
                         {
                             <article @key="t.Name" class="resource-item @(_activeTableName == t.Name ? "active" : "")" @onclick="@(() => OpenTableTabAsync(t.Name))">
                                 <span class="resource-icon">
-                                    <svg viewBox="0 0 24 24">
-                                        <ellipse cx="12" cy="5" rx="8" ry="3" />
-                                        <path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" />
-                                    </svg>
+                                    <AppIcon Kind="data" Size="14" />
                                 </span>
                                 <div class="resource-copy">
                                     <strong>@t.Name</strong>
@@ -71,7 +68,7 @@
                                 <span class="resource-tag">@TableEngineTag(t)</span>
                                 <button class="studio-materialize" title="Copy this table into an OpenSearch index (for search)"
                                         @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenMaterializeDialog(t.Name))">
-                                    <svg viewBox="0 0 24 24"><path d="M12 3v12M5 10l7 7 7-7" /><path d="M5 21h14" /></svg>
+                                    <AppIcon Kind="download" Size="14" />
                                 </button>
                             </article>
                         }
@@ -81,7 +78,7 @@
             else if (Vm.SidebarPane == SidebarPane.Indexes)
             {
                 <div class="studio-search">
-                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+                    <AppIcon Kind="search" Size="14" />
                     <input type="text" placeholder="Search indices" @bind="_tableFilter" @bind:event="oninput" />
                 </div>
                 <div class="studio-resource-list">
@@ -121,7 +118,7 @@
                             <article @key="idx.Name" class="resource-item @(_activeTableName == idx.Name ? "active" : "")"
                                      @onclick="@(() => OpenIndexTabAsync(idx.Name))">
                                 <span class="resource-icon">
-                                    <svg viewBox="0 0 24 24"><path d="M4 5h16M4 5v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V5M4 9h16M4 13h16M4 17h16" /></svg>
+                                    <AppIcon Kind="table" Size="14" />
                                 </span>
                                 <div class="resource-copy">
                                     <strong>@idx.Name</strong>
@@ -136,7 +133,7 @@
             else
             {
                 <button class="studio-new-table" @onclick="SaveCurrentQuery" title="Save the editor contents as a named query">
-                    <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8" /></svg>
+                    <AppIcon Kind="save" Size="14" />
                     Save current query
                 </button>
                 <div class="studio-resource-list">
@@ -160,7 +157,7 @@
                             <article @key="q.Id" class="resource-item @(_activeTableName == q.Name ? "active" : "")"
                                      @onclick="@(() => OpenSavedQueryAsync(q))" title="@q.Sql">
                                 <span class="resource-icon">
-                                    <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8" /></svg>
+                                    <AppIcon Kind="save" Size="14" />
                                 </span>
                                 <div class="resource-copy">
                                     <strong>@q.Name</strong>
@@ -191,11 +188,11 @@
                     </div>
                     <div class="studio-toolbar-spacer"></div>
                     <button class="studio-run" disabled="@ActiveTableTab?.Running" @onclick="@(async () => { if (ActiveTableTab is { } a) await RunTableTabAsync(a); })">
-                        <svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>
+                        <AppIcon Kind="play" Size="14" />
                         @(ActiveTableTab?.Running == true ? "Running…" : "Run")
                     </button>
                     <button class="studio-tool" title="Save this query" @onclick="SaveCurrentQuery">
-                        <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8" /></svg>
+                        <AppIcon Kind="save" Size="14" />
                         Save
                     </button>
                 </div>
@@ -231,7 +228,7 @@
 
                     <div class="studio-results-bar">
                         <div class="studio-results-search">
-                            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+                            <AppIcon Kind="search" Size="14" />
                             <input type="text" placeholder="Search results…" @bind="_resultFilter" @bind:event="oninput" />
                         </div>
                         <div class="studio-results-stats">
@@ -315,7 +312,7 @@
                                                                 title="Show linked records"
                                                                 @onclick:stopPropagation="true"
                                                                 @onclick="@(() => Vm.OpenGraphPaneAsync(activeTab.TableName, rowValues, row.Index))">
-                                                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" /></svg>
+                                                            <AppIcon Kind="data.graph" Size="14" />
                                                         </button>
                                                     }
                                                 </td>

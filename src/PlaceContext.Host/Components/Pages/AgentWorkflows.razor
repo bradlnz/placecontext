@@ -247,6 +247,6 @@
     }
     private static string IndustryLabel(string industry) => industry == "Enterprise communications" ? "Phone systems" : industry;
     private static string IndustryTone(string industry) => industry switch { "Enterprise communications" => "tone-cyan", "Service operations" => "tone-violet", "Retail" => "tone-amber", "Professional services" => "tone-violet", "Property operations" => "tone-green", _ => "" };
-    private static string AgentIcon(AgentWorkflow agent) => agent.UseCaseId switch { "call-abandonment" => "queue", "phone-inventory" => "data.entities", "call-routing" => "branch", "call-quality" => "pulse", "telephony-cost" => "ledger", _ => AgentWorkflowsViewModel.IndustryIcon(agent) };
+    private static string AgentIcon(AgentWorkflow agent) => agent.UseCaseId switch { "call-abandonment" => "phone-missed", "phone-inventory" => "phone", "call-routing" => "phone-forwarded", "call-quality" => "phone-call", "telephony-cost" => "receipt", _ => AgentWorkflowsViewModel.IndustryIcon(agent) };
     public void Dispose() => Vm.Dispose();
 }

@@ -1,0 +1,411 @@
+{
+  "library": "Lucide",
+  "version": "1.65.0",
+  "commit": "81875c8c42d2320fa5123b37fee3554f4ca2bddc",
+  "source": "https://github.com/lucide-icons/lucide",
+  "asset": "lucide-1.65.0.svg",
+  "sha256": "015eed3fcfe12139867278a818c7168e1bcef3b6d4f85f72a2aaa1a387d3c22d",
+  "license_sha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57",
+  "icons": {
+    "activity": {
+      "path": "icons/activity.svg",
+      "sha256": "050fbcda05e13c2051cf857683645e19c6b180861ef4d0cc28a6f09ba1ea1666"
+    },
+    "arrow-down": {
+      "path": "icons/arrow-down.svg",
+      "sha256": "2b641c7a59d39450edfed72067fcc9940a1a316a737346af23b4b9103c0689f2"
+    },
+    "arrow-left": {
+      "path": "icons/arrow-left.svg",
+      "sha256": "c5f4b88076108eb1a0d95336e1aa7e7bb1419a3a92af96f6247d88cd3456f933"
+    },
+    "arrow-right": {
+      "path": "icons/arrow-right.svg",
+      "sha256": "288397fdb73bb4f783cf9eabb726ff47357df1d4e3f1201dd748090579f108b9"
+    },
+    "arrow-up": {
+      "path": "icons/arrow-up.svg",
+      "sha256": "8c22c25874c80bb062bef985d207d8f1d4a4d7847237d0a8cf720a3235968518"
+    },
+    "bell": {
+      "path": "icons/bell.svg",
+      "sha256": "394889e9631fe3a9a63be9a479a95b451b708e432d895978d21d9130b5ee5dbe"
+    },
+    "blocks": {
+      "path": "icons/blocks.svg",
+      "sha256": "2bab1f7d783686678219b8f38667025d81a536430271214db73684647a53a2d8"
+    },
+    "book-open": {
+      "path": "icons/book-open.svg",
+      "sha256": "9b9bed0ff057283d5c5c5a1c71f8d3e927db26a56639603a92fdf7b25961510e"
+    },
+    "bot": {
+      "path": "icons/bot.svg",
+      "sha256": "e46fe72fc5b33d7a17b0112df85da9ded851860312e8353f4fe23d87a4ce77f5"
+    },
+    "brain-circuit": {
+      "path": "icons/brain-circuit.svg",
+      "sha256": "134231b12f68aca2943d6a7a6aa891dd2e26d89b5658a2c78c7094fbe29797e9"
+    },
+    "calculator": {
+      "path": "icons/calculator.svg",
+      "sha256": "a6b191250b1ffabdf9fc9536662309f1b0f65336aa681d75bae9f1708baaefd0"
+    },
+    "chart-no-axes-column": {
+      "path": "icons/chart-no-axes-column.svg",
+      "sha256": "5dfd8fc5b5417dad858991de4969c3fe1c4a466104d0880a15b691ff7c5b1f12"
+    },
+    "check": {
+      "path": "icons/check.svg",
+      "sha256": "7f33acc9a77a61659531044525fc008edebe215bf4dcf1c789c8674ad3277db0"
+    },
+    "chevron-down": {
+      "path": "icons/chevron-down.svg",
+      "sha256": "66ea878e72ed3488bb3b464c39dfdccee8d1f78e560dccea40e5e12da0e87e87"
+    },
+    "chevron-left": {
+      "path": "icons/chevron-left.svg",
+      "sha256": "83b0681aa38bf55e9d52a1e4b4cced624abe1fe7678ecafda133a574f1161d93"
+    },
+    "chevron-right": {
+      "path": "icons/chevron-right.svg",
+      "sha256": "2758143d7b2434e4aa7307dfd34405c87909ff4052f21b5f3f40d45224b4f19b"
+    },
+    "chevron-up": {
+      "path": "icons/chevron-up.svg",
+      "sha256": "d09f13fcbef3c493ead7e4663b5ee91804fec38d5edb5e7cc3acfbd547641cf4"
+    },
+    "circle": {
+      "path": "icons/circle.svg",
+      "sha256": "3a991bd47beaf9874fba6fdf87bbba442970a89b5e6aa391558bc8b0a00a0513"
+    },
+    "circle-alert": {
+      "path": "icons/circle-alert.svg",
+      "sha256": "ce3e98b7a03b78c0071131df42466e4e1ff5187fccad30e739ec9ce951cf685a"
+    },
+    "circle-check": {
+      "path": "icons/circle-check.svg",
+      "sha256": "9711e045a5999f8a3b0782eb88e09b04e0559bc7b379dcc0a4ae645223e10345"
+    },
+    "circle-question-mark": {
+      "path": "icons/circle-question-mark.svg",
+      "sha256": "975db087da041530dbf59ba1e61a7b99c3519fad43dae6375e42ccc74ba63924"
+    },
+    "clock": {
+      "path": "icons/clock.svg",
+      "sha256": "e9d3e3acf4d1c280fcf8092293439dc0a4756a908ceb859de144b12451cd1cb9"
+    },
+    "code-xml": {
+      "path": "icons/code-xml.svg",
+      "sha256": "a6d2110227be375be21da7324d3c09262c1bf019d06bdeab356d515342ab7cce"
+    },
+    "columns-2": {
+      "path": "icons/columns-2.svg",
+      "sha256": "bddf3348a9c82d111a060d118299c90755b1ae8411bd16ea1d5ddb83c5f98a27"
+    },
+    "copy": {
+      "path": "icons/copy.svg",
+      "sha256": "ea80e566c7a12628a447cb53179b19aea4f60b9143e2becd0d0f20bf260e5718"
+    },
+    "database": {
+      "path": "icons/database.svg",
+      "sha256": "471eb14bc8d144896a82dfc4aa9daf350f769f0896f4bef33e50aabdbb51130d"
+    },
+    "download": {
+      "path": "icons/download.svg",
+      "sha256": "3daeee13ded5a3afa2198b1bb4e2262d163922f97d96ac6ff9953e8ed4fe039d"
+    },
+    "external-link": {
+      "path": "icons/external-link.svg",
+      "sha256": "3891241b8c3bfc3a8a930078f26ffc5a7e9763da6d0162ace2050b28d4c1d1fe"
+    },
+    "file": {
+      "path": "icons/file.svg",
+      "sha256": "499039795d7412d67664ff79d2eb6b7412e746b24c18c8fd8aba383c24ddada0"
+    },
+    "file-braces-corner": {
+      "path": "icons/file-braces-corner.svg",
+      "sha256": "ae3b615148dee4635d9d7f55bd5cdad95d0b8323e528dd8c2f162079f809e693"
+    },
+    "file-code-corner": {
+      "path": "icons/file-code-corner.svg",
+      "sha256": "a0d8e44b96d6d4098833404cba4c3fbecb30249bbda97db3c61f93f5f9b9ca25"
+    },
+    "file-image": {
+      "path": "icons/file-image.svg",
+      "sha256": "82a9140926814aa4287fb6f4b479da6f99e752ebde557e19ffb066a239eab2f9"
+    },
+    "file-text": {
+      "path": "icons/file-text.svg",
+      "sha256": "52ca55846c202335fb870c8aa23e9345630ec10489303756d62e750f7109605c"
+    },
+    "file-video-camera": {
+      "path": "icons/file-video-camera.svg",
+      "sha256": "a1496d106b1d0d62da11f85fc36707924ff8c340b26083161959724c4c8acc3c"
+    },
+    "flag": {
+      "path": "icons/flag.svg",
+      "sha256": "e99f1de2fea87cd2e3decc28a1f021a2a8182f907b3b350f604909de2030d8b9"
+    },
+    "flask-conical": {
+      "path": "icons/flask-conical.svg",
+      "sha256": "a2ce857c159bef4c128a6d9f0b6dcbd6504ecf1a2a670ee220efd14fd032b561"
+    },
+    "folder": {
+      "path": "icons/folder.svg",
+      "sha256": "f0d92b94b797a8ab7d4c4ae33c3236c47f64068351b4e14bdb5014ee42898a39"
+    },
+    "gauge": {
+      "path": "icons/gauge.svg",
+      "sha256": "d7710543a5085c5a61d0bbac1da8b89ef28e541b38ed739357991dff33d475b5"
+    },
+    "git-branch": {
+      "path": "icons/git-branch.svg",
+      "sha256": "041f04acc8f92657b849540f0440e2e85d0df0b8da2365611e81b9bebfafc4eb"
+    },
+    "globe": {
+      "path": "icons/globe.svg",
+      "sha256": "82c6b8fa0b8e8d775ec9becd86f74a4e50bff7bee4c81f7362de45348504f14d"
+    },
+    "grip-vertical": {
+      "path": "icons/grip-vertical.svg",
+      "sha256": "ddf3a20c45869614f7b49dd14c5cbaba026d4155382e30b0ae8418f31c1ce2c5"
+    },
+    "info": {
+      "path": "icons/info.svg",
+      "sha256": "bc977a64eb96f3e9c1041ffd09a3fceb70e3e65c02b571f76064062ed31f3cb9"
+    },
+    "key-round": {
+      "path": "icons/key-round.svg",
+      "sha256": "f8cdea843754ed360e36b04bf6aa2c2b3610935dd39ffc685a36c4d0a05be248"
+    },
+    "layout-dashboard": {
+      "path": "icons/layout-dashboard.svg",
+      "sha256": "281ab865b4c04dab32a04023473e448f58be6a7ad90769450ac3349d79dc4aed"
+    },
+    "layout-grid": {
+      "path": "icons/layout-grid.svg",
+      "sha256": "b8903f61d09b1d75e55c71158277d26570962f69c2099446a251871e0a2d6678"
+    },
+    "list-checks": {
+      "path": "icons/list-checks.svg",
+      "sha256": "08d26ab05aaf724222c4c0cd5a19d5eae753b2a5fff0eb2d81759dde11bac6b6"
+    },
+    "list-filter": {
+      "path": "icons/list-filter.svg",
+      "sha256": "36b94082bd7f161244c06a27cdeea647cb99ee5b805183cbeaf7ac3155a7103b"
+    },
+    "list-ordered": {
+      "path": "icons/list-ordered.svg",
+      "sha256": "df549e10677b86c9a9f07c0c696b40a4937019212e73bc982a4e8dae7c557d8f"
+    },
+    "lock-keyhole": {
+      "path": "icons/lock-keyhole.svg",
+      "sha256": "fc0b8b7590d1d9e9bb0112c5c2e15a78ade0bfeca6d6f8c79fbbe149236d74be"
+    },
+    "log-out": {
+      "path": "icons/log-out.svg",
+      "sha256": "f24b5b45c05a3acc346af8095408f6ba197ff58ea1641a4f2cb25a9702d2c0ac"
+    },
+    "logs": {
+      "path": "icons/logs.svg",
+      "sha256": "86ea68bf946c5717c5a873d6e679c0ce90b95e04fb91164e3f978d0cab783fc8"
+    },
+    "mail": {
+      "path": "icons/mail.svg",
+      "sha256": "3236a51d5b8ce9b0528cf2e6ad07e527bd636dded6f5a9d656072052b99caea8"
+    },
+    "map": {
+      "path": "icons/map.svg",
+      "sha256": "41300a8ef2c2a4cf36ec3f8a730bcb4754543889eb23b98e7435de7a0757752d"
+    },
+    "maximize": {
+      "path": "icons/maximize.svg",
+      "sha256": "1f790856b0de805ab62e871609f1990b89d227d472022e57a11fde015aad4826"
+    },
+    "menu": {
+      "path": "icons/menu.svg",
+      "sha256": "af6491988ac1ba30dc5414f485bc48713e957e1edb0fbef4a0dd8691c3c21598"
+    },
+    "message-square": {
+      "path": "icons/message-square.svg",
+      "sha256": "5812a3be783fdcd73efd2b6026e03131e4b8c6649e7d52aa2dc7bf2e2023a59d"
+    },
+    "mic": {
+      "path": "icons/mic.svg",
+      "sha256": "9b940cd735d1ffa270ba670c4e677d9a09400f3fa81d6b3f405b12a3b67a59a8"
+    },
+    "monitor": {
+      "path": "icons/monitor.svg",
+      "sha256": "d1a443233345724859de8e4fb48968ba91e885e12ddbd710701548bd91b39428"
+    },
+    "moon": {
+      "path": "icons/moon.svg",
+      "sha256": "205b959e940d5841f0ce1d09c933153da9d9c94130a54d5cc0c68c2af1d403da"
+    },
+    "network": {
+      "path": "icons/network.svg",
+      "sha256": "626be730feea1e5ea7539fbf78b4a3fcb927ce5d7dc43364f2216908672ac792"
+    },
+    "notebook-tabs": {
+      "path": "icons/notebook-tabs.svg",
+      "sha256": "bd7366677f9b6a1b5c245029b48144176c236c11956a3b90e2b5a8c1cf996fba"
+    },
+    "package": {
+      "path": "icons/package.svg",
+      "sha256": "69d6bc7650d26c4d24dd55eb22791607b982ce7637073944c256f1f61575509d"
+    },
+    "panels-top-left": {
+      "path": "icons/panels-top-left.svg",
+      "sha256": "321a2a5500f2b814a2e62eb73c4b01dc65c7334fe2e6f7d77517239383e26bb1"
+    },
+    "paperclip": {
+      "path": "icons/paperclip.svg",
+      "sha256": "28308381efeab2e711feffe560a8eea33b092d440711aec108058041e5879f9f"
+    },
+    "pause": {
+      "path": "icons/pause.svg",
+      "sha256": "f122ec4ea7f5693a0b1baafa9c708b53980dc87b4aacb297c6e6f71c1a4c115c"
+    },
+    "pencil": {
+      "path": "icons/pencil.svg",
+      "sha256": "7e1ca7a6f5c1eb949671df762f2baadd32f5bd841d43153c3a15279af7d78d0c"
+    },
+    "phone": {
+      "path": "icons/phone.svg",
+      "sha256": "bd59dd10667cbe410a69e2fbbf4d9645d08abe862c8d89082bd4f533957859a8"
+    },
+    "phone-call": {
+      "path": "icons/phone-call.svg",
+      "sha256": "fb043b89aa72cfc63e00f6f0dd91df779cbb80bbf88b32b6d58358d0d94257d1"
+    },
+    "phone-forwarded": {
+      "path": "icons/phone-forwarded.svg",
+      "sha256": "70134f787cc813741c23adb43fd9a9a44b7a97de14e2e584601d653c6ec4f1a4"
+    },
+    "phone-missed": {
+      "path": "icons/phone-missed.svg",
+      "sha256": "8f6de53ac6ebce4c34050033e3da20aa21021871759b269e7ce8e4e3ae3fea99"
+    },
+    "play": {
+      "path": "icons/play.svg",
+      "sha256": "d7c34786135922a92b6896f6c2384ceeb0346afbf6041dc79982011411409833"
+    },
+    "plus": {
+      "path": "icons/plus.svg",
+      "sha256": "7f6af73bf1ff6c4bca3f18351c8d1bdec6749c0c2530c4de5da85d520c21df17"
+    },
+    "receipt": {
+      "path": "icons/receipt.svg",
+      "sha256": "26b4af2c5ea5aef9578c765a01585d9c8726ce00928dc64175a0d7d9f7c5f0a0"
+    },
+    "refresh-cw": {
+      "path": "icons/refresh-cw.svg",
+      "sha256": "2e10dd403c85a24f163d59fc6151aa21147fe9402e1305dfc8979208caee8944"
+    },
+    "rocket": {
+      "path": "icons/rocket.svg",
+      "sha256": "2b7887d9a5623f2e5e4a5d32716f93829d61b458e03b6eae33a6df648b9eb855"
+    },
+    "rotate-ccw-clock": {
+      "path": "icons/rotate-ccw-clock.svg",
+      "sha256": "a98ff758157910b9fc9d42d5d5dc80c2f4e037afa5f8ea4dee5f5649f03d438d"
+    },
+    "ruler": {
+      "path": "icons/ruler.svg",
+      "sha256": "af9710f70510217ef33773d502d0be2425c3a9cb1e3294ace27da9f0b4c8850b"
+    },
+    "save": {
+      "path": "icons/save.svg",
+      "sha256": "ee9d56a7fec4b20dd6689546d41f68219ea8cbd67f99bd17a1bdaff5be6edb53"
+    },
+    "search": {
+      "path": "icons/search.svg",
+      "sha256": "283d371c2e433817bb9c0c8310caa6c77fa4177c0f4f1168d9c83b97af7389dc"
+    },
+    "settings-2": {
+      "path": "icons/settings-2.svg",
+      "sha256": "06d06c191bd7eb28afaf9d40acb5c49ef69448fdeda91801d9823d7c440a4e10"
+    },
+    "share-2": {
+      "path": "icons/share-2.svg",
+      "sha256": "de283acf45610a564ade56bc55bb94e7cf4040bc942efe9163fd98cdfe07672c"
+    },
+    "shield-check": {
+      "path": "icons/shield-check.svg",
+      "sha256": "8d4fcdbde5bba4abb1a2f6fe53e37ceb6343a1d5449a9d88f6f97c1971d26c4e"
+    },
+    "skip-forward": {
+      "path": "icons/skip-forward.svg",
+      "sha256": "f6bdc4b8d453332bafcf1366a48d5ece4bd4f15eced97c85c3676bd22c5cadf9"
+    },
+    "sliders-horizontal": {
+      "path": "icons/sliders-horizontal.svg",
+      "sha256": "e43a00e5eb684e6cbb61083bed2528d7a3fa5f265693eb2b5f314cd432aa65f4"
+    },
+    "split": {
+      "path": "icons/split.svg",
+      "sha256": "7b8bebfea5419548e9fed898c8c8cfa7b4ddd910628eab44d3903ccce077dd73"
+    },
+    "star": {
+      "path": "icons/star.svg",
+      "sha256": "c59da86b889569387db28e69ad00a89f96af22863ad9eea9aa12c4876a14338c"
+    },
+    "sun": {
+      "path": "icons/sun.svg",
+      "sha256": "a3955c8b0425fcc5c9ba12d2bdd77fe53b2cd5dd05e7742a56f342e996fb2ef8"
+    },
+    "table-2": {
+      "path": "icons/table-2.svg",
+      "sha256": "7b1808e170670d644af828bed77022fc8baba27a654e0805f3fb98e0bec62077"
+    },
+    "target": {
+      "path": "icons/target.svg",
+      "sha256": "96a6b16628825a1a207a77e9a5818f74c3e74ea3664783ff5c2a44e6347b90df"
+    },
+    "terminal": {
+      "path": "icons/terminal.svg",
+      "sha256": "4f9b6488b237757d5cb615ccd07502fa99774826839e2a99017784bdb2596f1a"
+    },
+    "trash": {
+      "path": "icons/trash.svg",
+      "sha256": "27299f69ad7c6272be64b1b8e2d48cbd6dcf0ef0d4f92827a1affa945c91700e"
+    },
+    "trending-down": {
+      "path": "icons/trending-down.svg",
+      "sha256": "53c9d3a1a05426edfcd6772bd1805b60b7a941e6a45365ba403c935352547c27"
+    },
+    "trending-up": {
+      "path": "icons/trending-up.svg",
+      "sha256": "c86a4afe20ceccd7a28e829a2cd83dbc40a8af51ffa9547332a9bac9a50a90ae"
+    },
+    "triangle-alert": {
+      "path": "icons/triangle-alert.svg",
+      "sha256": "4866f38b8560d410f21e3226413e0b77997b6dfbb6931fadfe0a0d5aef9ffeb4"
+    },
+    "user-round": {
+      "path": "icons/user-round.svg",
+      "sha256": "84870f26f3faf8da45da84174517519e81b9e8f00319c78954fcbb74f50038a1"
+    },
+    "user-round-plus": {
+      "path": "icons/user-round-plus.svg",
+      "sha256": "03c10a74bcc653585368a82cc565c6f153d0174c52daad052d63fd30ce11d588"
+    },
+    "users-round": {
+      "path": "icons/users-round.svg",
+      "sha256": "8b41ee3ada1609e25a410d64056aa333952cf27d770f0c379a100065270de7f7"
+    },
+    "workflow": {
+      "path": "icons/workflow.svg",
+      "sha256": "ae99ea8f56a2835a2cca35b2fbb57643ab73443610970dba23e24bd9df75cfec"
+    },
+    "x": {
+      "path": "icons/x.svg",
+      "sha256": "4a9cdab38fbb96162e7dace28e33f4ca0e49d8963a6162abc3d4691b7d675117"
+    },
+    "zap": {
+      "path": "icons/zap.svg",
+      "sha256": "4c395891eab4d1e5627c5d414a16db037317cb2f12453de0f3a1130964c6d444"
+    }
+  }
+}

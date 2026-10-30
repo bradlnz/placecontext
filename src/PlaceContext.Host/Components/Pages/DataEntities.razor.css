@@ -65,7 +65,6 @@
 .entity-row:last-child { border-bottom: 0; }
 .entity-row:hover { background: var(--card-2); }
 .entity-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; background: var(--brand-bg); color: var(--brand-2); }
-.entity-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; }
 .entity-copy { min-width: 0; }
 .entity-copy > div:first-child { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .entity-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }

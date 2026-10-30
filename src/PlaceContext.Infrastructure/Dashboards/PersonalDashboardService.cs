@@ -74,7 +74,8 @@ public sealed class PersonalDashboardService(IServiceScopeFactory scopes, ICurre
         await CheckAsync(db, projectId, ct);
         if (string.IsNullOrWhiteSpace(dashboard.Name) || dashboard.Name.Length > 100 || dashboard.Question is null || dashboard.Question.Length > 1000)
             throw new InvalidOperationException("Use a name up to 100 characters and a question up to 1,000 characters.");
-        Select(await ReadChartsAsync(db, projectId, ct), dashboard.ChartIds);
+        var snapshot = Select(await ReadChartsAsync(db, projectId, ct), dashboard.ChartIds);
+        DashboardSignals.ValidateTargets(snapshot, dashboard.Targets);
         PersonalDashboardRow row;
         if (dashboard.Id == Guid.Empty)
         {
@@ -124,5 +125,56 @@ public sealed class PersonalDashboardService(IServiceScopeFactory scopes, ICurre
         if (response["noul"] is not JsonValue value || !value.TryGetValue<double>(out var score) || !double.IsFinite(score) || score is < 0 or > 1)
             throw new InvalidOperationException("Jev did not return a usable judgment. Try again.");
         return new(question.Trim(), score, clock.UtcNow, snapshot.Fingerprint);
+    }
+
+    public async Task<DashboardDecisionSet> DecideAsync(Guid projectId, IReadOnlyList<Guid> chartIds, string fingerprint,
+        IReadOnlyList<string> signalIds, IReadOnlyList<DashboardWatchTarget>? targets, CancellationToken ct = default)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await CheckAsync(db, projectId, ct);
+        var snapshot = Select(await ReadChartsAsync(db, projectId, ct), chartIds);
+        DashboardSignals.ValidateTargetScope(snapshot, targets);
+        var currentFingerprint = DashboardSignals.Fingerprint(snapshot, targets);
+        if (fingerprint != currentFingerprint)
+            throw new InvalidOperationException("Chart data or watch targets have changed. Refresh the decision evidence before evaluating.");
+        if (signalIds is null || signalIds.Count is < 1 or > DashboardSignals.MaxDecisions
+            || signalIds.Distinct(StringComparer.Ordinal).Count() != signalIds.Count)
+            throw new InvalidOperationException("Choose between 1 and 12 different measured signals.");
+        var candidates = DashboardSignals.Create(snapshot, clock.UtcNow, targets).ToDictionary(signal => signal.Id, StringComparer.Ordinal);
+        if (signalIds.Any(id => id is null || !candidates.ContainsKey(id)))
+            throw new InvalidOperationException("A selected signal is unavailable. Refresh the measured signals before evaluating.");
+        var selected = signalIds.Select(id => candidates[id]).ToArray();
+        var payloads = selected.Where(signal => !signal.NeedsData).ToDictionary(signal => signal.Id,
+            signal => DashboardSignals.Evidence(snapshot.Charts.Single(chart => chart.Id == signal.ChartId), signal));
+        if (payloads.Values.Any(payload => payload.Length > 60_000))
+            throw new InvalidOperationException("A chart contains too much evidence for one decision. Reduce the source chart before evaluating.");
+
+        var calls = 0;
+        using var concurrency = new SemaphoreSlim(2);
+        async Task<DashboardDecision> Evaluate(DashboardSignal signal)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (signal.NeedsData) return DashboardDecision.ForMissingData(signal, clock.UtcNow, currentFingerprint);
+            await concurrency.WaitAsync(ct);
+            try
+            {
+                Interlocked.Increment(ref calls);
+                var response = await jev.EvaluateAsync(signal.Question, payloads[signal.Id], ct, projectId);
+                if (response["noul"] is not JsonValue value || !value.TryGetValue<double>(out var score)
+                    || !double.IsFinite(score) || score is < 0 or > 1)
+                    return DashboardDecision.Failed(signal, clock.UtcNow, currentFingerprint);
+                var model = response["model"] is JsonValue modelValue && modelValue.TryGetValue<string>(out var modelName)
+                    && !string.IsNullOrWhiteSpace(modelName) && modelName.Length <= 160 ? modelName : null;
+                return DashboardDecision.FromJudgment(signal, score, model, clock.UtcNow, currentFingerprint);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { return DashboardDecision.Failed(signal, clock.UtcNow, currentFingerprint); }
+            finally { concurrency.Release(); }
+        }
+
+        var decisions = await Task.WhenAll(selected.Select(Evaluate));
+        ct.ThrowIfCancellationRequested();
+        return new(currentFingerprint, clock.UtcNow, decisions, calls);
     }
 }

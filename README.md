@@ -205,7 +205,9 @@ with sample project data and fixture services.
 
 ![Agent Store preparing project context for an enterprise phone agent](docs/images/agent-store-context.png)
 
-![Data profiles showing source confidence, freshness and evidence checks](docs/images/data-profiles.png)
+![Data profiles showing measured values, source confidence and evidence checks](docs/images/data-profiles.png)
+
+![Smart dashboard with measured signals and Jev decisions](docs/images/smart-dashboard-decisions.png)
 
 ![PlaceContext dashboard with populated charts](docs/images/dashboard-charts.png)
 
@@ -320,13 +322,28 @@ Both workspaces use locally bundled, prefixed daisyUI components for consistent 
 controls and status badges in light and dark themes. See the [workspace style guide](tools/workspace-ui/README.md)
 for the pinned component build.
 
-**Data profiles** opens a visual overview of up to 12 available chart snapshots, with stat cards
-for freshness, confidence and evidence needing attention. **Overview** and **Needs attention**
+Application icons use a local subset of Lucide SVGs with consistent geometry and semantic
+names across navigation, actions, status indicators and enterprise phone agents. The
+[icon tooling](tools/icons/README.md) pins the upstream source and licenses and checks that
+every registered name resolves to bundled geometry.
+
+**Data profiles** is a smart dashboard over up to 12 available chart snapshots. It measures
+each signal's minimum, maximum, mean, median and spread and prepares a small evidence-review
+step automatically. **Evaluate with Jev** judges those proposals and opens a decision queue
+with Review, Watch, Hold, Needs data or Unavailable states. The score, exact question and
+measured basis remain traceable to the snapshot and target fingerprint. Optional targets
+compare a named statistic against an explicit limit in chart units and can be saved with the
+private view. Data-confidence bands remain separate from Jev's support score.
+
+**Overview** and **Needs attention**
 show chart panels together; **Explore values** opens a focused chart and its exact displayed
 values. Select a panel to inspect confidence, evidence checks and suggested questions alongside
 the charts. Save private named
 views, choose and reorder source charts, or explore without saving a layout first. Saved views
-and questions remain encrypted and scoped to the current tenant, project and user.
+and questions remain encrypted and scoped to the current tenant, project and user. Decision
+results remain local to the open view, invalidate when evidence or targets change, and never
+execute external operational actions. Measurements do not infer units or time trends from
+category order. Stale or unusable evidence is held for repair before a model request.
 
 Confidence is derived from the available evidence, with a reason beside each band. Current
 means generated within 24 hours; aging means within 7 days. These are review defaults, not

@@ -44,11 +44,11 @@
                             <div class="flow-column"><h4>Inbound sources</h4>
                                 @foreach (var rule in flowGroup.Rules.Where(rule => rule.Direction == "ingress"))
                                 {
-                                    <button class="flow-node @(Vm.FlowResult?.Matches.Contains(rule) == true ? "matched" : "")" @onclick="() => Vm.SelectFlowRule(rule)"><strong>@rule.Cidr</strong><span>@rule.Protocol · ports @rule.FromPort–@rule.ToPort</span><small>Allowed inbound →</small></button>
+                                    <button class="flow-node @(Vm.FlowResult?.Matches.Contains(rule) == true ? "matched" : "")" @onclick="() => Vm.SelectFlowRule(rule)"><strong>@rule.Cidr</strong><span>@rule.Protocol · ports @rule.FromPort–@rule.ToPort</span><small>Allowed inbound <AppIcon Kind="arrow-right" Size="12" /></small></button>
                                 }
                                 <div class="flow-deny @(Vm.FlowResult is { Allowed: false, Direction: "ingress" } ? "matched-deny" : "")"><strong>All other inbound traffic</strong><span>Blocked by default</span></div>
                             </div>
-                            <div class="flow-connector" aria-label="Inbound traffic direction"><span>Inbound</span><span class="flow-arrow">→</span></div>
+                            <div class="flow-connector" aria-label="Inbound traffic direction"><span>Inbound</span><span class="flow-arrow"><AppIcon Kind="arrow-right" Size="32" /></span></div>
                             <div class="flow-workloads">
                                 <span class="flow-vpc-label">VPC · @flowNetwork.Name</span><code>@flowNetwork.Cidr</code>
                                 <div class="flow-group-node"><AppIcon Kind="cluster" /><h4>@flowGroup.Name</h4><small>Security group</small></div>
@@ -57,11 +57,11 @@
                                 @if (!Vm.FlowJobs.Any()) { <p>No jobs assigned. You can still test this group.</p> }
                                 <small>Replies to allowed connections are permitted.</small>
                             </div>
-                            <div class="flow-connector" aria-label="Outbound traffic direction"><span>Outbound</span><span class="flow-arrow">→</span></div>
+                            <div class="flow-connector" aria-label="Outbound traffic direction"><span>Outbound</span><span class="flow-arrow"><AppIcon Kind="arrow-right" Size="32" /></span></div>
                             <div class="flow-column"><h4>Outbound destinations</h4>
                                 @foreach (var rule in flowGroup.Rules.Where(rule => rule.Direction == "egress"))
                                 {
-                                    <button class="flow-node @(Vm.FlowResult?.Matches.Contains(rule) == true ? "matched" : "")" @onclick="() => Vm.SelectFlowRule(rule)"><strong>@rule.Cidr</strong><span>@rule.Protocol · ports @rule.FromPort–@rule.ToPort</span><small>Allowed outbound →</small></button>
+                                    <button class="flow-node @(Vm.FlowResult?.Matches.Contains(rule) == true ? "matched" : "")" @onclick="() => Vm.SelectFlowRule(rule)"><strong>@rule.Cidr</strong><span>@rule.Protocol · ports @rule.FromPort–@rule.ToPort</span><small>Allowed outbound <AppIcon Kind="arrow-right" Size="12" /></small></button>
                                 }
                                 <div class="flow-deny @(Vm.FlowResult is { Allowed: false, Direction: "egress" } ? "matched-deny" : "")"><strong>All other outbound traffic</strong><span>Blocked by default</span></div>
                             </div>

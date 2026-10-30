@@ -291,7 +291,6 @@
 .email-json-actions button { display:inline-flex; align-items:center; gap:3px; padding:3px 6px; border:1px solid var(--border); border-radius:5px; background:var(--card); color:var(--text-2); font-size:9px; cursor:pointer; }
 .email-json-actions button:hover { border-color:var(--brand); color:var(--brand-2); }
 .email-json-actions .attachment-action { color:var(--brand-2); }
-.attachment-action svg { width:11px; height:11px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 .email-json-empty { padding:10px 12px; color:var(--text-3); font-size:9.5px; }
 
 @media (max-width: 620px) {

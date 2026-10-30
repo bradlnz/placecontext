@@ -3,7 +3,6 @@
 .data-map-head h2 { margin: 0; font-size: 18px; font-weight: 650; }
 .data-map-head p { margin: 4px 0 0; color: var(--text-3); font-size: 12px; }
 .data-map-head .dcbtn { display: inline-flex; align-items: center; gap: 6px; }
-.data-map-head .dcbtn svg, .field-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .status-message { margin-bottom: 12px; padding: 10px 14px; border-radius: 8px; background: var(--card); color: var(--text-2); font-size: 12.5px; }
 
 .summary-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); overflow: hidden; }
@@ -25,7 +24,6 @@
 .mapping-row:hover { background: color-mix(in srgb, var(--card-2) 45%, transparent); }
 .mapping-row.unmapped { background: color-mix(in srgb, var(--warn, #b7791f) 3%, transparent); }
 .mapping-status { display: grid; place-items: center; width: 26px; height: 26px; margin-top: 1px; border-radius: 7px; }
-.mapping-status svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .mapping-status.configured { color: var(--good); background: color-mix(in srgb, var(--good) 10%, transparent); }
 .mapping-status.missing { color: var(--warn, #b7791f); background: color-mix(in srgb, var(--warn, #b7791f) 11%, transparent); }
 .mapping-main { min-width: 0; }
@@ -42,22 +40,17 @@
 .mapping-route strong { overflow: hidden; font-family: var(--font-sans); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .mapping-route > span:last-child, .mapping-facts { color: var(--text-3); font-size: 10.5px; }
 .table-icon { display: inline-flex; color: var(--brand-2); }
-.table-icon svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; }
 .mapping-facts { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mapping-facts .enabled { color: var(--good); }
 .mapping-facts .disabled { color: var(--warn, #b7791f); }
-.edit-icon { width: 14px; height: 14px; fill: none; stroke: var(--text-3); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.edit-icon { display: inline-flex; color: var(--text-3); }
 .map-action { align-self: center; }
 .icon-add { display: grid; place-items: center; width: 28px; height: 28px; align-self: center; border: 1px solid var(--border); border-radius: 7px; color: var(--text-2); background: var(--card); cursor: pointer; }
 .icon-add:hover { color: var(--brand-2); border-color: var(--brand-2); }
-.icon-add svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 
-.dcslide-x svg, .field-remove svg, .field-arrow { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
-.dcslide-x svg { width: 17px; height: 17px; }
 .field-add { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; font-size: 11px; }
-.field-arrow { width: 15px; height: 15px; flex: none; color: var(--text-3); }
+.field-arrow { display: inline-flex; flex: none; color: var(--text-3); }
 .field-remove { display: grid; place-items: center; flex: none; padding: 5px; }
-.field-remove svg { width: 14px; height: 14px; }
 
 @media (max-width: 760px) {
     .data-map-page { padding: 14px 12px 30px; }

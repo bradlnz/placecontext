@@ -1,5 +1,7 @@
-<span class="app-icon" aria-hidden="true">@((MarkupString)MainLayoutIconCatalog.Markup(Kind))</span>
+<span class="app-icon @Class" aria-hidden="true">@((MarkupString)MainLayoutIconCatalog.Markup(Kind, Size, Size == 16 ? "nav-icon" : "lucide-sized-icon"))</span>
 
 @code {
     [Parameter, EditorRequired] public string Kind { get; set; } = "";
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public int Size { get; set; } = 16;
 }

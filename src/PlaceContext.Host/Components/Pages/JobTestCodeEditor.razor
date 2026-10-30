@@ -108,12 +108,12 @@ else
                             <span title="@file.Path">@file.Path</span>
                             @if (file.Path == Vm.Entrypoint)
                             {
-                                <b title="Entrypoint">★</b>
+                                <b title="Entrypoint" aria-label="Entrypoint" role="img"><AppIcon Kind="star" Size="14" /></b>
                             }
                             else
                             {
-                                <button title="Set as entrypoint" @onclick:stopPropagation="true"
-                                        @onclick="@(() => Vm.SetEntry(file.Path))">☆</button>
+                                <button title="Set as entrypoint" aria-label="Set as entrypoint" @onclick:stopPropagation="true"
+                                        @onclick="@(() => Vm.SetEntry(file.Path))"><AppIcon Kind="star" Size="14" /></button>
                             }
                             @if (Vm.Files.Count > 1)
                             {

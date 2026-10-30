@@ -23,7 +23,7 @@
         @if (Vm.Configured)
         {
             <div class="setup-state-icon success" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"></path></svg>
+                <AppIcon Kind="check" Size="20" />
             </div>
             <div class="setup-step">Setup complete</div>
             <h2 class="auth-title">Your workspace is ready</h2>
@@ -39,14 +39,14 @@
                     <p class="auth-sub">Create the owner account. We’ll also prepare your default project so the workspace is ready when you enter.</p>
                 </div>
                 <div class="setup-state-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M12 13a4 4 0 100-8 4 4 0 000 8z"></path><path d="M5 21a7 7 0 0114 0"></path><path d="M19 8v4m-2-2h4"></path></svg>
+                    <AppIcon Kind="user-plus" Size="20" />
                 </div>
             </div>
 
             @if (!string.IsNullOrEmpty(Vm.Error))
             {
                 <div class="auth-error" role="alert">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6m0 4h.01"></path></svg>
+                    <AppIcon Kind="error" />
                     <span>@Vm.Error</span>
                 </div>
             }
@@ -82,14 +82,14 @@
                 </div>
 
                 <div id="password-guidance" class="security-note">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0110 0v2"></path><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M12 14v3"></path></svg>
+                    <AppIcon Kind="lock" />
                     <span>No default credentials are created. Your password is salted and hashed before storage.</span>
                 </div>
 
                 <button type="submit" class="dcbtn primary auth-submit">
                     <span class="setup-button-ready">
                         Create workspace account
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5l5 5-5 5"></path></svg>
+                        <AppIcon Kind="arrow-right" />
                     </span>
                     <span class="setup-button-loading" role="status">
                         <span class="loading-wheel" aria-hidden="true"></span>

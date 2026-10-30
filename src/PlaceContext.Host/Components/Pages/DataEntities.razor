@@ -34,7 +34,7 @@
             @foreach (var e in Vm.Entities)
             {
                 <article class="entity-row" @onclick="@(() => Vm.NavigateToEntity(e.Name))">
-                    <span class="entity-icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7" /></svg></span>
+                    <span class="entity-icon"><AppIcon Kind="data" Size="18" /></span>
                     <div class="entity-copy">
                         <div><strong>@e.Name</strong><span class="entity-table-chip">@e.TableName</span></div>
                         <small>@e.Relations.Count relation@(e.Relations.Count == 1 ? "" : "s") · @e.Tags.Count tag@(e.Tags.Count == 1 ? "" : "s")</small>

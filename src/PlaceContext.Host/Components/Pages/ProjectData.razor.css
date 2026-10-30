@@ -890,7 +890,6 @@
 
 .result-row-actions { width: 36px; padding: 0; text-align: center; }
 .row-graph-button { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: var(--card-2); color: var(--text-3); cursor: pointer; opacity: 0; transition: opacity .12s, border-color .12s, color .12s; }
-.row-graph-button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .studio-result-table tbody tr:hover .row-graph-button { opacity: 1; }
 .row-graph-button:hover { border-color: var(--border-2); color: var(--text); background: var(--hover); }
 
@@ -1795,15 +1794,6 @@
     border-color: #5a5a5a;
 }
 
-.studio-new-table svg {
-    width: 14px;
-    height: 14px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
 
 .studio-search {
     display: flex;
@@ -1817,16 +1807,6 @@
     color: var(--ch-text-2);
 }
 
-.studio-search svg {
-    width: 14px;
-    height: 14px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.8;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    flex: none;
-}
 
 .studio-search input {
     flex: 1;
@@ -1919,13 +1899,6 @@
     color: var(--ch-text-3);
 }
 
-.resource-icon svg {
-    width: 14px;
-    height: 14px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.7;
-}
 
 .resource-copy {
     min-width: 0;
@@ -2009,15 +1982,6 @@
     background: color-mix(in srgb, #5ad1e6 12%, var(--ch-panel-2));
 }
 
-.studio-materialize svg {
-    width: 12px;
-    height: 12px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
 
 .studio-note {
     margin: 8px 12px 0;
@@ -2148,12 +2112,6 @@
     cursor: not-allowed;
 }
 
-.studio-run svg {
-    width: 12px;
-    height: 12px;
-    fill: currentColor;
-    flex: none;
-}
 
 .studio-tool {
     display: flex;
@@ -2181,16 +2139,6 @@
     cursor: not-allowed;
 }
 
-.studio-tool svg {
-    width: 13px;
-    height: 13px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.7;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    flex: none;
-}
 
 /* Query tabs */
 .studio-tabs {
@@ -2336,14 +2284,6 @@
     flex: none;
 }
 
-.studio-results-search svg {
-    width: 13px;
-    height: 13px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.8;
-    flex: none;
-}
 
 .studio-results-search input {
     flex: 1;

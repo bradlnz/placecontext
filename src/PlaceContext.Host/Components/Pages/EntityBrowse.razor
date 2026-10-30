@@ -154,7 +154,7 @@
                     <span><span class="dot-human">●</span> related records</span>
                     <span><span class="dot-good">●</span> artifacts</span>
                     <span><span class="dot-run">●</span> runs</span>
-                    <span>click a node → Open ↗ jumps to it</span>
+                    <span>Click a node, then Open <AppIcon Kind="external-link" Size="12" /> to view it</span>
                 </div>
             }
             else
@@ -260,10 +260,10 @@
                     </span>
                     <div class="pager-controls">
                         <button class="dcbtn pager-btn" disabled="@(pg.Page <= 1)"
-                                @onclick="@(() => Vm.GoToPageAsync(pg.Page - 1))">‹ Prev</button>
+                                @onclick="@(() => Vm.GoToPageAsync(pg.Page - 1))"><AppIcon Kind="chevron-left" Size="14" /> Prev</button>
                         <span class="pager-page">@Vm.PageLabel(pg)</span>
                         <button class="dcbtn pager-btn" disabled="@((long)pg.Page * pg.PageSize >= pg.TotalCount)"
-                                @onclick="@(() => Vm.GoToPageAsync(pg.Page + 1))">Next ›</button>
+                                @onclick="@(() => Vm.GoToPageAsync(pg.Page + 1))">Next <AppIcon Kind="chevron-right" Size="14" /></button>
                     </div>
                 </div>
             </div>

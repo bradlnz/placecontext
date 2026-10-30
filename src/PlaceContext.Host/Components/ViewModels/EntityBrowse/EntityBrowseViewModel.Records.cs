@@ -451,9 +451,12 @@ public sealed partial class EntityBrowseViewModel
             );
             sb.Append(
                 FormattableString.Invariant(
-                    $"<text x='384' y='{y + 3}' font-size='9' fill='var(--text-2)' font-family='JetBrains Mono, monospace' style='cursor:pointer'>run {runId.ToString("N")[..8]} ↗</text>"
+                    $"<text x='384' y='{y + 3}' font-size='9' fill='var(--text-2)' font-family='JetBrains Mono, monospace' style='cursor:pointer'>run {runId.ToString("N")[..8]}</text>"
                 )
             );
+            sb.Append(FormattableString.Invariant($"<g transform='translate(493 {y - 5})' style='color:var(--text-2)'>"));
+            sb.Append(MainLayoutIconCatalog.Markup("external-link", 10, "graph-link-icon"));
+            sb.Append("</g>");
             sb.Append("</a>");
             for (var k = 0; k < arts.Count; k++)
             {
@@ -471,9 +474,12 @@ public sealed partial class EntityBrowseViewModel
                 );
                 sb.Append(
                     FormattableString.Invariant(
-                        $"<text x='403' y='{ay + 3}' font-size='8.5' fill='var(--good)' font-family='JetBrains Mono, monospace' style='cursor:pointer'>{E(FormatHelper.Trunc(arts[k].Title, 17))} ↗</text>"
+                        $"<text x='403' y='{ay + 3}' font-size='8.5' fill='var(--good)' font-family='JetBrains Mono, monospace' style='cursor:pointer'>{E(FormatHelper.Trunc(arts[k].Title, 17))}</text>"
                     )
                 );
+                sb.Append(FormattableString.Invariant($"<g transform='translate(493 {ay - 5})' style='color:var(--good)'>"));
+                sb.Append(MainLayoutIconCatalog.Markup("external-link", 10, "graph-link-icon"));
+                sb.Append("</g>");
                 sb.Append("</a>");
             }
             yCursor += 44 + arts.Count * 26;

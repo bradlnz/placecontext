@@ -7,10 +7,8 @@
    lists recent operations for this tenant. Operations run server-side in OperationCenter, so
    navigating between pages (or closing the pane) never interrupts them. *@
 
-<button title="Notifications" @onclick="Vm.Toggle" class="bell-btn">
-    <svg class="bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M14 21h-4" />
-    </svg>
+<button title="Notifications" aria-label="Notifications" @onclick="Vm.Toggle" class="bell-btn">
+    <AppIcon Kind="bell" />
     @if (Vm.ActiveCount > 0)
     {
         <span class="bell-badge">@Vm.ActiveCount</span>

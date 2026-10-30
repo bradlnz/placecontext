@@ -120,14 +120,14 @@
         <header class="topbar">
             <div class="topbar-left">
                 <button class="nav-toggle" @onclick="Vm.ToggleNavigation" title="Menu" aria-label="Toggle navigation">
-                    <svg class="shell-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+                    <AppIcon Kind="menu" Class="shell-control-icon" />
                 </button>
                 <span class="title-14">@Vm.HeaderTitle</span>
                 <span class="topbar-sub">@Vm.Subtitle</span>
             </div>
         <div class="topbar-right">
                 <button class="dcsearch-trigger" @onclick="Vm.OpenSearch">
-                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
+                    <AppIcon Kind="search" Class="search-icon" />
                     <span class="dcsearch-text">Search context, files, changes</span>
                     <kbd>/</kbd>
                 </button>
@@ -168,13 +168,13 @@
                         <div class="user-actions topbar-user-actions">
                             <form method="post" action="/auth/logout" class="logout-form">
                                 <AntiforgeryToken />
-                                <button type="submit" title="Sign out" class="icon-btn">
-                                    <svg class="shell-control-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /></svg>
+                                <button type="submit" title="Sign out" aria-label="Sign out" class="icon-btn">
+                                    <AppIcon Kind="sign-out" Class="shell-control-icon" />
                                 </button>
                             </form>
                             <button @onclick="ToggleTheme" title="Switch to @Vm.ThemeSwitchLabel mode"
                                     aria-label="Switch to @Vm.ThemeSwitchLabel mode"
-                                    aria-pressed="@Vm.IsThemeLightPressed" class="icon-btn">
+                                    aria-pressed="@(Vm.IsThemeLightPressed ? "true" : "false")" class="icon-btn">
                                 @((MarkupString)Vm.ThemeIcon)
                             </button>
                         </div>

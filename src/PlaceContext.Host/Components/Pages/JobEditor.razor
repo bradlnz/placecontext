@@ -100,12 +100,12 @@ else
                         }
                         @if (isEntry)
                         {
-                            <span title="Entry point" class="entry-star">★</span>
+                            <span title="Entry point" aria-label="Entry point" role="img" class="entry-star"><AppIcon Kind="star" Size="14" /></span>
                         }
                         else
                         {
-                            <button class="dcfile-act file-act" title="Set as entry point"
-                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.SetEntry(file.Path))">☆</button>
+                            <button class="dcfile-act file-act" title="Set as entry point" aria-label="Set as entry point"
+                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.SetEntry(file.Path))"><AppIcon Kind="star" Size="14" /></button>
                         }
                         @if (Vm.Files.Count > 1)
                         {

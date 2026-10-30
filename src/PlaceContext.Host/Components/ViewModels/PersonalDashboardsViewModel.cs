@@ -5,9 +5,9 @@ using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public enum DashboardLens { Overview, NeedsAttention, Explore }
+public enum DashboardLens { Overview, Decisions, NeedsAttention, Explore }
 
-public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, PortalUiState ui, IJSRuntime js, IClock? clock = null)
+public sealed partial class PersonalDashboardsViewModel(IPersonalDashboards dashboards, PortalUiState ui, IJSRuntime js, IClock? clock = null)
     : PageViewModel, IComponentViewModel, IDisposable
 {
     public Guid ProjectId { get; private set; }
@@ -27,7 +27,13 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
     public bool Busy { get; private set; }
     public bool ConfirmDelete { get; set; }
     public string? Error { get; private set; }
-    public string? Notice { get; private set; }
+    private string? _notice;
+    public string? Notice
+    {
+        get => _notice;
+        private set { _notice = value; DecisionSummaryNotice = false; }
+    }
+    public bool DecisionSummaryNotice { get; private set; }
     public DashboardLens Lens { get; private set; }
     public Guid? FocusedChartId { get; private set; }
     public DateTimeOffset AssessedAt { get; private set; }
@@ -61,8 +67,8 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
     }
     public DashboardDataProfile? FocusedProfile => VisibleProfiles.FirstOrDefault(x => x.ChartId == FocusedChartId);
     public DashboardChart? FocusedChart => SelectedCharts.FirstOrDefault(x => x.Id == FocusedChartId);
-    public IReadOnlyList<DashboardDataProfile> DisplayedProfiles => Lens == DashboardLens.Explore
-        ? FocusedProfile is { } focused ? [focused] : [] : VisibleProfiles;
+    public IReadOnlyList<DashboardDataProfile> DisplayedProfiles => Lens == DashboardLens.Decisions ? []
+        : Lens == DashboardLens.Explore ? FocusedProfile is { } focused ? [focused] : [] : VisibleProfiles;
     public IReadOnlyList<DashboardChart> DisplayedCharts => DisplayedProfiles
         .Select(profile => SelectedCharts.FirstOrDefault(chart => chart.Id == profile.ChartId))
         .OfType<DashboardChart>().ToArray();
@@ -77,9 +83,10 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
         if (_disposed) return;
         ProjectId = projectId;
         Selected = null; Analysis = null; ChartIds.Clear(); Charts = []; Saved = []; Editing = false; _rendered.Clear();
+        ResetDecisionWorkspace();
         Lens = DashboardLens.Overview; _profileSearch = ""; FocusedChartId = null; Question = ""; ConfirmDelete = false;
         RebuildProfile();
-        ui.Set("Data profiles", "Explore evidence and decide what needs attention");
+        ui.Set("Data profiles", "Measured signals and decisions with Jev");
         await ExecuteAsync(async () =>
         {
             Saved = await dashboards.ListAsync(ProjectId, _stop.Token);
@@ -93,6 +100,7 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
     {
         if (Busy) return;
         Selected = null; Name = "My dashboard"; Question = ""; ChartIds.Clear();
+        ResetDecisionWorkspace();
         Analysis = null; Error = Notice = null; ConfirmDelete = false; Editing = true; _rendered.Clear();
         Lens = DashboardLens.Explore; _profileSearch = ""; RebuildProfile();
     }
@@ -107,6 +115,7 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
     private void PreviewCore()
     {
         Selected = null; Name = "Project overview"; Question = ""; ChartIds.Clear();
+        ResetDecisionWorkspace();
         Error = Notice = null;
         ChartIds.AddRange(Charts.Take(12).Select(x => x.Id));
         Editing = false; ConfirmDelete = false; Analysis = null; _profileSearch = "";
@@ -115,6 +124,7 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
     private void OpenCore(PersonalDashboard dashboard)
     {
         Selected = dashboard; Name = dashboard.Name; Question = dashboard.Question;
+        ResetDecisionWorkspace(dashboard.Targets);
         ChartIds.Clear(); ChartIds.AddRange(dashboard.ChartIds); Analysis = null;
         Editing = false; ConfirmDelete = false; Error = Notice = null; _rendered.Clear();
         _profileSearch = ""; Lens = DashboardLens.Overview; RebuildProfile();
@@ -130,6 +140,7 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
     {
         if (Busy || !VisibleProfiles.Any(x => x.ChartId == chartId) || FocusedChartId == chartId) return;
         FocusedChartId = chartId; Analysis = null;
+        TargetEditorOpen = false;
         if (Lens == DashboardLens.Explore) _rendered.Clear();
     }
     public void UseSuggestion(string question)
@@ -142,12 +153,14 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
         if (Busy) return;
         var missing = MissingChartIds.ToHashSet();
         ChartIds.RemoveAll(missing.Contains);
+        Targets.RemoveAll(target => missing.Contains(target.ChartId));
         Analysis = null; _rendered.Clear(); RebuildProfile();
     }
     public void Toggle(Guid id)
     {
         if (Busy || !Charts.Any(x => x.Id == id) && !ChartIds.Contains(id)) return;
         if (!ChartIds.Remove(id) && ChartIds.Count < 12) ChartIds.Add(id);
+        Targets.RemoveAll(target => !ChartIds.Contains(target.ChartId));
         Analysis = null; _rendered.Clear(); RebuildProfile();
     }
     public void Move(Guid id, int direction)
@@ -162,7 +175,7 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
     public Task SaveAsync() => ExecuteAsync(async () =>
     {
         var saved = await dashboards.SaveAsync(ProjectId, new(Selected?.Id ?? Guid.Empty, Name,
-            ChartIds.ToArray(), Question, Selected?.Version ?? Guid.Empty), _stop.Token);
+            ChartIds.ToArray(), Question, Selected?.Version ?? Guid.Empty, Targets.ToArray()), _stop.Token);
         Saved = await dashboards.ListAsync(ProjectId, _stop.Token);
         OpenCore(saved); Notice = "Dashboard saved. Only you can see this layout.";
     });
@@ -183,8 +196,10 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
         {
             ChartIds.Clear();
             ChartIds.AddRange(Charts.Take(12).Select(x => x.Id));
+            if (Targets.RemoveAll(target => !ChartIds.Contains(target.ChartId)) > 0) TargetsDirty = true;
         }
-        Analysis = null; _rendered.Clear(); RebuildProfile(); Notice = "Loaded the latest saved snapshots. Source queries have not been rerun.";
+        InvalidateDecisions();
+        Analysis = null; _rendered.Clear(); RebuildProfile(); Notice = "Loaded the latest saved snapshots. Source queries have not been rerun. Re-evaluate decisions against this evidence.";
     });
     public Task AnalyzeAsync() => !CanAnalyze ? Task.CompletedTask : ExecuteAsync(async () =>
     {
@@ -217,11 +232,16 @@ public sealed class PersonalDashboardsViewModel(IPersonalDashboards dashboards, 
         if (MissingCharts) Profile = Profile with { Confidence = DashboardConfidence.Unknown,
             ConfidenceReason = $"{MissingChartIds.Count} selected chart(s) are unavailable. Restore them or update this view before relying on a combined assessment.",
             NeedsAttentionCount = Profile.NeedsAttentionCount + MissingChartIds.Count };
+        RebuildSignals();
         EnsureFocus();
     }
     private void EnsureFocus()
     {
-        if (!VisibleProfiles.Any(x => x.ChartId == FocusedChartId)) FocusedChartId = VisibleProfiles.FirstOrDefault()?.ChartId;
+        if (!VisibleProfiles.Any(x => x.ChartId == FocusedChartId))
+        {
+            FocusedChartId = VisibleProfiles.FirstOrDefault()?.ChartId;
+            TargetEditorOpen = false;
+        }
     }
     private Task ExecuteAsync(Func<Task> action) => Busy || _disposed ? Task.CompletedTask : _operation = ExecuteCoreAsync(action);
     private async Task ExecuteCoreAsync(Func<Task> action)

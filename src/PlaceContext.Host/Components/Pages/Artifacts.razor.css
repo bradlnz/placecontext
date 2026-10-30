@@ -106,10 +106,6 @@
     text-decoration: none;
 }
 
-.type-config svg {
-    width: 16px;
-    height: 16px;
-}
 
 .type-config:hover {
     border-color: var(--brand);

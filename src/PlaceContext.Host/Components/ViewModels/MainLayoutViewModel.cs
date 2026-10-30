@@ -133,10 +133,8 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public bool IsDarkTheme => Theme == ThemeNames.Dark;
     public string ThemeSwitchLabel => IsDarkTheme ? ThemeNames.Light : ThemeNames.Dark;
     public bool IsThemeLightPressed => IsLightTheme;
-    public string ThemeIcon =>
-        IsDarkTheme
-            ? "<svg class='shell-control-icon' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='12' cy='12' r='4'/><path d='M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41'/></svg>"
-            : "<svg class='shell-control-icon' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M21 12.8A8.5 8.5 0 1 1 11.2 3 6.6 6.6 0 0 0 21 12.8Z'/></svg>";
+    public string ThemeIcon => MainLayoutIconCatalog.Markup(
+        IsDarkTheme ? "sun" : "moon", 16, "shell-control-icon");
 
     public async Task InitializeAsync()
     {
@@ -365,8 +363,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
 
     public string IconMarkup(string? kind) => MainLayoutIconCatalog.Markup(kind);
 
-    public const string CaretMarkup =
-        "<svg class='nav-caret-svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='m9 18 6-6-6-6'/></svg>";
+    public static string CaretMarkup => MainLayoutIconCatalog.Markup("chevron-right", 12, "nav-caret-svg");
 
     public async Task ToggleThemeAsync() =>
         Theme = NormalizeTheme(await _js.InvokeAsync<string>("placecontext.toggleTheme"));
