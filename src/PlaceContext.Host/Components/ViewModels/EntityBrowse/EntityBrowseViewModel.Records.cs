@@ -39,7 +39,8 @@ public sealed partial class EntityBrowseViewModel
                 Entity.TableName,
                 Search,
                 PageNum,
-                RecordsPageSize
+                RecordsPageSize,
+                includeTotalCount: false
             );
             if (version != _recordsVersion || loadVersion != _loadVersion) return;
             Page = page;

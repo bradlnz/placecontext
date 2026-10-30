@@ -69,7 +69,7 @@ public sealed class LocalCliModels : IAsyncDisposable
             try
             {
                 var start = ClaudeStartInfo(directory, model);
-                var userContent = ModelWireFormat.Request("anthropic", model, input, [])["messages"]![0]!["content"]!.AsArray();
+                var userContent = new AnthropicModelProtocol().Request(model, input, [])["messages"]![0]!["content"]!.AsArray();
                 userContent.Insert(0, new JsonObject { ["type"] = "text", ["text"] =
                     $"System instructions:\n{input[0]!["content"]!.GetValue<string>()}\nAvailable application tools:\n{tools.ToJsonString()}" });
                 var request = new JsonObject { ["type"] = "user", ["message"] = new JsonObject { ["role"] = "user", ["content"] = userContent.DeepClone() } };

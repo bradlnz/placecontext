@@ -32,6 +32,7 @@ public sealed partial class ProjectDataViewModel
         SavedQueriesReady = false;
         SavedQueriesError = null;
         _sqlSchemaPushed = false;
+        _sqlSchemaIncludesIndexes = false;
     }
 
     // ── Sidebar panes ────────────────────────────────────────────────────────────────────────
@@ -263,11 +264,15 @@ public sealed partial class ProjectDataViewModel
     // Pushed once per project session: table names + columns feed the completion provider.
     private bool _sqlSchemaPushed;
 
+    private bool _sqlSchemaIncludesIndexes;
+
     public async Task PushSqlSchemaAsync()
     {
-        if (_sqlSchemaPushed || !SqlEditorMonaco)
+        var includeIndexes = SidebarPane == SidebarPane.Indexes;
+        if (!SqlEditorMonaco || (_sqlSchemaPushed && (!includeIndexes || _sqlSchemaIncludesIndexes)))
             return;
         _sqlSchemaPushed = true;
-        await SqlSchemaHelper.PushAsync(_svc, _js, ProjectId, includeIndexes: true);
+        _sqlSchemaIncludesIndexes |= includeIndexes;
+        await SqlSchemaHelper.PushAsync(_svc, _js, ProjectId, includeIndexes);
     }
 }

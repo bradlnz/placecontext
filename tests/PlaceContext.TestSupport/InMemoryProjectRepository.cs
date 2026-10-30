@@ -23,8 +23,14 @@ public sealed class InMemoryProjectRepository : IProjectRepository
         return Task.CompletedTask;
     }
 
+    public Task<bool> ExistsAsync(ProjectId id, CancellationToken ct = default)
+        => Task.FromResult(_store.ContainsKey(id.Value));
+
     public Task<Project?> GetByIdAsync(ProjectId id, CancellationToken ct = default)
         => Task.FromResult(_store.GetValueOrDefault(id.Value));
+
+    public Task<IReadOnlyDictionary<Guid, string>> GetNamesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyDictionary<Guid, string>>(_store.Values.Where(p => ids.Contains(p.Id.Value)).ToDictionary(p => p.Id.Value, p => p.Name.Value));
 
     public Task<Project?> GetByPathAsync(ProjectPath path, CancellationToken ct = default)
         => Task.FromResult(_store.Values.FirstOrDefault(p => p.Path == path));

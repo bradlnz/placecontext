@@ -44,25 +44,22 @@ public sealed class ChainContinuationWorker : BackgroundService
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var rows = await db.ChainRuns.FromSqlRaw(
-                """
-                SELECT * FROM chain_runs
+        var rows = await db.ChainRuns.FromSqlInterpolated(
+                $"""
+                WITH due AS (SELECT "Id" FROM chain_runs
                 WHERE "Status" = 'Waiting'
                   AND "ResumeAt" <= now()
                   AND ("ContinuationClaimedAt" IS NULL
                        OR "ContinuationClaimedAt" < now() - interval '5 minutes')
                 ORDER BY "ResumeAt"
                 FOR UPDATE SKIP LOCKED
-                LIMIT 4
-                """).IgnoreQueryFilters()
+                LIMIT 4)
+                UPDATE chain_runs AS run
+                SET "ContinuationClaimedAt" = now(), "ContinuationClaimedBy" = {_instanceId}
+                FROM due WHERE run."Id" = due."Id"
+                RETURNING run.*
+                """).IgnoreQueryFilters().AsNoTracking()
             .ToListAsync(ct);
-        var now = DateTimeOffset.UtcNow;
-        foreach (var row in rows)
-        {
-            row.ContinuationClaimedAt = now;
-            row.ContinuationClaimedBy = _instanceId;
-        }
-        await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return rows.Select(row => new Continuation(
             row.Id, row.TenantId, row.ChainId, row.ResumeStageIndex!.Value)).ToList();
@@ -131,14 +128,18 @@ public sealed class ChainContinuationWorker : BackgroundService
     {
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var row = await db.ChainRuns.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == runId, ct);
+        var tenantId = await db.ChainRuns.IgnoreQueryFilters().AsNoTracking()
+            .Where(x => x.Id == runId).Select(x => (Guid?)x.TenantId).SingleOrDefaultAsync(ct);
+        if (tenantId is null) return;
+        await using var tenantDb = new AppDbContext(db.ContextOptions, new TenantInfo(tenantId.Value, "", "", "UTC"));
+        var row = await tenantDb.ChainRuns.FirstOrDefaultAsync(x => x.Id == runId, ct);
         // Dispatch can fail after Resume has marked the run Running. Keep its checkpoint
         // retryable, without reviving cancellation, completion, or a new input request.
         if (row is null || row.Status is not ("Waiting" or "Running")) return;
         row.Status = "Waiting";
         row.ContinuationClaimedAt = null;
         row.ContinuationClaimedBy = null;
-        await db.SaveChangesAsync(ct);
+        await tenantDb.SaveChangesAsync(ct);
     }
 
     private sealed record Continuation(Guid RunId, Guid TenantId, Guid ChainId, int StageIndex);

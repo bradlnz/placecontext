@@ -188,6 +188,9 @@ public class RecordLinkServiceTests
         public Task<ProjectTableReadResult> ReadTableAsync(Guid projectId, string tableName, long maxRows = 10000, CancellationToken ct = default)
             => throw new NotSupportedException();
 
+        public Task<IReadOnlyList<ProjectTableSchema>> ListTableSchemasAsync(Guid projectId, CancellationToken ct = default)
+            => throw new NotSupportedException();
+
         public Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ProjectTableInfo>>(Tables);
 
@@ -226,7 +229,7 @@ public class RecordLinkServiceTests
             => Task.FromResult(rows.Count);
 
         public Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
-            int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default) => throw new NotSupportedException();
+            int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default, bool includeTotalCount = true) => throw new NotSupportedException();
         public Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default) => Task.CompletedTask;
         public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default) => Task.CompletedTask;
         public Task AddColumnAsync(Guid projectId, string tableName, ProjectColumnSpec column, CancellationToken ct = default) => Task.CompletedTask;

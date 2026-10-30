@@ -9,6 +9,7 @@ dist
 *.tar
 *.tar.gz
 **/node_modules
+**/target
 **/.claude
 **/tests/**/bin
 **/tests/**/obj

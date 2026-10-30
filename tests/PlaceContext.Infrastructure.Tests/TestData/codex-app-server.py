@@ -42,6 +42,7 @@ assert params['config']['mcp_servers.private_server.enabled'] is False
 assert params['environments'] == [] and params['sandbox'] == 'read-only'
 assert params['approvalPolicy'] == 'never' and params['ephemeral'] is True
 assert params['model'] == 'test-model' and params['dynamicTools'][0]['name'] == 'guest_shell'
+assert [tool['name'] for tool in params['dynamicTools']] == ['guest_shell', 'live_desktop', 'finish']
 assert params['baseInstructions'] == 'Guest tools only.'
 reply(request, {'thread': {'id': 'test-thread'}})
 request = read()
@@ -65,7 +66,7 @@ else:
     call(100, 'guest_shell', {'command': 'echo HELLO', 'description': 'Check guest'})
     output = read()
     assert output['id'] == 100 and output['result']['contentItems'][0]['text'] == 'HELLO'
-    call(101, 'desktop_screenshot', {})
+    call(101, 'live_desktop', {})
     output = read()
     assert output['id'] == 101
     assert output['result']['contentItems'][1] == {'type': 'inputImage', 'imageUrl': 'data:image/png;base64,second'}

@@ -64,7 +64,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     public async Task AfterRenderAsync()
     {
         if (ShowNewView || ShowTableModal || SqlEditorActiveTable is not null)
-            await PushSqlSchemaAsync();
+            _ = PushSqlSchemaAsync();
         if (ShowNewView && ViewMonaco && !ViewMonacoReady)
         {
             ViewMonacoReady = true;
@@ -228,21 +228,36 @@ public sealed partial class ProjectDataViewModel : PageViewModel
         JsonViewerValue = null;
     }
 
-    public void OpenTableModal(string table)
+    public async Task<string?> TablePreviewSqlAsync(string table)
     {
+        try
+        {
+            var columns = await _svc.ListProjectTableColumnsAsync(ProjectId, table);
+            if (columns.Count == 0) throw new InvalidOperationException($"Table {table} has no readable columns.");
+            static string Quote(string name) => "\"" + name.Replace("\"", "\"\"") + "\"";
+            Error = null;
+            return $"SELECT {string.Join(", ", columns.Select(column => Quote(column.Name)))} FROM {Quote(table)} LIMIT 50;";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            NotifyStateChanged();
+            return null;
+        }
+    }
+
+    public async Task OpenTableModalAsync(string table)
+    {
+        var sql = await TablePreviewSqlAsync(table);
+        if (sql is null) return;
         ModalTableName = table;
-        ModalSql = $"SELECT * FROM \"{table.Replace("\"", "\"\"")}\" LIMIT 100;";
+        ModalSql = sql;
         ModalResult = null;
         ModalError = null;
         ModalRunning = false;
         ModalEditorReady = false;
         ShowTableModal = true;
         NotifyStateChanged();
-    }
-
-    public async Task OpenTableModalAsync(string table)
-    {
-        OpenTableModal(table);
         await RunModalAsync(() => Task.FromResult(ModalSql));
     }
 

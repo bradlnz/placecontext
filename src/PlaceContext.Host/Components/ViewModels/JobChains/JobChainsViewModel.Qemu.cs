@@ -1,4 +1,5 @@
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -13,6 +14,28 @@ public sealed partial class JobChainsViewModel
     public int QemuCpus { get; set; } = 1;
     public int QemuTimeoutSeconds { get; set; } = 300;
     public bool QemuAllowNetwork { get; set; }
+    public bool QemuPauseForLogin { get; set; }
+    public string QemuLoginId { get; set; } = "";
+    public IReadOnlyList<QemuLoginProfile> QemuLogins { get; private set; } = [];
+    public string? QemuLoginError { get; private set; }
+    public async Task LoadQemuLoginsAsync()
+    {
+        var project = ProjectId;
+        try
+        {
+            var profiles = _qemuLogins is null ? [] : await _qemuLogins.ListAsync(project);
+            if (project != ProjectId) return;
+            QemuLogins = profiles; QemuLoginError = null;
+        }
+        catch { if (project == ProjectId) QemuLoginError = "Could not load your saved logins."; }
+        NotifyStateChanged();
+    }
+    public async Task ForgetQemuLoginAsync()
+    {
+        if (_qemuLogins is null || !Guid.TryParse(QemuLoginId, out var id)) return;
+        try { await _qemuLogins.DeleteAsync(ProjectId, id); QemuLoginId = ""; await LoadQemuLoginsAsync(); }
+        catch { QemuLoginError = "Could not delete the saved login."; NotifyStateChanged(); }
+    }
     public string? QemuError { get; private set; }
     private int _qemuStageIndex;
     private bool _editingQemu;
@@ -23,12 +46,14 @@ public sealed partial class JobChainsViewModel
         _qemuStageIndex = Math.Clamp(index, 0, EdStages.Count);
         _editingQemu = false;
         QemuImageProfile = QemuEnvironment.Images.FirstOrDefault(image => image.Available)?.Name ?? "";
-        QemuCommand = "Open Chromium, inspect the desktop, and report when the browser is ready.";
+        QemuCommand = "Start at https://example.com. Read the page and verify that its heading is Example Domain. Return the heading and final URL.";
         QemuOutputField = "qemu_result";
         QemuMemoryMb = 2048;
         QemuCpus = 1;
         QemuTimeoutSeconds = 300;
         QemuAllowNetwork = false;
+        QemuPauseForLogin = false; QemuLoginId = ""; QemuLogins = [];
+        _ = LoadQemuLoginsAsync();
         QemuError = null;
         ShowQemuEditor = true;
         NotifyStateChanged();
@@ -46,6 +71,7 @@ public sealed partial class JobChainsViewModel
         QemuCpus = action.Cpus;
         QemuTimeoutSeconds = action.TimeoutSeconds;
         QemuAllowNetwork = action.AllowNetwork;
+        QemuPauseForLogin = action.PauseForLogin; QemuLoginId = action.LoginProfileId?.ToString() ?? "";
     }
 
     public void SaveQemuAction()
@@ -53,8 +79,11 @@ public sealed partial class JobChainsViewModel
         QemuError = null;
         try
         {
+            if (!string.IsNullOrEmpty(QemuLoginId) && !Guid.TryParse(QemuLoginId, out _))
+                throw new ArgumentException("Select a saved login or start with a fresh browser.");
             var action = new QemuChainAction(QemuImageProfile, QemuCommand, QemuOutputField,
-                QemuMemoryMb, QemuCpus, QemuTimeoutSeconds, QemuAllowNetwork);
+                QemuMemoryMb, QemuCpus, QemuTimeoutSeconds, QemuAllowNetwork, QemuPauseForLogin,
+                string.IsNullOrEmpty(QemuLoginId) ? null : Guid.Parse(QemuLoginId));
             if (!_editingQemu)
             {
                 ShiftGatesForInsert(_qemuStageIndex);
@@ -62,10 +91,24 @@ public sealed partial class JobChainsViewModel
                 EdStages.Insert(_qemuStageIndex, []);
             }
             EdStageActions[_qemuStageIndex] = action;
+            _editingQemu = true;
             ShowQemuEditor = false;
         }
         catch (ArgumentException ex) { QemuError = ex.Message; }
         NotifyStateChanged();
+    }
+
+    public async Task SaveQemuWorkflowAsync()
+    {
+        SaveQemuAction();
+        if (QemuError is not null) return;
+        await SaveChainAsync();
+        if (EditorError is not null)
+        {
+            QemuError = EditorError;
+            ShowQemuEditor = true;
+            NotifyStateChanged();
+        }
     }
 
     public void CloseQemuEditor() { ShowQemuEditor = false; NotifyStateChanged(); }

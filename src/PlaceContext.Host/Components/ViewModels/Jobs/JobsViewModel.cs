@@ -20,12 +20,15 @@ public sealed partial class JobsViewModel : PageViewModel
     private readonly ParameterPromptState _runPrompt = new();
     private readonly IJSRuntime _js;
     private readonly NavigationManager _navigation;
+    private readonly ICurrentTenant? _tenant;
+    private IDisposable? _operationSubscription;
 
     public JobsViewModel(
         PlaceContextService svc,
         OperationCenter opCenter,
         IJSRuntime js,
-        NavigationManager navigation
+        NavigationManager navigation,
+        ICurrentTenant? tenant = null
     )
     {
         _svc = svc;
@@ -33,6 +36,7 @@ public sealed partial class JobsViewModel : PageViewModel
         _ops = new BackgroundOperationRunner(opCenter);
         _js = js;
         _navigation = navigation;
+        _tenant = tenant;
         McpOAuthCompleted += OnMcpOAuthCompleted;
     }
 
@@ -207,8 +211,9 @@ public sealed partial class JobsViewModel : PageViewModel
             ProjectMcpConnections = null;
         }
         ProjectId = projectId;
-        _opCenter.Changed -= OnOpsChanged;
-        _opCenter.Changed += OnOpsChanged;
+        _operationSubscription?.Dispose();
+        if (_tenant is { IsResolved: true })
+            _operationSubscription = _opCenter.Subscribe(_tenant.TenantId, OnOpsChanged, projectId: projectId);
         McpOAuthCompleted -= OnMcpOAuthCompleted;
         McpOAuthCompleted += OnMcpOAuthCompleted;
     }
@@ -260,7 +265,7 @@ public sealed partial class JobsViewModel : PageViewModel
 
     public void DetachEvents()
     {
-        _opCenter.Changed -= OnOpsChanged;
+        _operationSubscription?.Dispose();
         McpOAuthCompleted -= OnMcpOAuthCompleted;
         ResetPaneState();
     }

@@ -6,7 +6,8 @@ namespace PlaceContext.Infrastructure.Tenancy;
 public sealed class EfTenantStore : ITenantStore
 {
     private readonly AppDbContext _db;
-    public EfTenantStore(AppDbContext db) => _db = db;
+    private readonly KubernetesTenantRuntime _runtime;
+    public EfTenantStore(AppDbContext db, KubernetesTenantRuntime runtime) => (_db, _runtime) = (db, runtime);
 
     public async Task<TenantInfo?> FindBySlugAsync(string slug, CancellationToken ct = default)
     {
@@ -17,7 +18,11 @@ public sealed class EfTenantStore : ITenantStore
     public async Task<TenantInfo> GetOrCreateAsync(string slug, CancellationToken ct = default)
     {
         var row = await _db.Tenants.FirstOrDefaultAsync(t => t.Slug == slug, ct);
-        if (row is not null) return ToInfo(row);
+        if (row is not null)
+        {
+            await _runtime.EnsureAsync(row.Id, ct);
+            return ToInfo(row);
+        }
 
         row = new TenantRow
         {
@@ -31,7 +36,6 @@ public sealed class EfTenantStore : ITenantStore
         try
         {
             await _db.SaveChangesAsync(ct);
-            return ToInfo(row);
         }
         catch (DbUpdateException)
         {
@@ -39,8 +43,10 @@ public sealed class EfTenantStore : ITenantStore
             _db.Entry(row).State = EntityState.Detached;
             var existing = await _db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Slug == slug, ct);
             if (existing is null) throw;
-            return ToInfo(existing);
+            row = existing;
         }
+        await _runtime.EnsureAsync(row.Id, ct);
+        return ToInfo(row);
     }
 
     public async Task<IReadOnlyList<TenantInfo>> ListTenantsAsync(int take = 1000, CancellationToken ct = default)

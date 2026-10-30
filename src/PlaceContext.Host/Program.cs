@@ -447,22 +447,22 @@ if (app.Configuration.GetValue("PlaceContext:EncryptionAtRest:BootstrapOnStartup
 else
     app.Logger.LogInformation("Encryption-at-rest startup bootstrap skipped (PlaceContext:EncryptionAtRest:BootstrapOnStartup is not true).");
 
-// Subscriptions/billing are handled by a separate web portal, so the
-// product is no longer gated by an activation key.
+// The platform is free. Agent subscriptions are simulated only in explicitly configured Development hosts.
 
 app.UseResponseCompression();
 app.UseWebSockets();
 app.UseMiddleware<ServiceAppGateway>();
+app.UseRouting();
+// Keep service-app routing first; portal assets skip tenant/database work.
+app.MapStaticAssets().ShortCircuit().AllowAnonymous();
 var staticContentTypes = new FileExtensionContentTypeProvider();
 staticContentTypes.Mappings[".sh"] = "text/x-shellscript";
 app.UseStaticFiles(new StaticFileOptions
 {
     ContentTypeProvider = staticContentTypes,
-    // The vendored scripts (chart.umd.min.js, pcmonaco.js, pcgraph.js) and CSS were revalidated on
-    // every page view. An hour of client caching removes that chatter without pinning upgrades:
-    // assets are not fingerprinted, so keep the window modest rather than immutable.
+    // Unversioned fallback files must revalidate so deployments never serve stale code.
     OnPrepareResponse = ctx =>
-        ctx.Context.Response.Headers.CacheControl = "public,max-age=3600",
+        ctx.Context.Response.Headers.CacheControl = "public,max-age=0,must-revalidate",
 });
 app.Use(async (ctx, next) =>
 {

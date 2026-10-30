@@ -1,0 +1,20 @@
+.agent-library { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+.library-header, .card-actions, .history-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.library-header { margin-bottom: 1.5rem; }
+.library-header h1 { margin: .5rem 0; }
+.simulation-note, .workflow-card, .workflow-form, .workflow-result, .workflow-history { border: 1px solid var(--border, #d6dce4); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; }
+.simulation-note { background: var(--surface, #f5f7fa); }
+.workflow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 1rem; margin-top: 1rem; }
+.workflow-card { display: flex; flex-direction: column; margin-bottom: 0; }
+.workflow-card h2 { font-size: 1.2rem; }
+.workflow-card ol { padding-left: 1.2rem; flex: 1; }
+.workflow-card li { margin-bottom: .5rem; }
+.card-actions { flex-wrap: wrap; justify-content: flex-start; }
+.workflow-form, .workflow-result, .workflow-history { margin-top: 1.25rem; }
+.workflow-form label { display: block; margin: 1rem 0 .4rem; }
+.workflow-form textarea { width: 100%; box-sizing: border-box; }
+.workflow-form button { margin-top: 1rem; }
+.workflow-result pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; }
+.history-row { border-top: 1px solid var(--border, #d6dce4); padding: 1rem 0; }
+.history-row span { display: block; margin-top: .25rem; }
+@media (max-width: 640px) { .agent-library { padding: .75rem; } .history-row, .library-header { align-items: flex-start; flex-direction: column; } }

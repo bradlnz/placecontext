@@ -41,11 +41,13 @@ public sealed class CodexQemuSessionTests
          {"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,first"}}]}]
         """)!.AsArray();
     private static JsonArray Tools() => JsonNode.Parse("""
-        [{"type":"function","function":{"name":"guest_shell","description":"Guest only","parameters":{"type":"object"}}}]
+        [{"type":"function","function":{"name":"guest_shell","description":"Guest only","parameters":{"type":"object"}}},
+         {"type":"function","function":{"name":"live_desktop","description":"Read Live preview","parameters":{"type":"object"}}},
+         {"type":"function","function":{"name":"finish","description":"Finish task","parameters":{"type":"object"}}}]
         """)!.AsArray();
 
     [Fact]
-    public async Task Local_protocol_routes_commands_and_screenshots_without_exposing_host_tools()
+    public async Task Local_protocol_routes_commands_and_live_frames_without_exposing_host_tools()
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await using var session = new CodexQemuSession("test-model", Fake("actions"));
@@ -54,10 +56,10 @@ public sealed class CodexQemuSessionTests
         Assert.Equal("guest_shell", command["tool_calls"]![0]!["function"]!["name"]!.GetValue<string>());
         messages.Add(command);
         messages.Add(new JsonObject { ["role"] = "tool", ["content"] = "HELLO" });
-        var screenshot = await session.NextAsync(messages, Tools(), timeout.Token);
-        Assert.Equal("desktop_screenshot", screenshot["tool_calls"]![0]!["function"]!["name"]!.GetValue<string>());
-        messages.Add(screenshot);
-        messages.Add(new JsonObject { ["role"] = "tool", ["content"] = "Screenshot follows" });
+        var frame = await session.NextAsync(messages, Tools(), timeout.Token);
+        Assert.Equal("live_desktop", frame["tool_calls"]![0]!["function"]!["name"]!.GetValue<string>());
+        messages.Add(frame);
+        messages.Add(new JsonObject { ["role"] = "tool", ["content"] = "Live desktop frame follows" });
         messages.Add(JsonNode.Parse("""{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,second"}}]}"""));
         var finish = await session.NextAsync(messages, Tools(), timeout.Token);
         Assert.Equal("finish", finish["tool_calls"]![0]!["function"]!["name"]!.GetValue<string>());

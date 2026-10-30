@@ -85,6 +85,64 @@ public sealed class WorkflowRunLayoutTests
         Assert.Equal("Succeeded", Assert.Single(vm.RunSteps!["0"]).Status);
     }
 
+    [Theory]
+    [InlineData("deleted")]
+    [InlineData("changed")]
+    [InlineData("unavailable")]
+    public async Task Unmatched_definitions_keep_a_canvas_with_recorded_order_parallel_jobs_and_actions(string definition)
+    {
+        var dispatcher = new DelayedDispatcher();
+        var vm = new ChainPipelineViewModel(new PlaceContextService(dispatcher, null!, null!, null!));
+        var run = Run(Step(0, 0, Approved, "Skipped"),
+            Step(1, 1, Summary, "Succeeded") with { StartedAt = Started.AddSeconds(5) },
+            Step(2, 1, Approved, "Failed") with { BranchIndex = 1, StartedAt = Started.AddSeconds(5), Error = "Failed job" },
+            Step(3, 2, Guid.Empty, "Succeeded") with { StartedAt = Started.AddSeconds(3), ActionType = "qemu", JobName = "QEMU environment" });
+        var loading = vm.LoadAsync(run);
+        Assert.NotNull(vm.Layout); // The canvas is usable while the definition is loading.
+        if (definition == "unavailable") dispatcher.Result.SetException(new InvalidOperationException("Offline"));
+        else dispatcher.Result.SetResult(definition == "deleted" ? [] :
+            [new(run.ChainId, run.ProjectId, "Changed", null, Layout.Reverse().ToList(), Started)]);
+        await loading;
+        Assert.True(vm.UsesRecordedLayout);
+        Assert.Equal(3, vm.Layout!.Count);
+        Assert.Equal("qemu", Assert.Single(vm.RunSteps!["1"]).ActionType);
+        Assert.Equal(2, vm.RunSteps["2"].Count);
+        Assert.True(vm.Layout[2].IsParallel);
+        Assert.Equal("Failed job", vm.RunSteps["2"][1].Error);
+        Assert.Equal(run.Steps[2].RunId, vm.RunSteps["2"][1].RunId);
+        Assert.All(vm.Layout, stage => Assert.Null(stage.Gate));
+    }
+
+    [Fact]
+    public void Gate_only_stages_do_not_require_a_recorded_job()
+    {
+        IReadOnlyList<JobChainStageView> layout = [new([], new WaitGateView(30)), new([new(Summary, "Summary")])];
+        var mapped = ChainPipelineViewModel.MatchSteps(Run(Step(0, 1, Summary, "Succeeded")), layout);
+        Assert.NotNull(mapped);
+        Assert.Empty(mapped["0"]);
+        Assert.Single(mapped["1"]);
+    }
+
+    [Fact]
+    public async Task Missing_definition_renders_the_shared_read_only_canvas()
+    {
+        var services = new ServiceCollection().AddLogging().AddTransient<ChainCanvasViewModel>().AddTransient<ChainPipelineViewModel>();
+        await using var provider = services.BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            var result = await renderer.RenderComponentAsync<ChainPipeline>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            { ["Run"] = Run(Step(0, 0, Approved, "Failed")) }));
+            return result.ToHtmlString();
+        });
+        Assert.Contains("run-canvas", html);
+        Assert.Contains("Recorded execution order", html);
+        Assert.Contains("data-status=\"Failed\"", html);
+        Assert.Contains("run-step-link", html);
+        Assert.DoesNotContain("matching workflow layout is unavailable", html);
+        Assert.DoesNotContain("Add parallel job", html);
+    }
+
     [Fact]
     public void Fallback_places_appended_branch_before_the_later_summary()
     {

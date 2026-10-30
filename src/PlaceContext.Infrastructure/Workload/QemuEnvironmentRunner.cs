@@ -3,12 +3,15 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Infrastructure.Workload;
 
-public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> options, IQemuTaskAgent? agent = null) : IQemuEnvironmentRunner, IQemuEnvironmentCatalog
+public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> options, IQemuTaskAgent? agent = null,
+    QemuDesktopSessions? desktops = null, ICurrentTenant? tenant = null, ICurrentUser? user = null,
+    IServiceScopeFactory? scopes = null) : IQemuEnvironmentRunner, IQemuEnvironmentCatalog
 {
     public QemuEnvironmentCatalog Get() => new(options.Value.Enabled, options.Value.Images
         .OrderBy(image => image.Key, StringComparer.Ordinal)
@@ -20,7 +23,7 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
     private const int MaxOutput = 65_536;
 
     public async Task<QemuEnvironmentResult> RunAsync(QemuChainAction action, string? input, CancellationToken ct,
-        Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null)
+        Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null, QemuRunContext? context = null)
     {
         var config = options.Value;
         if (!config.Enabled) throw new InvalidOperationException("QEMU steps are not enabled on this host. Configure PlaceContext:Qemu and a prepared image profile.");
@@ -32,6 +35,13 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
         if (agent is null) throw new InvalidOperationException("Configure a QEMU task agent before running prompt instructions.");
         if (agent.ConfigurationError is { } agentError) throw new InvalidOperationException(agentError);
 
+        var interactive = context is not null && desktops is not null && tenant?.IsResolved == true && user?.IsAuthenticated == true && config.Executor == "jev";
+        if ((action.PauseForLogin || action.LoginProfileId is not null) && !interactive)
+            throw new InvalidOperationException("Saved logins and human control require the Jev executor and an authenticated workflow run.");
+        await using var scope = scopes?.CreateAsyncScope();
+        var logins = scope?.ServiceProvider.GetRequiredService<IQemuLoginStore>();
+        var tenantId = tenant?.TenantId ?? Guid.Empty;
+        QemuDesktopSessions.Session? desktop = null;
         await _capacity.WaitAsync(ct);
         var directory = Path.Combine(Path.GetTempPath(), "pcq-" + Guid.NewGuid().ToString("N"));
         Process? process = null;
@@ -40,10 +50,16 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
         deadline.CancelAfter(TimeSpan.FromSeconds(action.TimeoutSeconds));
         try
         {
+            var profile = action.LoginProfileId is { } profileId
+                ? await logins!.ReadAsync(context!.ProjectId, profileId, action.ImageProfile, deadline.Token) : null;
             Directory.CreateDirectory(directory);
             if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             var socketPath = Path.Combine(directory, "agent.sock");
-            var start = BuildStartInfo(config, action, image, socketPath);
+            var vncPath = Path.Combine(directory, "desktop.sock");
+            var start = BuildStartInfo(config, action, image, socketPath, vncPath);
+            if (interactive)
+                desktop = desktops!.Register(tenantId, user!.UserId, context!, vncPath, action.PauseForLogin,
+                    (name, data, token) => logins!.SaveAsync(context!.ProjectId, name, action.ImageProfile, data, token));
             process = Process.Start(start) ?? throw new InvalidOperationException("Could not start QEMU.");
             errors = CaptureErrorsAsync(process.StandardError);
             using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
@@ -59,7 +75,8 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
             using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
             // The socket accepts connections before the guest agent has booted; its reply is our readiness signal.
             await CallAsync(reader, writer, "guest-ping", new { }, deadline.Token);
-            return await agent.RunAsync(action.Command, input, async (command, limit, token) =>
+            await using var feed = await QemuDesktopFeed.ConnectAsync(vncPath, deadline.Token);
+            async Task<QemuEnvironmentResult> ExecuteGuest(string command, int limit, CancellationToken token)
             {
                 var execution = await CallAsync(reader, writer, "guest-exec", BuildGuestExecution(command, input), token);
                 var pid = execution.GetProperty("pid").GetInt64();
@@ -77,7 +94,22 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
                     return new QemuEnvironmentResult(result.TryGetProperty("exitcode", out var code) ? code.GetInt32() : -1,
                         stdout[..Math.Min(stdout.Length, limit)], stderr[..Math.Min(stderr.Length, limit)], truncated);
                 }
-            }, deadline.Token, recordFrame);
+            }
+            if (profile is not null)
+            {
+                var prepare = await ExecuteGuest($"mkdir -p {QemuProfileArchive.GuestProfile}; : > /tmp/pc-login.tar.gz", 1024, deadline.Token);
+                if (prepare.ExitCode != 0) throw new InvalidOperationException("Could not prepare the saved browser session.");
+                for (var offset = 0; offset < profile.Length; offset += 48_000)
+                {
+                    var chunk = Convert.ToBase64String(profile, offset, Math.Min(48_000, profile.Length - offset));
+                    var write = await ExecuteGuest($"printf '%s' '{chunk}' | base64 -d >> /tmp/pc-login.tar.gz", 1024, deadline.Token);
+                    if (write.ExitCode != 0) throw new InvalidOperationException("Could not restore the saved browser session.");
+                }
+                var restore = await ExecuteGuest($"tar -xzf /tmp/pc-login.tar.gz -C {QemuProfileArchive.GuestProfile} --no-same-owner --no-same-permissions && rm /tmp/pc-login.tar.gz", 1024, deadline.Token);
+                if (restore.ExitCode != 0) throw new InvalidOperationException("Could not restore the saved browser session.");
+            }
+            return await agent.RunAsync(action.Command, input, ExecuteGuest, deadline.Token, recordFrame,
+                desktop is null ? null : new(desktop.CheckpointAsync, desktop.TakeControl, desktop.SaveProfileAsync), feed.ReadFrameAsync);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -85,6 +117,7 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
         }
         finally
         {
+            if (desktop is not null) desktops!.Remove(tenantId, context!);
             try
             {
                 if (process is not null)
@@ -103,7 +136,7 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
         }
     }
 
-    internal static ProcessStartInfo BuildStartInfo(QemuEnvironmentOptions options, QemuChainAction action, string image, string socketPath)
+    internal static ProcessStartInfo BuildStartInfo(QemuEnvironmentOptions options, QemuChainAction action, string image, string socketPath, string? vncPath = null)
     {
         var start = new ProcessStartInfo(options.Executable) { UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true };
         foreach (var argument in new[] {
@@ -116,6 +149,7 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
             "-device", "virtio-serial", "-chardev", "socket,path=" + socketPath.Replace(",", ",,") + ",server=on,wait=off,id=agent",
             "-device", "virtserialport,chardev=agent,name=org.qemu.guest_agent.0",
             "-nic", action.AllowNetwork ? "user,model=virtio-net-pci" : "none" }) start.ArgumentList.Add(argument);
+        if (vncPath is not null) { start.ArgumentList.Add("-vnc"); start.ArgumentList.Add("unix:" + vncPath.Replace(",", ",,") + ",share=force-shared"); }
         return start;
     }
 

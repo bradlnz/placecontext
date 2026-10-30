@@ -28,6 +28,9 @@ public sealed class InMemoryJobRepository : IJobRepository
     public Task<Job?> GetByIdAsync(Guid jobId, CancellationToken ct = default)
         => Task.FromResult(_store.FirstOrDefault(j => j.Id == jobId));
 
+    public Task<IReadOnlyDictionary<Guid, string>> GetNamesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyDictionary<Guid, string>>(_store.Where(j => ids.Contains(j.Id)).ToDictionary(j => j.Id, j => j.Name));
+
     public Task<IReadOnlyList<Job>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<Job>>(
             _store.Where(j => j.ProjectId == projectId).OrderBy(j => j.CreatedAt).ToList());

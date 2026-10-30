@@ -882,7 +882,9 @@
             return;
         }
 
-        var tab = new TableTab(tableName, DefaultSqlFor(tableName));
+        var sql = await Vm.TablePreviewSqlAsync(tableName);
+        if (sql is null) return;
+        var tab = new TableTab(tableName, sql);
         _openTabs.Add(tab);
         _activeTableName = tableName;
         await Vm.ShowSqlTabAsync(tableName, tab.Sql);
@@ -955,7 +957,7 @@
         }
 
         _activeTableName = tableName;
-        await Vm.ShowSqlTabAsync(tableName, ActiveTableTab?.Sql ?? DefaultSqlFor(tableName));
+        if (ActiveTableTab is { } active) await Vm.ShowSqlTabAsync(tableName, active.Sql);
         await PersistTabsAsync(captureActiveEditor: false);
         StateHasChanged();
     }
@@ -985,7 +987,7 @@
         if (wasActive && _activeTableName is not null)
         {
             var tab = _openTabs.FirstOrDefault(t => StringComparer.Ordinal.Equals(t.TableName, _activeTableName));
-            await Vm.ShowSqlTabAsync(_activeTableName, tab?.Sql ?? DefaultSqlFor(_activeTableName));
+            if (tab is not null) await Vm.ShowSqlTabAsync(_activeTableName, tab.Sql);
         }
         else if (_openTabs.Count == 0)
         {
@@ -997,7 +999,9 @@
 
     private async Task ResetTableTabSql(TableTab tab)
     {
-        tab.Sql = tab.IsIndex ? DefaultOpenSearchSqlFor(tab.TableName) : DefaultSqlFor(tab.TableName);
+        var sql = tab.IsIndex ? DefaultOpenSearchSqlFor(tab.TableName) : await Vm.TablePreviewSqlAsync(tab.TableName);
+        if (sql is null) return;
+        tab.Sql = sql;
         tab.Result = null;
         tab.Error = null;
         await Vm.SetSqlEditorValueAsync(tab.Sql);
@@ -1035,8 +1039,6 @@
         }
     }
 
-    private string DefaultSqlFor(string tableName) =>
-        $"SELECT * FROM \"{EscapeIdent(tableName)}\" LIMIT 100;";
 
     // OpenSearch SQL treats double quotes as a literal index name (so "name" never resolves),
     // and accepts backticks for identifiers — verified against the live cluster.

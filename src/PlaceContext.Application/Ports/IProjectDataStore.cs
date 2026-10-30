@@ -18,7 +18,7 @@ public interface IProjectDataStore
     /// falls back to the default first-column ordering (it is never interpolated into SQL).
     /// </summary>
     Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
-        int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default);
+        int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default, bool includeTotalCount = true);
 
     /// <summary>
     /// Read every row of a table (row-capped for safety) for external tooling — the OpenSearch
@@ -29,6 +29,9 @@ public interface IProjectDataStore
 
     /// <summary>The project's tables with an approximate row count, name-sorted.</summary>
     Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default);
+
+    /// <summary>All table/view columns in one metadata request for SQL autocomplete.</summary>
+    Task<IReadOnlyList<ProjectTableSchema>> ListTableSchemasAsync(Guid projectId, CancellationToken ct = default);
 
     /// <summary>Create a table from a validated spec (identifiers and types are checked, then quoted).</summary>
     Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default);

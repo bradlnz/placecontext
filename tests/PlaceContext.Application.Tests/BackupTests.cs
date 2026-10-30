@@ -207,7 +207,7 @@ public class BackupTests
                     "{{client.email}}", "{{client.name}}", "Your report", "Hello {{client.name}}")),
             ChainStage.ForAction(new LoopChainAction(LoopChainAction.HumanType, "Review the draft", "human_review", LoopChainAction.YesNoResponse)),
             ChainStage.ForAction(new LoopChainAction(LoopChainAction.AgentType, "Check the sources", "agent_review", agentProvider: LoopChainAction.JevAgent)),
-            ChainStage.ForAction(new QemuChainAction("browser", "cat", "vm_result", 2048, 2, 600, true)),
+            ChainStage.ForAction(new QemuChainAction("browser", "cat", "vm_result", 2048, 2, 600, true, loginProfileId: Guid.NewGuid())),
         }, T0.AddMinutes(1));
 
         var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
@@ -242,6 +242,8 @@ public class BackupTests
         Assert.Equal(2, vm.Cpus);
         Assert.Equal(600, vm.TimeoutSeconds);
         Assert.True(vm.AllowNetwork);
+        Assert.True(vm.PauseForLogin);
+        Assert.Null(vm.LoginProfileId);
     }
 
     [Fact]

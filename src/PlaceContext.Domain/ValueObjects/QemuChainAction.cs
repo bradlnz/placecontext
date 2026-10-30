@@ -5,7 +5,7 @@ public sealed class QemuChainAction : ChainAction
     public const string ActionType = "qemu";
 
     public QemuChainAction(string imageProfile, string command, string outputField = "qemu_result",
-        int memoryMb = 1024, int cpus = 1, int timeoutSeconds = 300, bool allowNetwork = false)
+        int memoryMb = 1024, int cpus = 1, int timeoutSeconds = 300, bool allowNetwork = false, bool pauseForLogin = false, Guid? loginProfileId = null)
     {
         imageProfile = imageProfile?.Trim() ?? "";
         if (imageProfile.Length is < 1 or > 80 || imageProfile.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_')))
@@ -19,6 +19,9 @@ public sealed class QemuChainAction : ChainAction
         if (memoryMb is < 256 or > 8192) throw new ArgumentOutOfRangeException(nameof(memoryMb), "Memory must be 256–8192 MiB.");
         if (cpus is < 1 or > 8) throw new ArgumentOutOfRangeException(nameof(cpus), "CPUs must be 1–8.");
         if (timeoutSeconds is < 10 or > 3600) throw new ArgumentOutOfRangeException(nameof(timeoutSeconds), "Timeout must be 10–3600 seconds.");
+        if (loginProfileId == Guid.Empty) throw new ArgumentException("Choose a valid saved login.");
+        PauseForLogin = pauseForLogin;
+        LoginProfileId = loginProfileId;
         ImageProfile = imageProfile;
         Command = command;
         OutputField = outputField;
@@ -38,4 +41,6 @@ public sealed class QemuChainAction : ChainAction
     public int Cpus { get; }
     public int TimeoutSeconds { get; }
     public bool AllowNetwork { get; }
+    public bool PauseForLogin { get; }
+    public Guid? LoginProfileId { get; }
 }

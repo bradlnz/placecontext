@@ -88,7 +88,7 @@
                             @if (RunSteps is null) { <span class="drag-handle" title="Drag to reorder"><AppIcon Kind="grip" /></span> }
                             <span class="stage-num">@(stageIndex + 1)</span>
                             <AppIcon Kind="@ChainCanvasViewModel.StageIcon(stage)" />
-                            <span class="stage-label">@(stage.Action is LoopChainActionView loopKind ? (loopKind.Kind == "humanInput" ? "Human" : "Agent") : stage.Action is null ? "Job" : "Action")</span>
+                            <span class="stage-label">@(stage.Action is LoopChainActionView loopKind ? (loopKind.Kind == "humanInput" ? "Human" : "Agent") : stage.Action is null ? (RunSteps is null ? "Job" : "Step") : "Action")</span>
                             @if (stage.IsParallel)
                             {
                                 <span class="parallel-badge"><AppIcon Kind="parallel" /> @stage.Jobs.Count parallel jobs</span>

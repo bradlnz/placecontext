@@ -60,6 +60,8 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     private Guid? _entitiesFor;
     private bool _focusSearch;
     private ElementReference _searchInput;
+    private IDisposable? _operationSubscription;
+    private CancellationTokenSource? _searchCancellation;
 
     public MainLayoutViewModel(
         PortalUiState ui,
@@ -130,7 +132,9 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public async Task InitializeAsync()
     {
         _ui.OnChanged += OnUiChanged;
-        _operations.Changed += OnOperationsChanged;
+        _operationSubscription?.Dispose();
+        if (_tenant.IsResolved)
+            _operationSubscription = _operations.Subscribe(_tenant.TenantId, OnOperationsChanged, _currentUser?.UserId);
         _navigation.LocationChanged += OnLocationChanged;
         _ui.SetMainNavOpener(OpenNavigation);
         var brandTask = InScopeAsync<BrandingService, TenantBranding>(service =>
@@ -270,32 +274,48 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         SearchResults = null;
     }
 
-    public void CloseSearch() => SearchOpen = false;
+    public void CloseSearch()
+    {
+        _searchCancellation?.Cancel();
+        SearchOpen = false;
+        Searching = false;
+    }
 
     public async Task SearchAsync(string? input)
     {
+        _searchCancellation?.Cancel();
+        _searchCancellation?.Dispose();
+        var cancellation = _searchCancellation = new CancellationTokenSource();
+        var token = cancellation.Token;
         SearchTerm = input ?? string.Empty;
         var term = SearchTerm.Trim();
         if (term.Length < 2)
         {
             SearchResults = null;
+            Searching = false;
             return;
         }
         Searching = true;
         try
         {
-            SearchResults = await InScopeAsync<PlaceContextService, SearchResultsView>(service =>
-                service.SearchAsync(term, _ui.CurrentProjectId)
+            await Task.Delay(300, token);
+            var results = await InScopeAsync<PlaceContextService, SearchResultsView>(service =>
+                service.SearchAsync(term, _ui.CurrentProjectId, token)
             );
+            if (!token.IsCancellationRequested) SearchResults = results;
         }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch
         {
-            SearchResults = null;
+            if (!token.IsCancellationRequested) SearchResults = null;
         }
         finally
         {
-            Searching = false;
-            NotifyStateChanged();
+            if (!token.IsCancellationRequested)
+            {
+                Searching = false;
+                NotifyStateChanged();
+            }
         }
     }
 
@@ -343,8 +363,11 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
 
     public void Dispose()
     {
+        _searchCancellation?.Cancel();
+        _searchCancellation?.Dispose();
+        _searchCancellation = null;
         _ui.OnChanged -= OnUiChanged;
-        _operations.Changed -= OnOperationsChanged;
+        _operationSubscription?.Dispose();
         _navigation.LocationChanged -= OnLocationChanged;
         Detach();
     }
@@ -425,7 +448,12 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
             _ui.SetProject(project.Id, project.Name);
     }
 
-    private void OnOperationsChanged() => _ = InvokeOnDispatcherAsync(RefreshRunningCount);
+    private void OnOperationsChanged()
+    {
+        var previous = RunningCount;
+        RefreshRunningCount();
+        if (RunningCount != previous) NotifyStateChanged();
+    }
 
     private void OnUiChanged() => _ = InvokeOnDispatcherAsync(static () => { });
 

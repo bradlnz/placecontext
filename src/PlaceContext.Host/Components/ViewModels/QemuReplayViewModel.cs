@@ -11,7 +11,9 @@ public sealed class QemuReplayViewModel(IQemuReplayStore store) : PageViewModel,
     public int Step { get; private set; }
     public int Position { get; private set; }
     public QemuReplayFrame? Current => Frames.ElementAtOrDefault(Position);
+    public QemuReplayFrame? Pointer => Frames.Take(Position + 1).LastOrDefault(frame => frame.PointerX is not null && frame.PointerY is not null);
     public bool Recording => Steps.FirstOrDefault(step => step.Index == Step)?.Status == "Running";
+    public ChainStepRunView? ActiveDesktop => Steps.FirstOrDefault(step => step.Status == "Running");
     public bool Playing { get; private set; }
     public bool Loading { get; private set; }
     public bool ImageFailed { get; private set; }
@@ -58,8 +60,9 @@ public sealed class QemuReplayViewModel(IQemuReplayStore store) : PageViewModel,
         {
             var frames = await store.ListAsync(_projectId, _runId, Step, ct);
             if (version != _version || ct.IsCancellationRequested) return;
+            var follow = !Playing && (Recording || Frames.Count > 0) && Position >= Frames.Count - 1;
             Frames = frames;
-            Position = Math.Clamp(Position, 0, Math.Max(0, frames.Count - 1));
+            Position = follow ? Math.Max(0, frames.Count - 1) : Math.Clamp(Position, 0, Math.Max(0, frames.Count - 1));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch { if (version == _version) Error = "Could not load the replay. Try refreshing it."; }

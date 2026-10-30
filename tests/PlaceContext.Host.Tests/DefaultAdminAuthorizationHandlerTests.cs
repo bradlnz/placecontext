@@ -140,6 +140,6 @@ public sealed class DefaultAdminAuthorizationHandlerTests
         public Guid TenantId => DefaultAdminAuthorizationHandlerTests.TenantId;
         public string Slug => string.Empty;
         public string TimeZoneId => "UTC";
-        public bool IsResolved => false;
+        public bool IsResolved => true;
     }
 }

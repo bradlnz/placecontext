@@ -19,14 +19,13 @@ public static class SqlSchemaHelper
         var tables = new List<object>();
         try
         {
-            var tableInfos = await svc.ListProjectDataTablesAsync(projectId);
+            var tableInfos = await svc.ListProjectTableSchemasAsync(projectId);
             foreach (var t in tableInfos)
             {
-                var columns = await svc.ListProjectTableColumnsAsync(projectId, t.Name);
                 tables.Add(new
                 {
                     name = t.Name,
-                    columns = columns.Select(c => new { name = c.Name, type = c.Type }).ToList(),
+                    columns = t.Columns.Select(c => new { name = c.Name, type = c.Type }).ToList(),
                 });
             }
         }

@@ -150,7 +150,7 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
             : string.Empty;
 
     public string PageLabel(ProjectTablePageResult page) =>
-        $"Page {page.Page} of {TotalPages(page)}";
+        page.TotalCountIsExact ? $"Page {page.Page} of {TotalPages(page)}" : $"Page {page.Page}";
 
     public string? NodeUrl(GraphNodeView node) => NodeUrls.GetValueOrDefault(node.Id);
 

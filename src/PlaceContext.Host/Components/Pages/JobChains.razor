@@ -313,6 +313,11 @@ else
                         </section>
                     }
 
+                    @if (Vm.OpenRun.Steps.Any(step => step.ActionType == QemuChainAction.ActionType))
+                    {
+                        <QemuReplay @key="Vm.OpenRun.Id" Run="Vm.OpenRun" />
+                    }
+
                     <div class="running-steps-panel">
                         <div class="running-steps-head">
                             <span>Running steps</span>
@@ -321,11 +326,6 @@ else
                     <ChainPipeline Run="Vm.OpenRun" OnStepClick="@Vm.OpenStepRunAsync"
                                    OnStepCancel="@(step => Vm.CancelStepRunAsync(step.RunId!.Value))" />
                     </div>
-
-                    @if (Vm.OpenRun.Steps.Any(step => step.ActionType == QemuChainAction.ActionType))
-                    {
-                        <QemuReplay @key="Vm.OpenRun.Id" Run="Vm.OpenRun" />
-                    }
 
                     <section class="workflow-job-logs" aria-label="Underlying job logs">
                         <div class="job-log-selector">
@@ -521,134 +521,93 @@ else
 
             @if (!Vm.IsCanvasView)
             {
-            @* ── List editor ──────────────────────────────────────────────────────────────── *@
-            <div class="dcform-section">
-                <span class="dcform-title">Stages <span class="req">*</span></span>
-                <div class="sub-note mb-8">
-                    A stage with more than one job runs them all in parallel (a fan-out group) — every job in
-                    it must succeed for the workflow to continue to the next stage, which acts as the join.
-                    Click a <strong>+</strong> diamond between stages to add flow-control gates (wait / condition).
+            <section class="workflow-list" aria-label="Workflow stages">
+                <div class="workflow-list-heading">
+                    <div><h3>Workflow steps <span>@Vm.EdStages.Count</span></h3><p>Steps run in order. Jobs within a parallel stage run together.</p></div>
+                    <button class="dcbtn" @onclick="@(() => Vm.OpenStageNodePicker(Vm.EdStages.Count))"><AppIcon Kind="plus" /> Add step</button>
                 </div>
-
                 @if (Vm.EdStages.Count == 0)
                 {
-                    <div class="empty-steps">
-                        No stages yet — pick a job below and add it.
-                    </div>
+                    <div class="empty-steps">Your workflow starts here. Add a job, an action, or a review step.</div>
                 }
                 else
                 {
-                    <div class="step-list">
+                    <ol class="step-list">
                         @foreach (var (stage, i) in Vm.EdStages.Select((s, i) => (s, i)))
                         {
                             var stageIndex = i;
-                            var hasGate = Vm.EdStageGates.TryGetValue(stageIndex, out var stageGate) && stageGate is not null;
-                            <div class="step-item stage-item">
-                                <span class="step-num">@(stageIndex + 1).</span>
-                                <div class="stage-jobs">
-                                    @if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is SendEmailChainAction emailAction)
-                                    {
-                                        <button class="stage-job-chip" title="Edit Send Email action"
-                                                @onclick="@(() => Vm.OpenEmailActionEditor(stageIndex))">
-                                            <AppIcon Kind="mail" /> Send email · @emailAction.Recipient
-                                        </button>
-                                    }
-                                    else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is SendSmsChainAction smsAction)
-                                    {
-                                        <button class="stage-job-chip" title="Edit Send SMS action"
-                                                @onclick="@(() => Vm.OpenSmsActionEditor(stageIndex))">
-                                            <AppIcon Kind="message" /> Send SMS · @smsAction.Recipient
-                                        </button>
-                                    }
-                                    else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is QemuChainAction vmAction)
-                                    {
-                                        <button class="stage-job-chip" @onclick="@(() => Vm.EditQemuAction(stageIndex))">
-                                            <AppIcon Kind="vm" /> QEMU environment · @vmAction.ImageProfile
-                                        </button>
-                                    }
-                                    else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is LoopChainAction loopAction)
-                                    {
-                                        <button class="stage-job-chip loop-chip" @onclick="@(() => Vm.EditLoopAction(stageIndex))">
-                                            @loopAction.DisplayName · @loopAction.ResponseField
-                                        </button>
-                                    }
-                                    @foreach (var (jobId, j) in stage.Select((id, j) => (id, j)))
-                                    {
-                                        var branchIndex = j;
-                                        <span class="stage-job-chip">
-                                            @Vm.JobName(jobId)
-                                            <button class="dcbtn btn-2-8-del" title="Remove this job from the stage"
-                                                    @onclick="@(() => Vm.RemoveBranch(stageIndex, branchIndex))"><AppIcon Kind="close" /></button>
-                                        </span>
-                                    }
-                                </div>
-                                <div class="stage-gate-row">
-                                    @if (hasGate)
-                                    {
-                                        var gate = stageGate!;
-                                        <span class="gate-tag @(gate is WaitGate ? "gate-tag-wait" : "gate-tag-condition")"
-                                              title="@(gate is WaitGate w ? $"Wait {w.Duration.TotalSeconds}s" : gate is ConditionGate c ? $"If {c.Expression}" : "")"
-                                              @onclick="@(() => Vm.OpenGateEditor(stageIndex))">
-                                            <AppIcon Kind="@(gate is WaitGate ? "clock" : "branch")" />
-                                            @(gate is WaitGate wg ? $"{wg.Duration.TotalSeconds}s" : gate is ConditionGate cg ? cg.Expression : "")
-                                            <button aria-label="Remove" class="dcbtn btn-2-8-del gate-remove" @onclick:stopPropagation="true"
-                                                    @onclick="@(() => Vm.RemoveGate(stageIndex))"><AppIcon Kind="close" /></button>
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <button class="dcbtn btn-xs" @onclick="@(() => Vm.OpenStageNodePicker(stageIndex))"><AppIcon Kind="plus" /> step</button>
-                                    }
-                                </div>
-                                @if (stageGate is ConditionGate { ElseBranch: { Count: > 0 } other })
-                                {
-                                    <div class="dcform-section">
-                                        <strong>False path</strong>
-                                        <WorkflowBranchPreview Stages="@other.Select(Vm.BuildStageView).ToList()" />
-                                        <button class="dcbtn btn-xs" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">Edit false path</button>
+                            var stageView = canvasStages[stageIndex];
+                            var stageGate = Vm.EdStageGates.GetValueOrDefault(stageIndex);
+                            <li class="stage-item">
+                                <div class="list-stage-head">
+                                    <span class="step-num">@(stageIndex + 1)</span>
+                                    <AppIcon Kind="@ChainCanvasViewModel.StageIcon(stageView)" />
+                                    <strong>@(stageView.Action?.DisplayName ?? (stage.Count > 1 ? "Parallel jobs" : "Job"))</strong>
+                                    @if (stage.Count > 1) { <span class="list-stage-count">@stage.Count jobs</span> }
+                                    <div class="list-stage-actions">
+                                        <button aria-label="@($"Move step {stageIndex + 1} up")" title="Move up" class="dcbtn" disabled="@(stageIndex == 0)" @onclick="@(() => Vm.MoveStage(stageIndex, -1))"><AppIcon Kind="arrow-up" /></button>
+                                        <button aria-label="@($"Move step {stageIndex + 1} down")" title="Move down" class="dcbtn" disabled="@(stageIndex == Vm.EdStages.Count - 1)" @onclick="@(() => Vm.MoveStage(stageIndex, +1))"><AppIcon Kind="arrow-down" /></button>
+                                        <button aria-label="@($"Remove step {stageIndex + 1}")" title="Remove step" class="dcbtn danger" @onclick="@(() => Vm.RemoveStage(stageIndex))"><AppIcon Kind="close" /></button>
                                     </div>
-                                }
-                                @if (!Vm.HasStageAction(stageIndex))
-                                {
-                                <div class="stage-branch-row">
-                                    <select class="dcinput branch-select" title="Pick a job to add as a parallel branch"
-                                            value="@Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")"
-                                            @onchange="@((e) => Vm.SetBranchJobId(stageIndex, e))">
-                                        <option value="">— pick a job —</option>
-                                        @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>())
-                                        {
-                                            <option value="@job.Id">@job.Name</option>
-                                        }
-                                    </select>
-                                    <button class="dcbtn btn-2-8" title="Add the picked job as a parallel branch of this stage"
-                                            disabled="@(string.IsNullOrEmpty(Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")))"
-                                            @onclick="@(() => Vm.AddBranch(stageIndex))"><AppIcon Kind="plus" /> branch</button>
                                 </div>
-                                }
-                                <button aria-label="Move up" class="dcbtn btn-2-8" disabled="@(stageIndex == 0)" @onclick="@(() => Vm.MoveStage(stageIndex, -1))"><AppIcon Kind="arrow-up" /></button>
-                                <button aria-label="Move down" class="dcbtn btn-2-8" disabled="@(stageIndex == Vm.EdStages.Count - 1)" @onclick="@(() => Vm.MoveStage(stageIndex, +1))"><AppIcon Kind="arrow-down" /></button>
-                                <button aria-label="Remove" class="dcbtn btn-2-8-del" @onclick="@(() => Vm.RemoveStage(stageIndex))"><AppIcon Kind="close" /></button>
-                            </div>
+                                <div class="list-stage-body">
+                                    @if (stageGate is not null)
+                                    {
+                                        <div class="list-stage-gate">
+                                            <button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">
+                                                <AppIcon Kind="@(stageGate is WaitGate ? "clock" : "split")" />
+                                                <span>@(stageGate is WaitGate wait ? $"Wait {wait.Duration.TotalSeconds:0.#} seconds" : stageGate is ConditionGate condition ? $"If {condition.Expression}" : "Edit gate")</span>
+                                            </button>
+                                            <button class="dcbtn danger" aria-label="@($"Remove gate from step {stageIndex + 1}")" title="Remove gate" @onclick="@(() => Vm.RemoveGate(stageIndex))"><AppIcon Kind="close" /></button>
+                                        </div>
+                                    }
+                                    <div class="stage-jobs">
+                                        @if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is SendEmailChainAction emailAction)
+                                        {
+                                            <button class="stage-job-chip" @onclick="@(() => Vm.OpenEmailActionEditor(stageIndex))"><AppIcon Kind="mail" /><span><strong>Send email</strong><small>@emailAction.Recipient</small></span><span class="list-configure">Edit</span></button>
+                                        }
+                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is SendSmsChainAction smsAction)
+                                        {
+                                            <button class="stage-job-chip" @onclick="@(() => Vm.OpenSmsActionEditor(stageIndex))"><AppIcon Kind="message" /><span><strong>Send SMS</strong><small>@smsAction.Recipient</small></span><span class="list-configure">Edit</span></button>
+                                        }
+                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is QemuChainAction vmAction)
+                                        {
+                                            <button class="stage-job-chip" @onclick="@(() => Vm.EditQemuAction(stageIndex))"><AppIcon Kind="vm" /><span><strong>@vmAction.ImageProfile</strong><small>@vmAction.MemoryMb MiB · @vmAction.Cpus CPU(s) · @vmAction.TimeoutSeconds s timeout</small></span><span class="list-configure">Configure</span></button>
+                                        }
+                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is LoopChainAction loopAction)
+                                        {
+                                            <button class="stage-job-chip" @onclick="@(() => Vm.EditLoopAction(stageIndex))"><AppIcon Kind="@(loopAction.Type == LoopChainAction.HumanType ? "human" : "agent")" /><span><strong>@loopAction.DisplayName</strong><small>Response saved to @loopAction.ResponseField</small></span><span class="list-configure">Edit</span></button>
+                                        }
+                                        @foreach (var (jobId, j) in stage.Select((id, j) => (id, j)))
+                                        {
+                                            var branchIndex = j;
+                                            <div class="stage-job-chip"><AppIcon Kind="code" /><span class="list-job-name">@Vm.JobName(jobId)</span><button class="dcbtn danger" aria-label="@($"Remove {Vm.JobName(jobId)} from step {stageIndex + 1}")" title="Remove job" @onclick="@(() => Vm.RemoveBranch(stageIndex, branchIndex))"><AppIcon Kind="close" /></button></div>
+                                        }
+                                    </div>
+                                    @if (stageGate is ConditionGate { ElseBranch: { Count: > 0 } other })
+                                    {
+                                        <div class="list-false-path"><strong>When false</strong><WorkflowBranchPreview Stages="@other.Select(Vm.BuildStageView).ToList()" /><button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">Edit false path</button></div>
+                                    }
+                                    @if (!Vm.HasStageAction(stageIndex))
+                                    {
+                                        <div class="stage-branch-row">
+                                            <select class="dcinput branch-select" aria-label="@($"Parallel job for step {stageIndex + 1}")" value="@Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")" @onchange="@((e) => Vm.SetBranchJobId(stageIndex, e))">
+                                                <option value="">Choose a parallel job…</option>
+                                                @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>()) { <option value="@job.Id">@job.Name</option> }
+                                            </select>
+                                            <button class="dcbtn" disabled="@(string.IsNullOrEmpty(Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")))" @onclick="@(() => Vm.AddBranch(stageIndex))"><AppIcon Kind="plus" /> Add parallel job</button>
+                                        </div>
+                                    }
+                                    <div class="list-stage-footer">
+                                        @if (stageGate is null) { <button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))"><AppIcon Kind="split" /> Add condition or delay</button> }
+                                        <button class="dcbtn" @onclick="@(() => Vm.OpenStageNodePicker(stageIndex))"><AppIcon Kind="plus" /> Insert step before</button>
+                                    </div>
+                                </div>
+                            </li>
                         }
-                    </div>
+                    </ol>
                 }
-
-                <div class="add-row">
-                    <button class="dcbtn" @onclick="@(() => Vm.OpenStageNodePicker(Vm.EdStages.Count))"><AppIcon Kind="plus" /> Add workflow step</button>
-                    <select class="dcinput flex-1" @bind="Vm.EdAddJobId">
-                        <option value="">— pick a job —</option>
-                        @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>())
-                        {
-                            <option value="@job.Id">@job.Name</option>
-                        }
-                    </select>
-                    <button class="dcbtn" disabled="@(string.IsNullOrEmpty(Vm.EdAddJobId))" @onclick="() => Vm.AddStage()"><AppIcon Kind="plus" /> Add step</button>
-                    @if (Vm.CanSendSmsAction)
-                    {
-                        <button class="dcbtn" @onclick="() => Vm.OpenNewSmsAction()"><AppIcon Kind="message" /> Send SMS</button>
-                    }
-                </div>
-            </div>
+            </section>
             }
 
         </div>
@@ -732,28 +691,73 @@ else
             </div>
         }
 
-        @* ── Gate editor modal ────────────────────────────────────────────────────────────── *@
         @if (Vm.ShowQemuEditor)
         {
+            var imageAvailable = Vm.QemuEnvironment.Images.Any(image => image.Name == Vm.QemuImageProfile && image.Available);
+            var environmentReady = Vm.QemuEnvironment.Enabled && Vm.QemuEnvironment.AgentReady && imageAvailable;
             <div class="dcmodal-overlay" @onclick="Vm.CloseQemuEditor">
-                <div class="dcmodal" role="dialog" aria-modal="true" aria-label="QEMU environment" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><div class="title-14"><AppIcon Kind="vm" /> QEMU environment</div><button class="dcslide-x" aria-label="Close QEMU settings" @onclick="Vm.CloseQemuEditor"><AppIcon Kind="close" /></button></div>
-                    <div class="dcmodal-body">
-                        <p>Give an agent a task in a fresh Linux desktop. It can inspect the screen, use the browser, and run guest commands as a non-root user. The workflow waits for its result, then discards disk changes.</p>
-                        @if (!Vm.QemuEnvironment.Enabled) { <p role="status">QEMU execution is disabled on this host. You can save the step; an administrator must enable QEMU before running it.</p> }
-                        <div class="dcfield"><label for="qemu-image">Image profile</label><input id="qemu-image" class="dcinput" list="qemu-profiles" maxlength="80" placeholder="browser-linux" @bind="Vm.QemuImageProfile" /><datalist id="qemu-profiles">@foreach (var profile in Vm.QemuEnvironment.Images.Where(image => image.Available)) { <option value="@profile.Name" /> }</datalist><small>Choose a configured Linux desktop profile. Profiles must be available on every execution host.</small></div>
-                        @if (Vm.QemuEnvironment.Enabled && !Vm.QemuEnvironment.Images.Any(image => image.Name == Vm.QemuImageProfile && image.Available)) { <p role="status">This image profile is not available on this host. Configure its image before running the step.</p> }
-                        @if (!Vm.QemuEnvironment.AgentReady) { <p role="status">The task agent is not configured. An administrator must select a vision model with tool support before prompts can run.</p> }
-                        else { <p class="networking-note">Agent model: @Vm.QemuEnvironment.AgentModel</p> }
-                        <div class="dcfield"><label for="qemu-command">Task prompt</label><textarea id="qemu-command" class="dcinput" rows="7" maxlength="8192" @bind="Vm.QemuCommand"></textarea><small>Describe the outcome and how to verify it. The agent receives the workflow context and works inside the VM until completion, failure, timeout, or cancellation.</small></div>
-                        <div class="dcfield"><label for="qemu-output">Output field</label><input id="qemu-output" class="dcinput" maxlength="80" @bind="Vm.QemuOutputField" /><small>Contains the final result in stdout, errors in stderr, exitCode, agentSteps, and a bounded activity list for subsequent steps.</small></div>
-                        <div class="dcfield"><label for="qemu-memory">Memory (MiB)</label><input id="qemu-memory" class="dcinput" type="number" min="256" max="8192" @bind="Vm.QemuMemoryMb" /></div>
-                        <div class="dcfield"><label for="qemu-cpus">CPUs</label><input id="qemu-cpus" class="dcinput" type="number" min="1" max="8" @bind="Vm.QemuCpus" /></div>
-                        <div class="dcfield"><label for="qemu-timeout">Timeout (seconds, including startup)</label><input id="qemu-timeout" class="dcinput" type="number" min="10" max="3600" @bind="Vm.QemuTimeoutSeconds" /></div>
-                        <label><input type="checkbox" @bind="Vm.QemuAllowNetwork" /> Allow network access for this VM</label>
-                        @if (Vm.QemuError is not null) { <p role="alert" class="danger">@Vm.QemuError</p> }
+                <div class="dcmodal qemu-modal" role="dialog" aria-modal="true" aria-labelledby="qemu-editor-title" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head">
+                        <span class="qemu-heading-icon"><AppIcon Kind="vm" /></span>
+                        <div><span class="workflow-eyebrow">Workflow step</span><h3 id="qemu-editor-title">QEMU environment</h3><p class="sub-note">Give an agent a task in a fresh Linux desktop.</p></div>
+                        <button class="dcslide-x" aria-label="Close QEMU settings" @onclick="Vm.CloseQemuEditor"><AppIcon Kind="close" /></button>
                     </div>
-                    <div class="dcmodal-foot"><button class="dcbtn" @onclick="Vm.CloseQemuEditor">Cancel</button><button class="dcbtn primary" @onclick="Vm.SaveQemuAction">Save step</button></div>
+                    <div class="dcmodal-body">
+                        <section class="qemu-section" aria-labelledby="qemu-task-title">
+                            <h4 id="qemu-task-title">Task</h4>
+                            <div class="dcfield"><label for="qemu-command">What should the agent do?</label><textarea id="qemu-command" class="dcinput" rows="7" maxlength="8192" @bind="Vm.QemuCommand" @bind:event="oninput" aria-describedby="qemu-task-help"></textarea><small id="qemu-task-help">Include a starting URL, the actions to take, and how to verify the result. The agent also receives the workflow context.</small></div>
+                        </section>
+                        <section class="qemu-section" aria-labelledby="qemu-environment-title">
+                            <h4 id="qemu-environment-title">Environment</h4>
+                            <div class="dcfield"><label for="qemu-image">Image profile</label><input id="qemu-image" class="dcinput" list="qemu-profiles" maxlength="80" placeholder="browser-linux" @bind="Vm.QemuImageProfile" @bind:event="oninput" /><datalist id="qemu-profiles">@foreach (var profile in Vm.QemuEnvironment.Images.Where(image => image.Available)) { <option value="@profile.Name" /> }</datalist><small>Choose a Linux desktop profile available on your execution hosts.</small></div>
+                            <div class="qemu-readiness" role="status">
+                                <span class="qemu-status @(environmentReady ? "ready" : "")"><AppIcon Kind="@(environmentReady ? "check" : "warning")" /> @(environmentReady ? "Ready to run" : "Setup required")</span>
+                                @if (!Vm.QemuEnvironment.Enabled) { <p>Execution is disabled on this host. You can save this step; an administrator must enable QEMU to run it.</p> }
+                                @if (Vm.QemuEnvironment.Enabled && !imageAvailable) { <p>This image profile is unavailable on this host. Configure its image before running.</p> }
+                                @if (!Vm.QemuEnvironment.AgentReady) { <p>The task agent needs an execution provider and model credentials.</p> }
+                                else { <p>Agent model: <strong>@Vm.QemuEnvironment.AgentModel</strong></p> }
+                            </div>
+                            <label class="qemu-network" for="qemu-network"><span><strong>Network access</strong><small>Allow access to websites and services outside the VM.</small></span><input id="qemu-network" type="checkbox" role="switch" @bind="Vm.QemuAllowNetwork" /></label>
+                        </section>
+                        <section class="qemu-section" aria-labelledby="qemu-login-title">
+                            <h4 id="qemu-login-title">Login &amp; human control</h4>
+                            <div class="dcfield"><label for="qemu-login">Saved browser session</label>
+                                <select id="qemu-login" class="dcinput" @bind="Vm.QemuLoginId">
+                                    <option value="">Fresh browser — no saved login</option>
+                                    @if (!string.IsNullOrEmpty(Vm.QemuLoginId) && !Vm.QemuLogins.Any(p => p.Id.ToString() == Vm.QemuLoginId && p.ImageProfile == Vm.QemuImageProfile))
+                                    { <option value="@Vm.QemuLoginId">Saved login unavailable — choose your own session</option> }
+                                    @foreach (var profile in Vm.QemuLogins.Where(p => p.ImageProfile == Vm.QemuImageProfile))
+                                    { <option value="@profile.Id">@profile.Name</option> }
+                                </select><small>Only your private sessions for this project and image are listed. Each run gets its own copy.</small>
+                            </div>
+                            <div class="qemu-login-actions">
+                                <button class="dcbtn" @onclick="Vm.LoadQemuLoginsAsync">Refresh logins</button>
+                                @if (!string.IsNullOrEmpty(Vm.QemuLoginId)) { <button class="dcbtn" @onclick="Vm.ForgetQemuLoginAsync">Forget selected login</button> }
+                            </div>
+                            @if (Vm.QemuLoginError is not null) { <p role="alert">@Vm.QemuLoginError</p> }
+                            <label class="qemu-network" for="qemu-login-pause"><span><strong>Pause for login before starting</strong><small>Open the live desktop from the run, sign in, then resume automation. Requires the Jev executor.</small></span><input id="qemu-login-pause" type="checkbox" @bind="Vm.QemuPauseForLogin" /></label>
+                        </section>
+                        <section class="qemu-section" aria-labelledby="qemu-resources-title">
+                            <h4 id="qemu-resources-title">Resources &amp; limits</h4>
+                            <div class="qemu-resource-grid">
+                                <div class="dcfield"><label for="qemu-memory">Memory <span>MiB</span></label><input id="qemu-memory" class="dcinput" type="number" min="256" max="8192" @bind="Vm.QemuMemoryMb" /></div>
+                                <div class="dcfield"><label for="qemu-cpus">CPUs</label><input id="qemu-cpus" class="dcinput" type="number" min="1" max="8" @bind="Vm.QemuCpus" /></div>
+                                <div class="dcfield"><label for="qemu-timeout">Timeout <span>seconds</span></label><input id="qemu-timeout" class="dcinput" type="number" min="10" max="3600" @bind="Vm.QemuTimeoutSeconds" /></div>
+                            </div>
+                            <p class="sub-note">The timeout includes startup and human interaction. Disk changes are discarded unless you explicitly save a login.</p>
+                        </section>
+                        <section class="qemu-section" aria-labelledby="qemu-result-title">
+                            <h4 id="qemu-result-title">Result</h4>
+                            <div class="dcfield"><label for="qemu-output">Save output to</label><input id="qemu-output" class="dcinput" maxlength="80" @bind="Vm.QemuOutputField" /><small>Later steps can use the final result, errors, exit code, and activity recorded in this field.</small></div>
+                        </section>
+                        <p class="sub-note">Apply step keeps this edit in the draft. Save workflow saves all current workflow changes.</p>
+                        @if (Vm.QemuError is not null) { <p role="alert" class="qemu-error">@Vm.QemuError</p> }
+                    </div>
+                    <div class="dcmodal-foot">
+                        <button class="dcbtn" disabled="@Vm.Saving" @onclick="Vm.CloseQemuEditor">Cancel</button>
+                        <button class="dcbtn" disabled="@Vm.Saving" @onclick="Vm.SaveQemuAction">Apply step</button>
+                        <button class="dcbtn primary" disabled="@Vm.Saving" @onclick="Vm.SaveQemuWorkflowAsync">@(Vm.Saving ? "Saving…" : "Save workflow")</button>
+                    </div>
                 </div>
             </div>
         }

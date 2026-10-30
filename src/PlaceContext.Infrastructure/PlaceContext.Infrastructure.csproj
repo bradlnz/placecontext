@@ -28,7 +28,18 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Workload\Scripts\**\*" />
+    <Content Include="$(MSBuildThisFileDirectory)../../dist/qemu-agent-build/x86_64-unknown-linux-gnu/release/pc-jev"
+             Link="pc-jev" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
+             Condition="$([MSBuild]::IsOSPlatform('Linux'))" />
   </ItemGroup>
+
+  <Target Name="BuildQemuGuestAgent" BeforeTargets="PrepareForBuild"
+          Condition="$([MSBuild]::IsOSPlatform('Linux')) and '$(QemuAgentPrebuilt)' != 'true'"
+          Inputs="../PlaceContext.QemuAgent/Cargo.toml;../PlaceContext.QemuAgent/Cargo.lock;../PlaceContext.QemuAgent/src/agent.rs;../PlaceContext.QemuAgent/src/bridge.rs;../PlaceContext.QemuAgent/src/browser.rs;../PlaceContext.QemuAgent/src/main.rs"
+          Outputs="$(MSBuildThisFileDirectory)../../dist/qemu-agent-build/x86_64-unknown-linux-gnu/release/pc-jev">
+    <Exec WorkingDirectory="../PlaceContext.QemuAgent"
+          Command="cargo rustc --locked --release --target x86_64-unknown-linux-gnu --target-dir ../../dist/qemu-agent-build -- -C target-feature=+crt-static" />
+  </Target>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

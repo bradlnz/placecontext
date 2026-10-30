@@ -5,6 +5,7 @@
 // this portal's light (#ffffff) and dark (#111418) card surfaces — slot ORDER is the colorblind-
 // safety mechanism, so series take slots in order and never cycle.
 window.pcchart = (function () {
+  const chartSource = document.currentScript?.dataset.chartSrc || '/vendor/chart.umd.min.js';
   const LIGHT = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
   const DARK  = ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'];
 
@@ -18,7 +19,7 @@ window.pcchart = (function () {
     if (chartLoader) return chartLoader;
     chartLoader = new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = '/vendor/chart.umd.min.js';
+      script.src = chartSource;
       script.onload = () => resolve(window.Chart);
       script.onerror = () => reject(new Error('Chart.js failed to load.'));
       document.head.appendChild(script);
@@ -59,7 +60,7 @@ window.pcchart = (function () {
       ? {
           label: s.name, data: s.values,
           borderColor: t.palette[i], backgroundColor: t.palette[i],
-          borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointHitRadius: 12,
+          borderWidth: 2, pointRadius: s.values.length === 1 ? 3 : 0, pointHoverRadius: 4, pointHitRadius: 12,
           tension: 0.25,
         }
       : {
@@ -154,8 +155,8 @@ window.pcchart = (function () {
 
   // Once a chart has rendered, the .NET view models intentionally cache that fact to avoid an
   // interop call after every unrelated component update. Blazor can still replace a canvas during
-  // one of those updates. Reconcile child-list changes here so the cache cannot strand a fresh
-  // canvas with its Chart instance attached to an old, detached element.
+  // one of those updates, or reuse it under a different id in an unkeyed list. Reconcile both so
+  // an old Chart instance cannot strand a fresh canvas or block reuse of an existing one.
   let reconcileQueued = false;
   function reconcileMounts() {
     if (reconcileQueued) return;
@@ -183,7 +184,7 @@ window.pcchart = (function () {
 
   if (window.MutationObserver && document.documentElement) {
     new MutationObserver(reconcileMounts)
-      .observe(document.documentElement, { childList: true, subtree: true });
+      .observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['id'] });
   }
 
   // Theme flips re-render every live chart with the new tokens (dark is its own selected palette,

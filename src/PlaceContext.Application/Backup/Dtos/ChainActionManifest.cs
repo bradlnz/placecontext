@@ -19,4 +19,4 @@ public sealed record ChainActionManifest(
     int Cpus = 1,
     int TimeoutSeconds = 300,
     bool AllowNetwork = false,
-    string? AgentProvider = null);
+    string? AgentProvider = null, bool PauseForLogin = false);

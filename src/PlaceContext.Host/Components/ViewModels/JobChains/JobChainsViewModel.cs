@@ -21,6 +21,9 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly ParameterPromptState _runPrompt = new();
     private readonly IJobChainSubmissionQueue? _submissions;
     private readonly IQemuEnvironmentCatalog? _qemuCatalog;
+    private readonly IQemuLoginStore? _qemuLogins;
+    private readonly ICurrentTenant? _tenant;
+    private IDisposable? _operationSubscription;
 
     public JobChainsViewModel(
         PlaceContextService svc,
@@ -29,12 +32,16 @@ public sealed partial class JobChainsViewModel : PageViewModel
         IPermissionService permissions,
         NavigationManager navigation,
         IJobChainSubmissionQueue? submissions = null,
-        IQemuEnvironmentCatalog? qemuCatalog = null
+        IQemuEnvironmentCatalog? qemuCatalog = null,
+        ICurrentTenant? tenant = null,
+        IQemuLoginStore? qemuLogins = null
     )
     {
         _svc = svc;
         _submissions = submissions;
         _qemuCatalog = qemuCatalog;
+        _qemuLogins = qemuLogins;
+        _tenant = tenant;
         _opCenter = opCenter;
         _outputBuffer = outputBuffer;
         _permissions = permissions;
@@ -75,15 +82,16 @@ public sealed partial class JobChainsViewModel : PageViewModel
     public void Initialize(Guid projectId)
     {
         ProjectId = projectId;
-        _opCenter.Changed -= OnOpsChanged;
-        _opCenter.Changed += OnOpsChanged;
+        _operationSubscription?.Dispose();
+        if (_tenant is { IsResolved: true })
+            _operationSubscription = _opCenter.Subscribe(_tenant.TenantId, OnOpsChanged, projectId: projectId);
     }
 
     public void DetachEvents()
     {
         _pageVersion++;
         ShowEditor = false;
-        _opCenter.Changed -= OnOpsChanged;
+        _operationSubscription?.Dispose();
         StopPolling();
     }
 

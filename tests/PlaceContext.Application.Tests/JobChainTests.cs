@@ -54,7 +54,7 @@ public class JobChainTests
     {
         public bool Called;
         public async Task<QemuEnvironmentResult> RunAsync(QemuChainAction action, string? input, CancellationToken ct,
-            Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null)
+            Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null, QemuRunContext? context = null)
         {
             Called = true;
             Assert.Equal("{\"order\":42}", input);
@@ -96,7 +96,7 @@ public class JobChainTests
         public TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool Stopped;
         public async Task<QemuEnvironmentResult> RunAsync(QemuChainAction action, string? input, CancellationToken ct,
-            Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null)
+            Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null, QemuRunContext? context = null)
         {
             if (recordFrame is not null) await recordFrame(new(new(0, 0, T0, "Desktop ready", null, true), "screen"u8.ToArray()), ct);
             Started.SetResult();

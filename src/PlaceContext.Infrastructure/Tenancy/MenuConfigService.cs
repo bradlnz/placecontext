@@ -37,12 +37,11 @@ public sealed class MenuConfigService : IMenuConfigService
     {
         new("dashboard", "Dashboard", "link", "/", Permission.ProjectsView, "grid", null, null),
         new("build.chat", "Build", "link", "/project/{projectId}/build", Permission.ProjectsView, "agent", null, null),
+        new("build.library", "Workflow library", "link", "/project/{projectId}/build/workflows", Permission.ChainsManage, "chain", null, null),
         new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", "Automation", null),
         new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", "Automation", null),
         new("chains", "Workflows", "link", "/project/{projectId}/workflows", Permission.ChainsManage, "chain", "Automation", null),
         new("queues", "Queues", "link", "/project/{projectId}/queues", Permission.ChainsManage, "queue", "Infrastructure", null),
-        new("services", "Services", "link", "/project/{projectId}/services", Permission.SettingsManage, "box", "Infrastructure", null),
-        new("databases", "Databases", "link", "/project/{projectId}/databases", Permission.SettingsManage, "data", "Infrastructure", null),
         new("networking", "Networking", "link", "/project/{projectId}/networking", Permission.SettingsManage, "box", "Infrastructure", null),
         new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.TriggersManage, "clock", "Automation", null),
         new("data", "Data", "link", "/project/{projectId}/data", Permission.DataRead, "data", "Data & storage", null),

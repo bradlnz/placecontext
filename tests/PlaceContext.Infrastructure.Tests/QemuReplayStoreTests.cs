@@ -13,6 +13,17 @@ namespace PlaceContext.Infrastructure.Tests;
 
 public sealed class QemuReplayStoreTests
 {
+    [Fact]
+    public async Task Invalid_pointer_metadata_is_rejected_before_storage()
+    {
+        var store = new DbQemuReplayStore(new DbContextOptionsBuilder<AppDbContext>().Options,
+            new FakeCurrentTenant(Guid.NewGuid()), new DataProtectionEncryptor(new EphemeralDataProtectionProvider()), new Permissions(true));
+        var frame = new QemuReplayFrame(0, 0, DateTimeOffset.UtcNow, "Pointer", 0, false);
+        foreach (var invalid in new[] { frame with { PointerX = .5 }, frame with { Click = true },
+            frame with { PointerX = double.NaN, PointerY = .5 }, frame with { PointerX = 1.1, PointerY = .5 } })
+            await Assert.ThrowsAsync<ArgumentException>(() => store.AppendAsync(Guid.NewGuid(), 0, new(invalid, null), default));
+    }
+
     private sealed class Permissions(bool allowed) : IPermissionService
     {
         public Task<bool> HasAsync(string permission, CancellationToken ct = default) => Task.FromResult(allowed);

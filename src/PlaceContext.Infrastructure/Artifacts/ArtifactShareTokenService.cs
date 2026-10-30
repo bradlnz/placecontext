@@ -93,7 +93,7 @@ public sealed class ArtifactShareTokenService : IArtifactShareTokenService
 
         var hash = Hash(token);
         var now = _clock.UtcNow;
-        var share = await _db.ArtifactShareTokens.IgnoreQueryFilters()
+        var share = await _db.ArtifactShareTokens.IgnoreQueryFilters().AsNoTracking()
             .SingleOrDefaultAsync(item =>
                 item.TokenHash == hash
                 && item.RevokedAt == null
@@ -105,8 +105,14 @@ public sealed class ArtifactShareTokenService : IArtifactShareTokenService
                 item.Id == share.ArtifactId && item.TenantId == share.TenantId, ct);
         if (artifact is null) return null;
 
-        share.LastAccessedAt = now;
-        await _db.SaveChangesAsync(ct);
+        // The verified bearer grants access only to this share, not to the caller's other tracked rows.
+        await using var shareDb = new AppDbContext(_db.ContextOptions,
+            new Tenancy.TenantInfo(share.TenantId, "", "", "UTC"));
+        var access = await shareDb.ArtifactShareTokens.SingleOrDefaultAsync(item => item.Id == share.Id
+            && item.TokenHash == hash && item.RevokedAt == null && item.ExpiresAt > now, ct);
+        if (access is null) return null;
+        access.LastAccessedAt = now;
+        await shareDb.SaveChangesAsync(ct);
         return new SharedArtifact(
             artifact.Title,
             artifact.Bucket,

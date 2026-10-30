@@ -194,11 +194,11 @@
                 {
                     <h3>@run.ChainName <span class="queue-status">@run.Status</span></h3>
                     <p class="queue-note">Run @run.Id · @Vm.Presentation.DateTime(run.StartedAt)</p>
-                    <ChainPipeline Run="run" OnStepClick="Vm.InspectStepAsync" />
                     @if (run.Steps.Any(step => step.ActionType == PlaceContext.Domain.ValueObjects.QemuChainAction.ActionType))
                     {
                         <QemuReplay @key="run.Id" Run="run" />
                     }
+                    <ChainPipeline Run="run" OnStepClick="Vm.InspectStepAsync" />
                     <div class="dcfield"><label for="queue-run-job">Underlying job logs</label>
                         <select id="queue-run-job" class="dcinput" value="@Vm.InspectJobId" @onchange="e => Vm.SelectInspectJobAsync(e.Value?.ToString())">
                             <option value="">Select a job run</option>

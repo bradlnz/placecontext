@@ -39,24 +39,28 @@ public sealed class QemuPromptAgentTests
     {
         Agent = new() { Endpoint = "http://model.test/v1/chat/completions", Model = "vision-model", ApiKey = "host-only-secret", MaxSteps = 4 },
     };
+    private static Task<byte[]> LiveFrame(CancellationToken ct) => Task.FromResult(Convert.FromBase64String(Png));
     private const string Png = "iVBORw0KGgo=";
     private static Task<QemuEnvironmentResult> Guest(string command, int limit, CancellationToken ct) => Task.FromResult(
-        new QemuEnvironmentResult(0, command == QemuPromptAgent.ScreenshotCommand ? Png : "DONE", ""));
+        new QemuEnvironmentResult(0, "DONE", ""));
 
     [Fact]
     public async Task Prompt_drives_tool_observation_loop_and_returns_verified_summary_without_executing_prompt()
     {
         using var api = new ModelApi(Tool("guest_shell", new { command = "echo DONE", description = "Inspect guest state" }),
-            Tool("desktop_screenshot", new { }, "call-2"), Tool("finish", new { success = true, summary = "Browser task complete" }, "call-3"));
+            Tool("live_desktop", new { }, "call-2"), Tool("finish", new { success = true, summary = "Browser task complete" }, "call-3"));
         var agent = new QemuPromptAgent(api, Options.Create(OptionsForAgent()));
         var commands = new List<string>();
         var result = await agent.RunAsync("Open the browser and verify it", "{\"record\":123}", (command, limit, ct) =>
-        { commands.Add(command); return Guest(command, limit, ct); }, default);
+        { commands.Add(command); return Guest(command, limit, ct); }, default, readLiveFrame: LiveFrame);
         Assert.Equal(0, result.ExitCode);
         Assert.Equal("Browser task complete", result.Stdout);
         Assert.Equal(3, result.AgentSteps);
         Assert.Equal(2, result.Activity!.Count);
         Assert.Contains("echo DONE", commands);
+        Assert.Equal(2, commands.Count); // Readiness check and action only; frames come from the live feed.
+        Assert.Equal(new[] { "guest_shell", "live_desktop", "finish" },
+            api.Requests[0]["tools"]!.AsArray().Select(tool => tool!["function"]!["name"]!.GetValue<string>()));
         Assert.DoesNotContain("Open the browser and verify it", commands);
         Assert.DoesNotContain(commands, command => command.Contains("host-only-secret"));
         Assert.All(api.Auth, auth => Assert.Equal("Bearer host-only-secret", auth));
@@ -74,7 +78,7 @@ public sealed class QemuPromptAgentTests
             Tool("guest_shell", new { command = "retry", description = "Retry browser" }, "retry"), Tool("finish", new { success = true, summary = "Recovered" }));
         var agent = new QemuPromptAgent(api, Options.Create(OptionsForAgent()));
         var result = await agent.RunAsync("Open browser", null, (command, limit, ct) => command == "first"
-            ? Task.FromResult(new QemuEnvironmentResult(1, "", "Display not ready")) : Guest(command, limit, ct), default);
+            ? Task.FromResult(new QemuEnvironmentResult(1, "", "Display not ready")) : Guest(command, limit, ct), default, readLiveFrame: LiveFrame);
         Assert.Equal(0, result.ExitCode);
         Assert.Contains("Display not ready", api.Requests[1].ToJsonString());
         Assert.Equal(1, result.Activity![0].ExitCode);
@@ -87,7 +91,7 @@ public sealed class QemuPromptAgentTests
         const string text = """{"choices":[{"message":{"role":"assistant","content":"I completed everything"}}]}""";
         using var api = new ModelApi(text, text);
         var config = OptionsForAgent(); config.Agent.MaxSteps = 2;
-        var result = await new QemuPromptAgent(api, Options.Create(config)).RunAsync("Do task", null, Guest, default);
+        var result = await new QemuPromptAgent(api, Options.Create(config)).RunAsync("Do task", null, Guest, default, readLiveFrame: LiveFrame);
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("2-step limit", result.Stderr);
         Assert.Equal(2, api.Requests.Count);
@@ -100,28 +104,45 @@ public sealed class QemuPromptAgentTests
         using var api = new ModelApi(Tool("host_shell", new { command = "danger" }), "credential material");
         var calls = new List<string>();
         var result = await new QemuPromptAgent(api, Options.Create(OptionsForAgent())).RunAsync("Task", null, (command, limit, ct) =>
-        { calls.Add(command); return Guest(command, limit, ct); }, default);
+        { calls.Add(command); return Guest(command, limit, ct); }, default, readLiveFrame: LiveFrame);
         Assert.Equal(1, result.ExitCode);
         Assert.DoesNotContain("danger", calls);
         Assert.Contains("Unknown tool", api.Requests[1].ToJsonString());
         Assert.DoesNotContain("credential material", result.Stderr);
         using var denied = new ModelApi("secret-body") { Status = HttpStatusCode.Unauthorized };
-        result = await new QemuPromptAgent(denied, Options.Create(OptionsForAgent())).RunAsync("Task", null, Guest, default);
+        result = await new QemuPromptAgent(denied, Options.Create(OptionsForAgent())).RunAsync("Task", null, Guest, default, readLiveFrame: LiveFrame);
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("401", result.Stderr);
         Assert.DoesNotContain("secret-body", result.Stderr);
     }
 
     [Fact]
-    public async Task Missing_model_and_invalid_screenshots_fail_without_a_model_request()
+    public async Task Missing_model_and_invalid_live_frames_fail_without_a_model_request()
     {
         using var api = new ModelApi();
         var config = OptionsForAgent(); config.Agent.Model = "";
         var agent = new QemuPromptAgent(api, Options.Create(config));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => agent.RunAsync("Task", null, Guest, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => agent.RunAsync("Task", null, Guest, default, readLiveFrame: LiveFrame));
         config.Agent.Model = "vision";
-        var result = await agent.RunAsync("Task", null, (_, _, _) => Task.FromResult(new QemuEnvironmentResult(0, "not-an-image", "")), default);
+        var result = await agent.RunAsync("Task", null, Guest, default, readLiveFrame: _ => Task.FromResult("not-an-image"u8.ToArray()));
         Assert.Equal(1, result.ExitCode);
+        Assert.Empty(api.Requests);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Missing_or_disconnected_live_feed_fails_without_requesting_guest_screenshots(bool disconnected)
+    {
+        using var api = new ModelApi();
+        var commands = new List<string>();
+        var result = await new QemuPromptAgent(api, Options.Create(OptionsForAgent())).RunAsync("Task", null,
+            (command, limit, ct) => { commands.Add(command); return Guest(command, limit, ct); }, default,
+            readLiveFrame: disconnected ? _ => Task.FromException<byte[]>(new IOException("private connection details")) : null);
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("live desktop feed", result.Stderr);
+        Assert.DoesNotContain("private connection details", result.Stderr);
+        Assert.Single(commands);
         Assert.Empty(api.Requests);
     }
 
@@ -129,7 +150,7 @@ public sealed class QemuPromptAgentTests
     public async Task Model_request_timeout_is_a_failed_result_without_claiming_the_workflow_deadline_expired()
     {
         using var api = new ModelApi() { TimeoutRequest = true };
-        var result = await new QemuPromptAgent(api, Options.Create(OptionsForAgent())).RunAsync("Task", null, Guest, default);
+        var result = await new QemuPromptAgent(api, Options.Create(OptionsForAgent())).RunAsync("Task", null, Guest, default, readLiveFrame: LiveFrame);
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("model request timed out", result.Stderr);
         Assert.Equal(1, result.AgentSteps);
@@ -139,11 +160,11 @@ public sealed class QemuPromptAgentTests
     public async Task Replay_records_initial_and_post_action_frames_including_failed_commands()
     {
         using var api = new ModelApi(Tool("guest_shell", new { command = "fail", description = "Open browser" }),
-            Tool("desktop_screenshot", new { }), Tool("finish", new { success = false, summary = "Browser failed" }));
+            Tool("live_desktop", new { }), Tool("finish", new { success = false, summary = "Browser failed" }));
         var frames = new List<QemuReplayCapture>();
         var result = await new QemuPromptAgent(api, Options.Create(OptionsForAgent())).RunAsync("Open browser", null,
             (command, limit, ct) => command == "fail" ? Task.FromResult(new QemuEnvironmentResult(7, "", "Failed")) : Guest(command, limit, ct),
-            default, (capture, _) => { frames.Add(capture); return Task.CompletedTask; });
+            default, (capture, _) => { frames.Add(capture); return Task.CompletedTask; }, readLiveFrame: LiveFrame);
         Assert.Equal(1, result.ExitCode);
         Assert.Equal(new[] { 0, 1, 2 }, frames.Select(frame => frame.Frame.Sequence));
         Assert.Equal("Desktop ready", frames[0].Frame.Description);
@@ -160,14 +181,14 @@ public sealed class QemuPromptAgentTests
         var screens = 0;
         var frames = new List<QemuReplayCapture>();
         var result = await new QemuPromptAgent(api, Options.Create(OptionsForAgent())).RunAsync("Open browser", null,
-            (command, limit, ct) => command == QemuPromptAgent.ScreenshotCommand && ++screens > 1
-                ? Task.FromResult(new QemuEnvironmentResult(1, "", "Capture error")) : Guest(command, limit, ct),
-            default, (capture, _) => { frames.Add(capture); return Task.CompletedTask; });
+            Guest,
+            default, (capture, _) => { frames.Add(capture); return Task.CompletedTask; },
+            readLiveFrame: ct => ++screens > 1 ? Task.FromException<byte[]>(new InvalidOperationException("Feed error")) : LiveFrame(ct));
         Assert.Equal(0, result.ExitCode);
         Assert.True(frames[0].Frame.HasImage);
         Assert.False(frames[1].Frame.HasImage);
         Assert.Null(frames[1].Png);
-        Assert.Contains("Screenshot unavailable", frames[1].Frame.Error);
+        Assert.Contains("Live preview frame unavailable", frames[1].Frame.Error);
     }
 
     [Fact]
@@ -175,7 +196,7 @@ public sealed class QemuPromptAgentTests
     {
         using var api = new ModelApi() { WaitForCancellation = true };
         using var cancel = new CancellationTokenSource();
-        var task = new QemuPromptAgent(api, Options.Create(OptionsForAgent())).RunAsync("Task", null, Guest, cancel.Token);
+        var task = new QemuPromptAgent(api, Options.Create(OptionsForAgent())).RunAsync("Task", null, Guest, cancel.Token, readLiveFrame: LiveFrame);
         await api.Started.Task;
         cancel.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);

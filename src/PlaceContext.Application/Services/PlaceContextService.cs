@@ -298,12 +298,15 @@ public sealed class PlaceContextService
     public Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default)
         => _dispatcher.Send(new ExecuteProjectDataCommand(projectId, sql), ct);
 
+    public Task<IReadOnlyList<Ports.ProjectTableSchema>> ListProjectTableSchemasAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new ListProjectTableSchemasQuery(projectId), ct);
+
     public Task<IReadOnlyList<Ports.ProjectTableInfo>> ListProjectDataTablesAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListProjectDataTablesQuery(projectId), ct);
 
     public Task<Ports.ProjectTablePageResult> QueryProjectTablePageAsync(Guid projectId, string tableName, string? search,
-        int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default)
-        => _dispatcher.Query(new QueryProjectTablePageQuery(projectId, tableName, search, page, pageSize, sortColumn, sortDescending), ct);
+        int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default, bool includeTotalCount = true)
+        => _dispatcher.Query(new QueryProjectTablePageQuery(projectId, tableName, search, page, pageSize, sortColumn, sortDescending, includeTotalCount), ct);
 
     public Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default)
         => _dispatcher.Send(new CreateProjectTableCommand(projectId, tableName, columns), ct);

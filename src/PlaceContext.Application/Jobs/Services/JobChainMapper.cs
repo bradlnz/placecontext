@@ -8,41 +8,37 @@ namespace PlaceContext.Application.Features;
 internal static class JobChainMapper
 {
     public static async Task<JobChainView> ToViewAsync(JobChain chain, IJobRepository jobs, CancellationToken ct)
+        => (await ToViewsAsync([chain], jobs, ct))[0];
+
+    public static async Task<IReadOnlyList<JobChainView>> ToViewsAsync(
+        IReadOnlyList<JobChain> chains, IJobRepository jobs, CancellationToken ct)
     {
-        var stages = new List<JobChainStageView>(chain.Stages.Count);
-        foreach (var stage in chain.Stages)
-        {
-            stages.Add(await ToStageViewAsync(stage, jobs, ct));
-        }
-        return new JobChainView(chain.Id, chain.ProjectId, chain.Name, chain.Description, stages, chain.UpdatedAt);
+        var ids = chains.SelectMany(chain => JobIds(chain.Stages)).Distinct().ToArray();
+        var names = ids.Length == 0
+            ? new Dictionary<Guid, string>()
+            : await jobs.GetNamesAsync(ids, ct);
+        return chains.Select(chain => new JobChainView(chain.Id, chain.ProjectId, chain.Name,
+            chain.Description, chain.Stages.Select(stage => ToStageView(stage, names)).ToList(), chain.UpdatedAt)).ToList();
     }
 
-    private static async Task<JobChainStageView> ToStageViewAsync(ChainStage stage, IJobRepository jobs, CancellationToken ct)
-    {
-        var stepViews = new List<JobChainStepView>(stage.JobIds.Count);
-        foreach (var jobId in stage.JobIds)
-        {
-            var job = await jobs.GetByIdAsync(jobId, ct);
-            stepViews.Add(new JobChainStepView(jobId, job?.Name ?? "(deleted)"));
-        }
+    private static IEnumerable<Guid> JobIds(IReadOnlyList<ChainStage> stages)
+        => stages.SelectMany(stage => stage.JobIds.Concat(JobIds(ElseBranch(stage) ?? [])));
 
-        IReadOnlyList<JobChainStageView>? elseBranchView = null;
-        if ((stage.ElseBranch ?? (stage.Gate as ConditionGate)?.ElseBranch) is { Count: > 0 } elseBranch)
-        {
-            var branches = new List<JobChainStageView>();
-            foreach (var branch in elseBranch)
-                branches.Add(await ToStageViewAsync(branch, jobs, ct));
-            elseBranchView = branches;
-        }
+    private static IReadOnlyList<ChainStage>? ElseBranch(ChainStage stage)
+        => stage.ElseBranch ?? (stage.Gate as ConditionGate)?.ElseBranch;
 
-        return new JobChainStageView(
-            stepViews, ToGateView(stage.Gate), elseBranchView, ToActionView(stage.Action));
-    }
+    private static JobChainStageView ToStageView(ChainStage stage, IReadOnlyDictionary<Guid, string> names)
+        => new(stage.JobIds.Select(id => new JobChainStepView(id, names.GetValueOrDefault(id, "(deleted)"))).ToList(),
+            ToGateView(stage.Gate),
+            ElseBranch(stage) is { Count: > 0 } branches
+                ? branches.Select(branch => ToStageView(branch, names)).ToList()
+                : null,
+            ToActionView(stage.Action));
 
     private static ChainActionView? ToActionView(ChainAction? action) => action switch
     {
         null => null,
-        QemuChainAction vm => new QemuChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork),
+        QemuChainAction vm => new QemuChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork, vm.PauseForLogin, vm.LoginProfileId),
         LoopChainAction loop => new LoopChainActionView(loop.Type, loop.Instructions, loop.ResponseField, loop.ResponseType, loop.AgentProvider),
         SendEmailChainAction email => new SendEmailChainActionView(
             email.Recipient, email.RecipientName, email.Subject, email.Body, email.AttachmentPath),

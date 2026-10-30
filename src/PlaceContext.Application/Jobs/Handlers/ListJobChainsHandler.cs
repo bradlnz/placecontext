@@ -18,9 +18,6 @@ public sealed class ListJobChainsHandler : IQueryHandler<ListJobChainsQuery, IRe
     public async Task<IReadOnlyList<JobChainView>> HandleAsync(ListJobChainsQuery query, CancellationToken ct = default)
     {
         var chains = await _chains.ListForProjectAsync(query.ProjectId, ct);
-        var views = new List<JobChainView>(chains.Count);
-        foreach (var chain in chains)
-            views.Add(await JobChainMapper.ToViewAsync(chain, _jobs, ct));
-        return views;
+        return await JobChainMapper.ToViewsAsync(chains, _jobs, ct);
     }
 }

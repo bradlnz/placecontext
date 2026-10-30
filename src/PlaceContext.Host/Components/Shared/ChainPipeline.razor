@@ -4,27 +4,10 @@
 
 @if (Vm.Layout is { } layout)
 {
-    <p class="run-layout-note">Current workflow layout · recorded results from this run. Select a job to inspect its output.</p>
+    <p class="run-layout-note">@(Vm.UsesRecordedLayout
+        ? "Recorded execution order · select a job to inspect its output. Historical conditions are not recorded."
+        : "Current workflow layout · recorded results from this run. Select a job to inspect its output.")</p>
     <ChainCanvas Stages="layout" RunSteps="Vm.RunSteps" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
-}
-else
-{
-    <p class="run-layout-note">Recorded steps in execution order. A matching workflow layout is unavailable.</p>
-    <div class="pipeline">
-        @foreach (var (stage, colIndex) in Vm.Stages(Run).Select((s, i) => (s, i)))
-        {
-            if (colIndex > 0)
-            {
-                <span class="pipe-arrow"><AppIcon Kind="arrow-right" /></span>
-            }
-            <div class="stage-col">
-                @foreach (var step in stage)
-                {
-                    <WorkflowRunStep Step="step" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
-                }
-            </div>
-        }
-    </div>
 }
 
 @code {

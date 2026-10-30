@@ -8,7 +8,9 @@ public interface IProjectRepository
 {
     Task AddAsync(Project project, CancellationToken ct = default);
     Task UpdateAsync(Project project, CancellationToken ct = default);
+    Task<bool> ExistsAsync(ProjectId id, CancellationToken ct = default);
     Task<Project?> GetByIdAsync(ProjectId id, CancellationToken ct = default);
+    Task<IReadOnlyDictionary<Guid, string>> GetNamesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
     Task<Project?> GetByPathAsync(ProjectPath path, CancellationToken ct = default);
     Task<IReadOnlyList<Project>> ListAsync(CancellationToken ct = default);
 }

@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
@@ -7,12 +9,134 @@ using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components.ViewModels;
 using PlaceContext.Infrastructure.Operations;
 using PlaceContext.Infrastructure.Observability;
+using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.TestSupport;
 
 namespace PlaceContext.Host.Tests;
 
 public sealed class LazyViewLoadingTests
 {
+    [Fact]
+    public async Task Observability_coalesces_operation_bursts_and_reloads_changes_arriving_during_a_query()
+    {
+        var dispatcher = new Dispatcher();
+        var operations = new OperationCenter(null!, null!);
+        var tenant = new FakeCurrentTenant(Guid.NewGuid());
+        using var vm = new ObservabilityViewModel(Service(dispatcher), new PortalUiState(), new Navigation(),
+            operations, null!, null!, null!, tenant: tenant);
+        await vm.InitializeAsync();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var refreshed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        dispatcher.Delay = query =>
+        {
+            if (query is not ListRecentRunReportsQuery) return null;
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                started.SetResult();
+                return response.Task;
+            }
+            refreshed.TrySetResult();
+            return null;
+        };
+        var info = new TenantInfo(tenant.TenantId, "own", "Own", "UTC");
+        for (var i = 0; i < 100; i++) operations.Track(info, null, "burst", null);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, calls);
+        operations.Track(info, null, "arrived during query", null);
+        response.SetResult(Array.Empty<RunReportView>());
+        await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task Workspace_search_waits_for_typing_to_pause_and_ignores_stale_responses()
+    {
+        var dispatcher = new Dispatcher();
+        using var services = new ServiceCollection().AddSingleton(Service(dispatcher)).BuildServiceProvider();
+        using var vm = new MainLayoutViewModel(new PortalUiState(), new ConfigurationBuilder().Build(),
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!), null!, new Navigation(),
+            services.GetRequiredService<IServiceScopeFactory>());
+        await Task.WhenAll(vm.SearchAsync("fi"), vm.SearchAsync("fir"), vm.SearchAsync("first"));
+        Assert.Equal("first", Assert.Single(dispatcher.Queries.OfType<SearchQuery>()).Term);
+
+        var started = new TaskCompletionSource();
+        var stale = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+        dispatcher.Delay = query =>
+        {
+            if (query is not SearchQuery { Term: "old" }) return null;
+            started.SetResult();
+            return stale.Task;
+        };
+        var oldSearch = vm.SearchAsync("old");
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await vm.SearchAsync("new");
+        stale.SetResult(new SearchResultsView("old", []));
+        await oldSearch;
+        Assert.Equal("new", vm.SearchResults?.Term);
+        Assert.False(vm.Searching);
+
+        var count = dispatcher.Queries.Count;
+        var cancelled = vm.SearchAsync("cancelled");
+        vm.CloseSearch();
+        await cancelled;
+        Assert.Equal(count, dispatcher.Queries.Count);
+        await vm.SearchAsync("x");
+        Assert.Null(vm.SearchResults);
+    }
+
+    [Fact]
+    public async Task Dashboard_charts_do_not_wait_for_history_or_workflow_definitions()
+    {
+        var dispatcher = new Dispatcher();
+        var history = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var chains = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+        dispatcher.Delay = query => query switch
+        {
+            ListRecentRunReportsQuery => history.Task,
+            ListJobChainsQuery => chains.Task,
+            _ => null
+        };
+        var ui = new PortalUiState();
+        ui.SetProject(Guid.NewGuid(), "Project");
+        using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!,
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!));
+        var loading = vm.LoadAsync();
+        Assert.False(vm.Ready);
+        Assert.False(vm.ChainsReady);
+        Assert.Single(vm.SqlCharts());
+        Assert.Single(vm.Entities);
+        history.SetResult(Array.Empty<RunReportView>());
+        chains.SetResult(Array.Empty<JobChainView>());
+        await loading;
+        Assert.True(vm.Ready);
+        Assert.True(vm.ChainsReady);
+        Assert.DoesNotContain(dispatcher.Queries, query => query is ListJobsQuery);
+        var chain = new JobChainView(Guid.NewGuid(), ui.CurrentProjectId!.Value, "Workflow", null, [], DateTimeOffset.UtcNow);
+        await vm.PrepareQuickChainRunAsync(chain);
+        Assert.Single(dispatcher.Queries.OfType<ListJobsQuery>());
+        Assert.Equal(chain, vm.RunPromptChain);
+    }
+
+    [Fact]
+    public async Task Dashboard_operation_changes_only_refresh_history_for_its_own_tenant()
+    {
+        var dispatcher = new Dispatcher();
+        var tenant = new FakeCurrentTenant(Guid.NewGuid());
+        var operations = new OperationCenter(null!, null!);
+        var ui = new PortalUiState();
+        ui.SetProject(Guid.NewGuid(), "Project");
+        using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!, tenant, operations);
+        vm.Initialize();
+        await vm.LoadAsync();
+        var count = dispatcher.Queries.Count;
+        operations.Track(new TenantInfo(Guid.NewGuid(), "other", "Other", "UTC"), null, "Other tenant", null);
+        Assert.Equal(count, dispatcher.Queries.Count);
+        operations.Track(new TenantInfo(tenant.TenantId, "own", "Own", "UTC"), null, "Own tenant", null);
+        Assert.IsType<ListRecentRunReportsQuery>(Assert.Single(dispatcher.Queries.Skip(count)));
+    }
+
     [Theory]
     [InlineData("runs", typeof(ListRecentRunReportsQuery))]
     [InlineData("workflows", typeof(ListRecentChainRunsQuery))]
@@ -85,6 +209,57 @@ public sealed class LazyViewLoadingTests
     }
 
     [Fact]
+    public async Task Dashboard_loads_charts_when_the_shell_selects_its_project_after_initial_load()
+    {
+        var dispatcher = new Dispatcher();
+        var ui = new PortalUiState();
+        using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!,
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!));
+        vm.Initialize();
+        await vm.LoadAsync();
+        Assert.Empty(vm.SqlCharts());
+
+        var projectId = Guid.NewGuid();
+        ui.SetProject(projectId, "Project");
+
+        Assert.Equal(projectId, Assert.Single(dispatcher.Queries.OfType<ListProjectChartsQuery>()).ProjectId);
+        Assert.Single(vm.SqlCharts());
+        ui.Set("Dashboard", "Updated subtitle");
+        Assert.Single(dispatcher.Queries.OfType<ListProjectChartsQuery>());
+        vm.Dispose();
+        ui.SetProject(Guid.NewGuid(), "Other project");
+        Assert.Single(dispatcher.Queries.OfType<ListProjectChartsQuery>());
+    }
+
+    [Fact]
+    public async Task Dashboard_discards_pending_charts_when_the_selected_project_changes()
+    {
+        var dispatcher = new Dispatcher();
+        var ui = new PortalUiState();
+        var oldProject = Guid.NewGuid();
+        ui.SetProject(oldProject, "Old project");
+        var pending = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+        dispatcher.Delay = query => query is ListProjectChartsQuery q && q.ProjectId == oldProject
+            ? pending.Task : null;
+        using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!,
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!));
+        vm.Initialize();
+        var loading = vm.LoadAsync();
+        Assert.False(loading.IsCompleted);
+
+        var projectId = Guid.NewGuid();
+        ui.SetProject(projectId, "New project");
+        Assert.Equal("sql:Summary", Assert.Single(vm.SqlCharts()).TableName);
+        var queryCount = dispatcher.Queries.Count;
+        pending.SetResult(new ProjectChartView[] { new("sql:Old", "{}", DateTimeOffset.UtcNow) });
+        await loading;
+
+        Assert.Equal("sql:Summary", Assert.Single(vm.SqlCharts()).TableName);
+        Assert.Equal(projectId, Assert.Single(vm.Entities).ProjectId);
+        Assert.Equal(queryCount, dispatcher.Queries.Count);
+    }
+
+    [Fact]
     public async Task Dashboard_defers_entity_scans_until_requested_and_avoids_duplicate_loads()
     {
         var dispatcher = new Dispatcher();
@@ -149,6 +324,8 @@ public sealed class LazyViewLoadingTests
         var loading = vm.LoadAsync();
         Assert.True(vm.Loaded);
         Assert.Null(vm.Page);
+        Assert.False(Assert.Single(dispatcher.Queries.OfType<QueryProjectTablePageQuery>()).IncludeTotalCount);
+        Assert.Equal("Page 1", vm.PageLabel(new ProjectTablePageResult([], [], 51, 1, 50, false)));
         Assert.False(loading.IsCompleted);
         Assert.Empty(dispatcher.Commands);
         Assert.DoesNotContain(dispatcher.Queries, query => query is ListProjectChartsQuery);
@@ -199,6 +376,50 @@ public sealed class LazyViewLoadingTests
         var analytics = new ProjectAnalyticsViewModel(Service(dispatcher), new PortalUiState(), null!, null!);
         await analytics.RenderAsync();
         Assert.Empty(dispatcher.Queries);
+    }
+
+    [Fact]
+    public async Task Sql_editor_mounts_while_batched_autocomplete_is_pending()
+    {
+        var dispatcher = new Dispatcher();
+        var pending = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+        dispatcher.Delay = query => query is ListProjectTableSchemasQuery ? pending.Task : null;
+        var js = new EditorJs();
+        var vm = new ProjectDataViewModel(Service(dispatcher), new PortalUiState(), js);
+        vm.Initialize(Guid.NewGuid());
+        await vm.ShowSqlTabAsync("records", "SELECT name FROM records LIMIT 50");
+        await vm.AfterRenderAsync();
+        Assert.Contains("pcmonaco.init", js.Calls);
+        Assert.Single(dispatcher.Queries.OfType<ListProjectTableSchemasQuery>());
+        Assert.DoesNotContain(dispatcher.Queries, query => query is ListProjectTableColumnsQuery);
+        pending.SetResult(Array.Empty<ProjectTableSchema>());
+        await js.SchemaPushed.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.DoesNotContain(dispatcher.Queries, query => query is ListOpenSearchIndicesQuery);
+    }
+
+    [Fact]
+    public async Task Table_preview_projects_named_columns_with_a_small_row_limit()
+    {
+        var dispatcher = new Dispatcher();
+        dispatcher.Delay = query => query is ListProjectTableColumnsQuery
+            ? Task.FromResult<object>(new ProjectColumnInfo[] { new("Order", "text", false, false), new("a\"b", "text", false, false) }) : null;
+        var vm = new ProjectDataViewModel(Service(dispatcher), new PortalUiState(), null!);
+        vm.Initialize(Guid.NewGuid());
+        Assert.Equal("SELECT \"Order\", \"a\"\"b\" FROM \"records\" LIMIT 50;", await vm.TablePreviewSqlAsync("records"));
+    }
+
+    private sealed class EditorJs : Microsoft.JSInterop.IJSRuntime
+    {
+        public List<string> Calls { get; } = [];
+        public TaskCompletionSource SchemaPushed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public ValueTask<T> InvokeAsync<T>(string identifier, object?[]? args)
+        {
+            Calls.Add(identifier);
+            if (identifier == "pcmonaco.setSqlSchema") SchemaPushed.TrySetResult();
+            return ValueTask.FromResult(typeof(T) == typeof(bool) ? (T)(object)true : default!);
+        }
+        public ValueTask<T> InvokeAsync<T>(string identifier, CancellationToken cancellationToken, object?[]? args)
+            => InvokeAsync<T>(identifier, args);
     }
 
     [Fact]
@@ -339,9 +560,11 @@ public sealed class LazyViewLoadingTests
             if (Delay?.Invoke(query) is { } pending) return (T)await pending;
             object result = query switch
             {
+                SearchQuery q => new SearchResultsView(q.Term, []),
                 ListDataEntitiesQuery q => new DataEntityView[] { new(Guid.NewGuid(), q.ProjectId, "Records", "records", "name", [], [], DateTimeOffset.UtcNow) },
                 QueryProjectTablePageQuery q => Page(q.Page),
                 ListProjectDataTablesQuery => Array.Empty<ProjectTableInfo>(),
+                ListProjectChartsQuery => new ProjectChartView[] { new("sql:Summary", "{\"type\":\"bar\"}", DateTimeOffset.UtcNow) },
                 ListOpenSearchIndicesQuery => Array.Empty<OpenSearchIndexView>(),
                 ListOpenSearchDashboardsQuery => Array.Empty<OpenSearchDashboardView>(),
                 ListOpenSearchFieldsQuery => new OpenSearchFieldView[] { new("category", "keyword", true, true) },

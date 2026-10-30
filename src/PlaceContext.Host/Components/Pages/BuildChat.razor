@@ -32,6 +32,7 @@
                             </div>
             </div>
             <div class="chat-header-actions">
+                <a class="chat-toolbar-button" href="@($"/project/{ProjectId}/build/workflows")"><AppIcon Kind="chain" /><span>Workflow library</span></a>
                 <button class="chat-toolbar-button @(Vm.ShowMemory ? "selected" : "")" aria-label="Project memory" title="Project memory" aria-expanded="@Vm.ShowMemory" aria-controls="@(Vm.ViewId + "-build-memory")" @onclick="() => Vm.ShowMemory = !Vm.ShowMemory"><AppIcon Kind="ledger" /><span>Memory</span></button>
                 @if (Vm.Conversation.Messages.Count > 0)
                 { <button class="chat-icon-button delete-chat" aria-label="Delete conversation" title="Delete conversation" disabled="@Vm.Locked" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button> }
@@ -53,7 +54,8 @@
                 {
                     <div class="chat-welcome">
                         <span class="welcome-icon"><AppIcon Kind="agent" /></span>
-                        <h1>How can I help you build?</h1>
+                        <h1>What would you like to build?</h1>
+                        <p>Turn an outcome into a complete workflow for your industry.<br />Describe the outcome, or start with a quick pick below.</p>
                     </div>
                 }
                 @foreach (var message in Vm.Conversation.Messages.OfType<System.Text.Json.Nodes.JsonNode>())
@@ -93,7 +95,7 @@
                     {
                         <div class="attachments">@foreach (var image in Vm.Images) { <div><img src="@image.DataUrl" alt="@image.Name" /><button type="button" disabled="@Vm.Locked" aria-label="@($"Remove {image.Name}")" @onclick="() => Vm.Images.Remove(image)"><AppIcon Kind="close" /></button></div> }</div>
                     }
-                    <textarea class="chat-input" aria-label="Message Build" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Message Build…" rows="2" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
+                    <textarea @ref="_composer" class="chat-input" aria-label="Message Build" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Describe what you want to build or improve…" rows="2" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
                     <div class="composer-actions">
                         <div class="composer-tools">
                             <label class="chat-icon-button attach-button" title="Attach images · up to four, 2 MB each"><AppIcon Kind="plus" /><InputFile OnChange="Vm.UploadAsync" accept="image/png,image/jpeg,image/webp" multiple disabled="@Vm.Locked" aria-label="Attach images" /></label>
@@ -112,6 +114,25 @@
                 else if (!Vm.Loading && !Vm.Connections.Any(x => x.Models.Count > 0))
                 { <div class="model-setup" role="status"><span><AppIcon Kind="agent" /> No models available. Sign in to Codex or Claude Code on this host, start a local model server, or add a connection.</span><a href="/settings/models">Model settings <AppIcon Kind="arrow-right" /></a></div> }
                 else { <div class="composer-note">@(Vm.Listening ? "Listening… Stop dictation to review and send." : "Build can make changes to this project. Review action results.")</div> }
+                @if (!Vm.Loading && Vm.Conversation.Messages.Count == 0)
+                {
+                    <section class="quick-picks" aria-labelledby="@(Vm.ViewId + "-quick-picks")">
+                        <div class="quick-picks-heading">
+                            <h2 id="@(Vm.ViewId + "-quick-picks")">Quick picks</h2>
+                            <span>@(string.IsNullOrWhiteSpace(Vm.Draft) ? "Choose a starting point, then edit and send." : "Clear your message to choose another starting point.")</span>
+                        </div>
+                        <div class="quick-picks-grid">
+                            @foreach (var pick in BuildChatViewModel.QuickPicks)
+                            {
+                                <button type="button" class="quick-pick" disabled="@(!Vm.CanUseQuickPick)" @onclick="() => UseQuickPickAsync(pick.Prompt)">
+                                    <span class="quick-pick-icon"><AppIcon Kind="@pick.Icon" /></span>
+                                    <span class="quick-pick-copy"><strong>@pick.Title</strong><span>@pick.Description</span></span>
+                                    <span class="quick-pick-arrow"><AppIcon Kind="arrow-right" /></span>
+                                </button>
+                            }
+                        </div>
+                    </section>
+                }
             </div>
         </div>
     </section>
@@ -123,6 +144,11 @@
 @code {
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "conversation")] public Guid? ConversationId { get; set; }
+    private ElementReference _composer;
+    private async Task UseQuickPickAsync(string prompt)
+    {
+        if (Vm.UseQuickPick(prompt)) await _composer.FocusAsync();
+    }
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId, ConversationId);
     protected override Task OnAfterRenderAsync(bool firstRender) => firstRender ? Vm.InitializeBrowserAsync() : Task.CompletedTask;

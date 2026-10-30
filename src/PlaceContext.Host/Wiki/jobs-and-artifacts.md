@@ -101,27 +101,26 @@ such as `gte:agent_response.noul:0.9`, to decide whether to proceed. Obtaining a
 mean approval. An administrator must configure `PlaceContext__TypeSafe__ApiKey` or
 `TYPESAFE_API_KEY` on the server. Question generation or verification errors fail the step.
 
-### QEMU desktop steps
+### QEMU browser tasks
 
-Choose a configured image profile and describe a task in the **Task prompt** field. An agent
-receives the workflow context, inspects the desktop, operates Chromium and desktop tools, and
-verifies its work. It can run commands as the non-root `workflow` user inside the VM. The prompt
-is not executed as a shell script. The portal does not yet stream the desktop.
+Choose an image profile and give Jev a task in **Task prompt**, including the starting HTTP(S)
+URL and the outcome to verify. For example, ask it to place a test order, wait for processing,
+check shipping and the total, and refresh to verify the saved record. Enable guest networking
+when the target site is outside the VM.
 
-The workflow waits for a verified completion, failure, cancellation, or timeout. The output field
-contains the agent's final summary in `stdout`, errors in `stderr`, `exitCode`, `agentSteps`, and
-an `activity` list. Each run discards its disk changes. Guest network access is off by default.
-An administrator must configure the image and a vision model with tool support. Model requests
-run on the host and include the prompt, workflow context, screenshots, and bounded guest output;
-model credentials stay on the host. The configured step limit prevents an endless agent loop.
+Jev receives page text and available controls, chooses one action at a time, and checks completion.
+The configured workflow model supplies text for form fields. Passwords, uploads, iframes, and
+new-window workflows are not supported. Never put credentials in the prompt or workflow context.
 
-Existing QEMU steps retain their stored text, now treated as a prompt. Rewrite older scripts as
-tasks before running them. See the QEMU image guide in the repository for model and image setup.
+The workflow waits for completion, failure, cancellation, or timeout, then discards disk changes.
+The output field contains page evidence and a decision trace as JSON in `stdout`, errors in
+`stderr`, `exitCode`, `agentSteps`, and `activity`. Replay captures the browser along the way.
+A completion score is not proof; independently check consequential results in subsequent stages.
 
-For local testing, an administrator can select the `codex` agent provider and a model available
-to the host account's Codex login. The app runs the local Codex API over a private connection;
-the model still runs remotely. It receives the task, workflow context, guest screenshots, and
-tool results. The same guest isolation, step limit, timeout, and cancellation rules apply.
+An administrator must configure the prepared image and TypeSafe key. Model calls run on the host;
+keys stay outside the VM. The default browser executor is our Rust agent controlling the existing
+Chromium through a private pipe, with no Python or Node/npm runtime. Existing general desktop or terminal prompts
+require the legacy `PlaceContext:Qemu:Executor=model` setting and a vision/tool model.
 
 ### Queue messages
 
@@ -219,3 +218,15 @@ artifact version has its own share link, and deleting an artifact also removes i
 
 The Share button is only shown to users with permission to publish artifacts. Read-only viewers do
 not receive that permission by default.
+
+### Sign in and help a QEMU workflow
+
+In the QEMU step, enable **Pause for login before starting**. Open the run: the live desktop is
+the main view. It stays locked while automation runs; **Take control** pauses the agent and
+unlocks keyboard and mouse input for login or MFA. Replay capture pauses while you have control.
+Choose **Save login** to keep a private encrypted browser session for future tests, then
+**Resume automation** to lock input again. Select that session in the step's settings for subsequent runs.
+Use **Take control** whenever the running agent needs help; it waits for a safe pause.
+The timeout includes human interaction, and closing the pane does not resume the agent.
+Use **Forget selected login** to remove a saved session. Login sessions are private to their
+creator in the project; other operators must use their own.

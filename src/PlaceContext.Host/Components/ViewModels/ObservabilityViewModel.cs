@@ -20,7 +20,8 @@ public sealed partial class ObservabilityViewModel(
     IWorkloadOutputBuffer output,
     IJSRuntime js,
     IServiceConsole? serviceConsole = null,
-    IPermissionService? permissions = null
+    IPermissionService? permissions = null,
+    ICurrentTenant? tenant = null
 ) : PageViewModel, IDisposable
 {
     public const string RunsTab = "runs";
@@ -28,6 +29,9 @@ public sealed partial class ObservabilityViewModel(
     public const string TracesTab = "traces";
     public const string LogsTab = "logs";
     private int _detailVersion;
+    private IDisposable? _operationSubscription;
+    private int _operationRefreshPending;
+    private int _operationVersion;
     public string? RunId { get; set; }
     public string? ChainRunId { get; set; }
     public IReadOnlyList<RunReportView>? Reports { get; private set; }
@@ -66,8 +70,9 @@ public sealed partial class ObservabilityViewModel(
     {
         await _logEditorCleanup;
         _disposed = false;
-        operations.Changed -= OnOperationsChanged;
-        operations.Changed += OnOperationsChanged;
+        _operationSubscription?.Dispose();
+        if (tenant is { IsResolved: true })
+            _operationSubscription = operations.Subscribe(tenant.TenantId, OnOperationsChanged);
         var query = System.Web.HttpUtility.ParseQueryString(new Uri(navigation.Uri).Query);
         Tab = NormalizeTab(query["tab"] ?? (ChainRunId is not null ? ChainsTab : RunId is not null ? RunsTab : Tab));
         ui.Set("Observability", "cross-project job history");
@@ -502,11 +507,38 @@ public sealed partial class ObservabilityViewModel(
             _ => "var(--card-2)",
         };
 
-    private void OnOperationsChanged() => _ = RefreshAsync();
+    private void OnOperationsChanged()
+    {
+        Interlocked.Increment(ref _operationVersion);
+        _ = RefreshAfterOperationAsync();
+    }
+
+    private async Task RefreshAfterOperationAsync()
+    {
+        if (Interlocked.Exchange(ref _operationRefreshPending, 1) != 0) return;
+        var version = 0;
+        try
+        {
+            do
+            {
+                await Task.Delay(250);
+                version = Volatile.Read(ref _operationVersion);
+                if (_disposed) return;
+                await RefreshAsync();
+            }
+            while (version != Volatile.Read(ref _operationVersion));
+        }
+        finally
+        {
+            Volatile.Write(ref _operationRefreshPending, 0);
+            if (!_disposed && version != Volatile.Read(ref _operationVersion))
+                _ = RefreshAfterOperationAsync();
+        }
+    }
 
     public void Dispose()
     {
-        operations.Changed -= OnOperationsChanged;
+        _operationSubscription?.Dispose();
         _disposed = true;
         Detach();
         _logEditorCleanup = DestroyLogEditorAsync();

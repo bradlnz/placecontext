@@ -18,8 +18,8 @@ spec:
     - name: ns
       expression: "request.operation == 'DELETE' ? oldObject : object"
   validations:
-    - expression: "variables.ns.metadata.name.matches('^pc-(app|db)-[a-f0-9]{32}$') && variables.ns.metadata.labels['placecontext.io/managed'] == 'true'"
-      message: Portal provisioning is limited to managed app and database namespaces.
+    - expression: "variables.ns.metadata.name.matches('^pc-(app|db|tenant)-[a-f0-9]{32}$') && variables.ns.metadata.labels['placecontext.io/managed'] == 'true'"
+      message: Portal provisioning is limited to managed app, database and tenant namespaces.
     - expression: "request.operation == 'DELETE' || (object.metadata.labels['pod-security.kubernetes.io/enforce'] == 'restricted' && object.metadata.labels['pod-security.kubernetes.io/audit'] == 'restricted' && object.metadata.labels['pod-security.kubernetes.io/warn'] == 'restricted')"
       message: Hosted namespaces must enforce restricted pod security.
 ---
@@ -45,9 +45,9 @@ spec:
     - name: portal-provisioner
       expression: "request.userInfo.username == 'system:serviceaccount:placecontext:placecontext'"
   validations:
-    - expression: "namespaceObject != null && namespaceObject.metadata.name.matches('^pc-(app|db)-[a-f0-9]{32}$') && namespaceObject.metadata.labels['placecontext.io/managed'] == 'true'"
+    - expression: "namespaceObject != null && namespaceObject.metadata.name.matches('^pc-(app|db|tenant)-[a-f0-9]{32}$') && namespaceObject.metadata.labels['placecontext.io/managed'] == 'true'"
       message: The portal may bind management access only inside its managed namespaces.
-    - expression: "object.metadata.name == 'placecontext-management' && object.roleRef.apiGroup == 'rbac.authorization.k8s.io' && object.roleRef.kind == 'ClusterRole' && object.roleRef.name == 'placecontext-hosted-runtime' && size(object.subjects) == 1 && object.subjects[0].kind == 'ServiceAccount' && object.subjects[0].name == 'placecontext' && object.subjects[0].namespace == 'placecontext'"
+    - expression: "object.metadata.name == 'placecontext-management' && object.roleRef.apiGroup == 'rbac.authorization.k8s.io' && object.roleRef.kind == 'ClusterRole' && ((namespaceObject.metadata.labels['placecontext.io/kind'] == 'tenant' && object.roleRef.name == 'placecontext-tenant-runtime') || (namespaceObject.metadata.labels['placecontext.io/kind'] != 'tenant' && object.roleRef.name == 'placecontext-hosted-runtime')) && size(object.subjects) == 1 && object.subjects[0].kind == 'ServiceAccount' && object.subjects[0].name == 'placecontext' && object.subjects[0].namespace == 'placecontext'"
       message: Only the fixed namespace management binding is permitted; workload identities get no role bindings.
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -114,7 +114,7 @@ rules:
     verbs: [create]
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [clusterroles]
-    resourceNames: [placecontext-hosted-runtime]
+    resourceNames: [placecontext-hosted-runtime, placecontext-tenant-runtime]
     verbs: [bind]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -141,3 +141,27 @@ spec:
             matchLabels: { placecontext.io/managed: "true", placecontext.io/kind: service }
           podSelector: { matchLabels: { app: workload } }
       ports: [{ port: 7700, protocol: TCP }]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: placecontext-tenant-runtime }
+rules:
+  - apiGroups: [batch]
+    resources: [jobs, jobs/status]
+    verbs: [create, get, list, watch, delete, patch]
+  - apiGroups: [""]
+    resources: [pods, pods/log, pods/status]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create, get, delete]
+  - apiGroups: [""]
+    resources: [resourcequotas, serviceaccounts]
+    verbs: [create, get]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [get]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [create, get, delete]

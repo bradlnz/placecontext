@@ -250,7 +250,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     }
 
     public async Task<ProjectTablePageResult> QueryTablePageAsync(Guid projectId, string tableName, string? search,
-        int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default)
+        int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default, bool includeTotalCount = true)
     {
         Ident(tableName, "table name");
         page = ClampPage(page);
@@ -265,16 +265,20 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
 
         var quoted = QuoteIdent(tableName);
 
-        // Column names come straight off the result set's own schema (no untrusted input here),
-        // then get re-quoted below — used to build the "search every column" predicate.
+        // Read column names without fetching table rows; quote the same projection for each page.
         var columns = new List<string>();
         await using (var colCmd = conn.CreateCommand())
         {
             colCmd.Transaction = tx;
-            colCmd.CommandText = $"SELECT * FROM {quoted} LIMIT 0";
+            colCmd.CommandText = """
+                SELECT attname FROM pg_attribute
+                WHERE attrelid = to_regclass(@table) AND attnum > 0 AND NOT attisdropped
+                ORDER BY attnum
+                """;
+            colCmd.Parameters.AddWithValue("table", quoted);
             await using var colReader = await colCmd.ExecuteReaderAsync(ct);
-            for (var i = 0; i < colReader.FieldCount; i++)
-                columns.Add(colReader.GetName(i));
+            while (await colReader.ReadAsync(ct))
+                columns.Add(colReader.GetString(0));
         }
 
         // Encrypted text cells cannot be matched with SQL ILIKE — search filters after decrypt.
@@ -282,16 +286,17 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
         var whereSql = searchInMemory ? "" : (BuildSearchWhereClause(columns, search) ?? "");
         var hasSearch = whereSql.Length > 0;
 
-        long total;
-        await using (var countCmd = conn.CreateCommand())
+        long total = 0;
+        if (includeTotalCount && !searchInMemory)
         {
+            await using var countCmd = conn.CreateCommand();
             countCmd.Transaction = tx;
             countCmd.CommandText = $"SELECT count(*) FROM {quoted}{whereSql}";
-            // The search term is always bound as a parameter — never interpolated into the SQL text.
             if (hasSearch) countCmd.Parameters.AddWithValue(ToolNames.Search, $"%{search}%");
             total = Convert.ToInt64(await countCmd.ExecuteScalarAsync(ct) ?? 0L);
         }
 
+        var projection = string.Join(", ", columns.Select(QuoteIdent));
         var rows = new List<IReadOnlyList<string?>>();
         var offset = OffsetFor(page, pageSize);
         // ORDER BY 1 is the fallback anchor when no valid sort column is given (the table has
@@ -304,14 +309,14 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             if (searchInMemory)
             {
                 // Bounded decrypt-then-filter window (same cap as ExecuteAsync).
-                pageCmd.CommandText = $"SELECT * FROM {quoted}{orderBy} LIMIT @take";
+                pageCmd.CommandText = $"SELECT {projection} FROM {quoted}{orderBy} LIMIT @take";
                 pageCmd.Parameters.AddWithValue("take", MaxRows);
             }
             else
             {
-                pageCmd.CommandText = $"SELECT * FROM {quoted}{whereSql}{orderBy} LIMIT @take OFFSET @skip";
+                pageCmd.CommandText = $"SELECT {projection} FROM {quoted}{whereSql}{orderBy} LIMIT @take OFFSET @skip";
                 if (hasSearch) pageCmd.Parameters.AddWithValue(ToolNames.Search, $"%{search}%");
-                pageCmd.Parameters.AddWithValue("take", pageSize);
+                pageCmd.Parameters.AddWithValue("take", pageSize + (includeTotalCount ? 0 : 1));
                 pageCmd.Parameters.AddWithValue("skip", offset);
             }
             await using var reader = await pageCmd.ExecuteReaderAsync(ct);
@@ -324,6 +329,7 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             }
         }
 
+        var totalCountIsExact = true;
         if (searchInMemory)
         {
             var term = search!.Trim();
@@ -333,8 +339,15 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
             rows = matched.Skip((int)offset).Take(pageSize).ToList();
         }
 
+        if (!includeTotalCount && !searchInMemory)
+        {
+            total = rows.Count == 0 ? 0 : offset + rows.Count;
+            totalCountIsExact = rows.Count <= pageSize && (rows.Count > 0 || offset == 0);
+            if (rows.Count > pageSize) rows.RemoveAt(rows.Count - 1);
+        }
+
         await tx.CommitAsync(ct);
-        return new ProjectTablePageResult(columns, rows, total, page, pageSize);
+        return new ProjectTablePageResult(columns, rows, total, page, pageSize, totalCountIsExact);
     }
 
     public async Task<ProjectTableReadResult> ReadTableAsync(
@@ -481,6 +494,35 @@ public sealed class NpgsqlProjectDataStore : IProjectDataStore
     {
         Ident(tableName, "table name");
         return RunAsRoleAsync(projectId, $"DROP TABLE {QuoteIdent(tableName)}", ct);
+    }
+
+    public async Task<IReadOnlyList<ProjectTableSchema>> ListTableSchemasAsync(Guid projectId, CancellationToken ct = default)
+    {
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        var schema = await EffectiveListSchemaAsync(conn, resolved, projectId, ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT c.relname, a.attname, format_type(a.atttypid, a.atttypmod), a.attnotnull,
+                   COALESCE(i.indisprimary, false)
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+            LEFT JOIN pg_index i ON i.indrelid = c.oid AND i.indisprimary AND a.attnum = ANY(i.indkey)
+            WHERE n.nspname = @schema AND c.relkind IN ('r', 'v')
+            ORDER BY c.relname, a.attnum
+            """;
+        cmd.Parameters.AddWithValue("schema", schema);
+        var tables = new Dictionary<string, List<ProjectColumnInfo>>(StringComparer.Ordinal);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var name = reader.GetString(0);
+            if (!tables.TryGetValue(name, out var columns)) tables[name] = columns = [];
+            columns.Add(new(reader.GetString(1), reader.GetString(2), reader.GetBoolean(3), reader.GetBoolean(4)));
+        }
+        return tables.Select(table => new ProjectTableSchema(table.Key, table.Value)).ToList();
     }
 
     public async Task<IReadOnlyList<ProjectColumnInfo>> ListColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)

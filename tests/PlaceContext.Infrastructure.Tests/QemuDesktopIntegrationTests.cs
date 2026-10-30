@@ -13,7 +13,7 @@ public sealed class QemuDesktopIntegrationTests
         public string Model => "test-agent";
         public Task<QemuEnvironmentResult> RunAsync(string prompt, string? input,
             Func<string, int, CancellationToken, Task<QemuEnvironmentResult>> executeGuest, CancellationToken ct,
-            Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null) => executeGuest(prompt, 65536, ct);
+            Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null, QemuAgentInteraction? interaction = null, Func<CancellationToken, Task<byte[]>>? readLiveFrame = null) => executeGuest(prompt, 65536, ct);
     }
     private sealed class DesktopFactAttribute : FactAttribute
     {
@@ -84,7 +84,7 @@ public sealed class QemuDesktopIntegrationTests
             """;
         using var model = new QemuPromptAgentTests.ModelApi(
             QemuPromptAgentTests.Tool("guest_shell", new { command, description = "Open and verify the browser page" }),
-            QemuPromptAgentTests.Tool("desktop_screenshot", new { }, "screen"),
+            QemuPromptAgentTests.Tool("live_desktop", new { }, "screen"),
             QemuPromptAgentTests.Tool("finish", new { success = true, summary = "Opened the requested page and verified its title." }, "done"));
         var config = QemuPromptAgentTests.OptionsForAgent();
         config.Enabled = true;

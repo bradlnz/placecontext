@@ -26,8 +26,13 @@ public sealed class JobRunRetentionTests
 
         var active = Row(tenantId, start.AddMinutes(-1), "Running");
         var otherTenant = Row(otherTenantId, start.AddMinutes(-2), "Succeeded");
-        db.JobRuns.AddRange(active, otherTenant);
+        db.JobRuns.Add(active);
         await db.SaveChangesAsync();
+        await using (var otherDb = new AppDbContext(options, new Tenant(otherTenantId)))
+        {
+            otherDb.JobRuns.Add(otherTenant);
+            await otherDb.SaveChangesAsync();
+        }
 
         var repository = new EfJobRunRepository(
             db,

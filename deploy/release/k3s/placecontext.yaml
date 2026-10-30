@@ -1,6 +1,6 @@
 # PlaceContext Host deployment — portal + MCP + trigger scheduler.
 # __IMAGE__ is substituted by the release workflow with the immutable container image ref.
-# Platform resources live in `placecontext`; untrusted Jobs live in `placecontext-jobs`.
+# Platform resources live in `placecontext`; workload Jobs run in pc-tenant-<tenant-id>.
 # (Subscriptions/billing are handled by a separate web portal — no activation key here.)
 #
 # The scheduler is safe to scale: a Postgres advisory lock elects one replica to scan schedules, and the
@@ -14,44 +14,10 @@ metadata:
   name: placecontext
   namespace: placecontext
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: placecontext-jobs
-  namespace: placecontext-jobs
-rules:
-  - apiGroups: ["batch"]
-    resources: ["jobs", "jobs/status"]
-    verbs: ["create", "get", "list", "watch", "delete", "patch"]
-  - apiGroups: [""]
-    resources: ["pods", "pods/log", "pods/status"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["create", "get", "delete"]
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies"]
-    verbs: ["create", "get", "delete"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: placecontext-jobs
-  namespace: placecontext-jobs
-subjects:
-  - kind: ServiceAccount
-    name: placecontext
-    namespace: placecontext
-roleRef:
-  kind: Role
-  name: placecontext-jobs
-  apiGroup: rbac.authorization.k8s.io
----
 # Cluster page: node inventory (KubernetesClusterInfoProvider lists nodes for the fleet view).
 # `nodes` is a cluster-scoped resource — a namespaced Role can't grant it, so this needs a
 # ClusterRole/ClusterRoleBinding even though every other Host permission stays namespace-scoped.
-# The provider also best-effort reads its own pod (to mark "this node") which the namespaced
-# placecontext-jobs Role above already covers via pods:get.
+# The provider reads its own pod using the platform namespace role below.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -229,8 +195,6 @@ spec:
             # plane and queue until a standard worker is online.
             - name: PlaceContext__WorkloadRunner__RequireWorkerNodes
               value: "false"
-            - name: PlaceContext__WorkloadRunner__KubernetesNamespace
-              value: "placecontext-jobs"
             # Configure PlaceContext__ClusterChat__* or PlaceContext__Voyage__* only when an
             # operator has provisioned the corresponding local shards or external provider.
             - name: PlaceContext__ClusterChat__Endpoint

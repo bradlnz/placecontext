@@ -7,6 +7,7 @@ using k8s.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Ports;
+using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Workload;
 
@@ -38,6 +39,8 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     private readonly IObjectStore? _store;
     private readonly ILogger<KubernetesWorkloadRunner>? _log;
     private readonly IWorkloadOutputBuffer? _output;
+    private readonly ICurrentTenant _tenant;
+    private readonly KubernetesTenantRuntime? _runtime;
 
     // One bake per dependency-layer key (in-process); a failed bake is forgotten so the next run retries.
     private readonly ConcurrentDictionary<string, Lazy<Task<string?>>> _bakes = new();
@@ -45,14 +48,15 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     private const string BakeUploaderImage = "curlimages/curl:8.10.1";
 
     public KubernetesWorkloadRunner(IOptions<WorkloadRunnerOptions> options, IObjectStore? store = null,
-        ILogger<KubernetesWorkloadRunner>? log = null, IWorkloadOutputBuffer? output = null)
-        => (_options, _store, _log, _output) = (options.Value, store, log, output);
+        ILogger<KubernetesWorkloadRunner>? log = null, IWorkloadOutputBuffer? output = null,
+        ICurrentTenant? tenant = null, KubernetesTenantRuntime? runtime = null)
+        => (_options, _store, _log, _output, _tenant, _runtime) = (options.Value, store, log, output, tenant ?? new CurrentTenant(), runtime);
 
     public async Task CancelAsync(string correlationId, CancellationToken ct = default)
     {
         var name = MakeName(correlationId);
+        var ns = TenantNamespace();
         var cfg = KubernetesRuntime.Configuration(_options);
-        var ns = Namespace(cfg);
         using var client = new Kubernetes(cfg);
         await CleanupAsync(client, ns, name);
     }
@@ -62,8 +66,12 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
         BuildRestrictedContainerSecurityContext(_options);
         if (request.Network is not null && !_options.KubeOvnEnabled)
             throw new InvalidOperationException("This job requires a worker VPC. Install Kube-OVN and enable PlaceContext:WorkloadRunner:KubeOvnEnabled on the execution host.");
+        var ns = TenantNamespace();
+        if (request.Network is { } tenantNetwork && tenantNetwork.TenantId != _tenant.TenantId)
+            throw new UnauthorizedAccessException("The worker network belongs to another tenant.");
+        if (_runtime is null) throw new InvalidOperationException("Tenant runtime provisioning is required.");
+        await _runtime.EnsureAsync(_tenant.TenantId, ct);
         var cfg = KubernetesRuntime.Configuration(_options);
-        var ns = Namespace(cfg);
         using var client = new Kubernetes(cfg);
         if (request.Network is { } network)
             await Networking.KubeOvnNetwork.EnsureAsync(client, network, ns, ct);
@@ -157,6 +165,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                     // /out must be a volume: running as nobody, the job could never mkdir /out on the
                     // root-owned image rootfs. The pod fsGroup makes the emptyDir group-writable.
                     new V1VolumeMount { Name = "out", MountPath = "/out" },
+                    new V1VolumeMount { Name = "tmp", MountPath = "/tmp" },
                 },
                 Resources = ResourceLimits(runtime),
                 SecurityContext = BuildRestrictedContainerSecurityContext(_options),
@@ -191,6 +200,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                             // User-authored code must never receive a Kubernetes API credential. The
                             // Host creates and observes Jobs; workload pods need no API access.
                             AutomountServiceAccountToken = false,
+                            ServiceAccountName = "workload",
                             // Jobs never run as root: pod-level seccomp + an fsGroup that keeps /work and
                             // /out writable for the unprivileged run container; the run container itself
                             // adds the uid/gid, no-new-privileges and dropped capabilities. The
@@ -234,6 +244,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                                         new V1VolumeMount { Name = "in", MountPath = "/in" },
                                     },
                                     SecurityContext = BuildRestrictedContainerSecurityContext(_options),
+                                    Resources = ResourceLimits(runtime),
                                 },
                             },
                             Containers = new[] { runContainer },
@@ -243,6 +254,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                                 new V1Volume { Name = "work", EmptyDir = new V1EmptyDirVolumeSource() },
                                 new V1Volume { Name = "in", EmptyDir = new V1EmptyDirVolumeSource() },
                                 new V1Volume { Name = "out", EmptyDir = new V1EmptyDirVolumeSource() },
+                                new V1Volume { Name = "tmp", EmptyDir = new V1EmptyDirVolumeSource { SizeLimit = new ResourceQuantity("256Mi") } },
                             },
                         },
                     },
@@ -385,7 +397,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     private Task<string?> EnsureWarmCacheAsync(string ns, Kubernetes client, string runtimeId, string baseImage,
         WorkloadDependencies.Recipe recipe, WorkloadRunRequest request, CancellationToken ct)
     {
-        var key = $"{runtimeId}/{WorkloadDependencies.BakeKey(runtimeId, baseImage, recipe, request.CodeFiles!)}.tar.gz";
+        var key = $"{ns}/{runtimeId}/{WorkloadDependencies.BakeKey(runtimeId, baseImage, recipe, request.CodeFiles!)}.tar.gz";
         var lazy = _bakes.GetOrAdd(key, k => new Lazy<Task<string?>>(
             () => BakeAsync(ns, client, k, runtimeId, baseImage, recipe, request, ct)));
         return AwaitBakeAsync(key, lazy);
@@ -559,6 +571,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                         RestartPolicy = "Never",
                             TerminationGracePeriodSeconds = 5,
                         AutomountServiceAccountToken = false,
+                        ServiceAccountName = "workload",
                         SecurityContext = BuildPodSecurityContext(options),
                         Affinity = BuildWorkerAffinity(options),
                         NodeSelector = options.JobNodeSelector.Count > 0 ? options.JobNodeSelector : null,
@@ -576,11 +589,13 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                                     new V1VolumeMount { Name = "cm", MountPath = "/cm", ReadOnlyProperty = true },
                                     new V1VolumeMount { Name = "stage", MountPath = "/stage" },
                                     new V1VolumeMount { Name = "out", MountPath = "/out" },
+                                    new V1VolumeMount { Name = "tmp", MountPath = "/tmp" },
                                 },
                             },
                             new V1Container
                             {
                                 Name = "upload",
+                                Resources = resources,
                                 Image = BakeUploaderImage,
                                 Command = new[] { "sh", "-c", WorkloadScriptLoader.Load("k8s/upload.sh") },
                                 Env = new[] { new V1EnvVar { Name = "PCDEPS_PUT_URL", Value = putUrl } },
@@ -593,6 +608,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
                             new V1Volume { Name = "cm", ConfigMap = new V1ConfigMapVolumeSource { Name = name } },
                             new V1Volume { Name = "stage", EmptyDir = new V1EmptyDirVolumeSource() },
                             new V1Volume { Name = "out", EmptyDir = new V1EmptyDirVolumeSource() },
+                            new V1Volume { Name = "tmp", EmptyDir = new V1EmptyDirVolumeSource { SizeLimit = new ResourceQuantity("256Mi") } },
                         },
                     },
                 },
@@ -626,6 +642,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
             RunAsUser = options.RunAsUser,
             RunAsGroup = options.RunAsGroup,
             AllowPrivilegeEscalation = false,
+            ReadOnlyRootFilesystem = true,
             Capabilities = new V1Capabilities { Drop = new[] { "ALL" } },
         };
     }
@@ -763,10 +780,7 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
 
     // The three deletes are independent — issue them concurrently so cleanup costs one API
     // round-trip, not three, on every shard/reduce invocation.
-    private string Namespace(KubernetesClientConfiguration cfg)
-        => string.IsNullOrWhiteSpace(_options.KubernetesNamespace)
-            ? string.IsNullOrWhiteSpace(cfg.Namespace) ? "placecontext-jobs" : cfg.Namespace
-            : _options.KubernetesNamespace;
+    private string TenantNamespace() => KubernetesTenantRuntime.Namespace(_tenant.IsResolved ? _tenant.TenantId : Guid.Empty);
 
     private static Task CleanupAsync(Kubernetes client, string ns, string name)
     {

@@ -19,7 +19,11 @@ public sealed class DbQemuReplayStore(DbContextOptions<AppDbContext> options, IC
         if (!tenant.IsResolved) throw new UnauthorizedAccessException("A workspace is required.");
         var frame = capture.Frame;
         if (frame.Sequence is < 0 or >= IQemuReplayStore.MaxFrames || frame.ElapsedMilliseconds < 0 ||
-            frame.Description.Length > 200 || (frame.Error?.Length ?? 0) > 500 || frame.HasImage != (capture.Png is not null))
+            frame.Description.Length > 200 || (frame.Error?.Length ?? 0) > 500 || frame.HasImage != (capture.Png is not null)
+            || frame.PointerX.HasValue != frame.PointerY.HasValue
+            || frame.PointerX is { } x && (!double.IsFinite(x) || x is < 0 or > 1)
+            || frame.PointerY is { } y && (!double.IsFinite(y) || y is < 0 or > 1)
+            || frame.Click && frame.PointerX is null)
             throw new ArgumentException("Invalid replay frame.");
         var png = capture.Png;
         if (png is not null && (png.Length is < 8 or > IQemuReplayStore.MaxImageBytes ||

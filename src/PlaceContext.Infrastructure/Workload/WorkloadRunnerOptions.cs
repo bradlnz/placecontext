@@ -16,9 +16,6 @@ public sealed class WorkloadRunnerOptions
     public string[] PersistentRunnerUrls { get; set; } = [];
     public string PersistentRunnerToken { get; set; } = "";
 
-    /// <summary>Kubernetes namespace used for untrusted workload Jobs.</summary>
-    public string KubernetesNamespace { get; set; } = "placecontext-jobs";
-
     /// <summary>
     /// Docker CLI executable name or path. Default: "docker".
     /// Override to "podman" or a fully-qualified path in restricted environments.

@@ -1,10 +1,10 @@
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Build;
+using PlaceContext.Application.AgentWorkflows;
 using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Persistence;
 
@@ -12,7 +12,7 @@ namespace PlaceContext.Infrastructure.Build;
 
 public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser user, ICurrentTenant tenant,
     IPermissionService permissions, IMembershipService members, IDataEncryptor encryption,
-    IHttpClientFactory clients, LocalModelDiscovery? local = null, LocalCliModels? cli = null) : IModelConnections, IBuildModelGateway
+    IHttpClientFactory clients, LocalModelDiscovery? local = null, LocalCliModels? cli = null) : IModelConnections, IBuildModelGateway, IAgentModelGateway
 {
     private const string Purpose = "model.credentials.v1";
     private async Task CheckAsync(bool admin, CancellationToken ct)
@@ -45,7 +45,7 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
     {
         if (string.IsNullOrWhiteSpace(connection.Name) || connection.Name.Length > 100) throw new ArgumentException("Enter a name of up to 100 characters.");
         var isCli = LocalCliModels.Supports(connection.Protocol);
-        if (connection.Protocol is not ("openai" or "anthropic") && !isCli) throw new ArgumentException("Choose a supported model connection.");
+        if (!ModelProtocols.Supports(connection.Protocol) && !isCli) throw new ArgumentException("Choose a supported model connection.");
         if (isCli && (connection.BaseUrl != LocalCliModels.Endpoint(connection.Protocol) || !string.IsNullOrEmpty(connection.ApiKey)))
             throw new ArgumentException("Local CLI connections use the installed command and its existing sign-in; they do not accept a URL or API key.");
         if (!isCli && (!Uri.TryCreate(connection.BaseUrl, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http")
@@ -108,6 +108,18 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
             .Distinct().Order().Take(500).ToArray();
     }
     public async Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct)
+        => (await CompleteCoreAsync(connectionId, model, messages, tools, ct)).Message;
+
+    public async Task<AgentCompletion> CompleteMeteredAsync(Guid connectionId, string model, string instruction, string input, CancellationToken ct)
+    {
+        var response = await CompleteCoreAsync(connectionId, model,
+            new JsonArray(new JsonObject { ["role"] = "system", ["content"] = instruction },
+                new JsonObject { ["role"] = "user", ["content"] = input }), new JsonArray(), ct);
+        return new(response.Message["content"]?.GetValue<string>() ?? "", model, response.InputTokens, response.OutputTokens);
+    }
+
+    private async Task<(JsonObject Message, long? InputTokens, long? OutputTokens)> CompleteCoreAsync(
+        Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct)
     {
         await CheckAsync(false, ct);
         if (!await permissions.HasAsync(Permission.ProjectsView, ct)) throw new UnauthorizedAccessException("Project access is required.");
@@ -118,11 +130,12 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
         {
             await CheckLocalCliAsync(ct);
             if (cli is null) throw new InvalidOperationException("Local CLI support is unavailable on this host.");
-            return await cli.CompleteAsync(row.Protocol, model, messages, tools, ct);
+            return (await cli.CompleteAsync(row.Protocol, model, messages, tools, ct), null, null);
         }
-        var body = await SendAsync(row, row.Protocol == "anthropic" ? "messages" : "chat/completions",
-            ModelWireFormat.Request(row.Protocol, model, messages, tools), ct);
-        return ModelWireFormat.Response(row.Protocol, body);
+        var protocol = ModelProtocols.Get(row.Protocol);
+        var body = await SendAsync(row, protocol.CompletionPath, protocol.Request(model, messages, tools), ct);
+        var usage = protocol.Usage(body);
+        return (protocol.Response(body), usage.InputTokens, usage.OutputTokens);
     }
     private async Task<JsonObject> SendAsync(ModelConnectionRow row, string path, JsonObject? body, CancellationToken ct)
     {
@@ -132,12 +145,7 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
         using var request = new HttpRequestMessage(body is null ? HttpMethod.Get : HttpMethod.Post, row.BaseUrl + "/" + path);
         if (body is not null) request.Content = JsonContent.Create(body);
         var key = encryption.Unprotect(row.ApiKey, Purpose);
-        if (row.Protocol == "anthropic")
-        {
-            request.Headers.Add("anthropic-version", "2023-06-01");
-            if (key.Length > 0) request.Headers.Add("x-api-key", key);
-        }
-        else if (key.Length > 0) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+        ModelProtocols.Get(row.Protocol).Authenticate(request, key);
         try
         {
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);

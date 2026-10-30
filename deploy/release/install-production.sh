@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy PlaceContext to an existing HA k3s cluster. Cluster creation and stateful services stay operator-owned.
+# Deploy PlaceContext to an existing Kubernetes cluster. Cluster creation and stateful services stay operator-owned.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,6 +7,7 @@ IMAGE=""
 HOSTNAME=""
 TLS_SECRET=""
 WAIT=1
+MANAGED_CONTROL_PLANE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -14,11 +15,13 @@ while [[ $# -gt 0 ]]; do
     --hostname) HOSTNAME="$2"; shift 2 ;;
     --tls-secret) TLS_SECRET="$2"; shift 2 ;;
     --no-wait) WAIT=0; shift ;;
+    --managed-control-plane) MANAGED_CONTROL_PLANE=1; shift ;;
     -h|--help)
       printf '%s\n' \
         'Usage: install-production.sh --image REGISTRY/IMAGE@sha256:DIGEST --hostname HOST --tls-secret SECRET' \
         '' \
-        'Requires an existing three-server HA k3s cluster, at least one worker, external PostgreSQL,' \
+        'Use --managed-control-plane for DOKS, EKS, GKE or AKS; otherwise three visible control-plane nodes are required.' \
+        'Requires Ready workers labelled placecontext-pool=shared, Traefik, external PostgreSQL,' \
         'off-cluster S3, TLS, and the secrets documented in README.md.'
       exit 0 ;;
     *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
@@ -36,9 +39,13 @@ command -v kubectl >/dev/null || die 'kubectl is required'
 total="$(kubectl get nodes --no-headers | wc -l | tr -d ' ')"
 servers="$(kubectl get nodes -l node-role.kubernetes.io/control-plane --no-headers | wc -l | tr -d ' ')"
 ready="$(kubectl get nodes --no-headers | awk '$2 ~ /^Ready/ { n++ } END { print n+0 }')"
-(( servers >= 3 )) || die "production requires at least 3 control-plane nodes (found $servers)"
+if [[ "$MANAGED_CONTROL_PLANE" != 1 ]]; then
+  (( servers >= 3 )) || die "production requires at least 3 control-plane nodes (found $servers); use --managed-control-plane for a managed Kubernetes service"
+fi
 (( total > servers )) || die 'production requires at least one worker node'
 (( ready == total )) || die "all nodes must be Ready ($ready/$total ready)"
+shared="$(kubectl get nodes -l placecontext-pool=shared --no-headers | wc -l | tr -d ' ')"
+(( shared >= 1 )) || die 'label the shared workload pool placecontext-pool=shared before deploying'
 
 kubectl apply -f "$ROOT/k3s/namespaces.yaml" >/dev/null
 for secret in placecontext-db placecontext-portal placecontext-oauth placecontext-dp placecontext-ca placecontext-object-store; do
@@ -74,10 +81,12 @@ sed -e "s|__HOSTNAME__|$HOSTNAME|g" -e "s|__TLS_SECRET__|$TLS_SECRET|g" \
 kubectl -n placecontext set env deployment/placecontext \
   PlaceContext__PublicBaseUrl="https://$HOSTNAME" \
   PLACECONTEXT_HOSTNAME="$HOSTNAME" \
+  PlaceContext__WorkloadRunner__JobNodeSelector__placecontext-pool=shared \
   PlaceContext__WorkloadRunner__RequireWorkerNodes=true >/dev/null
 
-kubectl auth can-i create jobs.batch --as=system:serviceaccount:placecontext:placecontext \
-  -n placecontext-jobs | grep -qx yes || die 'workload RBAC verification failed'
+kubectl auth can-i create namespaces --as=system:serviceaccount:placecontext:placecontext \
+  | grep -qx yes || die 'tenant namespace provisioning RBAC verification failed'
+kubectl apply -f "$ROOT/k3s/autoscaling.yaml" >/dev/null
 if [[ "$WAIT" == 1 ]]; then
   kubectl -n placecontext rollout status deployment/placecontext --timeout=10m
 fi

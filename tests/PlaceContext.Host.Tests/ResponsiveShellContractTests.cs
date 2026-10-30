@@ -45,8 +45,8 @@ public sealed class ResponsiveShellContractTests
     [Fact]
     public void Mobile_modals_use_the_full_viewport_with_accessible_close_targets()
     {
-        var styles = ReadHostSource("Components/App.razor");
-        const string mobileBreakpoint = "@@media (max-width: 700px)";
+        var styles = ReadHostSource("wwwroot/app.css");
+        const string mobileBreakpoint = "@media (max-width: 700px)";
 
         Assert.Contains(mobileBreakpoint, styles);
         var mobileStyles = styles.Split(mobileBreakpoint, 2)[1];
@@ -60,7 +60,7 @@ public sealed class ResponsiveShellContractTests
     [Fact]
     public void Mobile_focus_layers_lock_background_scrolling()
     {
-        var styles = ReadHostSource("Components/App.razor");
+        var styles = ReadHostSource("wwwroot/app.css");
         var focusLayerRule = styles.Split("html.pc-focus-layer-open", 2)[1].Split('}', 2)[0];
 
         Assert.Contains("overflow:hidden", focusLayerRule);

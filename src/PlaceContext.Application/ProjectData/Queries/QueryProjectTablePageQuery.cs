@@ -9,4 +9,4 @@ namespace PlaceContext.Application.Features;
 /// sorts by that column when it exists, otherwise the default first-column order is used.</summary>
 public sealed record QueryProjectTablePageQuery(
     Guid ProjectId, string TableName, string? Search, int Page, int PageSize,
-    string? SortColumn = null, bool SortDescending = false) : IQuery<ProjectTablePageResult>;
+    string? SortColumn = null, bool SortDescending = false, bool IncludeTotalCount = true) : IQuery<ProjectTablePageResult>;

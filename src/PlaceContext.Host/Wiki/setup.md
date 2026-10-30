@@ -99,10 +99,6 @@ verified recovery plan.
 
 ## Optional integrations
 
-- In **Infrastructure → Services**, open an app name for its details, start/stop/restart controls,
-  logs, and assigned databases. **Open app** launches a running web app through platform sign-in.
-  Create a database from the **Databases** page and select its owning app; connection variables
-  are supplied automatically when the app restarts.
 - Follow [OpenSearch integration](/wiki/opensearch-integration) to connect searchable indices,
   enable SQL and aggregations, and optionally configure a collector trigger.
 - Follow [SSO and OAuth](/wiki/sso-and-oauth) to use PlaceContext sign-in in another platform or to

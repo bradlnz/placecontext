@@ -9,5 +9,6 @@ public interface IJobRepository
     Task UpdateAsync(Job job, CancellationToken ct = default);
     Task RemoveAsync(Guid jobId, CancellationToken ct = default);
     Task<Job?> GetByIdAsync(Guid jobId, CancellationToken ct = default);
+    Task<IReadOnlyDictionary<Guid, string>> GetNamesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default);
     Task<IReadOnlyList<Job>> ListForProjectAsync(Guid projectId, CancellationToken ct = default);
 }

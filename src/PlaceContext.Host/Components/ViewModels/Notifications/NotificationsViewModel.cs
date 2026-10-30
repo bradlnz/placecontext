@@ -10,6 +10,7 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
     private readonly ICurrentTenant _tenant;
     private readonly NavigationManager _navigation;
     private bool _initialized;
+    private IDisposable? _operationSubscription;
     private readonly ICurrentUser? _user;
 
     public NotificationsViewModel(
@@ -27,8 +28,7 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
 
     public bool IsOpen { get; private set; }
     public IReadOnlyList<PortalOperation> Operations { get; private set; } = [];
-    public int ActiveCount =>
-        _tenant.IsResolved ? _operationsCenter.ActiveCount(_tenant.TenantId, _user?.UserId) : 0;
+    public int ActiveCount { get; private set; }
     public string ActiveSummary => ActiveCount > 0 ? $"{ActiveCount} in progress" : "all quiet";
 
     public void Initialize()
@@ -36,7 +36,8 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
         if (_initialized)
             return;
 
-        _operationsCenter.Changed += OnOperationsChanged;
+        if (_tenant.IsResolved)
+            _operationSubscription = _operationsCenter.Subscribe(_tenant.TenantId, OnOperationsChanged, _user?.UserId);
         _initialized = true;
         Reload();
     }
@@ -44,6 +45,7 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
     public void Toggle()
     {
         IsOpen = !IsOpen;
+        Reload();
         NotifyStateChanged();
     }
 
@@ -101,7 +103,7 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
     {
         if (_initialized)
         {
-            _operationsCenter.Changed -= OnOperationsChanged;
+            _operationSubscription?.Dispose();
             _initialized = false;
         }
 
@@ -110,12 +112,16 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
 
     private void OnOperationsChanged()
     {
+        var previous = ActiveCount;
         Reload();
-        NotifyStateChanged();
+        if (IsOpen || ActiveCount != previous) NotifyStateChanged();
     }
 
-    private void Reload() =>
-        Operations = _tenant.IsResolved ? _operationsCenter.ListForTenant(_tenant.TenantId, _user?.UserId) : [];
+    private void Reload()
+    {
+        ActiveCount = _tenant.IsResolved ? _operationsCenter.ActiveCount(_tenant.TenantId, _user?.UserId) : 0;
+        Operations = IsOpen && _tenant.IsResolved ? _operationsCenter.ListForTenant(_tenant.TenantId, _user?.UserId) : [];
+    }
 
     private static string Elapsed(DateTimeOffset since) =>
         FormatDuration(DateTimeOffset.UtcNow - since);

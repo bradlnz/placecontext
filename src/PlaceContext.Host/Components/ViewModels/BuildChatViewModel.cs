@@ -17,6 +17,28 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
     public string? ModelSetupHint => Connections.FirstOrDefault(x => x.Id == Conversation.ConnectionId)?.SetupHint;
     public List<BuildImage> Images { get; } = [];
     public string Draft { get; set; } = "";
+    public static IReadOnlyList<(string Title, string Description, string Icon, string Prompt)> QuickPicks { get; } =
+    [
+        ("Compare grocery prices", "Compare Coles and Woolworths for your postcode.", "vm",
+            "Build a grocery price comparison workflow for Coles and Woolworths in Australia. Ask me for the product name and confirm the postcode (default 4101). Inspect existing jobs and workflows first and reuse what fits. Use QEMU Live preview frames and Jev to verify prices, pack sizes and availability. Compare matching products by unit price, link the evidence, and mark any unverified price clearly."),
+        ("Check a website", "Give a browser a task and verify what happened.", "check",
+            "Help me build a QEMU browser workflow to check a real website. Ask for the starting URL, the task and the expected result. Inspect existing workflows first. Use Live preview to guide the browser and Jev to verify the outcome, with replay evidence and a clear pass or fail result."),
+        ("Create a report", "Turn your data into a summary and useful charts.", "data.graph",
+            "Help me build a report with a concise summary and charts. First inspect the project's existing jobs and data sources, then ask which data and questions the report should cover. Reuse existing work where possible, use real data, and make missing data clear. Ask whether this should run once or on a schedule."),
+        ("Add a review step", "Check a result with Jev or ask a person to approve it.", "agent",
+            "Help me add a review step to a workflow. Inspect the existing workflows and ask which one to use, what needs checking, and whether Jev or a person should review it. Define the approval criteria and an explicit path for approved, rejected or uncertain results. Preserve the other workflow steps."),
+        ("Onboard a client", "Collect information and check what is still missing.", "human",
+            "Help me build an end-to-end client onboarding workflow for my industry. Ask which information and documents are required, inspect existing workflows and data connections, and collect the inputs. Use Jev to check completeness against explicit criteria. Send uncertain or missing information for human review, and only proceed when the configured checks pass. Ask whether to test once or activate a schedule."),
+        ("Fix a failed workflow", "Trace a failed run and find the smallest fix.", "logs",
+            "Help me diagnose a failed workflow. Inspect the available workflows and ask which run failed if it is unclear. Read its execution results and relevant definitions, explain the cause using the evidence, and make the smallest fix. Preserve unrelated steps and verify the change.")
+    ];
+    public bool CanUseQuickPick => !Locked && !Listening && string.IsNullOrWhiteSpace(Draft);
+    public bool UseQuickPick(string prompt)
+    {
+        if (!CanUseQuickPick) return false;
+        Draft = prompt;
+        return true;
+    }
     public string Memory { get; set; } = "";
     public string? Error { get; private set; }
     public string? Notice { get; private set; }

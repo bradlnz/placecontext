@@ -6,5 +6,5 @@ public interface IQemuTaskAgent
     string Model { get; }
     Task<QemuEnvironmentResult> RunAsync(string prompt, string? input,
         Func<string, int, CancellationToken, Task<QemuEnvironmentResult>> executeGuest, CancellationToken ct,
-        Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null);
+        Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null, QemuAgentInteraction? interaction = null, Func<CancellationToken, Task<byte[]>>? readLiveFrame = null);
 }

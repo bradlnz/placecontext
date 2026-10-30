@@ -120,7 +120,7 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             stage.Action switch
             {
                 QemuChainAction vm => new ChainActionManifest(vm.Type, ImageProfile: vm.ImageProfile, Command: vm.Command,
-                    OutputField: vm.OutputField, MemoryMb: vm.MemoryMb, Cpus: vm.Cpus, TimeoutSeconds: vm.TimeoutSeconds, AllowNetwork: vm.AllowNetwork),
+                    OutputField: vm.OutputField, MemoryMb: vm.MemoryMb, Cpus: vm.Cpus, TimeoutSeconds: vm.TimeoutSeconds, AllowNetwork: vm.AllowNetwork, PauseForLogin: vm.PauseForLogin || vm.LoginProfileId is not null),
                 LoopChainAction loop => new ChainActionManifest(loop.Type,
                     Instructions: loop.Instructions, ResponseField: loop.ResponseField, ResponseType: loop.ResponseType, AgentProvider: loop.AgentProvider),
                 SendEmailChainAction email => new ChainActionManifest(

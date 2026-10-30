@@ -11,16 +11,16 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
     private JobChainView? _definition;
     public IReadOnlyList<JobChainStageView>? Layout { get; private set; }
     public Dictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps { get; private set; }
+    public bool UsesRecordedLayout { get; private set; }
 
     public async Task LoadAsync(ChainRunView run)
     {
         _latestRun = run;
+        ShowRecordedLayout(run);
         if (_runId != run.Id)
         {
             _runId = run.Id;
             _definition = null;
-            Layout = null;
-            RunSteps = null;
             try
             {
                 var chains = service is null ? [] : await service.ListJobChainsAsync(run.ProjectId);
@@ -33,8 +33,23 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
             }
         }
         if (_runId != run.Id || _latestRun is not { } latest) return;
-        RunSteps = _definition is null ? null : MatchSteps(latest, _definition.Stages);
-        Layout = RunSteps is null ? null : _definition!.Stages;
+        if (_definition is not null && MatchSteps(latest, _definition.Stages) is { } matched)
+        {
+            RunSteps = matched;
+            Layout = _definition.Stages;
+            UsesRecordedLayout = false;
+        }
+        else ShowRecordedLayout(latest);
+    }
+
+    private void ShowRecordedLayout(ChainRunView run)
+    {
+        var stages = Stages(run);
+        Layout = stages.Select(steps => new JobChainStageView(
+            steps.Select(step => new JobChainStepView(step.JobId, step.JobName)).ToList())).ToList();
+        RunSteps = stages.Select((steps, index) => (steps, index))
+            .ToDictionary(pair => pair.index.ToString(), pair => pair.steps);
+        UsesRecordedLayout = true;
     }
 
     // shortcut: runs lack layout snapshots; match current stages conservatively, add snapshots for historical gate expressions.
@@ -46,7 +61,9 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
         var alternatives = new Dictionary<string, JobChainStageView>();
         for (var index = 0; index < stages.Count; index++)
         {
-            if (!recorded.Remove(index, out var steps) || !Matches(stages[index], steps)) return null;
+            recorded.Remove(index, out var steps);
+            steps ??= [];
+            if (!Matches(stages[index], steps)) return null;
             mapped[index.ToString()] = steps;
             CollectAlternatives(stages[index], index.ToString());
         }

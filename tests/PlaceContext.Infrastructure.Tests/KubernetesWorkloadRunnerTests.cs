@@ -211,7 +211,11 @@ public class KubernetesWorkloadRunnerTests
         Assert.Equal("http://minio:9000/signed-put", Assert.Single(upload.Env).Value);
         Assert.True(upload.SecurityContext.RunAsNonRoot);
         Assert.False(upload.SecurityContext.AllowPrivilegeEscalation);
-        Assert.Equal(3, job.Spec.Template.Spec.Volumes.Count); // cm + stage + out
+        Assert.Equal(4, job.Spec.Template.Spec.Volumes.Count); // cm + stage + out + bounded scratch
+        Assert.Equal("workload", job.Spec.Template.Spec.ServiceAccountName);
+        Assert.True(upload.SecurityContext.ReadOnlyRootFilesystem);
+        Assert.NotNull(upload.Resources);
+        Assert.Equal("256Mi", job.Spec.Template.Spec.Volumes.Single(v => v.Name == "tmp").EmptyDir.SizeLimit.CanonicalizeString());
     }
 
     [Fact]

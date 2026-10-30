@@ -26,7 +26,7 @@
                 <h2 class="page-title">@Vm.Entity.Name</h2>
                 <div class="page-sub">
                     <span class="mono">@Vm.Entity.TableName</span>
-                    · @(Vm.Page?.TotalCount ?? 0) records
+                    · @(Vm.Page is { TotalCountIsExact: false } ? "At least " : "")@(Vm.Page?.TotalCount ?? 0) records
                     @if (Vm.Entity.Relations.Count > 0)
                     {
                         <span> · related to @string.Join(", ", Vm.Entity.Relations.Select(r => r.TargetEntity))</span>
@@ -255,7 +255,7 @@
                         }
                         else
                         {
-                            <text>Showing @(((pg.Page - 1) * pg.PageSize) + 1)–@(Math.Min((long)pg.Page * pg.PageSize, pg.TotalCount)) of @pg.TotalCount</text>
+                            <text>Showing @(((pg.Page - 1) * pg.PageSize) + 1)–@(Math.Min((long)pg.Page * pg.PageSize, pg.TotalCount)) @(pg.TotalCountIsExact ? $"of {pg.TotalCount}" : "")</text>
                         }
                     </span>
                     <div class="pager-controls">

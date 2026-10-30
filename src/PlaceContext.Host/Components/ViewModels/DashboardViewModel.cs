@@ -24,7 +24,10 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     private readonly BackgroundOperationRunner _ops;
     private readonly Dictionary<string, DateTimeOffset> _rendered = new();
     private DateTimeOffset _lastRefresh = DateTimeOffset.MinValue;
-    private bool _refreshScheduled;
+    private int _refreshScheduled;
+    private Guid? _projectId;
+    private int _loadVersion;
+    private IDisposable? _operationSubscription;
 
     public DashboardViewModel(
         PlaceContextService service,
@@ -54,7 +57,6 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     public int Succeeded24 { get; private set; }
     public string Filter { get; private set; } = AllFilter;
     public IReadOnlyList<JobChainView> Chains { get; private set; } = Array.Empty<JobChainView>();
-    public IReadOnlyList<JobView> Jobs { get; private set; } = Array.Empty<JobView>();
     public IReadOnlyList<ProjectChartView> Charts { get; private set; } =
         Array.Empty<ProjectChartView>();
     public IReadOnlyList<DataEntityView> Entities { get; private set; } =
@@ -102,57 +104,89 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
 
     public void Initialize()
     {
-        _operations.Changed += OnOperationsChanged;
+        _projectId = CurrentProjectId;
+        _ui.OnChanged += OnUiChanged;
+        _operationSubscription?.Dispose();
+        if (_tenant.IsResolved)
+            _operationSubscription = _operations.Subscribe(_tenant.TenantId, OnOperationsChanged);
         _ui.Set("Dashboard", "jobs · runs · artifacts");
     }
 
     public async Task LoadAsync()
     {
+        var version = ++_loadVersion;
         Ready = false;
         ChainsReady = false;
+        var reports = LoadReportsAsync(version);
+        if (CurrentProjectId is { } projectId)
+            await Task.WhenAll(reports, LoadChainsAsync(projectId, version),
+                LoadChartsAsync(projectId, version), LoadEntitiesAsync(projectId, version));
+        else
+            await reports;
+    }
+
+    private async Task LoadReportsAsync(int version)
+    {
         try
         {
-            Reports = await _service.ListRecentRunReportsAsync(take: 50);
+            var reports = await _service.ListRecentRunReportsAsync(take: 50);
+            if (version != _loadVersion) return;
+            Reports = reports;
         }
         catch { }
+        if (version != _loadVersion) return;
         UpdateRunMetrics();
         Ready = true;
         NotifyStateChanged();
+    }
 
-        if (_ui.CurrentProjectId is not { } projectId)
-            return;
-
+    private async Task LoadChainsAsync(Guid projectId, int version)
+    {
         try
         {
-            var chains = _service.ListJobChainsAsync(projectId);
-            var jobs = _service.ListJobsAsync(projectId);
-            await Task.WhenAll(chains, jobs);
-            Chains = await chains;
-            Jobs = await jobs;
+            var chains = await _service.ListJobChainsAsync(projectId);
+            if (version != _loadVersion) return;
+            Chains = chains;
         }
         catch
         {
+            if (version != _loadVersion) return;
             Chains = Array.Empty<JobChainView>();
-            Jobs = Array.Empty<JobView>();
         }
         finally
         {
-            ChainsReady = true;
-            NotifyStateChanged();
+            if (version == _loadVersion)
+            {
+                ChainsReady = true;
+                NotifyStateChanged();
+            }
         }
+    }
 
+    private async Task LoadChartsAsync(Guid projectId, int version)
+    {
         try
         {
-            Charts = await _service.ListProjectChartsAsync(projectId);
+            var charts = await _service.ListProjectChartsAsync(projectId);
+            if (version != _loadVersion) return;
+            Charts = charts;
             NotifyStateChanged();
         }
         catch { }
+    }
+
+    private async Task LoadEntitiesAsync(Guid projectId, int version)
+    {
         try
         {
-            Entities = await _service.ListDataEntitiesAsync(projectId);
+            var entities = await _service.ListDataEntitiesAsync(projectId);
+            if (version != _loadVersion) return;
+            Entities = entities;
             if (Entities.Count > 0)
             {
-                EntityTables = await _service.ListProjectDataTablesAsync(projectId);
+                var tables = await _service.ListProjectDataTablesAsync(projectId);
+                if (version != _loadVersion) return;
+                EntityTables = tables;
             }
             NotifyStateChanged();
         }
@@ -205,19 +239,39 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
 
     public void OpenRun(Guid runId) => _navigation.NavigateTo($"/observability?run={runId}");
 
-    public Task PrepareQuickChainRunAsync(JobChainView chain)
+    public async Task PrepareQuickChainRunAsync(JobChainView chain)
     {
-        RunningChainId = null;
-        var plan = ChainParameterPromptPlan.Build(chain, Jobs ?? Array.Empty<JobView>());
-        RunPromptChain = chain;
-        RunPromptSteps.Clear();
-        RunPromptSteps.AddRange(plan.Steps);
-        RunPrompt.Reset(plan.Defaults);
-        RunAttachment = "";
+        if (RunningChainId is not null || chain.ProjectId != CurrentProjectId) return;
+        var version = _loadVersion;
+        RunningChainId = chain.Id;
         ChainError = false;
         ChainMessage = null;
         NotifyStateChanged();
-        return Task.CompletedTask;
+        try
+        {
+            var jobs = await _service.ListJobsAsync(chain.ProjectId);
+            if (version != _loadVersion) return;
+            var plan = ChainParameterPromptPlan.Build(chain, jobs);
+            RunPromptChain = chain;
+            RunPromptSteps.Clear();
+            RunPromptSteps.AddRange(plan.Steps);
+            RunPrompt.Reset(plan.Defaults);
+            RunAttachment = "";
+        }
+        catch (Exception ex)
+        {
+            if (version != _loadVersion) return;
+            ChainError = true;
+            ChainMessage = ex.Message;
+        }
+        finally
+        {
+            if (version == _loadVersion)
+            {
+                RunningChainId = null;
+                NotifyStateChanged();
+            }
+        }
     }
 
     public void SetRunAttachment(string value) => RunAttachment = value;
@@ -387,25 +441,41 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         }
     }
 
+    private void OnUiChanged()
+    {
+        if (_projectId == CurrentProjectId) return;
+        _projectId = CurrentProjectId;
+        Chains = [];
+        CancelQuickChainPrompt();
+        Charts = [];
+        Entities = [];
+        EntityTables = [];
+        EntityCharts.Clear();
+        EntityChartsError = null;
+        ResetChartCache();
+        _ = LoadAsync();
+        NotifyStateChanged();
+    }
+
     private void OnOperationsChanged() => _ = RefreshAfterOperationAsync();
 
     private async Task RefreshAfterOperationAsync()
     {
-        if (_refreshScheduled)
-            return;
-        _refreshScheduled = true;
+        if (Interlocked.Exchange(ref _refreshScheduled, 1) != 0) return;
+        var version = _loadVersion;
         try
         {
             var wait = _lastRefresh + TimeSpan.FromSeconds(5) - DateTimeOffset.UtcNow;
             if (wait > TimeSpan.Zero)
                 await Task.Delay(wait);
+            if (version != _loadVersion) return;
             _lastRefresh = DateTimeOffset.UtcNow;
-            await LoadAsync();
+            await LoadReportsAsync(version);
         }
         catch { }
         finally
         {
-            _refreshScheduled = false;
+            Volatile.Write(ref _refreshScheduled, 0);
         }
     }
 
@@ -437,5 +507,12 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     // so returning to the page redraws the fresh canvases instead of skipping them as "already drawn".
     public void ResetChartCache() => _rendered.Clear();
 
-    public void Dispose() => _operations.Changed -= OnOperationsChanged;
+    public void Dispose()
+    {
+        _ui.OnChanged -= OnUiChanged;
+        _operationSubscription?.Dispose();
+        ++_loadVersion;
+        CancelQuickChainPrompt();
+        Detach();
+    }
 }

@@ -766,7 +766,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             if (_permissions is null || !await _permissions.HasAsync(Permission.JobsRun, ct))
                 throw new UnauthorizedAccessException($"The '{Permission.JobsRun}' permission is required to run a QEMU step.");
             if (_qemu is null) throw new InvalidOperationException("QEMU execution is not configured on this host.");
-            var result = await RunQemuUntilCancelledAsync(action, run.Id, index, payload, ct);
+            var result = await RunQemuUntilCancelledAsync(action, run.ProjectId, run.Id, index, payload, ct);
             if (result is null)
             {
                 run.MarkStepFinished(index, null, ChainStepStatus.Cancelled, _clock.UtcNow, "QEMU");
@@ -794,11 +794,11 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         }
     }
 
-    private async Task<QemuEnvironmentResult?> RunQemuUntilCancelledAsync(QemuChainAction action, Guid runId, int step, string? payload, CancellationToken ct)
+    private async Task<QemuEnvironmentResult?> RunQemuUntilCancelledAsync(QemuChainAction action, Guid projectId, Guid runId, int step, string? payload, CancellationToken ct)
     {
         using var execution = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var task = _qemu!.RunAsync(action, payload, execution.Token,
-            _qemuReplay is null ? null : (frame, token) => _qemuReplay.AppendAsync(runId, step, frame, token));
+            _qemuReplay is null ? null : (frame, token) => _qemuReplay.AppendAsync(runId, step, frame, token), new(projectId, runId, step));
         try
         {
             while (!task.IsCompleted)

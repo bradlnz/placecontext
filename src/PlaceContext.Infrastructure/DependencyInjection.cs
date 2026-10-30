@@ -30,6 +30,9 @@ public static class DependencyInjection
         services.AddScoped<Build.LocalCliModels>();
         services.AddScoped<Build.ModelConnections>();
         services.AddScoped<PlaceContext.Application.Build.IModelConnections>(sp => sp.GetRequiredService<Build.ModelConnections>());
+        services.AddScoped<PlaceContext.Application.AgentWorkflows.IAgentModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
+        services.Configure<AgentWorkflows.AgentWorkflowOptions>(configuration.GetSection("PlaceContext:AgentWorkflows"));
+        services.AddScoped<PlaceContext.Application.AgentWorkflows.IAgentWorkflows, AgentWorkflows.AgentWorkflowService>();
         services.AddScoped<PlaceContext.Application.Build.IBuildModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
         services.AddHttpClient("build-model", client => client.Timeout = Timeout.InfiniteTimeSpan)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
@@ -42,6 +45,7 @@ public static class DependencyInjection
         services.AddSingleton<ICurrentTenant, CurrentTenant>();
         services.AddSingleton<ICurrentProject, CurrentProject>();
         services.AddScoped<ITenantStore, EfTenantStore>();
+        services.AddSingleton<KubernetesTenantRuntime>();
         services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
         services.AddScoped<IMenuConfigService, Tenancy.MenuConfigService>();
         services.AddScoped<IArtifactViewConfigService, Tenancy.ArtifactViewConfigService>();
@@ -111,7 +115,11 @@ public static class DependencyInjection
         services.Configure<QemuEnvironmentOptions>(configuration.GetSection("PlaceContext:Qemu"));
         services.AddHttpClient("qemu-agent", client => client.Timeout = TimeSpan.FromSeconds(90))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
-        services.AddSingleton<IQemuTaskAgent, QemuPromptAgent>();
+        services.AddSingleton<QemuPromptAgent>();
+        services.AddSingleton<JevQemuTaskAgent>();
+        services.AddSingleton<IQemuTaskAgent>(sp =>
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<QemuEnvironmentOptions>>().Value.Executor == "model"
+                ? sp.GetRequiredService<QemuPromptAgent>() : sp.GetRequiredService<JevQemuTaskAgent>());
         services.AddSingleton<IChainQuestionGenerator, ModelChainQuestionGenerator>();
         services.Configure<TypeSafeOptions>(configuration.GetSection("PlaceContext:TypeSafe"));
         services.PostConfigure<TypeSafeOptions>(options =>
@@ -122,6 +130,9 @@ public static class DependencyInjection
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         services.AddSingleton<IJevReviewer, JevReviewer>();
         services.AddScoped<IQemuReplayStore, DbQemuReplayStore>();
+        services.AddSingleton<QemuDesktopSessions>();
+        services.AddScoped<IQemuDesktop, QemuDesktopAccess>();
+        services.AddScoped<IQemuLoginStore, DbQemuLoginStore>();
         services.AddSingleton<QemuEnvironmentRunner>();
         services.AddSingleton<IQemuEnvironmentRunner>(sp => sp.GetRequiredService<QemuEnvironmentRunner>());
         services.AddSingleton<IQemuEnvironmentCatalog>(sp => sp.GetRequiredService<QemuEnvironmentRunner>());
@@ -133,10 +144,7 @@ public static class DependencyInjection
         services.AddScoped<IServiceConsole>(sp => sp.GetRequiredService<KubernetesServiceConsole>());
         services.AddScoped<IDatabaseConsole>(sp => sp.GetRequiredService<KubernetesServiceConsole>());
         services.AddHttpClient("persistent-workloads", client => client.Timeout = Timeout.InfiniteTimeSpan);
-        services.AddSingleton<IWorkloadRunner>(sp => new PersistentWorkloadRunner(
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkloadRunnerOptions>>(),
-            sp.GetRequiredService<IHttpClientFactory>(),
-            sp.GetRequiredService<KubernetesWorkloadRunner>()));
+        services.AddSingleton<IWorkloadRunner>(sp => sp.GetRequiredService<KubernetesWorkloadRunner>());
 
         // Field encryption at rest (AES via Data Protection). Portal/jobs decrypt in-process;
         // raw Postgres/MinIO without the DP key ring only see ciphertext.
@@ -314,6 +322,7 @@ public static class DependencyInjection
         EnsureRpcChainSubmissionSchema(db);
         EnsureWorkerNetworkingSchema(db);
         EnsureQemuReplaySchema(db);
+        db.Database.ExecuteSqlRaw(DbQemuLoginStore.Schema);
         // Additive indexes for the hot run queries (safe if already present). The status watcher
         // scans job_runs/chain_runs for in-flight or recently-finished rows every 2 seconds — a
         // sequential scan of the whole run history without these. Partial indexes keep the active-

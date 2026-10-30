@@ -5,13 +5,14 @@ using Npgsql;
 using PlaceContext.Application.Ports;
 using PlaceContext.Application.Shared;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Security;
 
 /// <summary>
 /// One-shot at Host launch: encrypt any legacy plaintext still sitting in Postgres. Idempotent —
-/// already-protected values (wire prefix <c>pcenc1.</c>) and empty cells are skipped. Uses
-/// <c>IgnoreQueryFilters</c> so every tenant is covered.
+/// already-protected values (wire prefix <c>pcenc1.</c>) and empty cells are skipped.
+/// Each tenant is migrated in its own context with normal ownership checks.
 /// </summary>
 public static class EncryptionAtRestBootstrap
 {
@@ -30,6 +31,23 @@ public static class EncryptionAtRestBootstrap
 
         log.LogInformation("Encryption-at-rest bootstrap: scanning for legacy plaintext…");
 
+        var n = await EncryptPendingRunsAsync(db, enc, ct);
+        foreach (var tenant in await db.Tenants.AsNoTracking().ToListAsync(ct))
+        {
+            await using var tenantDb = new AppDbContext(db.ContextOptions,
+                new TenantInfo(tenant.Id, tenant.Slug, tenant.Name, tenant.TimeZoneId));
+            n += await EncryptTenantAsync(tenantDb, enc, ct);
+        }
+        n += await EncryptProjectDataTextCellsAsync(config, enc, log, ct);
+
+        if (n > 0)
+            log.LogInformation("Encryption-at-rest bootstrap: rewrote {Count} field(s)/row(s).", n);
+        else
+            log.LogInformation("Encryption-at-rest bootstrap: nothing to rewrite (already encrypted or empty).");
+    }
+
+    internal static async Task<int> EncryptTenantAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct = default)
+    {
         var n = 0;
         n += await EncryptJobColumnsAsync(db, enc, ct);
         n += await EncryptJobRunColumnsAsync(db, enc, ct);
@@ -39,15 +57,9 @@ public static class EncryptionAtRestBootstrap
         n += await EncryptActivityAsync(db, enc, ct);
         n += await EncryptChartsAsync(db, enc, ct);
         n += await EncryptToolCallsAsync(db, enc, ct);
-        n += await EncryptPendingRunsAsync(db, enc, ct);
         n += await EncryptChainRunsAsync(db, enc, ct);
         n += await EncryptVaultIfLegacyAsync(db, enc, ct);
-        n += await EncryptProjectDataTextCellsAsync(config, enc, log, ct);
-
-        if (n > 0)
-            log.LogInformation("Encryption-at-rest bootstrap: rewrote {Count} field(s)/row(s).", n);
-        else
-            log.LogInformation("Encryption-at-rest bootstrap: nothing to rewrite (already encrypted or empty).");
+        return n;
     }
 
     private static bool NeedsProtect(IDataEncryptor enc, string? value)
@@ -60,7 +72,7 @@ public static class EncryptionAtRestBootstrap
         var n = 0;
         while (true)
         {
-            var rows = await db.ChainRuns.IgnoreQueryFilters()
+            var rows = await db.ChainRuns
                 .Where(r => (r.StepsJson != "" && !r.StepsJson.StartsWith(Prefix))
                     || (r.FinalOutput != null && r.FinalOutput != ""
                         && !r.FinalOutput.StartsWith(Prefix)))
@@ -82,7 +94,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptJobColumnsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = IDataEncryptor.Purpose.JobSource;
-        var rows = await db.Jobs.IgnoreQueryFilters().ToListAsync(ct);
+        var rows = await db.Jobs.ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
         {
@@ -101,7 +113,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptJobRunColumnsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = IDataEncryptor.Purpose.JobRun;
-        var rows = await db.JobRuns.IgnoreQueryFilters().ToListAsync(ct);
+        var rows = await db.JobRuns.ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
         {
@@ -116,7 +128,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptRequirementsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = IDataEncryptor.Purpose.Requirements;
-        var rows = await db.Requirements.IgnoreQueryFilters().ToListAsync(ct);
+        var rows = await db.Requirements.ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
         {
@@ -129,7 +141,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptEventPayloadsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = IDataEncryptor.Purpose.EventPayload;
-        var rows = await db.EventOccurrences.IgnoreQueryFilters().ToListAsync(ct);
+        var rows = await db.EventOccurrences.ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
         {
@@ -142,7 +154,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptDecisionsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = IDataEncryptor.Purpose.Decision;
-        var rows = await db.Decisions.IgnoreQueryFilters().ToListAsync(ct);
+        var rows = await db.Decisions.ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
         {
@@ -157,7 +169,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptActivityAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = IDataEncryptor.Purpose.Activity;
-        var rows = await db.ActivityRecords.IgnoreQueryFilters().ToListAsync(ct);
+        var rows = await db.ActivityRecords.ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
         {
@@ -171,7 +183,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptChartsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = IDataEncryptor.Purpose.Chart;
-        var rows = await db.ProjectCharts.IgnoreQueryFilters().ToListAsync(ct);
+        var rows = await db.ProjectCharts.ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
         {
@@ -184,7 +196,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptToolCallsAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = IDataEncryptor.Purpose.ToolCall;
-        var rows = await db.ToolCalls.IgnoreQueryFilters().ToListAsync(ct);
+        var rows = await db.ToolCalls.ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
         {
@@ -212,7 +224,7 @@ public static class EncryptionAtRestBootstrap
     private static async Task<int> EncryptVaultIfLegacyAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct)
     {
         var p = IDataEncryptor.Purpose.Vault;
-        var rows = await db.JobSecrets.IgnoreQueryFilters().ToListAsync(ct);
+        var rows = await db.JobSecrets.ToListAsync(ct);
         var n = 0;
         foreach (var r in rows)
         {

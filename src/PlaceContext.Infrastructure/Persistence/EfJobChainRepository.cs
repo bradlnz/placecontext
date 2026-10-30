@@ -89,7 +89,7 @@ public sealed class EfJobChainRepository : IJobChainRepository
         QemuChainAction vm => new
         {
             type = vm.Type, imageProfile = vm.ImageProfile, command = vm.Command, outputField = vm.OutputField,
-            memoryMb = vm.MemoryMb, cpus = vm.Cpus, timeoutSeconds = vm.TimeoutSeconds, allowNetwork = vm.AllowNetwork,
+            memoryMb = vm.MemoryMb, cpus = vm.Cpus, timeoutSeconds = vm.TimeoutSeconds, allowNetwork = vm.AllowNetwork, pauseForLogin = vm.PauseForLogin, loginProfileId = vm.LoginProfileId,
         },
         LoopChainAction loop => new
         {
@@ -190,7 +190,9 @@ public sealed class EfJobChainRepository : IJobChainRepository
                 element.GetProperty("imageProfile").GetString()!, element.GetProperty("command").GetString()!,
                 element.GetProperty("outputField").GetString()!, element.GetProperty("memoryMb").GetInt32(),
                 element.GetProperty("cpus").GetInt32(), element.GetProperty("timeoutSeconds").GetInt32(),
-                element.GetProperty("allowNetwork").GetBoolean()),
+                element.GetProperty("allowNetwork").GetBoolean(),
+                element.TryGetProperty("pauseForLogin", out var pause) && pause.GetBoolean(),
+                element.TryGetProperty("loginProfileId", out var login) && login.ValueKind == JsonValueKind.String ? login.GetGuid() : null),
             LoopChainAction.HumanType or LoopChainAction.AgentType => new LoopChainAction(
                 type.GetString()!,
                 element.GetProperty("instructions").GetString() ?? "",

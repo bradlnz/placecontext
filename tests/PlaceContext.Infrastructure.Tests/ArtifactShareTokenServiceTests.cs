@@ -76,10 +76,18 @@ public sealed class ArtifactShareTokenServiceTests
         await using (var outsiderDb = new AppDbContext(
             options, new FakeCurrentTenant(Guid.NewGuid())))
         {
+            var pendingArtifact = MakeArtifact(Guid.Empty);
+            outsiderDb.RunArtifacts.Add(pendingArtifact);
             var outsiderService = new ArtifactShareTokenService(outsiderDb, clock);
             Assert.Null(await outsiderService.GetStatusAsync(artifact.Id));
             Assert.NotNull(await outsiderService.ResolveAsync(token));
+            Assert.Equal(EntityState.Added, outsiderDb.Entry(pendingArtifact).State);
+            Assert.False(await outsiderDb.RunArtifacts.IgnoreQueryFilters().AsNoTracking()
+                .AnyAsync(item => item.Id == pendingArtifact.Id));
         }
+
+        await using var verifiedDb = new AppDbContext(options, new FakeCurrentTenant(tenantId));
+        Assert.Equal(clock.UtcNow, (await verifiedDb.ArtifactShareTokens.SingleAsync()).LastAccessedAt);
     }
 
     private static async Task<(AppDbContext Db, ArtifactShareTokenService Service, FakeClock Clock, RunArtifactLinkRow Artifact)>

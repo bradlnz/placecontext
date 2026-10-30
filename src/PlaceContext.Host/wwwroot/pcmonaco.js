@@ -7,7 +7,7 @@ window.pcmonaco = (function () {
   const LOAD_TIMEOUT_MS = 10000; // a hanging CDN must not hang the page
   const editors = new Map();   // id → Monaco editor
   const models = new Map();    // "id::path" → Monaco TextModel
-  const fallbacks = new Map(); // id → plain <textarea> (CDN unreachable)
+  const fallbacks = new Map(); // id → plain editor while Monaco loads or is unavailable
   const initLocks = new Map(); // id → in-flight init Promise (serializes concurrent inits)
   let loaderPromise = null;
 
@@ -30,10 +30,7 @@ window.pcmonaco = (function () {
     return loaderPromise;
   }
 
-  // Returns true when the real Monaco editor is up, false when it degraded to a plain
-  // textarea (CDN unreachable — offline/self-hosted network). NEVER throws: an exception
-  // here would propagate through JS interop and terminate the Blazor circuit, freezing
-  // the page on "Loading…".
+  // A usable plain editor remains available while the optional rich editor loads.
   // The editor follows the portal's theme: light shells get Monaco's white 'vs', dark get
   // a neutral PlaceContext theme — and a toggle mid-session re-themes
   // every mounted editor live.
@@ -273,18 +270,39 @@ window.pcmonaco = (function () {
       try { await initLocks.get(id); } catch { /* keep waiting */ }
     }
     const lock = (async () => {
+      const el = document.getElementById(id);
+      if (!el) return true;
+      destroy(id);
+      el.innerHTML = '';
+      const ta = document.createElement('textarea');
+      ta.value = value || '';
+      ta.readOnly = readOnly;
+      ta.spellcheck = false;
+      ta.dataset.path = path || '__active__';
+      ta.dataset.language = language || 'plaintext';
+      ta.setAttribute('aria-label', label);
+      ta.style.cssText =
+        'width:100%;height:100%;box-sizing:border-box;resize:none;border:none;' +
+        'background:var(--card-2,#171717);color:var(--text,#ededed);padding:10px 12px;font-size:13px;line-height:1.55;' +
+        "font-family:'JetBrains Mono',ui-monospace,monospace;tab-size:2";
+      el.appendChild(ta);
+      fallbacks.set(id, ta);
+      let upgrading = false;
       try {
         const monaco = await loadMonaco();
-        const el = document.getElementById(id);
-        if (!el) return true;
+        if (document.getElementById(id) !== el || fallbacks.get(id) !== ta) return true;
+        const currentValue = ta.value;
+        const focused = document.activeElement === ta;
+        const start = ta.selectionStart, end = ta.selectionEnd;
+        const modelPath = ta.dataset.path, currentLanguage = ta.dataset.language;
+        upgrading = true;
         destroy(id);
         watchTheme(monaco);
         // Schema may have been pushed (setSqlSchema) before the CDN finished loading — the
         // provider is cheap and guarded, so registering here always wires autocomplete up.
         registerSqlCompletion(monaco);
         if (language === 'logquery') registerLogQuery(monaco);
-        const modelPath = path || '__active__';
-        const model = getOrCreateModel(monaco, id, modelPath, value, language);
+        const model = getOrCreateModel(monaco, id, modelPath, currentValue, currentLanguage);
         const editor = monaco.editor.create(el, {
           model: model,
           theme: shellTheme(),
@@ -301,26 +319,22 @@ window.pcmonaco = (function () {
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
         });
         editors.set(id, editor);
+        if (focused) {
+          const from = model.getPositionAt(start), to = model.getPositionAt(end);
+          editor.setSelection({ startLineNumber: from.lineNumber, startColumn: from.column,
+            endLineNumber: to.lineNumber, endColumn: to.column });
+          editor.focus();
+        }
         return true;
       } catch (e) {
-        console.warn('pcmonaco: falling back to a plain editor —', e && e.message);
-        const el = document.getElementById(id);
-        if (el) {
+        console.warn('pcmonaco: using the plain editor —', e && e.message);
+        if (upgrading && document.getElementById(id) === el) {
           destroy(id);
           el.innerHTML = '';
-          const ta = document.createElement('textarea');
-          ta.value = value || '';
-          ta.readOnly = readOnly;
-          ta.spellcheck = false;
-          ta.setAttribute('aria-label', label);
-          ta.style.cssText =
-            'width:100%;height:100%;box-sizing:border-box;resize:none;border:none;outline:none;' +
-            'background:#171717;color:#ededed;padding:10px 12px;font-size:13px;line-height:1.55;' +
-            "font-family:'JetBrains Mono',ui-monospace,monospace;tab-size:2";
           el.appendChild(ta);
           fallbacks.set(id, ta);
         }
-        return false;
+        return true;
       }
     })();
     initLocks.set(id, lock);
@@ -332,7 +346,7 @@ window.pcmonaco = (function () {
   function openFile(id, path, value, language) {
     try {
       const ta = fallbacks.get(id);
-      if (ta) { ta.value = value || ''; return; }
+      if (ta) { ta.value = value || ''; ta.dataset.path = path; ta.dataset.language = language || ta.dataset.language; return; }
       const editor = editors.get(id);
       if (!editor) {
         if (initLocks.has(id)) {
@@ -370,7 +384,7 @@ window.pcmonaco = (function () {
   function setValue(id, value, language) {
     try {
       const ta = fallbacks.get(id);
-      if (ta) { ta.value = value || ''; return; }
+      if (ta) { ta.value = value || ''; ta.dataset.language = language || ta.dataset.language; return; }
       let editor = editors.get(id);
       if (!editor || !editor.getModel()) {
         if (initLocks.has(id)) {

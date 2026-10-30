@@ -1,0 +1,13 @@
+.desktop-panel { padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--card); margin-bottom:16px; min-width:0 }
+.desktop-head { display:flex; flex-wrap:wrap; align-items:center; gap:10px }
+.desktop-head > div { flex:1; min-width:200px }
+.desktop-head h3 { margin:0 0 5px; font-size:15px }
+.desktop-lock { display:inline-block; margin-left:8px; padding:3px 8px; border:1px solid var(--border); border-radius:12px; color:var(--text-3); font-size:11px; font-weight:500 }
+.desktop-head p, .desktop-note, .desktop-panel > p { margin:6px 0; color:var(--text-3); font-size:12px; line-height:1.6 }
+.desktop-screen { width:100%; height:min(70vh,800px); min-height:260px; margin:14px 0; background:#111; overflow:hidden; border-radius:8px }
+.desktop-screen[data-disconnected]::after { content:'Desktop disconnected. Select Reconnect.'; color:white; padding:16px; display:block }
+.desktop-save { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px; margin-top:12px }
+.desktop-save > div { flex:1; min-width:180px; max-width:420px }
+.desktop-save label { display:block; font-size:12px; margin-bottom:6px }
+.desktop-panel [role=alert] { color:var(--bad) }
+.desktop-screen:focus-visible { outline:2px solid var(--brand-2); outline-offset:2px }

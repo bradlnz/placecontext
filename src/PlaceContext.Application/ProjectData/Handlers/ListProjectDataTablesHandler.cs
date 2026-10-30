@@ -1,7 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
@@ -18,8 +17,7 @@ public sealed class ListProjectDataTablesHandler : IQueryHandler<ListProjectData
 
     public async Task<IReadOnlyList<ProjectTableInfo>> HandleAsync(ListProjectDataTablesQuery query, CancellationToken ct = default)
     {
-        _ = await _projects.GetByIdAsync(ProjectId.From(query.ProjectId), ct)
-            ?? throw new InvalidOperationException($"Project {query.ProjectId} not found.");
+        await ProjectDataGuard.EnsureExistsAsync(_projects, query.ProjectId, ct);
         return await _store.ListTablesAsync(query.ProjectId, ct);
     }
 }

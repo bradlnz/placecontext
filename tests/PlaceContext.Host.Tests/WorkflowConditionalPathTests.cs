@@ -15,6 +15,58 @@ namespace PlaceContext.Host.Tests;
 public sealed class WorkflowConditionalPathTests
 {
     [Fact]
+    public async Task Qemu_dialog_saves_updated_task_through_the_workflow_service()
+    {
+        var dispatcher = new RecordingDispatcher();
+        var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!, null!);
+        await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Browser task", null,
+            [new([], Action: new QemuChainActionView("browser-linux", "Original task", "browser", 2048, 2, 600, true))], DateTimeOffset.UtcNow));
+        vm.EditQemuAction(0);
+        vm.QemuCommand = "Updated task from the QEMU dialog";
+        vm.QemuPauseForLogin = true;
+        var loginId = Guid.NewGuid();
+        vm.QemuLoginId = loginId.ToString();
+        await vm.SaveQemuWorkflowAsync();
+        Assert.Null(vm.QemuError);
+        Assert.False(vm.ShowQemuEditor);
+        Assert.False(vm.ShowEditor);
+        var action = Assert.IsType<QemuChainAction>(Assert.Single(dispatcher.Saved!.StageActions!));
+        Assert.True(action.PauseForLogin);
+        Assert.Equal(loginId, action.LoginProfileId);
+        Assert.Equal("Updated task from the QEMU dialog", action.Command);
+        Assert.Equal("browser", action.OutputField);
+        Assert.Equal(600, action.TimeoutSeconds);
+        Assert.True(action.AllowNetwork);
+    }
+
+    [Fact]
+    public async Task Qemu_save_validation_and_failure_keep_the_task_and_allow_retry_without_duplicate_steps()
+    {
+        var dispatcher = new RecordingDispatcher { SaveError = "Storage unavailable" };
+        var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!, null!);
+        await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Browser task", null, [], DateTimeOffset.UtcNow));
+        vm.OpenQemuActionAt(0);
+        vm.QemuImageProfile = "browser-linux";
+        vm.QemuCommand = "";
+        await vm.SaveQemuWorkflowAsync();
+        Assert.NotNull(vm.QemuError);
+        Assert.Null(dispatcher.Saved);
+        Assert.Empty(vm.EdStages);
+        vm.QemuCommand = "Keep this task on failure";
+        await vm.SaveQemuWorkflowAsync();
+        Assert.Equal("Storage unavailable", vm.QemuError);
+        Assert.True(vm.ShowQemuEditor);
+        Assert.True(vm.ShowEditor);
+        Assert.Equal("Keep this task on failure", vm.QemuCommand);
+        dispatcher.SaveError = null;
+        await vm.SaveQemuWorkflowAsync();
+        Assert.Null(vm.QemuError);
+        Assert.Single(vm.EdStages);
+        Assert.Single(dispatcher.Saved!.StageActions!);
+        Assert.False(vm.ShowEditor);
+    }
+
+    [Fact]
     public async Task Editing_and_saving_preserves_nested_false_paths_and_action_settings()
     {
         var fallback = Guid.NewGuid();
@@ -96,9 +148,11 @@ public sealed class WorkflowConditionalPathTests
     private sealed class RecordingDispatcher : IDispatcher
     {
         public UpdateJobChainCommand? Saved;
+        public string? SaveError;
         public Task<T> Send<T>(ICommand<T> command, CancellationToken ct = default)
         {
             Saved = Assert.IsType<UpdateJobChainCommand>(command);
+            if (SaveError is not null) throw new InvalidOperationException(SaveError);
             return Task.FromResult(default(T)!);
         }
         public Task<T> Query<T>(IQuery<T> query, CancellationToken ct = default) => Task.FromResult((T)(object)(query switch

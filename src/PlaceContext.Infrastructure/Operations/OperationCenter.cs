@@ -23,7 +23,9 @@ public sealed class OperationCenter
     private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<OperationCenter>? _log;
     private readonly object _gate = new();
-    private readonly List<PortalOperation> _ops = new();
+    private readonly Dictionary<Guid, PortalOperation> _ops = new();
+    private readonly Dictionary<Guid, List<PortalOperation>> _tenantOps = new();
+    private readonly Dictionary<Guid, List<Subscription>> _subscriptions = new();
 
     public OperationCenter(IServiceScopeFactory scopes, IHostApplicationLifetime lifetime,
         ILogger<OperationCenter>? log = null)
@@ -33,20 +35,33 @@ public sealed class OperationCenter
         _log = log;
     }
 
-    /// <summary>Raised on every status change; the bell + pane re-render on it.</summary>
-    public event Action? Changed;
+    public IDisposable Subscribe(Guid tenantId, Action changed, Guid? userId = null, Guid? projectId = null)
+    {
+        var subscription = new Subscription(this, tenantId, changed, userId, projectId);
+        lock (_gate)
+        {
+            if (!_subscriptions.TryGetValue(tenantId, out var subscribers))
+                _subscriptions[tenantId] = subscribers = [];
+            subscribers.Add(subscription);
+        }
+        return subscription;
+    }
 
     public IReadOnlyList<PortalOperation> ListForTenant(Guid tenantId, Guid? userId = null)
     {
         lock (_gate)
-            return _ops.Where(o => o.TenantId == tenantId && (o.UserId is null || o.UserId == userId)).OrderByDescending(o => o.QueuedAt).ToList();
+            return _tenantOps.TryGetValue(tenantId, out var operations)
+                ? operations.Where(o => o.UserId is null || o.UserId == userId).OrderByDescending(o => o.QueuedAt).ToList()
+                : [];
     }
 
     public int ActiveCount(Guid tenantId, Guid? userId = null)
     {
         lock (_gate)
-            return _ops.Count(o => o.TenantId == tenantId && (o.UserId is null || o.UserId == userId)
-                && o.Status is PortalOperationStatus.Queued or PortalOperationStatus.Running);
+            return _tenantOps.TryGetValue(tenantId, out var operations)
+                ? operations.Count(o => (o.UserId is null || o.UserId == userId)
+                    && o.Status is PortalOperationStatus.Queued or PortalOperationStatus.Running)
+                : 0;
     }
 
     /// <summary>
@@ -87,7 +102,7 @@ public sealed class OperationCenter
             CorrelationKey = correlationKey, UserId = userId,
         };
         lock (_gate) { AddAndTrim(op); }
-        Notify();
+        Notify(op);
         return op;
     }
 
@@ -103,9 +118,10 @@ public sealed class OperationCenter
         string? link, Guid? projectId, string? outcome, DateTimeOffset? startedAt, DateTimeOffset? finishedAt)
     {
         var terminal = status is PortalOperationStatus.Succeeded or PortalOperationStatus.Failed;
+        PortalOperation op;
         lock (_gate)
         {
-            var op = _ops.FirstOrDefault(o => o.TenantId == tenantId && o.CorrelationKey == correlationKey);
+            op = _tenantOps.GetValueOrDefault(tenantId)?.FirstOrDefault(o => o.CorrelationKey == correlationKey)!;
             if (op is null)
             {
                 op = new PortalOperation
@@ -130,7 +146,7 @@ public sealed class OperationCenter
                 op.Sealed = terminal;
             }
         }
-        Notify();
+        Notify(op);
     }
 
     public void MarkRunning(Guid opId) => Update(opId, o =>
@@ -164,26 +180,69 @@ public sealed class OperationCenter
     /// <summary>Callers hold <see cref="_gate"/>.</summary>
     private void AddAndTrim(PortalOperation op)
     {
-        _ops.Add(op);
-        var tenantOps = _ops.Where(o => o.TenantId == op.TenantId).OrderByDescending(o => o.QueuedAt).ToList();
-        foreach (var stale in tenantOps.Skip(KeepPerTenant)
-                     .Where(o => o.Status is PortalOperationStatus.Succeeded or PortalOperationStatus.Failed))
-            _ops.Remove(stale);
+        _ops.Add(op.Id, op);
+        if (!_tenantOps.TryGetValue(op.TenantId, out var tenantOps))
+            _tenantOps[op.TenantId] = tenantOps = [];
+        tenantOps.Add(op);
+        foreach (var stale in tenantOps.OrderByDescending(o => o.QueuedAt).Skip(KeepPerTenant)
+                     .Where(o => o.Status is PortalOperationStatus.Succeeded or PortalOperationStatus.Failed).ToArray())
+        {
+            tenantOps.Remove(stale);
+            _ops.Remove(stale.Id);
+        }
     }
 
     private void Update(Guid opId, Func<PortalOperation, bool> mutate)
     {
+        PortalOperation? op;
         lock (_gate)
         {
-            var op = _ops.FirstOrDefault(o => o.Id == opId);
+            op = _ops.GetValueOrDefault(opId);
             if (op is null || !mutate(op)) return;
         }
-        Notify();
+        Notify(op);
     }
 
-    private void Notify()
+    private void Notify(PortalOperation operation)
     {
-        try { Changed?.Invoke(); }
-        catch { /* a dead subscriber (disposed circuit) must not break the next state change */ }
+        Subscription[] subscribers;
+        lock (_gate)
+            subscribers = _subscriptions.TryGetValue(operation.TenantId, out var list)
+                ? list.Where(s => (operation.UserId is null || operation.UserId == s.UserId)
+                    && (s.ProjectId is null || operation.ProjectId is null || operation.ProjectId == s.ProjectId)).ToArray()
+                : [];
+        foreach (var subscriber in subscribers)
+        {
+            try { subscriber.Notify(); }
+            catch { /* A disconnected circuit must not prevent other subscribers from updating. */ }
+        }
+    }
+
+    private sealed class Subscription(OperationCenter owner, Guid tenantId, Action changed,
+        Guid? userId, Guid? projectId) : IDisposable
+    {
+        // Callbacks must keep the subscribing circuit's identity, not the background publisher's.
+        private readonly ExecutionContext? _context = ExecutionContext.Capture();
+        private int _disposed;
+        public Guid? UserId { get; } = userId;
+        public Guid? ProjectId { get; } = projectId;
+
+        public void Notify()
+        {
+            if (Volatile.Read(ref _disposed) != 0) return;
+            if (_context is null) changed();
+            else ExecutionContext.Run(_context, _ => changed(), null);
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            lock (owner._gate)
+            {
+                if (!owner._subscriptions.TryGetValue(tenantId, out var list)) return;
+                list.Remove(this);
+                if (list.Count == 0) owner._subscriptions.Remove(tenantId);
+            }
+        }
     }
 }

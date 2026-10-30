@@ -17,9 +17,12 @@ namespace PlaceContext.Infrastructure.Persistence;
 public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyContext
 {
     private readonly ICurrentTenant _tenant;
+    internal DbContextOptions<AppDbContext> ContextOptions { get; }
+    public DbSet<AgentSubscriptionRow> AgentSubscriptions => Set<AgentSubscriptionRow>();
+    public DbSet<AgentRunRow> AgentRuns => Set<AgentRunRow>();
 
     public AppDbContext(DbContextOptions<AppDbContext> options, ICurrentTenant tenant) : base(options)
-        => _tenant = tenant;
+        => (_tenant, ContextOptions) = (tenant, options);
 
     /// <summary>Shared ASP.NET Data Protection key ring (so every replica decrypts the same auth cookie).</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -67,34 +70,59 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
-    public override Task<int> SaveChangesAsync(CancellationToken ct = default)
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken ct = default)
     {
         StampTenant();
-        return base.SaveChangesAsync(ct);
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, ct);
     }
 
-    public override int SaveChanges()
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         StampTenant();
-        return base.SaveChanges();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
-    /// <summary>Stamps the current tenant onto newly-added tenant-owned rows that don't have one yet.</summary>
+    /// <summary>Stamps new rows and rejects missing or changed tenant ownership before writes.</summary>
     private void StampTenant()
     {
         var tenantId = _tenant.TenantId;
         foreach (var entry in ChangeTracker.Entries<ITenantOwned>())
+        {
+            if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted)) continue;
+            if (!_tenant.IsResolved || tenantId == Guid.Empty)
+                throw new UnauthorizedAccessException("A resolved tenant is required to write tenant data.");
             if (entry.State == EntityState.Added && entry.Entity.TenantId == Guid.Empty)
                 entry.Entity.TenantId = tenantId;
+            if (entry.Entity.TenantId != tenantId || (entry.State != EntityState.Added
+                && entry.Property(nameof(ITenantOwned.TenantId)).OriginalValue is Guid original && original != tenantId))
+                throw new UnauthorizedAccessException("Tenant ownership cannot be changed or crossed.");
+        }
     }
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<AgentSubscriptionRow>(e =>
+        {
+            e.ToTable("agent_subscriptions");
+            e.HasKey(x => new { x.TenantId, x.AgentId });
+            e.Property(x => x.AgentId).HasMaxLength(80);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
+        b.Entity<AgentRunRow>(e =>
+        {
+            e.ToTable("agent_runs");
+            e.HasKey(x => new { x.TenantId, x.Id });
+            e.Property(x => x.AgentId).HasMaxLength(80);
+            e.Property(x => x.Status).HasConversion<string>().IsConcurrencyToken();
+            e.Property(x => x.DemoCredits).HasPrecision(28, 6);
+            e.HasIndex(x => new { x.TenantId, x.ProjectId, x.StartedAt });
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
         b.Entity<ModelConnectionRow>(e =>
         {
             e.ToTable("model_connections");
             e.HasKey(x => x.Id);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
         b.Entity<BuildConversationRow>(e =>
         {
@@ -104,13 +132,13 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.Version).IsConcurrencyToken();
             e.Property(x => x.Status).HasConversion<string>();
             e.HasIndex(x => new { x.Status, x.UpdatedAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
         b.Entity<BuildMemoryRow>(e =>
         {
             e.ToTable("build_memories");
             e.HasKey(x => new { x.TenantId, x.UserId, x.ProjectId });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<TenantRow>(e =>
@@ -145,7 +173,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("users");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.Email }).IsUnique(); // email unique within a tenant
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             e.Property(x => x.PasswordSet).HasDefaultValue(false);
             e.Property(x => x.IsDefaultAdmin).HasDefaultValue(false);
             e.Property(x => x.IsExternalAdmin).HasDefaultValue(false);
@@ -159,7 +187,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("invites");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Token).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<UserApiTokenRow>(e =>
@@ -168,7 +196,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.TokenHash).IsUnique();
             e.HasIndex(x => new { x.UserId, x.CreatedAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<UserPermissionGrantRow>(e =>
@@ -176,7 +204,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("user_permission_grants");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.UserId, x.Permission }).IsUnique(); // one override per (user, permission)
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<RoleDefinitionRow>(e =>
@@ -184,7 +212,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("role_definitions");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.Name }).IsUnique(); // role name unique within a tenant
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             e.Property(x => x.Name).HasMaxLength(64);
             e.Property(x => x.IsSystem).HasDefaultValue(false);
             e.Property(x => x.PermissionsJson).HasDefaultValue("[]");
@@ -195,7 +223,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("projects");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.Path }).IsUnique(); // path unique within a tenant
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<ActivityRecordRow>(e =>
@@ -203,7 +231,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("activity_log");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.Sequence });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<DecisionRow>(e =>
@@ -211,7 +239,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("decisions");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.ProjectId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<RequirementsRow>(e =>
@@ -219,7 +247,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("requirements");
             // Composite key: each tenant has its own per-project docs AND its own global doc (ProjectId = Guid.Empty).
             e.HasKey(x => new { x.TenantId, x.ProjectId });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<UsageRow>(e =>
@@ -227,7 +255,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("usage_records");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.RecordedAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<ToolCallRow>(e =>
@@ -235,7 +263,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("tool_calls");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.At);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<JobRow>(e =>
@@ -243,7 +271,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("jobs");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.ProjectId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             // New columns added for WorkloadSource discriminated union.
             e.Property(x => x.MapSourceKind).HasDefaultValue("image");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
@@ -263,7 +291,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.JobId });
             e.HasIndex(x => new { x.JobId, x.Name }).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             e.Property(x => x.AssertionType).HasDefaultValue("Succeeds");
             e.Property(x => x.Enabled).HasDefaultValue(true);
             e.Property(x => x.LastStatus).HasDefaultValue("NotRun");
@@ -283,7 +311,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("opensearch_dashboards");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             e.Property(x => x.IndexPattern).HasDefaultValue("*");
             e.Property(x => x.BucketType).HasDefaultValue("terms");
             e.Property(x => x.ChartType).HasDefaultValue("bar");
@@ -297,7 +325,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("saved_queries");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
         });
@@ -307,7 +335,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("communication_providers");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.Channel });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             e.Property(x => x.Channel).HasMaxLength(10);
             e.Property(x => x.Kind).HasMaxLength(20);
             e.Property(x => x.Name).HasMaxLength(100);
@@ -332,7 +360,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => x.OcrProcessedAt)
                 .HasFilter("\"OcrProcessedAt\" IS NULL")
                 .HasDatabaseName("ix_job_run_artifacts_ocr");
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
         });
 
@@ -342,7 +370,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.ArtifactId).IsUnique();
             e.HasIndex(x => x.TokenHash).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             e.Property(x => x.TokenHash).HasMaxLength(64);
             e.Property(x => x.TokenPrefix).HasMaxLength(20);
             e.HasOne<RunArtifactLinkRow>()
@@ -356,7 +384,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("project_charts");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.TableName }).IsUnique();
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<EntityTagRow>(e =>
@@ -365,7 +393,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.EntityId, x.Key });
             e.HasIndex(x => x.RunId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<RecordLinkRow>(e =>
@@ -374,7 +402,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.NormalizedValue });
             e.HasIndex(x => new { x.ProjectId, x.TableName, x.RowKey });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<DataEntityRow>(e =>
@@ -382,7 +410,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("data_entities");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.ProjectId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             e.Property(x => x.RelationsJson).HasDefaultValue("[]");
             e.Property(x => x.TagsJson).HasDefaultValue("[]");
         });
@@ -393,7 +421,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.ProjectId);
             e.HasIndex(x => x.JobId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             e.Property(x => x.FieldsJson).HasDefaultValue("[]");
             e.Property(x => x.Enabled).HasDefaultValue(true);
             e.Property(x => x.SourceKind).HasDefaultValue("job");
@@ -403,7 +431,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         {
             e.ToTable("job_secrets");
             e.HasKey(x => new { x.ProjectId, x.Name });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<JobRunRow>(e =>
@@ -412,8 +440,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             e.Property(x => x.Status).IsConcurrencyToken();
             e.HasIndex(x => new { x.JobId, x.StartedAt });
+            e.HasIndex(x => new { x.TenantId, x.StartedAt }).HasDatabaseName("ix_job_runs_tenant_started");
             e.HasIndex(x => x.ProjectId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
             // SnapshotJson stores the full WorkloadSnapshot at run-start.
             e.Property(x => x.SnapshotJson).HasDefaultValue("{}");
             e.Property(x => x.AttemptNumber).HasDefaultValue(1);
@@ -427,7 +456,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => x.JobId);
             // Scheduler scans by (Enabled, Kind, NextRunAt) across tenants.
             e.HasIndex(x => new { x.Enabled, x.Kind, x.NextRunAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<JobChainRow>(e =>
@@ -435,7 +464,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("job_chains");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.ProjectId);
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<ChainRunRow>(e =>
@@ -444,9 +473,10 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasKey(x => x.Id);
             // The pipeline history is read newest-first per chain.
             e.HasIndex(x => new { x.ChainId, x.StartedAt });
+            e.HasIndex(x => new { x.TenantId, x.StartedAt }).HasDatabaseName("ix_chain_runs_tenant_started");
             e.HasIndex(x => x.ProjectId);
             e.HasIndex(x => new { x.Status, x.ResumeAt, x.ContinuationClaimedAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<EventDefinitionRow>(e =>
@@ -454,7 +484,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("event_definitions");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.TenantId, x.Name }).IsUnique(); // event name unique within a tenant
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<EventOccurrenceRow>(e =>
@@ -462,7 +492,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("event_occurrences");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.Name, x.OccurredAt });
-            e.HasQueryFilter(x => x.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
         b.Entity<PendingRunRow>(e =>
@@ -488,8 +518,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(r => r.LastStatus).HasMaxLength(200);
             e.Property(r => r.OAuthClientId).HasMaxLength(200);
             e.Property(r => r.OAuthScopes).HasMaxLength(500);
-            e.HasQueryFilter(r => r.TenantId == _tenant.TenantId);
+            e.HasQueryFilter(r => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && r.TenantId == _tenant.TenantId);
         });
 
+        // Include ownership in UPDATE/DELETE predicates, including detached entities attached by ID.
+        foreach (var entity in b.Model.GetEntityTypes().Where(e => typeof(ITenantOwned).IsAssignableFrom(e.ClrType)))
+            b.Entity(entity.ClrType).Property(nameof(ITenantOwned.TenantId)).IsConcurrencyToken();
     }
 }

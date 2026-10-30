@@ -42,6 +42,8 @@ public sealed class QemuEnvironmentRunnerTests
         Assert.Contains("kvm", networked.ArgumentList);
         Assert.Contains("host", networked.ArgumentList);
         Assert.Equal("user,model=virtio-net-pci", networked.ArgumentList[^1]);
+        var live = QemuEnvironmentRunner.BuildStartInfo(new(), action, "/images/base.qcow2", "/tmp/agent.sock", "/tmp/desktop.sock");
+        Assert.Equal("unix:/tmp/desktop.sock,share=force-shared", live.ArgumentList[^1]);
     }
 
     [Fact]

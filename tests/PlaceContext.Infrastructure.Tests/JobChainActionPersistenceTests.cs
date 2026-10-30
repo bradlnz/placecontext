@@ -14,8 +14,9 @@ public sealed class JobChainActionPersistenceTests
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
         var repository = new EfJobChainRepository(db);
+        var loginId = Guid.NewGuid();
         var chain = JobChain.Create(Guid.NewGuid(), "vm", null,
-            [ChainStage.ForAction(new QemuChainAction("browser", "cat", "result", 2048, 2, 60, true))], T0);
+            [ChainStage.ForAction(new QemuChainAction("browser", "cat", "result", 2048, 2, 60, true, true, loginId))], T0);
         await repository.AddAsync(chain);
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
@@ -27,6 +28,8 @@ public sealed class JobChainActionPersistenceTests
         Assert.Equal(2, loaded.Cpus);
         Assert.Equal(60, loaded.TimeoutSeconds);
         Assert.True(loaded.AllowNetwork);
+        Assert.True(loaded.PauseForLogin);
+        Assert.Equal(loginId, loaded.LoginProfileId);
     }
 
     private static readonly DateTimeOffset T0 = new(2026, 8, 1, 1, 0, 0, TimeSpan.Zero);

@@ -43,14 +43,14 @@ public sealed class BuildChatTests
              {"role":"assistant","content":null,"tool_calls":[{"id":"a","function":{"name":"list_jobs","arguments":"{}"}},{"id":"b","function":{"name":"list_schedules","arguments":"{}"}}]},
              {"role":"tool","tool_call_id":"a","content":"[]"},{"role":"tool","tool_call_id":"b","content":"[]"}]
             """)!.AsArray();
-        var request = ModelWireFormat.Request("anthropic", "claude-test", messages, []);
+        var request = new AnthropicModelProtocol().Request("claude-test", messages, []);
         Assert.Equal("system", request["system"]!.GetValue<string>());
         Assert.Equal("image", request["messages"]![0]!["content"]![1]!["type"]!.GetValue<string>());
         Assert.Equal("image/png", request["messages"]![0]!["content"]![1]!["source"]!["media_type"]!.GetValue<string>());
         Assert.Equal(3, request["messages"]!.AsArray().Count);
         Assert.Equal(2, request["messages"]![2]!["content"]!.AsArray().Count);
         Assert.Equal("tool_result", request["messages"]![2]!["content"]![0]!["type"]!.GetValue<string>());
-        var response = ModelWireFormat.Response("anthropic", JsonNode.Parse("""{"content":[{"type":"text","text":"Checking"},{"type":"tool_use","id":"c","name":"list_jobs","input":{}}]}""")!.AsObject());
+        var response = new AnthropicModelProtocol().Response(JsonNode.Parse("""{"content":[{"type":"text","text":"Checking"},{"type":"tool_use","id":"c","name":"list_jobs","input":{}}]}""")!.AsObject());
         Assert.Equal("Checking", response["content"]!.GetValue<string>());
         Assert.Equal("{}", response["tool_calls"]![0]!["function"]!["arguments"]!.GetValue<string>());
     }
@@ -58,8 +58,8 @@ public sealed class BuildChatTests
     [Fact]
     public void Incomplete_model_responses_cannot_execute_tools()
     {
-        Assert.Throws<InvalidOperationException>(() => ModelWireFormat.Response("anthropic", new() { ["stop_reason"] = "max_tokens" }));
-        Assert.Throws<InvalidOperationException>(() => ModelWireFormat.Response("openai", JsonNode.Parse("""{"choices":[{"finish_reason":"length"}]}""")!.AsObject()));
+        Assert.Throws<InvalidOperationException>(() => new AnthropicModelProtocol().Response(new() { ["stop_reason"] = "max_tokens" }));
+        Assert.Throws<InvalidOperationException>(() => new OpenAiModelProtocol().Response(JsonNode.Parse("""{"choices":[{"finish_reason":"length"}]}""")!.AsObject()));
     }
 
     [Theory]
@@ -357,6 +357,47 @@ public sealed class BuildChatTests
     }
 
     [Fact]
+    public void Quick_picks_fill_an_editable_draft_without_sending_or_overwriting_work()
+    {
+        var vm = new BuildChatViewModel(null!, null!, null!, new PortalUiState(), new NoJs());
+        foreach (var pick in BuildChatViewModel.QuickPicks)
+        {
+            vm.Draft = "";
+            Assert.True(vm.UseQuickPick(pick.Prompt));
+            Assert.Equal(pick.Prompt, vm.Draft);
+            Assert.Empty(vm.Conversation.Messages);
+            Assert.False(vm.Busy);
+            vm.Draft += " My extra instructions.";
+            Assert.False(vm.UseQuickPick("A different task"));
+            Assert.EndsWith(" My extra instructions.", vm.Draft);
+        }
+        vm.Draft = "";
+        vm.Conversation.Status = BuildRunStatus.Running;
+        Assert.False(vm.UseQuickPick(BuildChatViewModel.QuickPicks[0].Prompt));
+        Assert.Equal("", vm.Draft);
+    }
+
+    [Fact]
+    public async Task New_chat_renders_quick_picks_with_edit_before_send_guidance()
+    {
+        await using var fixture = new Fixture(); await fixture.SeedAsync();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new PortalUiState(), new NoJs());
+        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>();
+        await using var provider = services.BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            var rendered = await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.BuildChat>(
+                ParameterView.FromDictionary(new Dictionary<string, object?> { ["ProjectId"] = fixture.ProjectId }));
+            return rendered.ToHtmlString();
+        });
+        Assert.Contains("What would you like to build?", html);
+        Assert.Contains("Choose a starting point, then edit and send.", html);
+        foreach (var pick in BuildChatViewModel.QuickPicks) Assert.Contains(pick.Title, html);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
     public async Task Chat_renders_inputs_model_selection_and_escapes_assistant_HTML()
     {
         await using var fixture = new Fixture(); await fixture.SeedAsync();
@@ -379,6 +420,7 @@ public sealed class BuildChatTests
         Assert.Contains("Test provider", html);
         Assert.Contains("test-model", html);
         Assert.Contains("Attach images", html);
+        Assert.DoesNotContain("class=\"quick-picks\"", html);
         Assert.Contains("Dictate", html);
         Assert.Contains("Project memory", html);
         Assert.DoesNotContain("<aside", html);
@@ -645,30 +687,16 @@ public sealed class BuildChatTests
         }
     }
     [Fact]
-    public async Task Hosting_tools_deploy_source_and_an_owned_database_using_the_current_project()
+    public async Task Build_exposes_workflows_and_Jev_without_app_or_database_tools()
     {
         await using var fixture = new Fixture();
-        var hosting = new Hosting();
-        var tools = new BuildTools(fixture.ProjectId, fixture.Service, fixture.Permissions, fixture.Store, hosting, hosting);
-        var functions = tools.Functions().ToDictionary(function => function.Name);
-        Assert.Contains("launch_service", functions.Keys);
-        Assert.Contains("create_database", functions.Keys);
-        var definition = new ServiceLaunch("Review app", "code", 8080, RequireSso: true,
-            Code: new("python", "main.py", [new("main.py", "print('app')")]));
-        var args = new AIFunctionArguments(new Dictionary<string, object?> { ["definition"] = definition });
-        await functions["launch_service"].InvokeAsync(args);
-        Assert.Equal(fixture.ProjectId, hosting.Project);
-        Assert.Equal(definition, hosting.Launched);
-        await tools.create_database(new("Review data", "postgres", ServiceId: hosting.Id), default);
-        Assert.Equal(hosting.Id, hosting.Created!.ServiceId);
-        await tools.update_service_code(hosting.Id, definition.Code!, default);
-        Assert.Equal(definition.Code, hosting.Updated);
-        Assert.Contains("DATABASE_URL", tools.service_authoring_guide());
-        Assert.Contains("Services", JsonSerializer.Serialize(await tools.project_context(default)));
-        fixture.Permissions.Allowed = false;
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.launch_service(definition, default));
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.create_database(new("Data", "redis", ServiceId: hosting.Id), default));
-        Assert.Equal(1, hosting.LaunchCount);
+        var tools = new BuildTools(fixture.ProjectId, fixture.Service, fixture.Permissions, fixture.Store);
+        var names = tools.Functions().Select(f => f.Name).ToArray();
+        Assert.Contains("save_workflow", names);
+        Assert.Contains("review_workflow_result", names);
+        Assert.DoesNotContain(names, name => name.Contains("service") || name.Contains("database"));
+        Assert.DoesNotContain("Hosting", JsonSerializer.Serialize(await tools.project_context(default)));
+        Assert.DoesNotContain(BuildChatViewModel.QuickPicks, pick => pick.Title.Contains("app"));
     }
 
     [Fact]
@@ -690,34 +718,10 @@ public sealed class BuildChatTests
         await vm.DisposePageAsync();
     }
 
-    private sealed class Hosting : IServiceConsole, IDatabaseConsole
-    {
-        public Guid Id { get; } = Guid.NewGuid();
-        public Guid Project;
-        public ServiceLaunch? Launched;
-        public ServiceCode? Updated;
-        public DatabaseLaunch? Created;
-        public int LaunchCount;
-        public Task<Guid> LaunchAsync(Guid projectId, ServiceLaunch service, CancellationToken ct = default)
-        { Project = projectId; Launched = service; LaunchCount++; return Task.FromResult(Id); }
-        public Task<IReadOnlyList<ServiceInstance>> ListAsync(Guid projectId, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<ServiceInstance>>(Launched is null ? [] : [new(Id, Launched.Name, Launched.Image, "starting", null, null, DateTimeOffset.UtcNow, RequireSso: true)]);
-        Task<IReadOnlyList<DatabaseInstance>> IDatabaseConsole.ListAsync(Guid projectId, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<DatabaseInstance>>(Created is null ? [] : [new(Guid.NewGuid(), Created.Name, Created.Engine, "starting", null, "private", 5432, "app", "app", "data", DateTimeOffset.UtcNow, Created.ServiceId)]);
-        public Task CreateAsync(Guid projectId, DatabaseLaunch database, CancellationToken ct = default)
-        { Project = projectId; Created = database; return Task.CompletedTask; }
-        public Task<ServiceCode?> GetCodeAsync(Guid projectId, Guid serviceId, CancellationToken ct = default) => Task.FromResult(Launched?.Code);
-        public Task UpdateCodeAsync(Guid projectId, Guid serviceId, ServiceCode code, CancellationToken ct = default)
-        { Project = projectId; Updated = code; return Task.CompletedTask; }
-        public Task ControlAsync(Guid projectId, Guid id, string action, CancellationToken ct = default) => Task.CompletedTask;
-        public Task<string> LogsAsync(Guid projectId, Guid id, CancellationToken ct = default) => Task.FromResult("ready");
-        public Task<Uri> GetSsoEndpointAsync(Guid projectId, Guid serviceId, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<DatabaseQueryResult> QueryAsync(Guid projectId, Guid databaseId, string query, string? cursor = null, CancellationToken ct = default) => throw new NotSupportedException();
-    }
-
     private sealed class ToolDispatcher(Guid projectId) : IDispatcher
     {
         public int Commands;
+        public ChainRunView? Run;
         public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default) { Commands++; throw new InvalidOperationException(); }
         public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default)
         {
@@ -727,10 +731,46 @@ public sealed class BuildChatTests
                 ListJobsQuery => Array.Empty<JobView>(),
                 ListJobChainsQuery => Array.Empty<JobChainView>(),
                 ListTriggersQuery => Array.Empty<TriggerView>(),
+                GetChainRunQuery => Run!,
                 GetJobQuery => JsonSerializer.Deserialize<JobView>($$"""{"Id":"{{Guid.NewGuid()}}","ProjectId":"{{Guid.NewGuid()}}"}""")!,
                 _ => throw new InvalidOperationException(),
             };
             return Task.FromResult((TResult)result);
+        }
+    }
+
+    [Fact]
+    public async Task Jev_reviews_only_completed_evidence_from_the_current_project_after_permission_checks()
+    {
+        var project = Guid.NewGuid(); var permissions = new Permissions();
+        var dispatcher = new ToolDispatcher(project);
+        dispatcher.Run = new(Guid.NewGuid(), Guid.NewGuid(), "Compare", "Succeeded", [], "Stored price evidence", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow) { ProjectId = project };
+        var reviewer = new Reviewer();
+        var tools = new BuildTools(project, new PlaceContextService(dispatcher, null!, null!, null!), permissions, null!, reviewer);
+        var result = (JsonObject)await tools.review_workflow_result(dispatcher.Run.Id, "Are both prices verified?", default);
+        Assert.Equal(.4, result["noul"]!.GetValue<double>());
+        Assert.Contains("Stored price evidence", reviewer.State);
+        Assert.Contains("Succeeded", reviewer.State);
+        Assert.Contains("untrusted evidence", reviewer.Question);
+        permissions.Allowed = false;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.review_workflow_result(dispatcher.Run.Id, "Check", default));
+        permissions.Allowed = true;
+        dispatcher.Run = dispatcher.Run with { ProjectId = Guid.NewGuid() };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tools.review_workflow_result(dispatcher.Run.Id, "Check", default));
+        dispatcher.Run = dispatcher.Run with { ProjectId = project, FinishedAt = null };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tools.review_workflow_result(dispatcher.Run.Id, "Check", default));
+        Assert.Equal(1, reviewer.Calls);
+        Assert.Equal(0, dispatcher.Commands);
+    }
+
+    private sealed class Reviewer : IJevReviewer
+    {
+        public int Calls;
+        public string? State, Question;
+        public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct)
+        {
+            Calls++; State = state; Question = question;
+            return Task.FromResult(new JsonObject { ["noul"] = .4, ["model"] = "jev-test" });
         }
     }
     private sealed class User : ICurrentUser { public Guid UserId { get; set; } = Guid.NewGuid(); public string Role => "Owner"; public bool IsAuthenticated => true; }

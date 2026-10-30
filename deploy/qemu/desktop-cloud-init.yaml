@@ -19,7 +19,6 @@ packages:
   - dbus-x11
   - chromium
   - xdotool
-  - scrot
 write_files:
   - path: /etc/lightdm/lightdm.conf.d/50-workflow.conf
     permissions: '0644'
@@ -43,7 +42,6 @@ runcmd:
     command -v setpriv
     command -v chromium
     command -v xdotool
-    command -v scrot
     command -v xdpyinfo
     command -v xprop
     # The cloud kernel omits the virtio graphics driver; boot the full kernel.

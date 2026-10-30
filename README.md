@@ -36,6 +36,30 @@ across the fleet. For the quick start, [k3d](https://k3d.io) runs k3s inside Doc
 cluster is required. The installer pulls the versioned multi-architecture
 [PlaceContext image from GHCR](https://github.com/bradlnz/placecontext/pkgs/container/placecontext).
 
+## Local agent subscriptions
+
+Open **Build → Workflow library** in a project. Retail, professional services, and property operations
+each have a free checklist and a detailed agent workflow. An administrator can activate or cancel a
+simulated subscription, supply the workflow inputs, and inspect the result and recorded token usage.
+Subscriptions apply within the tenant; run history stays within its project. Paid implementations remain
+on the server and are not created as editable or exportable customer jobs.
+
+Simulation requires `ASPNETCORE_ENVIRONMENT=Development` and
+`PlaceContext__AgentWorkflows__SimulateSubscriptions=true` (enabled in the Development settings).
+It collects no money. The demonstration rate is **1 demo credit per 1,000 reported model tokens**.
+Missing usage is shown as unknown; Jev usage is excluded because its current integration does not report it.
+These totals are not invoices. Configured AI providers may still charge for actual inference.
+
+Paid workflows use the first enabled connection/model in **Settings → Models**, draft a plan, then
+ask Jev to verify it. Configure the existing `PlaceContext:TypeSafe` settings for verification. Missing
+inputs, uncertain verification, or unavailable Jev require human review. These starter workflows deliver
+plans; they do not contact clients, order stock, or book contractors. Free checklists use no model.
+Cancelling a subscription blocks new paid runs but preserves in-flight work and historical results.
+Request IDs make retries idempotent; an intentional rerun needs a fresh ID.
+
+Production payment collection, reconciliation of missing usage, and provider-specific prices must be
+implemented before enabling real paid access. Production hosts reject simulated entitlements.
+
 ## Connect your AI harness
 
 PlaceContext exposes the same tools at `<workspace-url>/mcp`. These examples connect to the local quick-start
@@ -103,16 +127,14 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
   or Yes/No buttons; Yes/No answers are JSON booleans, including `false`. The run waits for a fresh response
   through the run panel or `resume_job_chain`; subsequent steps receive that field in the accumulated context. Agent steps
   do not launch an agent automatically. These hand-offs are top-level stages and can have condition gates.
-- **QEMU agent steps** — describe a task in a prompt. An agent inspects screenshots, operates the
-  browser/desktop, executes non-root guest commands, verifies results, and returns a final summary.
-  Configure a prepared image and a vision/tool-capable model endpoint, or use the local `codex`
-  provider with the host account's Codex login. Inference remains remote with Codex. The model key
-  remains outside the VM; generated commands run only in the guest. VM disks are disposable,
-  networking is off by default, and cancellation/timeout stop the VM. The agent has a bounded
-  step count; each guest command is limited to 30 seconds. The output includes `exitCode`, final
-  summary in `stdout`, errors in `stderr`, `agentSteps`, and an activity list. Older stored QEMU
-  instructions are now interpreted as prompts; review steps containing scripts before running them.
-  See the [QEMU image and agent guide](deploy/qemu/README.md) for setup, data flow, and real-VM tests.
+- **QEMU agent steps** — give Jev a browser task with a starting URL and a result to verify.
+  Our Rust guest agent controls the image's existing Chromium, with no Python or Node/npm runtime dependency.
+  The configured vision model proposes coordinate actions; Jev checks live desktop frames for action approval,
+  completion and price evidence. No HTML inspection is used. TypeSafe and vision-model credentials stay on the host. VM disks are disposable, guest networking
+  is off by default, and cancellation/timeout stop the VM. Runs return page evidence, a decision
+  trace, and replay frames. Configure `PlaceContext:TypeSafe` and a prepared image; use
+  `PlaceContext:Qemu:Executor=model` for the older general desktop/terminal agent.
+  See the [QEMU guide](deploy/qemu/README.md) for setup, supported controls, and realistic task examples.
   Workflows use `/project/{projectId}/workflows` and Observability uses `tab=workflows&workflowRun={runId}`.
   API trigger/replay endpoints use `/api/v1/workflows/{workflowId}` and cancellation uses
   `/api/v1/workflow-runs/{runId}/cancel`. Existing chain URLs remain compatible aliases.

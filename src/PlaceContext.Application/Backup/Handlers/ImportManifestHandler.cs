@@ -316,7 +316,7 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
     private static ChainAction? ToAction(ChainActionManifest? action) => action?.Type switch
     {
         QemuChainAction.ActionType => new QemuChainAction(action.ImageProfile ?? "", action.Command ?? "",
-            action.OutputField ?? "qemu_result", action.MemoryMb, action.Cpus, action.TimeoutSeconds, action.AllowNetwork),
+            action.OutputField ?? "qemu_result", action.MemoryMb, action.Cpus, action.TimeoutSeconds, action.AllowNetwork, action.PauseForLogin),
         LoopChainAction.HumanType or LoopChainAction.AgentType => new LoopChainAction(
             action.Type, action.Instructions ?? "", action.ResponseField ?? "", action.ResponseType ?? LoopChainAction.TextResponse,
             action.AgentProvider ?? LoopChainAction.ExternalAgent),

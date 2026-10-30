@@ -20,8 +20,8 @@ public sealed class LoadingPerformanceContractTests
     {
         var app = ReadHostSource("Components/App.razor");
 
-        Assert.Contains("<script defer src=\"pcchart.js", app, StringComparison.Ordinal);
-        Assert.Contains("<script defer src=\"pcmap.js", app, StringComparison.Ordinal);
+        Assert.Contains("<script defer src=\"@Assets[\"pcchart.js", app, StringComparison.Ordinal);
+        Assert.Contains("<script defer src=\"@Assets[\"pcmodules.js", app, StringComparison.Ordinal);
         Assert.Contains("media=\"print\" onload=\"this.media='all'\"", app, StringComparison.Ordinal);
     }
 
@@ -29,13 +29,15 @@ public sealed class LoadingPerformanceContractTests
     public void Interop_modules_are_registered_before_blazor_starts()
     {
         var app = ReadHostSource("Components/App.razor");
-        var charts = app.IndexOf("<script defer src=\"pcchart.js", StringComparison.Ordinal);
+        var charts = app.IndexOf("<script defer src=\"@Assets[\"pcchart.js", StringComparison.Ordinal);
         var blazor = app.IndexOf(
             "<script defer src=\"_framework/blazor.web.js\"",
             StringComparison.Ordinal
         );
 
         Assert.True(charts >= 0, "The chart interop module must be loaded.");
+        var modules = app.IndexOf("<script defer src=\"@Assets[\"pcmodules.js", StringComparison.Ordinal);
+        Assert.True(modules >= 0 && blazor > modules, "Lazy interop must be registered before Blazor starts.");
         Assert.True(blazor > charts, "Blazor must start after the chart interop module.");
     }
 

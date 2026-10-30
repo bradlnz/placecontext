@@ -109,7 +109,7 @@ public sealed partial class EntityBrowseViewModel
                 new Insight(
                     $"{Entity.Name} total",
                     (Page?.TotalCount ?? 0).ToString("N0"),
-                    "records",
+                    Page is { TotalCountIsExact: false } ? "records (at least)" : "records",
                     Array.Empty<(string, string, int)>()
                 )
             );

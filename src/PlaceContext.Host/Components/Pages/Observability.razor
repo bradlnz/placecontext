@@ -129,8 +129,7 @@ else
                                     }
                                     @if (!results.Aggregated && row.Source is { } source)
                                     { <td><button class="dcbtn" aria-expanded="@(ReferenceEquals(Vm.SelectedLog, source) ? "true" : "false")" aria-controls="log-event-details" @onclick="() => Vm.ToggleLogEvent(source)">Inspect event</button>
-                                      @if (source.Service is { } serviceSource) { <a class="dcbtn" href="/project/@serviceSource.ProjectId/services?service=@serviceSource.Id">Service <AppIcon Kind="arrow-right" /></a> }
-                                      else if (source.Report is { } report) { <button class="dcbtn" @onclick="() => Vm.OpenRun(report)" aria-label="@($"Open run {report.Run.Id}")">@Vm.Presentation.AbbreviatedId(report.Run.Id) <AppIcon Kind="arrow-right" /></button> }</td> }
+                                      @if (source.Report is { } report) { <button class="dcbtn" @onclick="() => Vm.OpenRun(report)" aria-label="@($"Open run {report.Run.Id}")">@Vm.Presentation.AbbreviatedId(report.Run.Id) <AppIcon Kind="arrow-right" /></button> }</td> }
                                 </tr>
                                 @if (row.Source is { } selected && ReferenceEquals(Vm.SelectedLog, selected) && Vm.SelectedLogFields is { } fields)
                                 {
@@ -421,11 +420,11 @@ else
                 </span>
             </div>
 
-            <ChainPipeline Run="chainRun" OnStepClick="Vm.OpenChainStep" />
             @if (chainRun.Steps.Any(step => step.ActionType == PlaceContext.Domain.ValueObjects.QemuChainAction.ActionType))
             {
                 <QemuReplay @key="chainRun.Id" Run="chainRun" />
             }
+            <ChainPipeline Run="chainRun" OnStepClick="Vm.OpenChainStep" />
 
             <div class="dccard panel-card">
                 <div class="panel-title">Job logs</div>

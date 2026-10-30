@@ -115,6 +115,7 @@
 .log-summary { font-size:10.5px; color:var(--text-3); cursor:pointer }
 .log-pre { font-size:10px; font-family:var(--font-mono); color:var(--text-3); white-space:pre-wrap; margin-top:3px; max-height:220px; overflow-y:auto }
 .editor-body { flex:1; display:flex; flex-direction:column; gap:14px; overflow-y:auto; overscroll-behavior:contain }
+.editor-body > * { flex-shrink:0 }
 .workflow-builder { display:grid; grid-template-columns:250px minmax(0, 1fr); gap:18px; align-items:start }
 .workflow-palette { padding:20px 16px; border:1px solid var(--border); border-radius:14px; background:var(--card) }
 .workflow-eyebrow { color:var(--brand-2); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase }
@@ -157,9 +158,6 @@
 .field-row { display:flex; gap:10px }
 .flex-14 { flex:1.4 }
 .empty-steps { padding:14px; border-radius:8px; background:var(--card-2); font-size:12px; color:var(--text-3); text-align:center }
-.step-list { display:flex; flex-direction:column; gap:6px }
-.step-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background:var(--card-2) }
-.stage-gate-row { display:flex; align-items:center; gap:6px; margin-left:18px; margin-top:2px; margin-bottom:2px }
 .gate-tag { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:5px; font-size:11px; font-family:var(--font-mono); cursor:pointer }
 .gate-tag-wait { background:var(--card); border:1px solid var(--border); color:var(--text-2) }
 .gate-tag-condition { background:#fef9e7; border:1px solid #f0d060; color:#7a5c00 }
@@ -173,16 +171,8 @@
 .condition-builder .dcfield:last-child:nth-child(3) { grid-column:1 / -1 }
 .condition-preview { display:flex; align-items:center; gap:8px; margin-top:10px; padding:8px 10px; border:1px solid var(--border); border-radius:7px; background:var(--card-2); font-size:10px; color:var(--text-3) }
 .condition-preview code { color:var(--brand-2); font-size:10.5px }
-.step-num { font-size:11px; color:var(--text-3); font-family:var(--font-sans); flex:none }
-.step-jobname { flex:1; min-width:0; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-.stage-item { align-items:flex-start }
-.stage-jobs { flex:1; min-width:0; display:flex; flex-wrap:wrap; gap:6px }
-.stage-job-chip { display:inline-flex; align-items:center; gap:4px; padding:2px 4px 2px 8px; border-radius:6px; background:var(--card); font-size:12px }
-.stage-branch-row { display:flex; align-items:center; gap:6px; min-width:0 }
-.branch-select { flex:1; min-width:0; padding:2px 6px; font-size:11px; min-height:26px }
 .btn-2-8 { padding:2px 8px }
 .btn-2-8-del { padding:2px 8px }
-.add-row { display:flex; gap:8px; margin-top:4px }
 .editor-err { color:var(--bad); font-size:12px; flex:1 }
 .run-modal { width:520px;  display:flex; flex-direction:column }
 .modal-body-scroll { overflow-y:auto }
@@ -216,13 +206,9 @@
     .chain-facts { white-space:normal; }
     .suite-result { display:none; }
     .stage-group { flex-wrap:wrap; }
-    .stage-item { flex-wrap:wrap; gap:8px; }
     .stage-jobs { width:100%; }
     .stage-branch-row { width:100%; }
     .stage-branch-row .branch-select { min-height:34px; }
-    .stage-branch-row .dcbtn { flex:0; min-height:34px; }
-    .add-row { flex-wrap:wrap; }
-    .add-row .dcbtn { flex:1; min-height:40px; }
     .dcslide-foot { flex-wrap:wrap; gap:10px; }
     .editor-err { width:100%; }
     .dcslide-foot .dcbtn { flex:1; min-height:40px; }
@@ -318,3 +304,75 @@
 
 .human-decision-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:16px; }
 .human-decision-actions .dcbtn { min-width:90px; min-height:40px; justify-content:center; }
+
+/* List editor and environment settings share the existing side-pane shell. */
+.workflow-list { min-width:0 }
+.workflow-list-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px }
+.workflow-list-heading h3 { margin:0; font-size:15px }
+.workflow-list-heading h3 span { margin-left:6px; color:var(--text-3); font-size:12px; font-weight:400 }
+.workflow-list-heading p { margin:5px 0 0; color:var(--text-3); font-size:12px }
+.step-list { display:flex; flex-direction:column; gap:14px; list-style:none; margin:0; padding:0 }
+.stage-item { min-width:0; border:1px solid var(--border); border-radius:12px; background:var(--card); overflow:hidden }
+.list-stage-head { display:flex; align-items:center; gap:9px; padding:10px 14px; background:var(--card-2); border-bottom:1px solid var(--border) }
+.list-stage-head > strong { min-width:0; overflow-wrap:anywhere; font-size:12px }
+.step-num { display:grid; place-items:center; flex:none; width:25px; height:25px; border-radius:7px; background:var(--brand-bg); color:var(--brand-2); font-size:11px; font-weight:700 }
+.list-stage-count { color:var(--text-3); font-size:11px; white-space:nowrap }
+.list-stage-actions { display:flex; gap:5px; margin-left:auto; flex:none }
+.list-stage-actions .dcbtn, .stage-job-chip .dcbtn { display:grid; place-items:center; min-width:32px; min-height:32px; padding:5px }
+.list-stage-body { display:flex; flex-direction:column; gap:12px; padding:14px; min-width:0 }
+.stage-jobs { display:flex; flex-direction:column; gap:8px; min-width:0 }
+.stage-job-chip { display:flex; align-items:center; gap:10px; min-width:0; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text-2); font:inherit; font-size:12px; text-align:left }
+button.stage-job-chip { width:100%; cursor:pointer }
+button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--brand-bg) }
+.stage-job-chip > span { min-width:0; overflow-wrap:anywhere }
+.stage-job-chip strong, .stage-job-chip small { display:block }
+.stage-job-chip small { margin-top:4px; color:var(--text-3); font-size:11px; line-height:1.5 }
+.list-job-name { flex:1 }
+.list-configure { margin-left:auto; color:var(--brand-2); font-size:11px; flex:none }
+.list-stage-gate { display:flex; gap:6px; align-items:flex-start }
+.list-stage-gate > .dcbtn:first-child { min-width:0; text-align:left; white-space:normal; overflow-wrap:anywhere; color:var(--brand-2) }
+.list-false-path { display:flex; flex-direction:column; gap:10px; padding:12px; border-left:2px solid var(--brand-2); background:var(--bg); border-radius:0 8px 8px 0; min-width:0; overflow:auto }
+.list-false-path > strong { color:var(--text-3); font-size:11px }
+.list-false-path > .dcbtn { align-self:flex-start }
+.stage-branch-row { display:flex; align-items:center; gap:8px; min-width:0 }
+.branch-select { flex:1; min-width:0; max-width:420px }
+.list-stage-footer { display:flex; flex-wrap:wrap; gap:8px; padding-top:10px; border-top:1px solid var(--border) }
+.list-stage-footer .dcbtn { color:var(--text-3); font-size:11px }
+.qemu-modal { width:min(620px, 100vw) }
+.qemu-modal .dcmodal-head { gap:12px; padding:22px }
+.qemu-modal h3 { margin:5px 0 7px; font-size:20px }
+.qemu-heading-icon { display:grid; place-items:center; flex:none; width:40px; height:40px; border-radius:12px; background:var(--brand-bg); color:var(--brand-2); font-size:20px }
+.qemu-modal .dcslide-x { margin-left:auto }
+.qemu-modal .dcmodal-body { gap:24px; padding:22px }
+.qemu-section { display:flex; flex-direction:column; gap:12px; min-width:0 }
+.qemu-section + .qemu-section { border-top:1px solid var(--border); padding-top:20px }
+.qemu-section h4 { margin:0; font-size:13px; font-weight:650 }
+.qemu-section .dcfield { margin:0 }
+.qemu-section small { display:block; color:var(--text-3); font-size:11px; line-height:1.6 }
+.qemu-section textarea { min-height:150px; resize:vertical; line-height:1.65 }
+.qemu-section .sub-note { margin:0; line-height:1.6 }
+.qemu-readiness { padding:12px 14px; border:1px solid var(--border); border-radius:9px; background:var(--card) }
+.qemu-status { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:650; color:var(--warn) }
+.qemu-status.ready { color:var(--good) }
+.qemu-readiness p { margin:7px 0 0; color:var(--text-3); font-size:11px; line-height:1.6; overflow-wrap:anywhere }
+.qemu-network { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 0 0; cursor:pointer }
+.qemu-network strong { display:block; font-size:12px; margin-bottom:4px }
+.qemu-network input { flex:none; width:18px; height:18px; accent-color:var(--brand) }
+.qemu-resource-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px }
+.qemu-resource-grid .dcfield { min-width:0 }
+.qemu-resource-grid label span { color:var(--text-3); font-weight:400; font-size:10px }
+.qemu-error { margin:0; padding:12px; border:1px solid var(--bad); border-radius:8px; color:var(--bad); font-size:12px }
+@media (max-width: 600px) {
+    .list-stage-head, .list-stage-body { padding:10px }
+    .list-stage-head { gap:6px; flex-wrap:wrap }
+    .list-stage-actions .dcbtn, .stage-job-chip .dcbtn { min-width:40px; min-height:40px }
+    .stage-branch-row { flex-wrap:wrap }
+    .branch-select { flex-basis:100%; max-width:none }
+    .list-stage-footer .dcbtn { min-height:40px }
+    .qemu-modal .dcmodal-head, .qemu-modal .dcmodal-body { padding:18px }
+    .qemu-heading-icon { display:none }
+    .qemu-resource-grid { grid-template-columns:repeat(2, minmax(0, 1fr)) }
+    .qemu-resource-grid .dcfield:last-child { grid-column:1 / -1 }
+}
+
+.qemu-login-actions { display:flex; flex-wrap:wrap; gap:8px }

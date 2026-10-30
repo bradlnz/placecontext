@@ -182,6 +182,8 @@ public class TriggerSchedulerServiceDrainTests
         public Task UpdateAsync(Job job, CancellationToken ct = default) => Task.CompletedTask;
         public Task RemoveAsync(Guid jobId, CancellationToken ct = default) => Task.CompletedTask;
         public Task<Job?> GetByIdAsync(Guid jobId, CancellationToken ct = default) => Task.FromResult<Job?>(FakeJob);
+        public Task<IReadOnlyDictionary<Guid, string>> GetNamesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
         public Task<IReadOnlyList<Job>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<Job>>(Array.Empty<Job>());
     }

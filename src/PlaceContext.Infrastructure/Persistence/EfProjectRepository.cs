@@ -22,11 +22,18 @@ public sealed class EfProjectRepository : IProjectRepository
         Map(p, row);
     }
 
+    public Task<bool> ExistsAsync(ProjectId id, CancellationToken ct = default)
+        => _db.Projects.AnyAsync(p => p.Id == id.Value, ct);
+
     public async Task<Project?> GetByIdAsync(ProjectId id, CancellationToken ct = default)
     {
         var row = await _db.Projects.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id.Value, ct);
         return row is null ? null : ToDomain(row);
     }
+
+    public async Task<IReadOnlyDictionary<Guid, string>> GetNamesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
+        => await _db.Projects.AsNoTracking().Where(p => ids.Contains(p.Id))
+            .Select(p => new { p.Id, p.Name }).ToDictionaryAsync(p => p.Id, p => p.Name, ct);
 
     public async Task<Project?> GetByPathAsync(ProjectPath path, CancellationToken ct = default)
     {

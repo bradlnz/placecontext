@@ -8,6 +8,17 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class QemuReplayViewModelTests
 {
+    [Fact]
+    public async Task Live_desktop_follows_the_running_step_independently_of_selected_replay()
+    {
+        var run = Run() with { Steps = Run().Steps.Select(step => step with { Status = step.Index == 1 ? "Running" : "Succeeded" }).ToArray() };
+        using var vm = new QemuReplayViewModel(new FakeQemuReplayStore());
+        await vm.SetRunAsync(run);
+        Assert.Equal(0, vm.Step);
+        Assert.Equal(1, vm.ActiveDesktop!.Index);
+        await vm.SetRunAsync(run with { Steps = run.Steps.Select(step => step with { Status = "Succeeded" }).ToArray() });
+        Assert.Null(vm.ActiveDesktop);
+    }
     private static ChainRunView Run(string status = "Succeeded") => new(Guid.NewGuid(), Guid.NewGuid(), "Desktop", status,
         [new(0, 0, 0, Guid.Empty, "QEMU environment", null, status, DateTimeOffset.UtcNow, null, QemuChainAction.ActionType),
          new(1, 1, 0, Guid.Empty, "Second desktop", null, "Succeeded", DateTimeOffset.UtcNow, null, QemuChainAction.ActionType)],
@@ -37,6 +48,25 @@ public sealed class QemuReplayViewModelTests
         Assert.Single(vm.Frames); Assert.Contains("/qemu/1/", vm.ImageUrl);
         await vm.SetRunAsync(Run());
         Assert.Empty(vm.Frames); Assert.Null(vm.ImageUrl);
+    }
+
+    [Fact]
+    public async Task Live_replay_follows_new_actions_and_preserves_pointer_while_waiting()
+    {
+        var store = new FakeQemuReplayStore();
+        var run = Run("Running");
+        await store.AppendAsync(run.Id, 0, new(new(0, 0, DateTimeOffset.UtcNow, "Click search", 0, true,
+            PointerX: .4, PointerY: .2, Click: true), [1]), default);
+        using var vm = new QemuReplayViewModel(store);
+        await vm.SetRunAsync(run);
+        await AddAsync(store, run.Id, 0, 1);
+        await vm.SetRunAsync(run);
+        Assert.Equal(1, vm.Position);
+        Assert.Equal(.4, vm.Pointer!.PointerX);
+        vm.Select(0);
+        await AddAsync(store, run.Id, 0, 2);
+        await vm.SetRunAsync(run);
+        Assert.Equal(0, vm.Position);
     }
 
     [Fact]

@@ -38,10 +38,3 @@ spec:
     - from:
         - podSelector: { matchLabels: { app: placecontext } }
       ports: [{ protocol: TCP, port: 8081 }]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata: { name: default-deny-ingress, namespace: placecontext-jobs }
-spec:
-  podSelector: {}
-  policyTypes: [Ingress]

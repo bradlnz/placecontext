@@ -19,15 +19,11 @@ public sealed class ListRecentChainRunsHandler : IQueryHandler<ListRecentChainRu
     {
         var runs = await _runs.ListRecentAsync(query.Take, ct);
 
-        var projectNames = new Dictionary<Guid, string>();
-        foreach (var projectId in runs.Select(r => r.ProjectId).Distinct())
-        {
-            var project = await _projects.GetByIdAsync(Domain.ValueObjects.ProjectId.From(projectId), ct);
-            projectNames[projectId] = project?.Name.Value ?? "(deleted project)";
-        }
+        if (runs.Count == 0) return [];
+        var projectNames = await _projects.GetNamesAsync(runs.Select(r => r.ProjectId).Distinct().ToArray(), ct);
 
         return runs
-            .Select(r => new ChainRunReportView(r.ProjectId, projectNames[r.ProjectId], ChainRunMapper.ToView(r)))
+            .Select(r => new ChainRunReportView(r.ProjectId, projectNames.GetValueOrDefault(r.ProjectId, "(deleted project)"), ChainRunMapper.ToView(r)))
             .ToList();
     }
 }

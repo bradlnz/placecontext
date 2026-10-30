@@ -111,9 +111,18 @@ public sealed class ChainInputResumeTests
                 Assert.Equal(next.Id, JsonSerializer.Deserialize<ChainInputRequest>(saved.InputRequestJson!)!.Id);
             }
             await using var services = new ServiceCollection()
-                .AddScoped(_ => new AppDbContext(options, tenant)).BuildServiceProvider();
+                .AddScoped(_ => new AppDbContext(options, new CurrentTenant())).BuildServiceProvider();
             using var worker = new ChainContinuationWorker(services.GetRequiredService<IServiceScopeFactory>(),
                 NullLogger<ChainContinuationWorker>.Instance);
+            var claim = typeof(ChainContinuationWorker).GetMethod("ClaimAsync",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            await (Task)claim.Invoke(worker, new object[] { CancellationToken.None })!;
+            await using (var claimedDb = new AppDbContext(options, tenant))
+            {
+                var claimed = await claimedDb.ChainRuns.SingleAsync();
+                Assert.NotNull(claimed.ContinuationClaimedAt);
+                Assert.NotNull(claimed.ContinuationClaimedBy);
+            }
             var release = typeof(ChainContinuationWorker).GetMethod("ReleaseAsync",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
             foreach (var (before, after) in new[] { ("Running", "Waiting"), ("Waiting", "Waiting"),

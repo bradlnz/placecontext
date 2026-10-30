@@ -1,0 +1,73 @@
+@page "/project/{ProjectId:guid}/build/workflows"
+@attribute [Authorize(Policy = Permission.ChainsManage)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@inject AgentWorkflowsViewModel Vm
+@implements IDisposable
+
+<PageTitle>PlaceContext — Workflow library</PageTitle>
+<div class="agent-library" aria-busy="@Vm.Busy">
+    <header class="library-header">
+        <div><a href="@Vm.BuildUrl">Back to Build</a><h1>Workflow library</h1><p>Choose your industry, provide the information, and follow the process to a result.</p></div>
+        <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync">Refresh</button>
+    </header>
+    @if (Vm.Error is not null) { <p class="danger" role="alert">@Vm.Error</p> }
+    @if (Vm.Workspace is { } workspace)
+    {
+        @if (workspace.SimulationEnabled)
+        {
+            <aside class="simulation-note"><strong>Local subscription simulation</strong><p>No payment is collected. Each 1,000 reported model tokens uses 1 demo credit. Jev usage is not included because it is not reported. Model and Jev providers may charge for actual requests.</p><p>Paid workflows use the first enabled model connection in Settings. Cancelling a subscription stops new runs; existing runs and results remain.</p></aside>
+        }
+        else { <p>Free workflows are available. Paid agents are not enabled on this host.</p> }
+        <label for="workflow-industry">Industry</label>
+        <select id="workflow-industry" class="dcinput" @bind="Vm.Industry" disabled="@Vm.Busy"><option value="">All industries</option>@foreach (var industry in Vm.Industries) { <option value="@industry">@industry</option> }</select>
+        <div class="workflow-grid">
+            @foreach (var workflow in Vm.VisibleWorkflows)
+            {
+                <article class="workflow-card" @key="workflow.Id">
+                    <span>@workflow.Industry · @Vm.AccessLabel(workflow)</span><h2>@workflow.Name</h2><p>@workflow.Description</p>
+                    <ol>@foreach (var step in workflow.Steps) { <li>@step</li> }</ol>
+                    <div class="card-actions">
+                        <button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.Select(workflow)">Configure workflow</button>
+                        @if (workflow.Paid && Vm.CanManageSubscriptions)
+                        { <button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.ToggleSubscriptionAsync(workflow)">@(Vm.Subscribed(workflow.Id) ? "Cancel simulated subscription" : "Simulate subscription")</button> }
+                    </div>
+                </article>
+            }
+        </div>
+        @if (Vm.Selected is { } selected)
+        {
+            <section class="workflow-form" aria-label="Workflow inputs">
+                <h2>@selected.Name</h2><p>Provide the facts the workflow should use. Missing information will be returned for review.</p>
+                @foreach (var field in selected.InputFields)
+                {
+                    <label for="@($"agent-input-{field}")">@AgentWorkflowsViewModel.FieldLabel(field)</label>
+                    <textarea id="@($"agent-input-{field}")" class="dcinput" rows="3" maxlength="5000" @bind="Vm.Inputs[field]" disabled="@Vm.Busy"></textarea>
+                }
+                @if (selected.Paid && !Vm.Subscribed(selected.Id)) { <p>An administrator must activate this agent's simulated subscription before it can run.</p> }
+                <button class="dcbtn primary" disabled="@(!Vm.CanRun)" @onclick="Vm.RunAsync">@(Vm.Busy ? "Working…" : "Run workflow")</button>
+            </section>
+        }
+        @if (Vm.Result is { } result)
+        {
+            <section class="workflow-result" aria-live="polite"><h2>@Vm.WorkflowName(result.AgentId) · @AgentWorkflowsViewModel.StatusLabel(result)</h2>
+                <p>@result.Notice</p><p>@AgentWorkflowsViewModel.TokenLabel(result) · @AgentWorkflowsViewModel.CreditLabel(result)</p>
+                @if (result.Output is not null) { <pre>@result.Output</pre> }
+            </section>
+        }
+        <section class="workflow-history"><h2>Recent runs</h2><p>The latest 50 runs in this project. Reopening a result does not run or charge it again.</p>
+            @if (workspace.Runs.Count == 0) { <p>No runs yet. Choose a workflow to get started.</p> }
+            @foreach (var run in workspace.Runs)
+            {
+                <article class="history-row" @key="run.Id"><div><strong>@Vm.WorkflowName(run.AgentId)</strong><span>@AgentWorkflowsViewModel.StartedLabel(run) · @AgentWorkflowsViewModel.StatusLabel(run)</span></div><div><span>@AgentWorkflowsViewModel.TokenLabel(run)</span><span>@AgentWorkflowsViewModel.CreditLabel(run)</span></div><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.OpenResult(run)">View result</button></article>
+            }
+        </section>
+    }
+    else if (Vm.Busy) { <p role="status">Loading workflows…</p> }
+</div>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId);
+    public void Dispose() => Vm.Dispose();
+}

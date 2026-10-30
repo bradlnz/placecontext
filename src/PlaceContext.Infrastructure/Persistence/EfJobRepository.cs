@@ -70,6 +70,10 @@ public sealed class EfJobRepository : IJobRepository
         return row is null ? null : ToDomain(row);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, string>> GetNamesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
+        => await _db.Jobs.AsNoTracking().Where(j => ids.Contains(j.Id))
+            .Select(j => new { j.Id, j.Name }).ToDictionaryAsync(j => j.Id, j => j.Name, ct);
+
     public async Task<IReadOnlyList<Job>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
     {
         var rows = await _db.Jobs.AsNoTracking()

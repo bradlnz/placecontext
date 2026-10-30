@@ -154,12 +154,62 @@ public class OperationCenterTests
     {
         var center = Center();
         var fired = 0;
-        center.Changed += () => fired++;
+        using var subscription = center.Subscribe(Tenant.Id, () => fired++);
 
         center.Sync(Tenant.Id, "job-run:abc", PortalOperationStatus.Running, "Run job — encode",
             null, null, null, DateTimeOffset.UtcNow, null);
 
         Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void Ten_thousand_tenant_subscriptions_only_wake_the_changed_tenant()
+    {
+        var center = Center();
+        var fired = 0;
+        var subscriptions = Enumerable.Range(0, 10_000)
+            .Select(_ => center.Subscribe(Guid.NewGuid(), () => fired++)).ToArray();
+        using var target = center.Subscribe(Tenant.Id, () => fired++);
+        center.Track(Tenant, null, "changed", null);
+        Assert.Equal(1, fired);
+        foreach (var subscription in subscriptions) subscription.Dispose();
+    }
+
+    [Fact]
+    public void Subscriptions_filter_private_and_project_changes_and_stop_on_dispose()
+    {
+        var center = Center();
+        var project = Guid.NewGuid();
+        var user = Guid.NewGuid();
+        var fired = 0;
+        var subscription = center.Subscribe(Tenant.Id, () => fired++, user, project);
+        center.Track(Tenant, Guid.NewGuid(), "Other project", null);
+        center.Track(Tenant, project, "Other user", null, userId: Guid.NewGuid());
+        Assert.Equal(0, fired);
+        center.Track(Tenant, project, "Private", null, userId: user);
+        center.Track(Tenant, project, "Shared", null);
+        Assert.Equal(2, fired);
+        subscription.Dispose();
+        center.Track(Tenant, project, "After disposal", null);
+        Assert.Equal(2, fired);
+    }
+
+    [Fact]
+    public void Notifications_preserve_subscriber_context_and_isolate_throwing_subscribers()
+    {
+        var center = Center();
+        var identity = new AsyncLocal<string>();
+        identity.Value = "subscriber";
+        string? observed = null;
+        using var broken = center.Subscribe(Tenant.Id, () => throw new InvalidOperationException());
+        using var healthy = center.Subscribe(Tenant.Id, () => observed = identity.Value);
+        identity.Value = "publisher";
+        var op = center.Track(Tenant, null, "Work", null);
+        Assert.Equal("subscriber", observed);
+        Assert.Equal("publisher", identity.Value);
+        observed = null;
+        center.MarkRunning(op.Id);
+        Assert.Equal("subscriber", observed);
     }
 
     // ── Stubs (Sync/Track/Mark* never touch scopes or the lifetime) ─────────────────────────────

@@ -17,7 +17,7 @@ namespace PlaceContext.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.11")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -82,6 +82,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<int>("TestsAdded")
@@ -108,193 +109,80 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("activity_log", (string)null);
                 });
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.AgentChatSessionRow", b =>
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.AgentRunRow", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AgentId")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<decimal?>("DemoCredits")
+                        .HasPrecision(28, 6)
+                        .HasColumnType("numeric(28,6)");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("MessagesJson")
+                    b.Property<string>("InputHash")
                         .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("[]");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
                         .HasColumnType("text");
 
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<long?>("InputTokens")
+                        .HasColumnType("bigint");
 
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("Notice")
+                        .HasColumnType("text");
 
-                    b.HasKey("Id");
+                    b.Property<string>("Output")
+                        .HasColumnType("text");
 
-                    b.HasIndex("ProjectId", "UpdatedAt");
-
-                    b.ToTable("agent_chat_sessions", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.AgentConfigRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BaseModel")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("qwen3.5:0.8b");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("Enabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<string>("LaunchpadToolCatalog")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<int>("MaxContextChunks")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(5);
-
-                    b.Property<string>("Preamble")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
+                    b.Property<long?>("OutputTokens")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("SystemPrompt")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<float>("Temperature")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("real")
-                        .HasDefaultValue(0.7f);
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ToolCatalog")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("");
-
-                    b.Property<float>("TopP")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("real")
-                        .HasDefaultValue(0.9f);
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
+                    b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                    b.Property<string>("Status")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.HasIndex("ProjectId")
-                        .IsUnique();
+                    b.HasKey("TenantId", "Id");
 
-                    b.ToTable("agent_configs", (string)null);
+                    b.HasIndex("TenantId", "ProjectId", "StartedAt");
+
+                    b.ToTable("agent_runs", (string)null);
                 });
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.AgentDefinitionRow", b =>
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.AgentSubscriptionRow", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("AllowedJobIdsJson")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("[]");
+                    b.Property<string>("AgentId")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
 
-                    b.Property<string>("CapabilitiesJson")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("[]");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<bool>("Enabled")
+                    b.Property<bool>("Active")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("Instructions")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<Guid?>("ParentAgentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Schema")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("TemplateKey")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                    b.HasKey("TenantId", "AgentId");
 
-                    b.HasIndex("ParentAgentId");
-
-                    b.HasIndex("ProjectId", "Kind");
-
-                    b.HasIndex("ProjectId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("agent_definitions", (string)null);
+                    b.ToTable("agent_subscriptions", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ArtifactShareTokenRow", b =>
@@ -322,6 +210,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<string>("TokenHash")
@@ -372,6 +261,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Title")
@@ -400,6 +290,7 @@ namespace PlaceContext.Infrastructure.Migrations
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.BuildMemoryRow", b =>
                 {
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("UserId")
@@ -469,6 +360,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -477,51 +369,12 @@ namespace PlaceContext.Infrastructure.Migrations
 
                     b.HasIndex("ChainId", "StartedAt");
 
+                    b.HasIndex("TenantId", "StartedAt")
+                        .HasDatabaseName("ix_chain_runs_tenant_started");
+
                     b.HasIndex("Status", "ResumeAt", "ContinuationClaimedAt");
 
                     b.ToTable("chain_runs", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ChatCommandRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Args")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ToolName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("chat_commands", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CommunicationProviderRow", b =>
@@ -580,6 +433,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasDefaultValue("{}");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -638,6 +492,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasDefaultValue("[]");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -690,6 +545,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -729,6 +585,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -768,6 +625,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -799,6 +657,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -836,6 +695,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -869,6 +729,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Token")
@@ -907,6 +768,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -1045,6 +907,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<int>("TimeoutSeconds")
@@ -1124,6 +987,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -1131,6 +995,9 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("ProjectId");
 
                     b.HasIndex("JobId", "StartedAt");
+
+                    b.HasIndex("TenantId", "StartedAt")
+                        .HasDatabaseName("ix_job_runs_tenant_started");
 
                     b.ToTable("job_runs", (string)null);
                 });
@@ -1151,6 +1018,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("ProjectId", "Name");
@@ -1241,6 +1109,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -1262,12 +1131,6 @@ namespace PlaceContext.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("ChainId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("CommandId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -1302,13 +1165,8 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Prompt")
-                        .HasColumnType("text");
-
-                    b.Property<string>("SourceTable")
-                        .HasColumnType("text");
-
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -1389,6 +1247,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Transport")
@@ -1434,6 +1293,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -1599,6 +1459,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -1673,6 +1534,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -1711,6 +1573,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -1758,6 +1621,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -1772,6 +1636,7 @@ namespace PlaceContext.Infrastructure.Migrations
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.RequirementsRow", b =>
                 {
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ProjectId")
@@ -1815,6 +1680,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasDefaultValue("[]");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -1871,6 +1737,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Title")
@@ -1911,6 +1778,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
@@ -2006,6 +1874,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<string>("Tool")
@@ -2045,6 +1914,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
@@ -2077,6 +1947,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<string>("TokenHash")
@@ -2114,6 +1985,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("UserId")
@@ -2174,6 +2046,7 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<string>("TotpSecret")

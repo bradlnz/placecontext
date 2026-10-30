@@ -21,22 +21,13 @@ public sealed class ListRecentRunReportsHandler : IQueryHandler<ListRecentRunRep
     {
         var runs = await _runs.ListRecentAsync(query.Take, ct);
 
-        // Resolve each distinct job and project once; runs of deleted jobs/projects still report.
-        var names = new Dictionary<Guid, string>();
-        foreach (var jobId in runs.Select(r => r.JobId).Distinct())
-        {
-            var job = await _jobs.GetByIdAsync(jobId, ct);
-            names[jobId] = job?.Name ?? "(deleted job)";
-        }
-        var projectNames = new Dictionary<Guid, string>();
-        foreach (var projectId in runs.Select(r => r.ProjectId).Distinct())
-        {
-            var project = await _projects.GetByIdAsync(Domain.ValueObjects.ProjectId.From(projectId), ct);
-            projectNames[projectId] = project?.Name.Value ?? "(deleted project)";
-        }
+        if (runs.Count == 0) return [];
+        var names = await _jobs.GetNamesAsync(runs.Select(r => r.JobId).Distinct().ToArray(), ct);
+        var projectNames = await _projects.GetNamesAsync(runs.Select(r => r.ProjectId).Distinct().ToArray(), ct);
 
         return runs
-            .Select(r => new RunReportView(r.JobId, names[r.JobId], projectNames[r.ProjectId], JobViewMapper.ToDetailView(r)))
+            .Select(r => new RunReportView(r.JobId, names.GetValueOrDefault(r.JobId, "(deleted job)"),
+                projectNames.GetValueOrDefault(r.ProjectId, "(deleted project)"), JobViewMapper.ToDetailView(r)))
             .ToList();
     }
 }

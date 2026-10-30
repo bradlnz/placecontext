@@ -24,9 +24,9 @@ public sealed class CodexQemuIntegrationTests(ITestOutputHelper output)
         public bool BrowserVerified { get; private set; }
         public async Task<QemuEnvironmentResult> RunAsync(string prompt, string? input,
             Func<string, int, CancellationToken, Task<QemuEnvironmentResult>> executeGuest, CancellationToken ct,
-            Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null)
+            Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null, QemuAgentInteraction? interaction = null, Func<CancellationToken, Task<byte[]>>? readLiveFrame = null)
         {
-            var result = await agent.RunAsync(prompt, input, executeGuest, ct, recordFrame);
+            var result = await agent.RunAsync(prompt, input, executeGuest, ct, recordFrame, interaction, readLiveFrame);
             var check = await executeGuest("test \"$(id -u)\" != 0 && xwininfo -root -tree | grep -F -- '" + title + "'", 8192, ct);
             BrowserVerified = check.ExitCode == 0;
             return result;
@@ -48,7 +48,7 @@ public sealed class CodexQemuIntegrationTests(ITestOutputHelper output)
         var agent = new VerifiedAgent(new QemuPromptAgent(unusedHttp, config), title);
         var runner = new QemuEnvironmentRunner(config, agent);
         var directories = Directory.GetDirectories(Path.GetTempPath(), "pcq-*").Order().ToArray();
-        var result = await runner.RunAsync(new("browser", $"Create a local HTML page whose title and visible heading are '{title}'. Open it in Chromium with its sandbox enabled. Inspect a desktop screenshot and verify the title and heading. Leave the browser open, then finish with a summary including the exact title. Guest networking is disabled; this is an offline desktop test.",
+        var result = await runner.RunAsync(new("browser", $"Create a local HTML page whose title and visible heading are '{title}'. Open it in Chromium with its sandbox enabled. Inspect the Live preview using live_desktop and verify the title and heading. Leave the browser open, then finish with a summary including the exact title. Guest networking is disabled; this is an offline desktop test.",
             memoryMb: 2048, cpus: 2, timeoutSeconds: 300), "{}", default);
         output.WriteLine($"Model: {model}\nExit code: {result.ExitCode}\nSteps: {result.AgentSteps}\nSummary: {result.Stdout}\nError: {result.Stderr}");
         foreach (var activity in result.Activity ?? []) output.WriteLine($"{activity.Tool}: {activity.Description} (exit {activity.ExitCode})");
@@ -56,7 +56,7 @@ public sealed class CodexQemuIntegrationTests(ITestOutputHelper output)
         Assert.True(agent.BrowserVerified, "Independent guest check could not find the requested Chromium window.");
         Assert.Contains(title, result.Stdout);
         Assert.Contains(result.Activity!, activity => activity.Tool == "guest_shell" && activity.ExitCode == 0);
-        Assert.Contains(result.Activity!, activity => activity.Tool == "desktop_screenshot");
+        Assert.Contains(result.Activity!, activity => activity.Tool == "live_desktop");
         Assert.Empty(unusedHttp.Requests);
         Assert.Equal(directories, Directory.GetDirectories(Path.GetTempPath(), "pcq-*").Order().ToArray());
     }

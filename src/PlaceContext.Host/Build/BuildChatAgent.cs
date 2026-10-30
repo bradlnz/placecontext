@@ -10,7 +10,8 @@ using PlaceContext.Infrastructure.Tenancy;
 namespace PlaceContext.Host.Build;
 
 public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway model, PlaceContextService service,
-    IPermissionService permissions, ICurrentTenant tenant, IServiceConsole? services = null, IDatabaseConsole? databases = null, OperationCenter? operations = null, ICurrentUser? user = null)
+    IPermissionService permissions, ICurrentTenant tenant, IJevReviewer? reviewer = null, OperationCenter? operations = null, ICurrentUser? user = null,
+    PlaceContext.Application.AgentWorkflows.IAgentWorkflows? agents = null)
 {
     public async Task QueueAsync(BuildConversation conversation, string text, IReadOnlyList<BuildImage> images, CancellationToken ct = default)
     {
@@ -44,7 +45,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
         {
             if (conversation.StopRequested) throw new OperationCanceledException();
             RepairInterruptedCalls(conversation.Messages);
-            var tools = new BuildTools(conversation.ProjectId, service, permissions, store, services, databases);
+            var tools = new BuildTools(conversation.ProjectId, service, permissions, store, reviewer, agents);
             var functions = tools.Functions().ToDictionary(x => x.Name);
             var context = await tools.project_context(deadline.Token);
             var toolSchema = new JsonArray(functions.Values.Select(f => (JsonNode)new JsonObject { ["type"] = "function", ["function"] = new JsonObject {
@@ -55,16 +56,21 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                 var memory = await store.GetMemoryAsync(conversation.ProjectId, deadline.Token);
                 var messages = new JsonArray(new JsonObject { ["role"] = "system", ["content"] = $"""
                     You are the PlaceContext Build assistant for project {conversation.ProjectId}.
-                    Help build, inspect, edit, run, and delete jobs, workflows, schedules, and hosted apps using the provided tools.
-                    Services is the built-in hosting environment for this project. Default app requests to Services;
-                    do not ask for an external hosting provider or claim hosting access is missing before checking the hosting tools.
-                    Read service_authoring_guide before building apps. You can deploy Python or Node source, or a prebuilt image,
-                    and provision an app-owned PostgreSQL or Redis database with credentials injected by the platform.
-                    A request to build an app here authorizes its necessary service deployment and database provisioning.
-                    Inspect existing services first, reuse the intended app, and update its source without replacing its database.
-                    Use service status and logs to verify deployment; a submitted deployment is not yet a healthy app.
-                    If hosting is unavailable or permission is denied, report the actual tool error and completed work.
-                    Ask about standalone versus embedded UI only when the user's requirements cannot reasonably resolve it.
+                    Help customers build complete industry workflows: clarify the outcome, connect inputs,
+                    configure process steps, define acceptance criteria, test, activate when requested, and monitor results.
+                    Reuse existing jobs, workflows, data connections, and schedules. Explain the process in business terms.
+                    Use list_agent_workflows to find free checklists and subscription agents before building equivalent work.
+                    Library agents are managed processes: do not try to inspect, export, clone or edit their implementation as jobs.
+                    For subscription changes, direct administrators to /project/{conversation.ProjectId}/build/workflows.
+                    Subscription simulation collects no payment. Recorded model tokens use demo credits; Jev usage is excluded.
+                    Library agents deliver plans and review outcomes. They do not execute the proposed external actions.
+                    Use Jev for evidence-based result checks, document validation, and routing uncertain outcomes to people.
+                    Use review_workflow_result to inspect persisted results; for recurring validation add a Jev review stage.
+                    Always follow a Jev stage with an explicit condition on its noul score and a rejection or human-review path.
+                    A successful API call is not approval. Missing evidence, unavailable Jev, and uncertain judgments must not pass.
+                    Jev never decides tenant access, subscriptions, billing, permissions, or whether the user authorized an action.
+                    Browser automation uses Live preview and the existing Jev browser verification.
+                    Do not invent subscription entitlements, token prices, or claim a workflow is free without platform evidence.
                     Read existing resources before changing them and preserve settings the user did not ask to change.
                     You run as a background agent; the browser does not need to remain open.
                     Trace shared jobs, branch gates, data passed between stages, event triggers, and schedules before changes.

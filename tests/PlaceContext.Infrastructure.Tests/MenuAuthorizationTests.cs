@@ -6,6 +6,14 @@ namespace PlaceContext.Infrastructure.Tests;
 public sealed class MenuAuthorizationTests
 {
     [Fact]
+    public void Hosted_apps_and_databases_are_not_part_of_the_workflow_navigation()
+    {
+        Assert.DoesNotContain(MenuConfigService.WorkspaceCatalog, item => item.Id is "services" or "databases");
+        Assert.Contains(MenuConfigService.WorkspaceCatalog, item => item.Id == "build.chat");
+        Assert.Contains(MenuConfigService.WorkspaceCatalog, item => item.Id == "chains");
+    }
+
+    [Fact]
     public void Related_items_share_a_group_without_changing_their_routes_or_order()
     {
         var catalog = MenuConfigService.WorkspaceCatalog;
@@ -13,7 +21,7 @@ public sealed class MenuAuthorizationTests
             item.Kind, item.HrefTemplate, item.Icon, item.DefaultSection, index)).ToArray();
         var grouped = MenuConfigService.GroupSections(items);
         var infrastructure = Assert.Single(grouped, item => item.Label == "Infrastructure");
-        Assert.Equal(new[] { "queues", "services", "databases", "networking", "vault", "cluster" },
+        Assert.Equal(new[] { "queues", "networking", "vault", "cluster" },
             grouped.Where(item => item.Parent == infrastructure.Id).Select(item => item.Id));
         foreach (var item in items)
             Assert.Equal(item.Href, Assert.Single(grouped, resolved => resolved.Id == item.Id).Href);
@@ -34,8 +42,6 @@ public sealed class MenuAuthorizationTests
     [Theory]
     [InlineData("dashboard", Permission.ProjectsView)]
     [InlineData("jobs", Permission.JobsView)]
-    [InlineData("services", Permission.SettingsManage)]
-    [InlineData("databases", Permission.SettingsManage)]
     [InlineData("chains", Permission.ChainsManage)]
     [InlineData("schedules", Permission.TriggersManage)]
     [InlineData("data", Permission.DataRead)]

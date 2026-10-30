@@ -28,11 +28,11 @@ curl -fsSL https://get.placecontext.io/install.sh | \
 
 Use the same private `--ai-token` for every worker and the controller.
 
-## Production on Proxmox/k3s
+## Production on Kubernetes
 
 The production installer deploys only stateless PlaceContext resources to an existing cluster. It
 fails closed unless the image is digest-pinned, TLS exists, all nodes are Ready, there are at least
-three k3s server nodes and at least one worker node.
+three visible control-plane nodes and at least one worker node. For managed clusters (including DigitalOcean Kubernetes), pass `--managed-control-plane`; the provider owns control-plane availability.
 
 Provision these first:
 
@@ -80,7 +80,41 @@ digest. Deploy from the verified release bundle:
   --tls-secret placecontext-tls
 ```
 
-The deploy creates two trust zones: `placecontext` for the platform and `placecontext-jobs` for
-untrusted code. Restricted Pod Security, least-privilege cross-namespace RBAC, per-job egress policy,
-two portal replicas, topology spreading, a disruption budget, NetworkPolicies, and TLS-only Traefik
-ingress are applied by default.
+The platform runs in `placecontext`. Each tenant is provisioned into `pc-tenant-<tenant-id>` with
+restricted Pod Security, a token-free workload service account, namespace-scoped management RBAC,
+a resource quota, and default-deny ingress and egress. Per-run policies allow only the requested
+outbound access. Dependency caches are tenant-scoped. Tenant Jobs use the shared node pool selected
+by `placecontext-pool=shared`; label that pool before installation. Persistent shared workers are
+not used for tenant jobs. Existing shared-namespace jobs must finish before this upgrade; the new
+runner never falls back to the old namespace or cancels another tenant's jobs.
+
+The application uses Kubernetes, PostgreSQL, and S3-compatible storage. Provider-specific provisioning
+stays outside application code. The manifests under `k3s/` use standard Kubernetes APIs; the historical
+directory name does not require k3s. Kubernetes 1.30+, enforced NetworkPolicy, Traefik in `kube-system`,
+and metrics-server are required. Custom ingress installations must adapt the platform ingress policy.
+
+### DigitalOcean first, portable runtime
+
+Use DOKS for the managed control plane, managed PostgreSQL, and Spaces (or another S3-compatible store).
+Create a shared worker pool with the `placecontext-pool=shared` label and autoscaling enabled. For example,
+using an existing cluster and your chosen region-supported node size:
+
+```bash
+doctl kubernetes cluster node-pool create CLUSTER_ID \
+  --name shared --size NODE_SIZE --count 1 \
+  --label placecontext-pool=shared --auto-scale --min-nodes 1 --max-nodes 10
+```
+
+Run the production installer above with `--managed-control-plane`. Keep the platform's own nodes separate
+from the labelled workload pool. The included HPA scales the portal from 2 to 10 replicas using CPU demand.
+DOKS autoscaling adds worker nodes when resource requests cannot be scheduled and removes unused capacity;
+registered user counts alone are not a capacity signal. Set the maximum pool size to your operating budget.
+See [DigitalOcean node-pool autoscaling](https://docs.digitalocean.com/products/kubernetes/how-to/autoscale/).
+On another cloud, use its node autoscaler with the same pool label and apply the same application manifests.
+No provider API credentials are required by the application.
+
+These controls establish tenant boundaries, but do not certify complete isolation. Validate cross-tenant
+network access, storage access, and workload escape controls on the target cluster before accepting
+untrusted customers. Namespaces share a kernel on ordinary container nodes; use a sandboxed runtime or
+stronger infrastructure isolation when the threat model requires it. Host-side QEMU automation requires
+a separately secured execution host and is not made namespaced by these changes.
