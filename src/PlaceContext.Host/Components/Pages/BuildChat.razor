@@ -32,7 +32,7 @@
                             </div>
             </div>
             <div class="chat-header-actions">
-                <a class="chat-toolbar-button" href="@($"/project/{ProjectId}/build/workflows")"><AppIcon Kind="chain" /><span>Workflow library</span></a>
+                <a class="chat-toolbar-button" href="@($"/project/{ProjectId}/build/workflows")"><AppIcon Kind="chain" /><span>Workflow store</span></a>
                 <button class="chat-toolbar-button @(Vm.ShowMemory ? "selected" : "")" aria-label="Project memory" title="Project memory" aria-expanded="@Vm.ShowMemory" aria-controls="@(Vm.ViewId + "-build-memory")" @onclick="() => Vm.ShowMemory = !Vm.ShowMemory"><AppIcon Kind="ledger" /><span>Memory</span></button>
                 @if (Vm.Conversation.Messages.Count > 0)
                 { <button class="chat-icon-button delete-chat" aria-label="Delete conversation" title="Delete conversation" disabled="@Vm.Locked" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button> }

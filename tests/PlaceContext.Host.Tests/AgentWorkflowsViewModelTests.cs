@@ -5,6 +5,23 @@ namespace PlaceContext.Host.Tests;
 public sealed class AgentWorkflowsViewModelTests
 {
     [Fact]
+    public async Task Store_filters_combine_search_industry_and_subscription()
+    {
+        var service = new AgentWorkflowUiStub();
+        using var vm = new AgentWorkflowsViewModel(service, new PortalUiState());
+        await vm.LoadAsync(Guid.NewGuid());
+        Assert.Equal(2, vm.VisibleWorkflows.Count());
+        vm.Browse(AgentBrowseFilter.Free); Assert.False(Assert.Single(vm.VisibleWorkflows).Paid);
+        vm.Search = "ONBOARDING"; Assert.Empty(vm.VisibleWorkflows);
+        vm.Browse(AgentBrowseFilter.All); Assert.True(Assert.Single(vm.VisibleWorkflows).Paid);
+        vm.Industry = "Retail"; Assert.Empty(vm.VisibleWorkflows);
+        vm.Industry = ""; vm.Search = "";
+        vm.Browse(AgentBrowseFilter.Subscribed); Assert.Empty(vm.VisibleWorkflows);
+        await vm.ToggleSubscriptionAsync(service.Workflow); Assert.Single(vm.VisibleWorkflows);
+        vm.Select(service.Workflow); vm.CloseDetails(); Assert.Null(vm.Selected);
+    }
+
+    [Fact]
     public async Task Subscription_controls_unlock_run_and_transport_retries_keep_the_request_id()
     {
         var service = new AgentWorkflowUiStub();

@@ -256,3 +256,17 @@ PLACECONTEXT_TEST_QEMU_IMAGE=/absolute/path/browser-linux.qcow2 \
 PLACECONTEXT_TEST_QEMU_KVM=true \
 dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~QemuInteractiveIntegrationTests
 ```
+
+### Repeatable local startup
+
+From the repository, run `./deploy/qemu/run-local.sh` after starting the local database.
+It uses `dist/qemu/browser-linux.qcow2` (override with `PLACECONTEXT_QEMU_IMAGE`), detects
+KVM access, and enables the Jev executor with the signed-in Codex vision model. Jev reads `TYPESAFE_API_KEY` from the current project’s vault first, falling back to host
+configuration or the launching environment when no project entry exists. Existing `PlaceContext__Qemu__Agent__*`
+values take precedence. Kubernetes defaults to `$HOME/.kube/config`. The portal binds to
+`http://localhost:7700`. These local settings do not enable QEMU on production hosts.
+
+Jev credentials resolve per project: the vault entry `TYPESAFE_API_KEY` takes precedence over
+`PlaceContext:TypeSafe:ApiKey` and the host environment. This applies to browser automation,
+workflow reviews and dashboard analysis. No credential is copied to another project or into
+the VM. An invalid or unreadable vault entry fails instead of silently using the host key.

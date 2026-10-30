@@ -767,7 +767,7 @@ public sealed class BuildChatTests
     {
         public int Calls;
         public string? State, Question;
-        public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct)
+        public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null)
         {
             Calls++; State = state; Question = question;
             return Task.FromResult(new JsonObject { ["noul"] = .4, ["model"] = "jev-test" });

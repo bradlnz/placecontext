@@ -53,9 +53,23 @@ public sealed partial class JobChainsViewModel
         QemuTimeoutSeconds = 300;
         QemuAllowNetwork = false;
         QemuPauseForLogin = false; QemuLoginId = ""; QemuLogins = [];
-        _ = LoadQemuLoginsAsync();
         QemuError = null;
+        _ = LoadQemuLoginsAsync();
+        _ = LoadQemuEnvironmentAsync();
         ShowQemuEditor = true;
+        NotifyStateChanged();
+    }
+
+    private async Task LoadQemuEnvironmentAsync()
+    {
+        if (_qemuCatalog is null) return;
+        var project = ProjectId;
+        try
+        {
+            var environment = await _qemuCatalog.GetAsync(project);
+            if (project == ProjectId) QemuEnvironment = environment;
+        }
+        catch { if (project == ProjectId) QemuError = "Could not load the project's QEMU configuration. Check its vault settings."; }
         NotifyStateChanged();
     }
 

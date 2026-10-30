@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<PlaceContext.Application.AgentWorkflows.IAgentModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
         services.Configure<AgentWorkflows.AgentWorkflowOptions>(configuration.GetSection("PlaceContext:AgentWorkflows"));
         services.AddScoped<PlaceContext.Application.AgentWorkflows.IAgentWorkflows, AgentWorkflows.AgentWorkflowService>();
+        services.AddScoped<PlaceContext.Application.Dashboards.IPersonalDashboards, Dashboards.PersonalDashboardService>();
         services.AddScoped<PlaceContext.Application.Build.IBuildModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
         services.AddHttpClient("build-model", client => client.Timeout = Timeout.InfiniteTimeSpan)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
@@ -128,6 +129,7 @@ public static class DependencyInjection
         });
         services.AddHttpClient("typesafe", client => client.Timeout = TimeSpan.FromSeconds(90))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        services.AddSingleton<TypeSafeConfiguration>();
         services.AddSingleton<IJevReviewer, JevReviewer>();
         services.AddScoped<IQemuReplayStore, DbQemuReplayStore>();
         services.AddSingleton<QemuDesktopSessions>();

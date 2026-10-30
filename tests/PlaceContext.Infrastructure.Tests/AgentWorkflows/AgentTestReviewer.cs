@@ -7,7 +7,7 @@ internal sealed class AgentTestReviewer : IJevReviewer
 {
     public double Score { get; set; } = 0.95;
     public bool Fail { get; set; }
-    public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct) => Fail
+    public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null) => Fail
         ? throw new InvalidOperationException("Private upstream error must not leak.")
         : Task.FromResult(new JsonObject { ["noul"] = Score });
 }

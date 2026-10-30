@@ -12,8 +12,12 @@ using PlaceContext.Application.Ports;
 namespace PlaceContext.Infrastructure.Workload;
 
 public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEnvironmentOptions> options,
-    IOptions<TypeSafeOptions> typeSafe) : IQemuTaskAgent
+    IOptions<TypeSafeOptions> typeSafe, TypeSafeConfiguration? configuration = null) : IQemuTaskAgent
 {
+    public async Task<IQemuTaskAgent> ForProjectAsync(Guid? projectId, CancellationToken ct)
+        => configuration is null ? this : new JevQemuTaskAgent(clients, options,
+            Options.Create(await configuration.ResolveAsync(projectId, ct)));
+
     internal static string GuestExecutable => Path.Combine(AppContext.BaseDirectory, "pc-jev");
     public string Model => typeSafe.Value.Model;
     public string? ConfigurationError =>

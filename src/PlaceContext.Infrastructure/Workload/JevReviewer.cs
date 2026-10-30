@@ -7,11 +7,11 @@ using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Infrastructure.Workload;
 
-public sealed class JevReviewer(IHttpClientFactory clients, IOptions<TypeSafeOptions> options) : IJevReviewer
+public sealed class JevReviewer(IHttpClientFactory clients, IOptions<TypeSafeOptions> options, TypeSafeConfiguration? configuration = null) : IJevReviewer
 {
-    public async Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct)
+    public async Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null)
     {
-        var config = options.Value;
+        var config = configuration is null ? options.Value : await configuration.ResolveAsync(projectId, ct);
         if (string.IsNullOrWhiteSpace(config.ApiKey) || config.ApiKey.Any(c => char.IsWhiteSpace(c) || char.IsControl(c))
             || string.IsNullOrWhiteSpace(config.Model))
             throw new InvalidOperationException("Configure the TypeSafe API key and model (PlaceContext:TypeSafe) before running a Jev step.");

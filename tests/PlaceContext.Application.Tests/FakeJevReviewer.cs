@@ -6,7 +6,7 @@ namespace PlaceContext.Application.Tests;
 public sealed class FakeJevReviewer(double probability = 0.95, bool fail = false) : IJevReviewer
 {
     public List<(string Question, string? State)> Requests { get; } = [];
-    public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct)
+    public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null)
     {
         ct.ThrowIfCancellationRequested();
         Requests.Add((question, state));

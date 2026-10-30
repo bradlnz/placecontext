@@ -247,7 +247,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     question = _questions is null ? loop.Instructions : await _questions.GenerateAsync(loop, payload, ct);
                     if (loop.AgentProvider == LoopChainAction.JevAgent)
                         verification = await (_jev ?? throw new InvalidOperationException("Jev review is not configured."))
-                            .EvaluateAsync(question, payload, ct);
+                            .EvaluateAsync(question, payload, ct, chain.ProjectId);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                 catch (Exception ex)

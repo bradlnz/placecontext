@@ -4,65 +4,76 @@
 @inject AgentWorkflowsViewModel Vm
 @implements IDisposable
 
-<PageTitle>PlaceContext — Workflow library</PageTitle>
-<div class="agent-library" aria-busy="@Vm.Busy">
-    <header class="library-header">
-        <div><a href="@Vm.BuildUrl">Back to Build</a><h1>Workflow library</h1><p>Choose your industry, provide the information, and follow the process to a result.</p></div>
-        <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync">Refresh</button>
+<PageTitle>PlaceContext — Workflow store</PageTitle>
+<div class="workflow-store" aria-busy="@Vm.Busy">
+    <header class="store-nav">
+        <a class="store-wordmark" href="@Vm.BuildUrl"><span class="store-mark"><AppIcon Kind="chain" /></span>Workflow store<span class="store-beta">EARLY ACCESS</span></a>
+        <div class="store-nav-actions"><a href="@Vm.DashboardsUrl"><AppIcon Kind="data.graph" /> My dashboards</a><button disabled="@Vm.Busy" @onclick="Vm.ToggleHistory"><AppIcon Kind="history" /> Run history</button></div>
     </header>
-    @if (Vm.Error is not null) { <p class="danger" role="alert">@Vm.Error</p> }
+    @if (Vm.Error is not null) { <p class="store-error" role="alert">@Vm.Error</p> }
     @if (Vm.Workspace is { } workspace)
     {
-        @if (workspace.SimulationEnabled)
-        {
-            <aside class="simulation-note"><strong>Local subscription simulation</strong><p>No payment is collected. Each 1,000 reported model tokens uses 1 demo credit. Jev usage is not included because it is not reported. Model and Jev providers may charge for actual requests.</p><p>Paid workflows use the first enabled model connection in Settings. Cancelling a subscription stops new runs; existing runs and results remain.</p></aside>
-        }
-        else { <p>Free workflows are available. Paid agents are not enabled on this host.</p> }
-        <label for="workflow-industry">Industry</label>
-        <select id="workflow-industry" class="dcinput" @bind="Vm.Industry" disabled="@Vm.Busy"><option value="">All industries</option>@foreach (var industry in Vm.Industries) { <option value="@industry">@industry</option> }</select>
-        <div class="workflow-grid">
-            @foreach (var workflow in Vm.VisibleWorkflows)
+        <section class="store-hero">
+            <div class="hero-copy"><span class="eyebrow"><span class="live-dot"></span> A LITTLE MORE POSSIBILITY</span><h1>Good work.<br /><span>On repeat.</span></h1><p>Find a workflow that fits your business.<br />Start with the essentials. Add an agent for the details.</p>
+                <div class="hero-actions"><button class="store-primary" @onclick="() => Vm.Browse(AgentBrowseFilter.Free)">Explore free workflows <AppIcon Kind="arrow-right" /></button><button class="store-text-button" @onclick="() => Vm.Browse(AgentBrowseFilter.Subscribed)">My agents <span>@Vm.SubscriptionCount</span></button></div>
+                <div class="hero-footnote"><AppIcon Kind="check" /> Free platform <span>·</span> Usage-based agents <span>·</span> Your data stays yours</div>
+            </div>
+            @if (Vm.Featured is { } featured)
             {
-                <article class="workflow-card" @key="workflow.Id">
-                    <span>@workflow.Industry · @Vm.AccessLabel(workflow)</span><h2>@workflow.Name</h2><p>@workflow.Description</p>
-                    <ol>@foreach (var step in workflow.Steps) { <li>@step</li> }</ol>
-                    <div class="card-actions">
-                        <button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.Select(workflow)">Configure workflow</button>
-                        @if (workflow.Paid && Vm.CanManageSubscriptions)
-                        { <button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.ToggleSubscriptionAsync(workflow)">@(Vm.Subscribed(workflow.Id) ? "Cancel simulated subscription" : "Simulate subscription")</button> }
-                    </div>
-                </article>
-            }
-        </div>
-        @if (Vm.Selected is { } selected)
-        {
-            <section class="workflow-form" aria-label="Workflow inputs">
-                <h2>@selected.Name</h2><p>Provide the facts the workflow should use. Missing information will be returned for review.</p>
-                @foreach (var field in selected.InputFields)
-                {
-                    <label for="@($"agent-input-{field}")">@AgentWorkflowsViewModel.FieldLabel(field)</label>
-                    <textarea id="@($"agent-input-{field}")" class="dcinput" rows="3" maxlength="5000" @bind="Vm.Inputs[field]" disabled="@Vm.Busy"></textarea>
-                }
-                @if (selected.Paid && !Vm.Subscribed(selected.Id)) { <p>An administrator must activate this agent's simulated subscription before it can run.</p> }
-                <button class="dcbtn primary" disabled="@(!Vm.CanRun)" @onclick="Vm.RunAsync">@(Vm.Busy ? "Working…" : "Run workflow")</button>
-            </section>
-        }
-        @if (Vm.Result is { } result)
-        {
-            <section class="workflow-result" aria-live="polite"><h2>@Vm.WorkflowName(result.AgentId) · @AgentWorkflowsViewModel.StatusLabel(result)</h2>
-                <p>@result.Notice</p><p>@AgentWorkflowsViewModel.TokenLabel(result) · @AgentWorkflowsViewModel.CreditLabel(result)</p>
-                @if (result.Output is not null) { <pre>@result.Output</pre> }
-            </section>
-        }
-        <section class="workflow-history"><h2>Recent runs</h2><p>The latest 50 runs in this project. Reopening a result does not run or charge it again.</p>
-            @if (workspace.Runs.Count == 0) { <p>No runs yet. Choose a workflow to get started.</p> }
-            @foreach (var run in workspace.Runs)
-            {
-                <article class="history-row" @key="run.Id"><div><strong>@Vm.WorkflowName(run.AgentId)</strong><span>@AgentWorkflowsViewModel.StartedLabel(run) · @AgentWorkflowsViewModel.StatusLabel(run)</span></div><div><span>@AgentWorkflowsViewModel.TokenLabel(run)</span><span>@AgentWorkflowsViewModel.CreditLabel(run)</span></div><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.OpenResult(run)">View result</button></article>
+                <div class="hero-feature"><div class="feature-topline"><span>IN THE SPOTLIGHT</span><span class="feature-spark">✳</span></div><div class="feature-avatar"><AppIcon Kind="human" /></div><h2>A better first impression.</h2><p>Turn client information into a clear onboarding plan. Let Jev check the details.</p>
+                    <div class="feature-flow"><span><AppIcon Kind="file" /> Collect</span><AppIcon Kind="arrow-right" /><span><AppIcon Kind="agent" /> Plan</span><AppIcon Kind="arrow-right" /><span><AppIcon Kind="check" /> Review</span></div>
+                    <button class="feature-link" disabled="@Vm.Busy" @onclick="() => Vm.Select(featured)">Meet the onboarding agent <AppIcon Kind="arrow-right" /></button>
+                </div>
             }
         </section>
+        <section class="store-discovery" aria-label="Find workflows">
+            <div class="discovery-heading"><div><span class="eyebrow">BUILT AROUND YOUR DAY</span><h2>Find your next workflow</h2></div><label class="store-search"><AppIcon Kind="search" /><input aria-label="Search workflows" placeholder="Search agents, tasks, industries…" @bind="Vm.Search" @bind:event="oninput" /></label></div>
+            <div class="store-filters"><div class="industry-pills"><button class="@(Vm.Industry.Length == 0 ? "selected" : "")" aria-pressed="@(Vm.Industry.Length == 0)" @onclick="() => Vm.Industry = string.Empty">All industries</button>@foreach (var industry in Vm.Industries) { <button class="@(Vm.Industry == industry ? "selected" : "")" aria-pressed="@(Vm.Industry == industry)" @onclick="() => Vm.Industry = industry">@industry</button> }</div>
+                <div class="access-pills"><button class="@(Vm.Filter == AgentBrowseFilter.All ? "selected" : "")" @onclick="() => Vm.Browse(AgentBrowseFilter.All)">Discover</button><button class="@(Vm.Filter == AgentBrowseFilter.Free ? "selected" : "")" @onclick="() => Vm.Browse(AgentBrowseFilter.Free)">Free</button><button class="@(Vm.Filter == AgentBrowseFilter.Subscribed ? "selected" : "")" @onclick="() => Vm.Browse(AgentBrowseFilter.Subscribed)">Subscribed</button></div>
+            </div>
+            <div class="store-grid">
+                @foreach (var workflow in Vm.VisibleWorkflows)
+                {
+                    <article class="product-card @AgentWorkflowsViewModel.IndustryClass(workflow)" @key="workflow.Id"><div class="product-cover"><div class="cover-orbit orbit-one"></div><div class="cover-orbit orbit-two"></div><span class="product-icon"><AppIcon Kind="@AgentWorkflowsViewModel.IndustryIcon(workflow)" /></span><span class="product-badge">@(workflow.Paid ? "AI AGENT" : "FREE WORKFLOW")</span></div>
+                        <div class="product-content"><span class="product-industry">@workflow.Industry</span><h3><button disabled="@Vm.Busy" @onclick="() => Vm.Select(workflow)">@workflow.Name</button></h3><p>@workflow.Description</p><div class="product-meta"><AppIcon Kind="chain" /> @workflow.Steps.Count process steps @if (workflow.Paid) { <span>·</span><AppIcon Kind="check" /><span>Jev review</span> }</div>
+                            <div class="product-footer"><div><strong>@AgentWorkflowsViewModel.PriceLabel(workflow)</strong><small>@AgentWorkflowsViewModel.PriceUnit(workflow)</small></div><button class="product-open" aria-label="View @workflow.Name" disabled="@Vm.Busy" @onclick="() => Vm.Select(workflow)"><AppIcon Kind="arrow-right" /></button></div>
+                            @if (Vm.Subscribed(workflow.Id)) { <span class="subscribed-tag"><AppIcon Kind="check" /> In your workspace</span> }
+                        </div>
+                    </article>
+                }
+            </div>
+            @if (!Vm.VisibleWorkflows.Any()) { <div class="store-empty"><AppIcon Kind="search" /><h3>No workflows here yet</h3><p>Try another industry or a different search.</p><button class="dcbtn" @onclick="() => { Vm.Search = string.Empty; Vm.Industry = string.Empty; Vm.Browse(AgentBrowseFilter.All); }">Show all workflows</button></div> }
+        </section>
+        <a class="dashboard-promo" href="@Vm.DashboardsUrl"><span class="promo-icon"><AppIcon Kind="data.graph" /></span><div><span class="eyebrow">MAKE THE DATA YOURS</span><h2>Your workspace. Your dashboard.</h2><p>Bring your charts together and ask Jev what the evidence says.</p></div><span class="promo-action">Create a dashboard <AppIcon Kind="arrow-right" /></span></a>
+        @if (Vm.ShowHistory)
+        {
+            <section class="store-history"><div class="discovery-heading"><h2>Your recent work</h2><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync">Refresh</button></div><p>The latest 50 runs. Viewing a result never starts a new run.</p>
+                @if (workspace.Runs.Count == 0) { <p class="store-empty">Your first result will appear here.</p> }
+                @foreach (var run in workspace.Runs) { <article class="history-row" @key="run.Id"><div><strong>@Vm.WorkflowName(run.AgentId)</strong><small>@AgentWorkflowsViewModel.StartedLabel(run) · @AgentWorkflowsViewModel.StatusLabel(run)</small></div><div><span>@AgentWorkflowsViewModel.TokenLabel(run)</span><small>@AgentWorkflowsViewModel.CreditLabel(run)</small></div><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.OpenResult(run)">View result</button></article> }
+            </section>
+        }
+        <footer class="store-footnote">@if (workspace.SimulationEnabled) { <span class="simulation-pill">Local subscription simulation</span><span>No payments collected. Demo credits cover reported model tokens only; Jev usage is excluded. Your AI providers may charge for requests.</span> } else { <span>Free workflows are available. Paid agents are not enabled on this host.</span> }</footer>
     }
-    else if (Vm.Busy) { <p role="status">Loading workflows…</p> }
+    else if (Vm.Busy) { <Skeleton Kind="cards" Rows="3" /> }
+
+    @if (Vm.Selected is { } selected)
+    {
+        <div class="detail-backdrop dcmodal-overlay"><section class="product-detail" role="dialog" aria-modal="true" aria-labelledby="product-detail-title" tabindex="-1" @onkeydown='e => { if (e.Key == "Escape") Vm.CloseDetails(); }'>
+            <header><span class="product-industry">@selected.Industry</span><button class="detail-close" aria-label="Close workflow details" disabled="@Vm.Busy" @onclick="Vm.CloseDetails"><AppIcon Kind="close" /></button></header>
+            <h2 id="product-detail-title">@selected.Name</h2><p>@selected.Description</p><div class="detail-price"><strong>@AgentWorkflowsViewModel.PriceLabel(selected)</strong><span>@AgentWorkflowsViewModel.PriceUnit(selected)</span></div>
+            <h3>The process</h3><ol class="detail-steps">@foreach (var step in selected.Steps) { <li>@step</li> }</ol>
+            @if (selected.Paid)
+            {
+                <p class="detail-hint">Uses your first enabled model connection. Plans are reviewed before you act; this agent does not carry out external actions.</p>
+                @if (Vm.CanManageSubscriptions) { <button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.ToggleSubscriptionAsync(selected)">@(Vm.Subscribed(selected.Id) ? "Cancel simulated subscription" : "Activate simulated subscription")</button> }
+                else if (!Vm.Subscribed(selected.Id)) { <p>An administrator can activate this agent's subscription in local simulation mode.</p> }
+            }
+            <div class="detail-inputs"><h3>Make it work for you</h3>@foreach (var field in selected.InputFields) { <label for="@($"agent-input-{field}")">@AgentWorkflowsViewModel.FieldLabel(field)</label><textarea id="@($"agent-input-{field}")" class="dcinput" rows="3" maxlength="5000" @bind="Vm.Inputs[field]" disabled="@Vm.Busy"></textarea> }</div>
+            @if (Vm.Error is not null) { <p class="store-error" role="alert">@Vm.Error</p> }
+            <button class="store-primary detail-run" disabled="@(!Vm.CanRun)" @onclick="Vm.RunAsync"><AppIcon Kind="play" /> @(Vm.Busy ? "Working on it…" : "Run workflow")</button>
+            @if (Vm.Result is { } result) { <section class="detail-result" aria-live="polite"><h3>@AgentWorkflowsViewModel.StatusLabel(result)</h3><p>@result.Notice</p><small>@AgentWorkflowsViewModel.TokenLabel(result) · @AgentWorkflowsViewModel.CreditLabel(result)</small>@if (result.Output is not null) { <pre>@result.Output</pre> }</section> }
+        </section></div>
+    }
 </div>
 
 @code {

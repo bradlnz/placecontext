@@ -4,5 +4,5 @@ namespace PlaceContext.Application.Ports;
 
 public interface IJevReviewer
 {
-    Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct);
+    Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null);
 }

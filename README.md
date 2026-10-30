@@ -289,3 +289,18 @@ Third-party components used by PlaceContext are listed in
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations. Please report vulnerabilities
 privately as described in [SECURITY.md](SECURITY.md).
+
+### Workflow store and personal dashboards
+
+Open **Build → Workflow store** to browse industry workflows, filter free or subscribed
+agents, and view process details and token pricing. Subscriptions remain a local simulation.
+**My dashboards** lets each user save named layouts of up to 12 existing project charts,
+reorder them, inspect their values, and ask Jev a yes/no question about the selected data.
+Layouts and saved questions are encrypted and scoped to the current tenant, project and user.
+
+Dashboards show saved chart snapshots, with generation timestamps; refreshing loads the latest
+saved snapshots and does not rerun the source query. Create or update charts in **Analytics**.
+Jev receives only the selected chart values and timestamps, and reports an estimated probability
+with an evidence fingerprint. Stale snapshots must be refreshed before analysis. Chart data can
+be sampled or incomplete, so this is not a full-data audit. Set `TYPESAFE_API_KEY` in the project vault to use Jev (host `PlaceContext:TypeSafe`
+or environment settings are the fallback); provider usage is not included in simulated agent credits.

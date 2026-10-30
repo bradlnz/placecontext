@@ -18,6 +18,12 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
         .Select(image => new QemuImageProfile(image.Key, Path.IsPathFullyQualified(image.Value) && File.Exists(image.Value))).ToArray(),
         agent is not null && agent.ConfigurationError is null, agent?.Model);
 
+    public async Task<QemuEnvironmentCatalog> GetAsync(Guid projectId, CancellationToken ct = default)
+    {
+        var configured = agent is null ? null : await agent.ForProjectAsync(projectId, ct);
+        return Get() with { AgentReady = configured is not null && configured.ConfigurationError is null, AgentModel = configured?.Model };
+    }
+
     // Bound memory consumption on each host independently of the chain worker count.
     private readonly SemaphoreSlim _capacity = new(1, 1);
     private const int MaxOutput = 65_536;
@@ -33,7 +39,8 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
             throw new InvalidOperationException("QEMU input must be no larger than 1 MiB.");
 
         if (agent is null) throw new InvalidOperationException("Configure a QEMU task agent before running prompt instructions.");
-        if (agent.ConfigurationError is { } agentError) throw new InvalidOperationException(agentError);
+        var configuredAgent = await agent.ForProjectAsync(context?.ProjectId, ct);
+        if (configuredAgent.ConfigurationError is { } agentError) throw new InvalidOperationException(agentError);
 
         var interactive = context is not null && desktops is not null && tenant?.IsResolved == true && user?.IsAuthenticated == true && config.Executor == "jev";
         if ((action.PauseForLogin || action.LoginProfileId is not null) && !interactive)
@@ -108,7 +115,7 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
                 var restore = await ExecuteGuest($"tar -xzf /tmp/pc-login.tar.gz -C {QemuProfileArchive.GuestProfile} --no-same-owner --no-same-permissions && rm /tmp/pc-login.tar.gz", 1024, deadline.Token);
                 if (restore.ExitCode != 0) throw new InvalidOperationException("Could not restore the saved browser session.");
             }
-            return await agent.RunAsync(action.Command, input, ExecuteGuest, deadline.Token, recordFrame,
+            return await configuredAgent.RunAsync(action.Command, input, ExecuteGuest, deadline.Token, recordFrame,
                 desktop is null ? null : new(desktop.CheckpointAsync, desktop.TakeControl, desktop.SaveProfileAsync), feed.ReadFrameAsync);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)

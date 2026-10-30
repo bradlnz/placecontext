@@ -118,6 +118,14 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.TenantId, x.ProjectId, x.StartedAt });
             e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
+        b.Entity<PersonalDashboardRow>(e =>
+        {
+            e.ToTable("personal_dashboards");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.TenantId, x.ProjectId, x.UserId });
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
         b.Entity<ModelConnectionRow>(e =>
         {
             e.ToTable("model_connections");
