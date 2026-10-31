@@ -21,6 +21,7 @@ public sealed class MvvmBoundaryContractTests
         "Components/Shared/DataTabs.razor",
         "Components/Shared/DashboardDecisionInspector.razor",
         "Components/Shared/DashboardDecisionQueue.razor",
+        "Components/Shared/WorkflowApprovalInbox.razor",
         "Components/Shared/OpenSearchDataValue.razor",
         "Components/Shared/Skeleton.razor",
     ];
@@ -31,6 +32,7 @@ public sealed class MvvmBoundaryContractTests
         "Components/Shared/DataTabs.razor",
         "Components/Shared/DashboardDecisionInspector.razor",
         "Components/Shared/DashboardDecisionQueue.razor",
+        "Components/Shared/WorkflowApprovalInbox.razor",
     ];
 
     [Fact]

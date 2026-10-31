@@ -5,9 +5,9 @@ using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public enum DashboardLens { Overview, Decisions, NeedsAttention, Explore }
+public enum DashboardLens { Overview, Actions, Decisions, NeedsAttention, Explore }
 
-public sealed partial class PersonalDashboardsViewModel(IPersonalDashboards dashboards, PortalUiState ui, IJSRuntime js, IClock? clock = null)
+public sealed partial class PersonalDashboardsViewModel(IPersonalDashboards dashboards, PortalUiState ui, IJSRuntime js, IClock? clock = null, IWorkflowActionInbox? actionInbox = null)
     : PageViewModel, IComponentViewModel, IDisposable
 {
     public Guid ProjectId { get; private set; }
@@ -84,6 +84,7 @@ public sealed partial class PersonalDashboardsViewModel(IPersonalDashboards dash
         ProjectId = projectId;
         Selected = null; Analysis = null; ChartIds.Clear(); Charts = []; Saved = []; Editing = false; _rendered.Clear();
         ResetDecisionWorkspace();
+        WorkflowActions = []; SelectedWorkflowActionId = null; ActionError = ActionNotice = null;
         Lens = DashboardLens.Overview; _profileSearch = ""; FocusedChartId = null; Question = ""; ConfirmDelete = false;
         RebuildProfile();
         ui.Set("Data profiles", "Measured signals and decisions with Jev");
@@ -91,6 +92,7 @@ public sealed partial class PersonalDashboardsViewModel(IPersonalDashboards dash
         {
             Saved = await dashboards.ListAsync(ProjectId, _stop.Token);
             Charts = await dashboards.ChartsAsync(ProjectId, _stop.Token);
+            await LoadWorkflowActionsCoreAsync();
             if (Saved.FirstOrDefault() is { } first) OpenCore(first);
             else PreviewCore();
         });
@@ -192,6 +194,7 @@ public sealed partial class PersonalDashboardsViewModel(IPersonalDashboards dash
     public Task RefreshAsync() => ExecuteAsync(async () =>
     {
         Charts = await dashboards.ChartsAsync(ProjectId, _stop.Token);
+        await LoadWorkflowActionsCoreAsync();
         if (Selected is null && !Editing)
         {
             ChartIds.Clear();

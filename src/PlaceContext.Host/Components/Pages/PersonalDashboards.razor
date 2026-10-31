@@ -82,6 +82,8 @@
             </section>
         }
 
+        <WorkflowApprovalInbox Vm="Vm" />
+
         @if (Vm.ChartIds.Count > 0)
         {
             <section class="summary-strip @(Vm.Lens == DashboardLens.Decisions ? "decisions-summary" : "")" aria-label="Measurement and decision summary">

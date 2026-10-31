@@ -1,0 +1,91 @@
+@using PlaceContext.Application.Dashboards
+
+<section id="workflow-action-inbox" class="workflow-inbox dui-card dui-card-border" aria-labelledby="workflow-inbox-title">
+    <header class="workflow-inbox-head">
+        <div class="workflow-inbox-title">
+            <span class="workflow-inbox-icon"><AppIcon Kind="list-checks" /></span>
+            <div>
+                <span class="section-label">ACTION-DRIVEN DASHBOARD</span>
+                <h3 id="workflow-inbox-title">Human action inbox <span class="dui-badge dui-badge-soft dui-badge-sm">@Vm.PendingHumanActionCount</span></h3>
+                <p>Persisted workflow decisions requiring a person before the next stage can continue.</p>
+            </div>
+        </div>
+        <button type="button" class="dui-btn dui-btn-ghost dui-btn-sm" disabled="@Vm.Busy" @onclick="Vm.RefreshWorkflowActionsAsync">
+            <AppIcon Kind="refresh" /> Refresh actions
+        </button>
+    </header>
+    @if (Vm.ActionNotice is { } notice)
+    {
+        <p class="workflow-action-notice" role="status"><AppIcon Kind="check-circle" /> @notice</p>
+    }
+    @if (Vm.ActionError is { } error)
+    {
+        <p class="workflow-action-error" role="alert"><AppIcon Kind="warning" /> @error</p>
+    }
+    @if (Vm.WorkflowActions.Count == 0)
+    {
+        <div class="workflow-inbox-empty">
+            <AppIcon Kind="check-circle" />
+            <div><strong>No pending human Yes/No requests found</strong><p>Actions appear here when an authorised workflow reaches a Human in the loop step. Requests for free-text input remain available in Workflows.</p></div>
+            <a class="dui-btn dui-btn-outline dui-btn-sm" href="@($"/project/{Vm.ProjectId}/workflows")">Workflows <AppIcon Kind="arrow-right" /></a>
+        </div>
+    }
+    else
+    {
+        <div class="workflow-action-rows">
+            @foreach (var action in Vm.WorkflowActions)
+            {
+                <article class="workflow-action-row" @key="action.ActionId">
+                    <span class="workflow-action-bullet"><AppIcon Kind="human" /></span>
+                    <div class="workflow-action-copy">
+                        <div class="workflow-action-titles">
+                            <strong>@action.WorkflowName</strong>
+                            <span class="dui-badge dui-badge-soft dui-badge-warning dui-badge-sm">@(action.IsApprovalCheckpoint ? "Approval required" : "Response required")</span>
+                        </div>
+                        <p>@action.Instructions</p>
+                        <small>Started @action.StartedAt.ToLocalTime().ToString("g") · Paused run @(action.ChainRunId.ToString("N")[..8])</small>
+                    </div>
+                    <div class="workflow-action-buttons">
+                        <a class="dui-btn dui-btn-ghost dui-btn-sm" href="@($"/project/{Vm.ProjectId}/workflows?chain={action.ChainId}")" title="Review the full workflow and previous run evidence">Evidence <AppIcon Kind="external-link" /></a>
+                        <button class="dui-btn dui-btn-outline dui-btn-sm" disabled="@Vm.Busy" @onclick="() => Vm.ProposeHumanResponse(action.ActionId, false)">
+                            <AppIcon Kind="close" /> @(action.IsApprovalCheckpoint ? "Decline" : "No")
+                        </button>
+                        <button class="dui-btn dui-btn-primary dui-btn-sm" disabled="@Vm.Busy" @onclick="() => Vm.ProposeHumanResponse(action.ActionId, true)">
+                            <AppIcon Kind="check" /> @(action.IsApprovalCheckpoint ? "Approve" : "Yes")
+                        </button>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+    <footer class="workflow-inbox-foot">
+        <AppIcon Kind="shield" />
+        <span>Jev support is evidence, not authorisation. Actions appear only for real paused runs and require jobs.run permission. Confirmations are recorded against the workflow request.</span>
+    </footer>
+</section>
+
+@if (Vm.SelectedWorkflowAction is { } selected && Vm.ProposedApproval is { } answer)
+{
+    <div class="workflow-confirm-backdrop">
+        <section class="workflow-confirm-dialog dui-card dui-card-border" role="dialog" aria-modal="true" aria-labelledby="workflow-confirm-title">
+            <span class="section-label">HUMAN IN THE LOOP</span>
+            <h3 id="workflow-confirm-title">@(answer ? selected.IsApprovalCheckpoint ? "Approve and resume?" : "Submit Yes?" : selected.IsApprovalCheckpoint ? "Decline and continue?" : "Submit No?")</h3>
+            <strong>@selected.WorkflowName</strong>
+            <p>@selected.Instructions</p>
+            <p class="workflow-confirm-caution">@(answer
+                ? "A Yes response resumes the same paused run. Review its evidence and downstream steps first."
+                : "Decline submits No and resumes the configured No path. It does not guarantee the workflow stops; inspect its branches first.")</p>
+            <div class="workflow-confirm-actions">
+                <a class="dui-btn dui-btn-ghost dui-btn-sm" href="@($"/project/{Vm.ProjectId}/workflows?chain={selected.ChainId}")">Review full run <AppIcon Kind="external-link" /></a>
+                <button class="dui-btn dui-btn-outline dui-btn-sm" disabled="@Vm.Busy" @onclick="Vm.CancelHumanResponse">Cancel</button>
+                <button class="dui-btn @(answer ? "dui-btn-primary" : "dui-btn-warning") dui-btn-sm" disabled="@Vm.Busy" @onclick="Vm.SubmitHumanResponseAsync">
+                    <AppIcon Kind="@(answer ? "check" : "close")" /> @(Vm.ActionSubmitting ? "Submitting…" : answer ? selected.IsApprovalCheckpoint ? "Confirm approval" : "Confirm Yes" : selected.IsApprovalCheckpoint ? "Confirm decline" : "Confirm No")
+                </button>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public PersonalDashboardsViewModel Vm { get; set; } = default!;
+}
