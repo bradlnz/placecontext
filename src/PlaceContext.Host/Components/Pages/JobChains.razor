@@ -486,7 +486,7 @@ else
                         </button>
                         <button class="palette-step agent-step" @onclick="@(() => Vm.OpenLoopActionAt(LoopChainAction.AgentType, Vm.EdStages.Count))">
                             <span class="palette-icon" aria-hidden="true"><AppIcon Kind="agent" /></span>
-                            <span><strong>Agent in the loop</strong><small>Ask Jev or an external agent</small></span>
+                            <span><strong>Agent in the loop</strong><small>Use AI review or an external agent</small></span>
                             <span aria-hidden="true"><AppIcon Kind="plus" /></span>
                         </button>
                         <span class="palette-label">Automate</span>
@@ -635,7 +635,7 @@ else
                             </button>
                             <button class="node-picker-tile agent-step" @onclick="@(() => Vm.ChooseStageNode(LoopChainAction.AgentType))">
                                 <span class="palette-icon" aria-hidden="true"><AppIcon Kind="agent" /></span>
-                                <strong>Agent in the loop</strong><small>Ask Jev or wait for an external agent</small>
+                                <strong>Agent in the loop</strong><small>Use AI review or wait for an external agent</small>
                             </button>
                         </div>
                         <div class="node-picker-divider">Jobs</div>
@@ -735,7 +735,7 @@ else
                                 @if (!string.IsNullOrEmpty(Vm.QemuLoginId)) { <button class="dcbtn" @onclick="Vm.ForgetQemuLoginAsync">Forget selected login</button> }
                             </div>
                             @if (Vm.QemuLoginError is not null) { <p role="alert">@Vm.QemuLoginError</p> }
-                            <label class="qemu-network" for="qemu-login-pause"><span><strong>Pause for login before starting</strong><small>Open the live desktop from the run, sign in, then resume automation. Requires the Jev executor.</small></span><input id="qemu-login-pause" type="checkbox" @bind="Vm.QemuPauseForLogin" /></label>
+                            <label class="qemu-network" for="qemu-login-pause"><span><strong>Pause for login before starting</strong><small>Open the live desktop from the run, sign in, then resume automation. Requires the configured browser executor.</small></span><input id="qemu-login-pause" type="checkbox" @bind="Vm.QemuPauseForLogin" /></label>
                         </section>
                         <section class="qemu-section" aria-labelledby="qemu-resources-title">
                             <h4 id="qemu-resources-title">Resources &amp; limits</h4>
@@ -781,10 +781,10 @@ else
                                 <label for="loop-agent">Responding agent</label>
                                 <select id="loop-agent" class="dcinput" @bind="Vm.LoopAgentProvider" aria-describedby="loop-agent-help">
                                     <option value="@LoopChainAction.ExternalAgent">External agent — wait for a response</option>
-                                    <option value="@LoopChainAction.JevAgent">Jev (TypeSafe) — call for verification</option>
+                                    <option value="@LoopChainAction.JevAgent">AI verification — assess evidence</option>
                                 </select>
                                 <span id="loop-agent-help" class="sub-note">@(Vm.LoopAgentProvider == LoopChainAction.JevAgent
-                                    ? "Sends the preceding output and a yes/no verification question to TypeSafe. Requires a TypeSafe API key configured on the server."
+                                    ? "Sends the preceding output and a yes/no question to the configured AI verification service. An administrator must set up the provider."
                                     : "Waits for a connected agent to submit a written response. No agent is launched automatically.")</span>
                             </div>
                         }

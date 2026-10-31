@@ -1,61 +1,21 @@
 @page "/project/{ProjectId:guid}/dashboards"
 @attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
-@inject PersonalDashboardsViewModel Vm
-@implements IDisposable
+@inject NavigationManager Navigation
 
-<PageTitle>PlaceContext — My dashboards</PageTitle>
-<div class="personal-dashboards" aria-busy="@Vm.Busy">
-    <header class="dashboard-header"><div><a class="back-link" href="/project/@ProjectId/build/workflows">← Workflow store</a><span class="eyebrow">YOUR DATA, YOUR PERSPECTIVE</span><h1>My dashboards<span class="private-badge">Private to you</span></h1><p>A space for the numbers that matter. A second look from Jev.</p></div><button class="primary-button" disabled="@Vm.Busy" @onclick="Vm.New">+ New dashboard</button></header>
-    @if (Vm.Error is not null) { <p class="dashboard-error" role="alert">@Vm.Error</p> }
-    @if (Vm.Notice is not null) { <p class="dashboard-notice" role="status">@Vm.Notice</p> }
-    @if (Vm.Saved.Count > 0)
-    {
-        <nav class="dashboard-tabs" aria-label="Your dashboards">@foreach (var dashboard in Vm.Saved) { <button class="@(Vm.Selected?.Id == dashboard.Id ? "active" : "")" aria-pressed="@(Vm.Selected?.Id == dashboard.Id)" disabled="@Vm.Busy" @onclick="() => Vm.Open(dashboard)">@dashboard.Name</button> }</nav>
-    }
-    @if (Vm.Editing)
-    {
-        <section class="dashboard-editor"><div class="editor-heading"><h2>Make it yours</h2><span>Choose up to 12 charts, then arrange them below.</span></div><label for="dashboard-name">Dashboard name</label><input id="dashboard-name" class="dcinput" maxlength="100" @bind="Vm.Name" disabled="@Vm.Busy" />
-            <div class="chart-picker">@foreach (var chart in Vm.Charts) { <label class="chart-choice"><input type="checkbox" checked="@Vm.ChartIds.Contains(chart.Id)" disabled="@(Vm.Busy || (!Vm.ChartIds.Contains(chart.Id) && Vm.ChartIds.Count >= 12))" @onchange="() => Vm.Toggle(chart.Id)" /><span><strong>@chart.Name</strong><small>@chart.Spec.Type · @chart.Spec.Labels.Count categories</small></span></label> }</div>
-            @if (Vm.Charts.Count == 0) { <p>No saved charts yet. <a href="/project/@ProjectId/analytics">Create your first chart</a> from your project data.</p> }
-            @if (Vm.MissingCharts) { <p>A saved chart is no longer available. <button class="dcbtn" @onclick="() => { foreach (var id in Vm.ChartIds.Except(Vm.SelectedCharts.Select(x => x.Id)).ToArray()) Vm.Toggle(id); }">Remove missing charts</button></p> }
-            <label for="dashboard-question">A question for Jev <span>(optional)</span></label><textarea id="dashboard-question" class="dcinput" rows="2" maxlength="1000" placeholder="Does one category account for more than half of the total?" @bind="Vm.Question" disabled="@Vm.Busy"></textarea>
-            <div class="editor-actions"><button class="primary-button" disabled="@(Vm.Busy || Vm.ChartIds.Count == 0 || Vm.MissingCharts)" @onclick="Vm.SaveAsync">Save dashboard</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.Cancel">Cancel</button><a href="/project/@ProjectId/analytics">Create or update charts ↗</a></div>
-        </section>
-    }
-    else if (Vm.Selected is not null)
-    {
-        <div class="dashboard-toolbar"><h2>@Vm.Name</h2><div><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync">Refresh snapshots</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.Edit">Customize</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = true">Delete</button></div></div>
-        @if (Vm.ConfirmDelete) { <div class="delete-confirm" role="alert"><span>Delete this dashboard layout?</span><button class="dcbtn danger" disabled="@Vm.Busy" @onclick="Vm.DeleteAsync">Delete dashboard</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = false">Keep it</button></div> }
-        @if (Vm.MissingCharts) { <p class="dashboard-error">A chart is no longer available. Customize this dashboard to choose another.</p> }
-    }
-    else if (!Vm.Busy)
-    {
-        <section class="dashboard-empty"><span class="empty-icon"><AppIcon Kind="data.graph" /></span><h2>A clearer view starts here.</h2><p>Choose your saved charts, arrange your dashboard,<br />and ask Jev to assess what the data supports.</p><button class="primary-button" @onclick="Vm.New">Create your first dashboard</button></section>
-    }
-    <div class="dashboard-grid">
-        @foreach (var chart in Vm.SelectedCharts)
-        {
-            <article class="chart-tile" @key="chart.Id"><header><div><span class="eyebrow">@chart.Spec.Type CHART</span><h3>@chart.Name</h3></div>@if (Vm.Editing) { <div class="tile-actions"><button class="dcbtn" aria-label="Move @chart.Name earlier" disabled="@(Vm.Busy || Vm.ChartIds.IndexOf(chart.Id) == 0)" @onclick="() => Vm.Move(chart.Id, -1)">↑</button><button class="dcbtn" aria-label="Move @chart.Name later" disabled="@(Vm.Busy || Vm.ChartIds.IndexOf(chart.Id) == Vm.ChartIds.Count - 1)" @onclick="() => Vm.Move(chart.Id, 1)">↓</button><button class="dcbtn" aria-label="Remove @chart.Name" disabled="@Vm.Busy" @onclick="() => Vm.Toggle(chart.Id)">×</button></div> }</header>
-                <div class="chart-canvas"><canvas id="@PersonalDashboardsViewModel.CanvasId(chart.Id)" role="img" aria-label="@chart.Name. Values are available in the data table below."></canvas></div>
-                <footer>Snapshot · @chart.GeneratedAt.ToLocalTime().ToString("g")</footer>
-                <details class="chart-data"><summary>View chart data</summary><div class="table-scroll"><table><thead><tr><th>Category</th>@foreach (var series in chart.Spec.Series) { <th>@series.Name</th> }</tr></thead><tbody>@for (var i = 0; i < chart.Spec.Labels.Count; i++) { var index = i; <tr><th>@chart.Spec.Labels[index]</th>@foreach (var series in chart.Spec.Series) { <td>@series.Values[index].ToString("N2")</td> }</tr> }</tbody></table></div></details>
-            </article>
-        }
-    </div>
-    @if (Vm.ChartIds.Count > 0)
-    {
-        <section class="jev-panel"><div class="jev-heading"><span class="jev-mark">J</span><div><span class="eyebrow">ANOTHER PERSPECTIVE</span><h2>Ask Jev</h2></div></div><p>Ask a yes/no question about the charts above. Jev assesses the saved values and timestamps. Charts may be sampled or out of date; this is a judgment, not a complete data audit.</p>
-            @if (!Vm.Editing) { <label for="jev-question">Your question</label><textarea id="jev-question" class="dcinput" rows="2" maxlength="1000" @bind="Vm.Question" @bind:event="oninput" disabled="@Vm.Busy" placeholder="Does one category account for more than half of the total?"></textarea> }
-            <div class="jev-actions"><button class="primary-button" disabled="@(Vm.Busy || Vm.MissingCharts || string.IsNullOrWhiteSpace(Vm.Question))" @onclick="Vm.AnalyzeAsync">@(Vm.Busy ? "Working…" : "Analyze with Jev")</button><small>Selected chart data is sent to your configured Jev service. Provider usage may apply.</small></div>
-            @if (Vm.AnalysisCurrent && Vm.Analysis is { } analysis) { <div class="jev-result" aria-live="polite"><strong>@analysis.Verdict</strong><p>@analysis.Question</p><span>@analysis.Probability.ToString("P0") estimated probability of “yes” · @analysis.AnalyzedAt.ToLocalTime().ToString("g")</span><small>Evidence: @analysis.Fingerprint[..12] · @(Vm.SelectedCharts.Count()) saved chart snapshots</small></div> }
-        </section>
-    }
-</div>
+<PageTitle>PlaceContext — Workflow overview</PageTitle>
+<section role="status" class="dccard" style="padding:24px">
+    <h1>Workflow overview</h1>
+    <p>The separate personal dashboard has been retired. Workflow status, activity and insights live in the main overview and Workflows.</p>
+    <a class="dcbtn primary" href="/">Open workflow overview <AppIcon Kind="arrow-right" /></a>
+</section>
+
 @code {
     [Parameter] public Guid ProjectId { get; set; }
-    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
-    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId);
-    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.RenderAsync();
-    public void Dispose() => Vm.Dispose();
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+            Navigation.NavigateTo("/", replace: true);
+    }
 }

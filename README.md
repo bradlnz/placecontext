@@ -36,29 +36,22 @@ across the fleet. For the quick start, [k3d](https://k3d.io) runs k3s inside Doc
 cluster is required. The installer pulls the versioned multi-architecture
 [PlaceContext image from GHCR](https://github.com/bradlnz/placecontext/pkgs/container/placecontext).
 
-## Local agent subscriptions
+## Workflow-first platform
 
-Open **Build → Workflow library** in a project. Retail, professional services, and property operations
-each have a free checklist and a detailed agent workflow. An administrator can activate or cancel a
-simulated subscription, supply the workflow inputs, and inspect the result and recorded token usage.
-Subscriptions apply within the tenant; run history stays within its project. Paid implementations remain
-on the server and are not created as editable or exportable customer jobs.
+PlaceContext is a self-hosted workflow engine. **Build** creates and edits executable pipelines,
+**Workflows** is the canonical place to manage stages, conditions, human approvals, and execution,
+and the **Workflow overview** and **Observability** show runs, outcomes, and failures.
 
-Simulation requires `ASPNETCORE_ENVIRONMENT=Development` and
-`PlaceContext__AgentWorkflows__SimulateSubscriptions=true` (enabled in the Development settings).
-It collects no money. The demonstration rate is **1 demo credit per 1,000 reported model tokens**.
-Missing usage is shown as unknown; Jev usage is excluded because its current integration does not report it.
-These totals are not invoices. Configured AI providers may still charge for actual inference.
+Connect data and services as workflow inputs. Create jobs and compose them into flows; use
+AI verification when evidence is uncertain, and durable human-input steps for consequential
+approvals. An AI assessment is not itself approval or permission to run external actions.
 
-Paid workflows use the first enabled connection/model in **Settings → Models**, draft a plan, then
-ask Jev to verify it. Configure the existing `PlaceContext:TypeSafe` settings for verification. Missing
-inputs, uncertain verification, or unavailable Jev require human review. These starter workflows deliver
-plans; they do not contact clients, order stock, or book contractors. Free checklists use no model.
-Cancelling a subscription blocks new paid runs but preserves in-flight work and historical results.
-Request IDs make retries idempotent; an intentional rerun needs a fresh ID.
-
-Production payment collection, reconciliation of missing usage, and provider-specific prices must be
-implemented before enabling real paid access. Production hosts reject simulated entitlements.
+The separate **Workflow store / Agent Store** and **My dashboards / Data profiles** pages
+are retired from the product navigation. Their old URLs redirect to Workflows or the Workflow
+overview. Existing tenant/project/user records and prior executions are preserved; the underlying
+services are retained for compatibility pending a separately planned data-retention migration.
+No saved data is deleted by the navigation change. The workflow editor and Build no longer expose
+library-agent purchase/simulation actions as a primary workflow.
 
 ## Connect your AI harness
 
@@ -290,17 +283,14 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the develo
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations. Please report vulnerabilities
 privately as described in [SECURITY.md](SECURITY.md).
 
-### Workflow store and personal dashboards
+### Build, run, inspect
 
-Open **Build → Workflow store** to browse industry workflows, filter free or subscribed
-agents, and view process details and token pricing. Subscriptions remain a local simulation.
-**My dashboards** lets each user save named layouts of up to 12 existing project charts,
-reorder them, inspect their values, and ask Jev a yes/no question about the selected data.
-Layouts and saved questions are encrypted and scoped to the current tenant, project and user.
+Use **Build** to describe the workflow outcome and reuse existing jobs and connectors. Open
+**Workflows** to inspect the executable definition, conditions, waits, human-review checkpoints
+and run history. The Workflow overview highlights runnable processes; **Observability**
+shows execution evidence, failures and timing. Use **Analytics** only where a workflow or
+investigation needs a chart; it is not a separate profiling product.
 
-Dashboards show saved chart snapshots, with generation timestamps; refreshing loads the latest
-saved snapshots and does not rerun the source query. Create or update charts in **Analytics**.
-Jev receives only the selected chart values and timestamps, and reports an estimated probability
-with an evidence fingerprint. Stale snapshots must be refreshed before analysis. Chart data can
-be sampled or incomplete, so this is not a full-data audit. Set `TYPESAFE_API_KEY` in the project vault to use Jev (host `PlaceContext:TypeSafe`
-or environment settings are the fallback); provider usage is not included in simulated agent credits.
+Provider-specific billing simulations and private dashboard layouts are legacy records, not
+features to build new process design around. These records remain stored until an explicit
+retention/export policy is approved.

@@ -15,20 +15,6 @@ namespace PlaceContext.Host.Build;
 
 public sealed class BuildTools(Guid projectId, PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IJevReviewer? reviewer = null, IAgentWorkflows? agents = null)
 {
-    [Description("List industry agent workflows, free/paid access, simulated subscriptions and recent results. These managed agents expose their business process, not editable jobs or source code.")]
-    public async Task<AgentWorkspace> list_agent_workflows(CancellationToken ct)
-    {
-        await RequireAsync(Permission.ChainsManage, ct);
-        return await (agents ?? throw new InvalidOperationException("The workflow library is unavailable.")).LoadAsync(projectId, ct);
-    }
-
-    [Description("Run a library workflow after the user requests it. Use a new requestId for each intentional run and reuse that ID for retries of the same request. Input is a JSON object with the catalog's input fields. Paid agents require an active simulated subscription; never claim this creates a real payment or executes proposed external actions.")]
-    public async Task<AgentRun> run_agent_workflow(string agentId, Guid requestId, string input, CancellationToken ct)
-    {
-        await RequireAsync(Permission.ChainsManage, ct);
-        return await (agents ?? throw new InvalidOperationException("The workflow library is unavailable.")).RunAsync(projectId, agentId, requestId, input, ct);
-    }
-
     public IReadOnlyList<AIFunction> Functions() => GetType().GetMethods()
         .Where(m => m.GetCustomAttribute<DescriptionAttribute>() is not null)
         .Select(m => AIFunctionFactory.Create(m, this, m.Name, m.GetCustomAttribute<DescriptionAttribute>()!.Description)).ToArray();
