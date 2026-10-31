@@ -79,8 +79,12 @@ public sealed partial class PersonalDashboardsViewModel
                     ProposedApproval = null;
                     WorkflowActions = await actionInbox.ListAsync(ProjectId, _stop.Token);
                     ActionNotice = answer
-                        ? "Approval response recorded. The paused workflow was queued to continue according to its configured branches."
-                        : "Decline response recorded. The paused workflow was queued to follow its configured No branch; verify that branch before using this action.";
+                        ? selected.IsApprovalCheckpoint
+                            ? "Approval recorded. The paused workflow was queued to continue according to its configured branches."
+                            : "Yes response recorded. The paused workflow was queued to continue according to its configured branches."
+                        : selected.IsApprovalCheckpoint
+                            ? "Decline recorded. The paused workflow was queued to follow its configured No branch; verify that branch."
+                            : "No response recorded. The paused workflow was queued to follow its configured No branch; verify that branch.";
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {

@@ -41,6 +41,8 @@ public sealed class AgentWorkflowsViewModel(IAgentWorkflows workflows, PortalUiS
                 "its current project permissions, available schema and data freshness. " +
                 $"Objective: {template.Outcome} Expected outputs: {string.Join("; ", template.Deliverables.Take(3))}. " +
                 "Build the smallest testable draft, with measured indicators and Jev review steps. " +
+                "If Jev support is low or evidence is missing, route the case to a durable Human in the loop Yes/No approval checkpoint. " +
+                "Require review of source evidence before approving, and configure a safe No branch that prevents external action. " +
                 "Ask only for essential missing details. Do not execute external actions or enable a schedule without approval.";
             return $"{BuildUrl}?prompt={Uri.EscapeDataString(request)}";
         }
