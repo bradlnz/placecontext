@@ -57,7 +57,7 @@ public sealed partial class PersonalDashboardsViewModel
             DashboardDecisionStatus.Watch => "Watch",
             DashboardDecisionStatus.Hold => "Hold",
             DashboardDecisionStatus.Unavailable => "Unavailable",
-            _ => "Ready for Jev"
+            _ => "Ready for assessment"
         };
     public string DecisionTone(DashboardSignal signal) => RequiresData(signal) ? "warning"
         : DecisionFor(signal.Id)?.Status switch
@@ -121,7 +121,7 @@ public sealed partial class PersonalDashboardsViewModel
         Targets.Add(new(chart.Id, TargetSeries, TargetStatistic, TargetDirection, threshold));
         TargetsDirty = true; TargetEditorOpen = false; TargetError = null;
         RebuildProfile();
-        Notice = "Target applied. Save this view to keep the target; Jev decisions must be evaluated again.";
+        Notice = "Target applied. Save this view to keep the target; Decisions must be evaluated again.";
     }
     public void RemoveTarget()
     {
@@ -164,7 +164,7 @@ public sealed partial class PersonalDashboardsViewModel
             var judgments = result.Decisions.Count(x => x.Probability is not null);
             var needsData = result.Decisions.Count(x => x.Status == DashboardDecisionStatus.NeedsData);
             var unavailable = result.Decisions.Count(x => x.Status == DashboardDecisionStatus.Unavailable);
-            Notice = $"Jev assessed {judgments} signal(s)."
+            Notice = $"AI review assessed {judgments} signal(s)."
                 + (needsData > 0 ? $" {needsData} need refreshed evidence." : "")
                 + (unavailable > 0 ? $" {unavailable} unavailable; retry those reviews." : " Decisions apply to these saved snapshots.");
             DecisionSummaryNotice = judgments > 0 && unavailable == 0;

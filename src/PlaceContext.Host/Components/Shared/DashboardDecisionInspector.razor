@@ -10,14 +10,14 @@
         <p class="next-action">@(decision?.NextAction ?? signal.Rationale)</p>
         @if (decision?.Probability is { } probability)
         {
-            <div class="support-heading"><span>Jev support</span><strong>@probability.ToString("P0")</strong></div>
-            <div class="support-meter" role="meter" aria-label="Jev support for the proposed review step" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@((probability * 100).ToString("0.##", CultureInfo.InvariantCulture))"><span style="@($"width:{(probability * 100).ToString("0.##", CultureInfo.InvariantCulture)}%")"></span></div>
+            <div class="support-heading"><span>AI support</span><strong>@probability.ToString("P0")</strong></div>
+            <div class="support-meter" role="meter" aria-label="AI support for the proposed review step" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@((probability * 100).ToString("0.##", CultureInfo.InvariantCulture))"><span style="@($"width:{(probability * 100).ToString("0.##", CultureInfo.InvariantCulture)}%")"></span></div>
             <p class="support-note">Support for this review step. Data confidence is assessed separately.</p>
         }
         @if (!Vm.RequiresData(signal))
         {
             <button class="dui-btn dui-btn-primary dui-btn-sm decision-action" disabled="@(!Vm.CanEvaluateDecisions)" @onclick="() => Vm.EvaluateSignalAsync(signal.Id)">
-                <AppIcon Kind="decision" />@(decision is null ? "Evaluate with Jev" : decision.Status == DashboardDecisionStatus.Unavailable ? "Retry Jev" : "Recheck decision")
+                <AppIcon Kind="decision" />@(decision is null ? "Evaluate decision" : decision.Status == DashboardDecisionStatus.Unavailable ? "Retry review" : "Recheck decision")
             </button>
         }
         else
@@ -79,14 +79,13 @@
         <details class="decision-evidence">
             <summary>Decision evidence<AppIcon Kind="chevron-down" /></summary>
             <h5>Measured basis</h5><p>@(decision?.Rationale ?? signal.Rationale)</p>
-            <h5>@(decision?.Probability is not null ? "Question assessed by Jev" : "Question for Jev")</h5><p>@(decision?.Question ?? signal.Question)</p>
+            <h5>@(decision?.Probability is not null ? "Question assessed by AI" : "Question for AI review")</h5><p>@(decision?.Question ?? signal.Question)</p>
             @if (decision is not null)
             {
                 <span>Assessed @decision.EvaluatedAt.ToLocalTime().ToString("g")</span>
-                @if (!string.IsNullOrWhiteSpace(decision.Model)) { <span>Model @decision.Model</span> }
                 <span>Evidence @decision.Fingerprint[..Math.Min(12, decision.Fingerprint.Length)]</span>
             }
-            <p class="evidence-scope">Measurements and the proposed step are calculated locally. Jev supplies the support score. Results are for this view and are cleared when its evidence or targets change.</p>
+            <p class="evidence-scope">Measurements and the proposed step are calculated locally. AI review supplies the support score. Results are for this view and are cleared when its evidence or targets change.</p>
         </details>
     </section>
 }

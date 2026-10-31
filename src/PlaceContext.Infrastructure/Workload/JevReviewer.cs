@@ -14,11 +14,11 @@ public sealed class JevReviewer(IHttpClientFactory clients, IOptions<TypeSafeOpt
         var config = configuration is null ? options.Value : await configuration.ResolveAsync(projectId, ct);
         if (string.IsNullOrWhiteSpace(config.ApiKey) || config.ApiKey.Any(c => char.IsWhiteSpace(c) || char.IsControl(c))
             || string.IsNullOrWhiteSpace(config.Model))
-            throw new InvalidOperationException("Configure the TypeSafe API key and model (PlaceContext:TypeSafe) before running a Jev step.");
+            throw new InvalidOperationException("Configure the AI verification service before running an automated review step.");
         if (string.IsNullOrWhiteSpace(question) || question.Length > 4000)
-            throw new ArgumentException("Jev requires a verification question of up to 4000 characters.");
+            throw new ArgumentException("AI verification requires a question of up to 4,000 characters.");
         if (state?.Length > 65_536)
-            throw new InvalidOperationException("The workflow output is too large for Jev review. Reduce it to 65,536 characters; verification input is not truncated.");
+            throw new InvalidOperationException("The workflow output is too large for AI review. Reduce it to 65,536 characters; verification input is not truncated.");
 
         JsonNode? context;
         try { context = JsonNode.Parse(state ?? "{}"); }
@@ -39,7 +39,7 @@ public sealed class JevReviewer(IHttpClientFactory clients, IOptions<TypeSafeOpt
         {
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
             if (!response.IsSuccessStatusCode)
-                throw new InvalidOperationException($"Jev returned HTTP {(int)response.StatusCode}. Check the TypeSafe API key, quota, and request limits before retrying.");
+                throw new InvalidOperationException($"The verification service returned HTTP {(int)response.StatusCode}. Check provider credentials, quota and request limits before retrying.");
             await response.Content.LoadIntoBufferAsync(65_536, deadline.Token);
             using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
             var root = body.RootElement;
@@ -50,14 +50,14 @@ public sealed class JevReviewer(IHttpClientFactory clients, IOptions<TypeSafeOpt
                 || !answer.TryGetProperty("type", out var type) || type.ValueKind != JsonValueKind.String || type.GetString() != "noul"
                 || !answer.TryGetProperty("noul", out var noul) || noul.ValueKind != JsonValueKind.Number
                 || !noul.TryGetDouble(out var probability) || !double.IsFinite(probability) || probability is < 0 or > 1)
-                throw new InvalidOperationException("Jev returned an invalid verification response.");
+                throw new InvalidOperationException("The AI verification service returned an invalid response.");
             return new JsonObject { ["type"] = "noul", ["noul"] = probability, ["model"] = model.GetString(), ["question"] = question };
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        { throw new InvalidOperationException("Jev verification timed out. The workflow has not been approved."); }
+        { throw new InvalidOperationException("AI verification timed out. The workflow has not been approved."); }
         catch (HttpRequestException)
-        { throw new InvalidOperationException("Could not reach TypeSafe or read its response. Retry the Jev step when the service is available."); }
+        { throw new InvalidOperationException("The AI verification service is unavailable. Retry when the provider is reachable."); }
         catch (JsonException)
-        { throw new InvalidOperationException("Jev returned an invalid verification response."); }
+        { throw new InvalidOperationException("The AI verification service returned an invalid response."); }
     }
 }

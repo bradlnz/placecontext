@@ -148,7 +148,7 @@ public sealed class AgentWorkflowService(IServiceScopeFactory scopes, ICurrentTe
                     throw new InvalidOperationException("Invalid workflow output.");
                 row.Output = encryption.Protect(completion.Text, OutputPurpose);
                 row.Status = AgentRunStatus.NeedsReview;
-                row.Notice = "The plan needs human review. Jev verification was unavailable or uncertain.";
+                row.Notice = "The plan needs human review. Automated verification was unavailable or uncertain.";
                 try
                 {
                     var review = await reviewer.EvaluateAsync(
@@ -158,7 +158,7 @@ public sealed class AgentWorkflowService(IServiceScopeFactory scopes, ICurrentTe
                         && double.IsFinite(score) && score >= 0.9 && score <= 1)
                     {
                         row.Status = AgentRunStatus.Completed;
-                        row.Notice = "Jev verified the plan. Proposed actions still require your approval and execution.";
+                        row.Notice = "Automated verification supports the plan. Proposed actions still require your approval and execution.";
                     }
                 }
                 catch (Exception) when (!deadline.IsCancellationRequested) { /* Unavailable verification stays on the human-review path. */ }

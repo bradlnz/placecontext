@@ -116,14 +116,14 @@ public sealed class PersonalDashboardService(IServiceScopeFactory scopes, ICurre
         await CheckAsync(db, projectId, ct);
         if (string.IsNullOrWhiteSpace(question) || question.Length > 1000) throw new InvalidOperationException("Ask a yes/no question up to 1,000 characters.");
         var snapshot = Select(await ReadChartsAsync(db, projectId, ct), chartIds);
-        if (snapshot.Fingerprint != fingerprint) throw new InvalidOperationException("Chart data has changed. Refresh the snapshots before asking Jev.");
+        if (snapshot.Fingerprint != fingerprint) throw new InvalidOperationException("Chart data has changed. Refresh the snapshots before requesting an assessment.");
         if (snapshot.Evidence.Length > 60_000) throw new InvalidOperationException("These charts contain too much data for one analysis. Select fewer charts.");
         JsonObject response;
         try { response = await jev.EvaluateAsync(question.Trim(), snapshot.Evidence, ct, projectId); }
         catch (OperationCanceledException) { throw; }
-        catch { throw new InvalidOperationException("Jev analysis is unavailable. Check the host's TypeSafe configuration and try again."); }
+        catch { throw new InvalidOperationException("AI assessment is unavailable. Check the decision service configuration and try again."); }
         if (response["noul"] is not JsonValue value || !value.TryGetValue<double>(out var score) || !double.IsFinite(score) || score is < 0 or > 1)
-            throw new InvalidOperationException("Jev did not return a usable judgment. Try again.");
+            throw new InvalidOperationException("The decision service did not return a usable assessment. Try again.");
         return new(question.Trim(), score, clock.UtcNow, snapshot.Fingerprint);
     }
 

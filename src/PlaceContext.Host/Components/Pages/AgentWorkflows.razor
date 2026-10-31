@@ -230,7 +230,7 @@
                                 <details class="detail-disclosure access-note" open="@(!Vm.CanRunAiPlan)"><summary>AI plan access <span class="access-label">@(Vm.CanRunAiPlan ? "Simulation enabled" : "Set up in Build")</span><AppIcon Kind="chevron-down" /></summary>
                                     @if (workspace.SimulationEnabled)
                                     {
-                                        <p>Local subscription simulation: @AgentWorkflowsViewModel.PriceLabel(selected) @AgentWorkflowsViewModel.PriceUnit(selected). No payments collected. Provider charges may apply; Jev usage is excluded from demo credits.</p>
+                                        <p>Local subscription simulation: @AgentWorkflowsViewModel.PriceLabel(selected) @AgentWorkflowsViewModel.PriceUnit(selected). No payments collected. Provider charges may apply; AI verification usage is excluded from demo credits.</p>
                                         @if (Vm.CanManageSubscriptions) { <button class="dui-btn dui-btn-outline dui-btn-sm" disabled="@Vm.Busy" @onclick="() => Vm.ToggleSubscriptionAsync(selected)">@(Vm.Subscribed(selected.Id) ? "Disable simulated access" : "Enable simulated access")</button> }
                                         else if (!Vm.Subscribed(selected.Id)) { <p>An administrator can enable simulated access on this host.</p> }
                                     }

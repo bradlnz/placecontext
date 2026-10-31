@@ -20,7 +20,7 @@ public sealed class SmartDashboardsViewModelTests
         Assert.Equal(50, signal.Measurement.Range);
         Assert.Equal(0, service.DecisionCalls);
         Assert.Equal(0, service.Analyses);
-        Assert.Equal("Ready for Jev", vm.DecisionLabel(signal));
+        Assert.Equal("Ready for assessment", vm.DecisionLabel(signal));
 
         vm.ShowDecisions();
         Assert.Equal(0, service.DecisionCalls);

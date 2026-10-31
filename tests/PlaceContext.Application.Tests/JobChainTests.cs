@@ -969,7 +969,7 @@ public class JobChainTests
             .HandleAsync(new RunJobChainCommand(chain.Id));
         Assert.Equal("Failed", result.Status);
         Assert.Null(result.InputRequest);
-        Assert.Contains("Could not complete Jev verification", result.Steps[0].Error);
+        Assert.Contains("Could not complete AI verification", result.Steps[0].Error);
         Assert.Empty(dispatcher.DispatchedJobIds);
     }
 

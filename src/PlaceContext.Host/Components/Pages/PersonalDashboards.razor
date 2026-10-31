@@ -23,7 +23,7 @@
         <section class="view-heading" aria-label="Dashboard view">
             <div class="view-title">
                 <div class="view-title-line"><h2>@Vm.Name</h2><span class="dui-badge dui-badge-soft dui-badge-sm privacy-label"><AppIcon Kind="human" /> Private</span></div>
-                <p>Measured indicators for real data profiles, with evidence-backed next steps from Jev.</p>
+                <p>Measured indicators for real data profiles, with evidence-backed decisions and next steps.</p>
                 @if (Vm.IsPreview && Vm.Charts.Count > Vm.ChartIds.Count) { <small class="preview-scope">Showing @Vm.ChartIds.Count of @Vm.Charts.Count snapshots. Choose data to change this view.</small> }
             </div>
             <div class="view-actions">
@@ -45,7 +45,7 @@
                     }
                     else
                     {
-                        <button class="dui-btn dui-btn-primary dui-btn-sm primary-button evaluate-decisions" disabled="@(!Vm.CanEvaluateDecisions)" @onclick="Vm.EvaluateDecisionsAsync"><AppIcon Kind="decision" />Evaluate with Jev</button>
+                        <button class="dui-btn dui-btn-primary dui-btn-sm primary-button evaluate-decisions" disabled="@(!Vm.CanEvaluateDecisions)" @onclick="Vm.EvaluateDecisionsAsync"><AppIcon Kind="decision" />Evaluate decisions</button>
                     }
                     @if (Vm.Selected is not null) { <button class="dui-btn dui-btn-ghost dui-btn-sm dui-btn-square icon-button" aria-label="Delete saved view" title="Delete saved view" disabled="@Vm.Busy" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button> }
                 }
@@ -94,13 +94,13 @@
             </section>
             @if (Vm.EvaluatingDecisions)
             {
-                <p class="decision-progress" role="status"><AppIcon Kind="decision" /><span>Jev is assessing the measured signals and proposed next steps…</span></p>
+                <p class="decision-progress" role="status"><AppIcon Kind="decision" /><span>Assessing measured indicators and proposed next steps…</span></p>
             }
             @if (Vm.TargetsDirty)
             {
                 <p class="target-save-note"><AppIcon Kind="target" />Targets changed in this view. Save the view to keep them.</p>
             }
-            @if (Vm.MissingCharts) { <p class="workspace-notice error" role="alert">@Vm.MissingChartIds.Count selected chart(s) are unavailable. Choose data to restore or remove them. Jev analysis is paused until the view is complete.</p> }
+            @if (Vm.MissingCharts) { <p class="workspace-notice error" role="alert">@Vm.MissingChartIds.Count selected chart(s) are unavailable. Choose data to restore or remove them. Decision review is paused until the view is complete.</p> }
             @if (Vm.Lens == DashboardLens.Overview)
             {
                 <section class="indicator-profiles" aria-label="Profiles with measurable indicators">
@@ -223,25 +223,25 @@
                         <div class="inspector-placeholder"><AppIcon Kind="data.entities" /><h3>Select a profile</h3><p>Inspect its confidence, evidence checks and next steps here.</p></div>
                     }
                     <section class="investigation" aria-labelledby="investigation-title">
-                        <div class="section-heading"><h3 id="investigation-title"><AppIcon Kind="agent" /> Investigate with Jev</h3><span class="dui-badge dui-badge-soft dui-badge-primary dui-badge-sm ai-label">AI</span></div>
+                        <div class="section-heading"><h3 id="investigation-title"><AppIcon Kind="agent" /> Investigate with AI</h3><span class="dui-badge dui-badge-soft dui-badge-primary dui-badge-sm ai-label">AI</span></div>
                         @if (Vm.FocusedProfile is { SuggestedQuestions.Count: > 0 } focused)
                         {
                             <details class="suggested-questions"><summary>Suggested questions <span>@focused.SuggestedQuestions.Count</span></summary><div>@foreach (var question in focused.SuggestedQuestions) { <button class="dui-btn dui-btn-ghost dui-btn-sm" disabled="@Vm.Busy" @onclick="() => UseSuggestionAsync(question)">@question<AppIcon Kind="arrow-up" /></button> }</div></details>
                         }
                         <form class="question-composer" @onsubmit="Vm.AnalyzeAsync" @onsubmit:preventDefault>
-                            <label for="jev-question" class="visually-hidden">Yes or no question for Jev</label><textarea @ref="_question" id="jev-question" class="dui-textarea question-input" rows="3" maxlength="1000" @bind="Vm.Question" @bind:event="oninput" disabled="@Vm.Busy" placeholder="Ask a yes/no question about this data…"></textarea>
-                            <div class="composer-actions"><span>@Vm.SelectedCharts.Count() selected snapshots</span><button class="dui-btn dui-btn-primary dui-btn-sm send-button" type="submit" disabled="@(!Vm.CanAnalyze)" aria-label="Analyze question with Jev" title="Analyze question with Jev">Ask Jev <AppIcon Kind="arrow-up" /></button></div>
+                            <label for="ai-review-question" class="visually-hidden">Yes or no question about this data</label><textarea @ref="_question" id="ai-review-question" class="dui-textarea question-input" rows="3" maxlength="1000" @bind="Vm.Question" @bind:event="oninput" disabled="@Vm.Busy" placeholder="Ask a yes/no question about this data…"></textarea>
+                            <div class="composer-actions"><span>@Vm.SelectedCharts.Count() selected snapshots</span><button class="dui-btn dui-btn-primary dui-btn-sm send-button" type="submit" disabled="@(!Vm.CanAnalyze)" aria-label="Assess question using AI" title="Assess question using AI">Ask AI <AppIcon Kind="arrow-up" /></button></div>
                         </form>
-                        <p class="composer-note">Uses your configured Jev service. Sending shares selected chart values; provider usage may apply.</p>
+                        <p class="composer-note">Sends selected chart values to your configured AI decision service. Provider usage may apply.</p>
                         @if (Vm.AnalysisCurrent && Vm.Analysis is { } analysis)
                         {
-                            <div class="dui-card dui-card-border analysis-result" role="status"><span class="section-label">JEV ASSESSMENT</span><h4>@analysis.Verdict</h4><p>@analysis.Question</p><strong>@analysis.Probability.ToString("P0") estimated probability of “yes”</strong><p class="analysis-scope">This estimate answers the question. It does not change data confidence.</p><small>@analysis.AnalyzedAt.ToLocalTime().ToString("g") · Evidence @analysis.Fingerprint[..Math.Min(analysis.Fingerprint.Length, 12)]</small></div>
+                            <div class="dui-card dui-card-border analysis-result" role="status"><span class="section-label">AI ASSESSMENT</span><h4>@analysis.Verdict</h4><p>@analysis.Question</p><strong>@analysis.Probability.ToString("P0") estimated probability of “yes”</strong><p class="analysis-scope">This estimate answers the question. It does not change data confidence.</p><small>@analysis.AnalyzedAt.ToLocalTime().ToString("g") · Evidence @analysis.Fingerprint[..Math.Min(analysis.Fingerprint.Length, 12)]</small></div>
                         }
                     </section>
                     </div>
                 </aside>
             </div>
-            <details class="confidence-method"><summary><AppIcon Kind="about" /> About measurements, decisions and confidence</summary><p>@DashboardDataProfile.Scope</p><p>@Vm.Profile.ConfidenceReason</p><p>Measurements summarize one named measure per chart, or the measure chosen by its optional target. Means and medians describe displayed values, not the full source population. Targets use chart units; units, business limits and time trends are not inferred. Evaluate with Jev sends the measured chart evidence to your configured service; provider usage may apply. Jev support of at least 90% recommends review, at most 10% recommends watching, and intermediate support holds for a person. A measured target breach cannot become Watch because of a low model score.</p><p>Current means generated within 24 hours; aging means within 7 days. Stale or unusable evidence needs a refresh before Jev can decide. Coverage is unverified, so data confidence is capped at Medium. Refresh retrieves saved snapshots; regenerate source charts in Analytics to get newer values. Targets can be saved with the private view. Decision results are view-local and cleared when evidence or targets change.</p></details>
+            <details class="confidence-method"><summary><AppIcon Kind="about" /> About measurements, decisions and confidence</summary><p>@DashboardDataProfile.Scope</p><p>@Vm.Profile.ConfidenceReason</p><p>Measurements summarize one named measure per chart, or the measure chosen by its optional target. Means and medians describe displayed values, not the full source population. Targets use chart units; units, business limits and time trends are not inferred. Evaluate decisions sends the measured chart evidence to your configured service; provider usage may apply. AI support of at least 90% recommends review, at most 10% recommends watching, and intermediate support holds for a person. A measured target breach cannot become Watch because of a low model score.</p><p>Current means generated within 24 hours; aging means within 7 days. Stale or unusable evidence needs a refresh before a decision assessment can be made. Coverage is unverified, so data confidence is capped at Medium. Refresh retrieves saved snapshots; regenerate source charts in Analytics to get newer values. Targets can be saved with the private view. Decision results are view-local and cleared when evidence or targets change.</p></details>
         }
         else if (!Vm.Busy && !Vm.Editing)
         {

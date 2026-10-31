@@ -87,7 +87,7 @@ public sealed partial class PersonalDashboardsViewModel(IPersonalDashboards dash
         WorkflowActions = []; SelectedWorkflowActionId = null; ActionError = ActionNotice = null;
         Lens = DashboardLens.Overview; _profileSearch = ""; FocusedChartId = null; Question = ""; ConfirmDelete = false;
         RebuildProfile();
-        ui.Set("Data profiles", "Measured signals and decisions with Jev");
+        ui.Set("Data profiles", "Measured indicators, decisions and actions");
         await ExecuteAsync(async () =>
         {
             Saved = await dashboards.ListAsync(ProjectId, _stop.Token);

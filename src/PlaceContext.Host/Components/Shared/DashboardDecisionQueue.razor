@@ -37,11 +37,11 @@
                     <span class="judgment-caption">
                         @if (decision?.Probability is { } probability)
                         {
-                            <AppIcon Kind="decision" /><span>Jev support <strong>@probability.ToString("P0")</strong></span>
+                            <AppIcon Kind="decision" /><span>AI support <strong>@probability.ToString("P0")</strong></span>
                         }
                         else
                         {
-                            <AppIcon Kind="@(Vm.RequiresData(signal) ? "refresh" : decision?.Status == DashboardDecisionStatus.Unavailable ? "warning" : "measure")" /><span>@(Vm.RequiresData(signal) ? "Refresh evidence first" : decision?.Status == DashboardDecisionStatus.Unavailable ? "Jev unavailable · retry review" : "Measured locally · awaiting Jev")</span>
+                            <AppIcon Kind="@(Vm.RequiresData(signal) ? "refresh" : decision?.Status == DashboardDecisionStatus.Unavailable ? "warning" : "measure")" /><span>@(Vm.RequiresData(signal) ? "Refresh evidence first" : decision?.Status == DashboardDecisionStatus.Unavailable ? "AI review unavailable · retry" : "Measured locally · awaiting AI review")</span>
                         }
                     </span>
                     <div class="dui-card-actions">
@@ -53,7 +53,7 @@
                         else
                         {
                             <button class="dui-btn dui-btn-soft dui-btn-primary dui-btn-sm" disabled="@(!Vm.CanEvaluateDecisions)" @onclick="() => Vm.EvaluateSignalAsync(signal.Id)">
-                                <AppIcon Kind="decision" />@(decision is null ? "Evaluate" : decision.Status == DashboardDecisionStatus.Unavailable ? "Retry Jev" : "Recheck")
+                                <AppIcon Kind="decision" />@(decision is null ? "Evaluate" : decision.Status == DashboardDecisionStatus.Unavailable ? "Retry review" : "Recheck")
                             </button>
                         }
                     </div>
@@ -65,7 +65,7 @@
     {
         <div class="queue-empty"><AppIcon Kind="data.search" /><h4>No signals match this view</h4><p>Choose source charts or clear the search to see measured signals.</p></div>
     }
-    <p class="queue-scope"><AppIcon Kind="about" />Jev decides what deserves review. Source changes stay in their own workflows.</p>
+    <p class="queue-scope"><AppIcon Kind="about" />AI assessment helps prioritise reviews. It never grants approval. Source changes stay in their own workflows.</p>
 </section>
 
 @code {
