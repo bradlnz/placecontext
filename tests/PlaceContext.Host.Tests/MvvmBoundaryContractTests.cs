@@ -15,6 +15,13 @@ public sealed class MvvmBoundaryContractTests
         "Components/Layout/ProjectLayout.razor",
     ];
 
+    // Retired routes are stateless navigation shims, not stateful portal pages.
+    private static readonly HashSet<string> RedirectOnlyPages =
+    [
+        "Components/Pages/AgentWorkflows.razor",
+        "Components/Pages/PersonalDashboards.razor",
+    ];
+
     private static readonly HashSet<string> PresentationalComponents =
     [
         "Components/Shared/AppIcon.razor",
@@ -35,7 +42,8 @@ public sealed class MvvmBoundaryContractTests
         var hostRoot = FindHostRoot();
         var views = EnumerateRazor(hostRoot, "Components/Pages")
             .Concat(EnumerateRazor(hostRoot, "Components/Layout"))
-            .Where(view => !PresentationalLayouts.Contains(view.RelativePath));
+            .Where(view => !PresentationalLayouts.Contains(view.RelativePath)
+                && !RedirectOnlyPages.Contains(view.RelativePath));
 
         var violations = views
             .Where(view => !ViewModelInjection.IsMatch(view.Source))
