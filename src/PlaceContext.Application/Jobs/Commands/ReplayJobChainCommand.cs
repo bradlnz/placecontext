@@ -23,5 +23,6 @@ public sealed record ReplayJobChainCommand(
     Guid OriginalRunId,
     int? FromStepIndex = null,
     string? InputPayload = null,
-    IReadOnlyDictionary<int, string>? StepPayloadOverrides = null)
+    IReadOnlyDictionary<int, string>? StepPayloadOverrides = null,
+    Guid? ReplayRunId = null)
     : ICommand<ChainRunView>;
