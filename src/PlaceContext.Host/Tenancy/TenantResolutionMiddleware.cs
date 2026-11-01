@@ -15,6 +15,16 @@ public sealed class TenantResolutionMiddleware
     public async Task Invoke(HttpContext context, ITenantStore store, TenantHolder holder,
         IConfiguration configuration)
     {
+        // Login and registration on the canonical SaaS apex are public even
+        // before the first tenant exists. Never bypass tenant lookup for other
+        // hosts or tenant subdomains.
+        if (configuration.GetValue<bool>("PlaceContext:SaaS:ManagedHosting")
+            && ManagedSignupUrls.IsApexHost(context.Request.Host.Host, configuration)
+            && ManagedSignupUrls.IsPublicApexPath(context.Request.Path))
+        {
+            await _next(context);
+            return;
+        }
         var slug = ResolveSlug(context.Request.Host.Host);
         // Public hosted SaaS must never allocate a fresh tenant simply because a visitor
         // typed a new subdomain. Tenant creation is a privileged onboarding operation.
