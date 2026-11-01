@@ -45,6 +45,33 @@ public sealed class ChainQueueTests
             DbChainQueueService Service(AppDbContext context, FakeCurrentTenant owner) => new(context, owner, permissions,
                 new DbJobChainSubmissionQueue(context, owner, new CurrentUser(), encryptor, permissions), encryptor);
             var queues = Service(db, tenant);
+            var submit = new DbJobChainSubmissionQueue(
+                db, tenant, new CurrentUser(), encryptor, permissions);
+            var stepValues = new Dictionary<int, string>
+            {
+                [0] = "{\"account\":\"Ada\"}",
+                [2] = "{\"approved\":true}"
+            };
+            var portalRun = await submit.EnqueueAsync(project, chain, null,
+                "portal:test-durable-overrides", stepPayloadOverrides: stepValues);
+            var repeated = await submit.EnqueueAsync(project, chain, null,
+                "portal:test-durable-overrides", stepPayloadOverrides: stepValues);
+            Assert.Equal(portalRun.TrackingId, repeated.TrackingId);
+            await using (var sql = new NpgsqlCommand(
+                "SELECT \"StepPayloadOverrides\" FROM rpc_chain_submissions WHERE \"Id\" = @id", connection))
+            {
+                sql.Parameters.AddWithValue("id", portalRun.TrackingId);
+                var persisted = (string?)await sql.ExecuteScalarAsync();
+                Assert.NotNull(persisted);
+                var recovered = JsonSerializer.Deserialize<Dictionary<int, string>>(
+                    encryptor.Unprotect(persisted!, IDataEncryptor.Purpose.RpcChainSubmission));
+                Assert.Equal(stepValues, recovered);
+            }
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                submit.EnqueueAsync(Guid.NewGuid(), chain, null));
+            // Mark the extra fixture submission terminal, keeping the claim-count tests intact.
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE rpc_chain_submissions SET \"Status\" = 'Succeeded', \"FinishedAt\" = now() WHERE \"Id\" = {portalRun.TrackingId}");
             var queue = await queues.SaveAsync(null, project, chain, "incoming", true);
             var second = await queues.SaveAsync(null, project, chain, "other", true);
             await Assert.ThrowsAsync<ArgumentException>(() => queues.SaveAsync(null, project, chain, "invalid TTL", true, 0));

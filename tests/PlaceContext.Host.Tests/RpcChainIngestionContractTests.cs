@@ -49,6 +49,8 @@ public sealed class RpcChainIngestionContractTests
         Assert.Contains("if (existing is not null)", worker);
         Assert.Contains("IDataEncryptor.Purpose.RpcChainSubmission", worker);
         Assert.Contains("LoadSubmitterAsync", worker);
+        Assert.Contains("stepOverrides", worker);
+        Assert.Contains("submission.\"StepPayloadOverrides\"", worker);
     }
 
     [Fact]
@@ -64,6 +66,8 @@ public sealed class RpcChainIngestionContractTests
         Assert.Contains("\"TenantId\", \"IdempotencyKey\"", infrastructure);
         Assert.Contains("ON CONFLICT (\"TenantId\", \"IdempotencyKey\")", queue);
         Assert.Contains("_encryptor.Protect(inputPayload", queue);
+        Assert.Contains("protectedOverrides", queue);
+        Assert.Contains("ADD COLUMN IF NOT EXISTS \"StepPayloadOverrides\"", infrastructure);
     }
 
     [Fact]
