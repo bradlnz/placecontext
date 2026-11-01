@@ -1,0 +1,141 @@
+@page "/signup"
+@attribute [AllowAnonymous]
+@layout PlaceContext.Host.Components.Layout.AuthLayout
+
+@using Microsoft.Extensions.Options
+@using PlaceContext.Application.Billing
+@using PlaceContext.Host.Tenancy
+@inject IOptions<RunBillingDeploymentOptions> Hosting
+@inject IOptions<WorkspaceSignupOptions> Signup
+@inject IConfiguration Config
+@inject NavigationManager Nav
+
+<PageTitle>PlaceContext — Create a workspace</PageTitle>
+
+<main class="signup-layout">
+    <div class="signup-brand"><img src="/favicon.svg" alt="" /><strong>PlaceContext</strong><span>Create a workspace</span></div>
+    <section class="dccard signup-card">
+        @if (!Enabled)
+        {
+            <div class="signup-eyebrow">WORKSPACE REGISTRATION</div>
+            <h1>Registration isn't available here</h1>
+            <p class="signup-sub">Sign in to an existing workspace, or contact the administrator for access.</p>
+            <a href="/login" class="dcbtn primary signup-button">Return to sign in</a>
+        }
+        else if (!string.IsNullOrWhiteSpace(VerifyToken))
+        {
+            <div class="signup-step"><span>01</span><span class="signup-step-active">Confirm your email</span><span>02</span><span>Billing</span></div>
+            <div class="signup-eyebrow">EMAIL CONFIRMATION</div>
+            <h1>Confirm your workspace</h1>
+            <p class="signup-sub">Confirm this request to create the workspace and its owner account.
+                Your email link can only be used once and expires after 30 minutes.</p>
+            @if (!string.IsNullOrWhiteSpace(Error))
+            {
+                <div class="signup-error" role="alert">@Error</div>
+            }
+            <form method="post" action="/auth/signup/verify" class="signup-form">
+                <AntiforgeryToken />
+                <input name="token" type="hidden" value="@VerifyToken" />
+                <button type="submit" class="dcbtn primary signup-button">Confirm and create workspace <span aria-hidden="true">→</span></button>
+            </form>
+            <p class="signup-note">If this wasn't your request, close this page. No workspace will be created.</p>
+        }
+        else if (Sent == "1")
+        {
+            <div class="signup-eyebrow">CHECK YOUR INBOX</div>
+            <h1>One more step</h1>
+            <p class="signup-sub">We've sent a verification link to the email you provided.
+                Follow that link to activate your workspace, then you'll choose your managed plan.</p>
+            <div class="signup-notice">Verification links expire after 30 minutes. Check your spam folder if it doesn't arrive.</div>
+            <a class="dcbtn signup-button secondary" href="/login">Back to sign in</a>
+        }
+        else
+        {
+            <div class="signup-step"><span class="signup-step-active">01</span><span class="signup-step-active">Workspace</span><span>02</span><span>Verify email</span><span>03</span><span>Billing</span></div>
+            <div class="signup-eyebrow">CREATE YOUR WORKSPACE</div>
+            <h1>Start building with PlaceContext</h1>
+            <p class="signup-sub">Choose your workspace address and owner credentials.
+                Your workflow runs are unlimited on either managed plan.</p>
+            @if (!string.IsNullOrWhiteSpace(Error))
+            {
+                <div class="signup-error" role="alert">@Error</div>
+            }
+            <form method="post" action="/auth/signup" class="signup-form">
+                <AntiforgeryToken />
+                <div class="signup-fields">
+                    <div class="dcfield">
+                        <label for="workspace-name">Workspace name</label>
+                        <input id="workspace-name" class="dcinput" name="workspaceName" type="text"
+                               required minlength="2" maxlength="90" placeholder="Acme Operations" autofocus
+                               autocomplete="organization" />
+                    </div>
+                    <div class="dcfield">
+                        <label for="workspace-slug">Workspace address</label>
+                        <div class="signup-address">
+                            <input id="workspace-slug" class="dcinput" name="workspace" type="text"
+                                   required minlength="4" maxlength="40" pattern="[a-z][a-z0-9-]{2,38}[a-z0-9]"
+                                   value="@Workspace" autocomplete="off" spellcheck="false" placeholder="acme" />
+                            <span>.placecontext.io</span>
+                        </div>
+                        <small>Your team's unique sign-in URL. Use lowercase letters, numbers and hyphens.</small>
+                    </div>
+                    <div class="signup-two">
+                        <div class="dcfield">
+                            <label for="signup-fullname">Your name</label>
+                            <input id="signup-fullname" class="dcinput" name="displayName" type="text"
+                                   maxlength="120" autocomplete="name" placeholder="Alex Morgan" />
+                        </div>
+                        <div class="dcfield">
+                            <label for="signup-email">Work email</label>
+                            <input id="signup-email" class="dcinput" name="email" type="email" maxlength="254"
+                                   autocomplete="email" required placeholder="alex@acme.com" />
+                        </div>
+                    </div>
+                    <div class="signup-two">
+                        <div class="dcfield">
+                            <label for="signup-password">Password <small>12+ characters</small></label>
+                            <input id="signup-password" class="dcinput" name="password" type="password"
+                                   minlength="12" required autocomplete="new-password"
+                                   placeholder="Create a secure password" />
+                        </div>
+                        <div class="dcfield">
+                            <label for="signup-confirm">Confirm password</label>
+                            <input id="signup-confirm" class="dcinput" name="confirmPassword" type="password"
+                                   minlength="12" required autocomplete="new-password"
+                                   placeholder="Enter it again" />
+                        </div>
+                    </div>
+                </div>
+                <fieldset class="signup-plan">
+                    <legend>Choose your managed plan</legend>
+                    <label class="plan-option">
+                        <input type="radio" name="plan" value="basic" checked="@(SelectedPlan != RunPlans.Standard)" />
+                        <span><strong>Basic Managed</strong><small>60 starts/min · 2 active executions</small></span>
+                        <b>$600/mo</b>
+                    </label>
+                    <label class="plan-option">
+                        <input type="radio" name="plan" value="standard" checked="@(SelectedPlan == RunPlans.Standard)" />
+                        <span><strong>Standard Managed</strong><small>600 starts/min · 8 active executions</small></span>
+                        <b>$825/mo</b>
+                    </label>
+                </fieldset>
+                <p class="signup-note">No payment is taken during registration. After email verification you'll
+                    review billing in your new workspace. Developer Edition is free and self-hosted only.</p>
+                <button type="submit" class="dcbtn primary signup-button">Create workspace <span aria-hidden="true">→</span></button>
+            </form>
+        }
+    </section>
+    <div class="signup-footer">Already have a workspace? <a href="/login">Sign in</a></div>
+</main>
+
+@code {
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+    [SupplyParameterFromQuery(Name = "sent")] public string? Sent { get; set; }
+    [SupplyParameterFromQuery(Name = "verify")] public string? VerifyToken { get; set; }
+    [SupplyParameterFromQuery(Name = "plan")] public string? Plan { get; set; }
+    [SupplyParameterFromQuery(Name = "workspace")] public string? Workspace { get; set; }
+
+    private bool Enabled => Hosting.Value.ManagedHosting && Hosting.Value.RequireExplicitTenantProvisioning
+        && Signup.Value.Enabled && ManagedSignupUrls.IsApexHost(new Uri(Nav.Uri).Host, Config);
+    private string SelectedPlan => Plan == RunPlans.Standard ? RunPlans.Standard : RunPlans.Basic;
+}

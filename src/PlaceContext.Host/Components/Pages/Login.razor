@@ -2,57 +2,121 @@
 @attribute [AllowAnonymous]
 @layout PlaceContext.Host.Components.Layout.AuthLayout
 
-@using Microsoft.AspNetCore.Components.Forms
+@using PlaceContext.Application.Billing
+@using PlaceContext.Host.Tenancy
+@using Microsoft.Extensions.Options
 @using PlaceContext.Host.Components.ViewModels
 @inject LoginViewModel Vm
+@inject IConfiguration Config
+@inject NavigationManager Nav
+@inject IOptions<RunBillingDeploymentOptions> Hosting
+@inject IOptions<WorkspaceSignupOptions> Signup
 
-@* Password sign-in. Posts as a plain HTML form to AuthController.Login (see Setup.razor's comment for
-   why — cookie sign-in needs a normal HTTP round trip, not a Blazor circuit event). Errors are always
-   the same generic string regardless of what actually went wrong, so a response can't be used to probe
-   for valid emails. *@
+<PageTitle>PlaceContext — Sign in</PageTitle>
 
-<PageTitle>placecontext — sign in</PageTitle>
-
-<div class="dccard auth-card">
-    <div class="auth-brand">
-        <img src="/favicon.svg" alt="PlaceContext" class="auth-mark" />
-        <span class="auth-brand-name">placecontext</span>
-    </div>
-
-    <h1 class="auth-title">Sign in</h1>
-    <p class="auth-sub">Enter this workspace's admin (or member) credentials.</p>
-
-    <form method="post" action="/auth/login" class="auth-form">
-        <AntiforgeryToken />
-        @if (!string.IsNullOrEmpty(Vm.Error))
-        {
-            <div class="auth-error">@Vm.Error</div>
-        }
-        @if (!string.IsNullOrEmpty(Vm.ReturnUrl))
-        {
-            <input type="hidden" name="returnUrl" value="@Vm.ReturnUrl" />
-        }
-        <div class="dcfield">
-            <label>Email</label>
-            <input class="dcinput" type="email" name="email" required autofocus value="@Vm.Email" autocomplete="username" />
+<main class="login-layout">
+    <section class="login-intro" aria-label="PlaceContext platform">
+        <div class="auth-brand">
+            <img src="/favicon.svg" class="auth-mark" alt="" />
+            <strong>PlaceContext</strong>
         </div>
-        <div class="dcfield">
-            <label>Password</label>
-            <input class="dcinput" type="password" name="password" required autocomplete="current-password" />
+        <div class="login-eyebrow"><span class="login-eyebrow-dot"></span> Workflows for real work</div>
+        <h1>Build the workflow.<br /><span>Keep control.</span></h1>
+        <p>Connect your data, orchestrate reliable jobs, and bring people into decisions when they matter.</p>
+        <div class="login-benefits">
+            <div><span class="login-icon">01</span><span><strong>Build</strong><small>Compose jobs, data and AI into workflows.</small></span></div>
+            <div><span class="login-icon">02</span><span><strong>Run</strong><small>Manage executions with traceable results.</small></span></div>
+            <div><span class="login-icon">03</span><span><strong>Approve</strong><small>Human decisions stay part of the process.</small></span></div>
         </div>
-        <button type="submit" class="dcbtn primary auth-submit">Sign in</button>
-    </form>
-</div>
+    </section>
+
+    <section class="dccard auth-card" aria-labelledby="login-title">
+        <div class="login-card-heading">
+            <div class="login-card-eyebrow">YOUR WORKSPACE</div>
+            <h2 class="auth-title" id="login-title">@(IsApex ? "Find your workspace" : "Welcome back")</h2>
+            <p class="auth-sub">@(IsApex
+                ? "Enter your workspace address to continue to its secure sign-in."
+                : "Sign in to your PlaceContext workspace.")</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Vm.Error))
+        {
+            <div class="auth-error" role="alert">@Vm.Error</div>
+        }
+
+        @if (IsApex)
+        {
+            <form method="post" action="/auth/workspace" class="auth-form">
+                <AntiforgeryToken />
+                <div class="dcfield">
+                    <label for="workspace-slug">Workspace address</label>
+                    <div class="workspace-field">
+                        <input id="workspace-slug" class="dcinput" name="workspace" type="text"
+                               autocomplete="organization" pattern="[a-z][a-z0-9-]{2,38}[a-z0-9]"
+                               maxlength="40" minlength="4" placeholder="your-company" required autofocus />
+                        <span>.placecontext.io</span>
+                    </div>
+                </div>
+                <button type="submit" class="dcbtn primary auth-submit">Continue to workspace <span aria-hidden="true">→</span></button>
+            </form>
+            @if (PublicSignupEnabled)
+            {
+                <div class="auth-switch">New to PlaceContext? <a href="@SignupUrl">Create a workspace</a></div>
+            }
+            else
+            {
+                <p class="auth-hint">Your workspace owner can provide your sign-in address.</p>
+            }
+        }
+        else
+        {
+            <form method="post" action="/auth/login" class="auth-form">
+                <AntiforgeryToken />
+                @if (!string.IsNullOrWhiteSpace(Vm.ReturnUrl))
+                {
+                    <input type="hidden" name="returnUrl" value="@Vm.ReturnUrl" />
+                }
+                <div class="dcfield">
+                    <label for="login-email">Work email</label>
+                    <input id="login-email" class="dcinput" type="email" name="email"
+                           required autofocus value="@Vm.Email" maxlength="254"
+                           placeholder="you@company.com" autocomplete="username" />
+                </div>
+                <div class="dcfield">
+                    <label for="login-password">Password</label>
+                    <input id="login-password" class="dcinput" type="password" name="password"
+                           required autocomplete="current-password" placeholder="Your password" />
+                </div>
+                <button type="submit" class="dcbtn primary auth-submit">Sign in <span aria-hidden="true">→</span></button>
+            </form>
+            @if (SsoAvailable)
+            {
+                <div class="login-divider"><span>or</span></div>
+                <a class="dcbtn sso-button" href="/auth/sso">Continue with company SSO</a>
+            }
+            <p class="auth-hint">Don't have access? Ask your workspace owner for an invitation.</p>
+            @if (Hosting.Value.ManagedHosting && PublicSignupEnabled)
+            {
+                <div class="auth-switch">Starting a new team? <a href="@SignupUrl">Create a workspace</a></div>
+            }
+        }
+        <div class="login-secure"><span aria-hidden="true">◈</span> Access is scoped to your workspace</div>
+    </section>
+</main>
 
 @code {
-    [SupplyParameterFromQuery(Name = "error")]
-    public string? ErrorQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? ErrorQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrlQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "email")] public string? EmailQuery { get; set; }
 
-    [SupplyParameterFromQuery(Name = "returnUrl")]
-    public string? ReturnUrlQuery { get; set; }
-
-    [SupplyParameterFromQuery(Name = "email")]
-    public string? EmailQuery { get; set; }
+    private bool IsApex => Hosting.Value.ManagedHosting
+        && ManagedSignupUrls.IsApexHost(new Uri(Nav.Uri).Host, Config);
+    private bool PublicSignupEnabled => Hosting.Value.ManagedHosting
+        && Hosting.Value.RequireExplicitTenantProvisioning && Signup.Value.Enabled
+        && ManagedSignupUrls.PublicOrigin(Config) is not null;
+    private string SignupUrl => ManagedSignupUrls.PublicOrigin(Config) is { } origin
+        ? new Uri(origin, "/signup").AbsoluteUri : "/signup";
+    private bool SsoAvailable => PlaceContext.Host.Controllers.AuthController.ExternalSsoConfigured(Config);
 
     protected override async Task OnParametersSetAsync()
     {
