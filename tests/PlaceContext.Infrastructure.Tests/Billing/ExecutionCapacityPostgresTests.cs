@@ -32,6 +32,7 @@ public sealed class ExecutionCapacityPostgresTests
                 await db.Database.MigrateAsync();
                 db.Tenants.Add(new TenantRow { Id = tenantId, Slug = schema, Name = schema,
                     CreatedAt = DateTimeOffset.UtcNow });
+                await db.SaveChangesAsync();
                 db.TenantRunPlans.Add(new TenantRunPlanRow {
                     TenantId = tenantId, Plan = RunPlans.Basic, Status = "active",
                     PeriodStart = DateTimeOffset.UtcNow.AddHours(-1),
