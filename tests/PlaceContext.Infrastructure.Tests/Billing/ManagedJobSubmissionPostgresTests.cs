@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Infrastructure.Tests.AgentWorkflows;
 using PlaceContext.Infrastructure.Scheduling;
 using PlaceContext.TestSupport;
 
@@ -10,7 +11,7 @@ namespace PlaceContext.Infrastructure.Tests.Billing;
 
 public sealed class ManagedJobSubmissionPostgresTests
 {
-    [AgentWorkflows.AgentPostgresFact]
+    [AgentPostgresFact]
     public async Task Managed_jobs_are_durable_idempotent_and_tenant_isolated()
     {
         var schema = "managed_job_" + Guid.NewGuid().ToString("N");
@@ -65,8 +66,8 @@ public sealed class ManagedJobSubmissionPostgresTests
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO job_runs VALUES ({runId}, {tenant.TenantId}, {"Succeeded"})");
             Assert.Equal("Succeeded", (await queue.GetAsync(projectId, jobId, receipt.TrackingId))!.Status);
-            Assert.Equal(1, await db.Database
-                .SqlQueryRaw<int>("SELECT count(*) AS \"Value\" FROM rpc_job_submissions")
+            Assert.Equal(1L, await db.Database
+                .SqlQueryRaw<long>("SELECT count(*) AS \"Value\" FROM rpc_job_submissions")
                 .SingleAsync());
         }
         finally
