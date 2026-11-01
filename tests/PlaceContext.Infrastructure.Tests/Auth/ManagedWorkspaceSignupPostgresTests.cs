@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -26,7 +27,8 @@ public sealed class ManagedWorkspaceSignupPostgresTests
         try
         {
             CurrentTenant.Clear();
-            var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs).Options;
+            var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs)
+                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)).Options;
             await using var db = new AppDbContext(options, new CurrentTenant());
             await db.Database.MigrateAsync();
             var mailer = new FakeMailer();
@@ -119,7 +121,8 @@ public sealed class ManagedWorkspaceSignupPostgresTests
         {
             CurrentTenant.Clear();
             await using var db = new AppDbContext(
-                new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs).Options, new CurrentTenant());
+                new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs)
+                .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)).Options, new CurrentTenant());
             await db.Database.MigrateAsync();
             var noMail = new FakeMailer { IsConfigured = false };
             var prod = NewService(db, noMail, Environments.Production,
