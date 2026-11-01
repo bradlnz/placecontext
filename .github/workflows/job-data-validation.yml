@@ -62,7 +62,7 @@ jobs:
         run: |
           dotnet test tests/PlaceContext.Application.Tests/PlaceContext.Application.Tests.csproj \
             --configuration Release --no-restore \
-            --filter "FullyQualifiedName~WorkflowReadinessTests|FullyQualifiedName~JobChainTests"
+            --filter "FullyQualifiedName~WorkflowReadinessTests|FullyQualifiedName~Updating_a_workflow_rejects_stale_editor_revisions|FullyQualifiedName~Workflow_domain_keeps_its_loaded_revision_across_mutations"
 
       - name: Run job template and editor contracts
         run: |
