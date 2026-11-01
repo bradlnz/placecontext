@@ -1,0 +1,108 @@
+name: Sandbox managed signup browser walkthrough
+
+on:
+  push:
+    branches:
+      - codex/saas-auth-signup-flow
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auth-browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: Live Blazor signup and sign-in via PostgreSQL + k3d + Chromium
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: auth_browser
+          POSTGRES_PASSWORD: auth_browser
+          POSTGRES_DB: auth_browser
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U auth_browser -d auth_browser"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build merged app with the auth changes
+        run: |
+          dotnet restore PlaceContext.slnx
+          dotnet build PlaceContext.slnx --configuration Release --no-restore
+      - name: Install browser
+        run: |
+          python -m pip install -q "playwright==1.56.0"
+          python -m playwright install --with-deps chromium
+      - name: Provision disposable k3d
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/k3d" \
+            https://github.com/k3d-io/k3d/releases/download/v5.8.3/k3d-linux-amd64
+          sudo install -m 0755 "$RUNNER_TEMP/k3d" /usr/local/bin/k3d
+          k3d cluster create pc-auth --servers 1 --agents 0 --wait --timeout 240s \
+            --k3s-arg "--disable=traefik@server:0"
+          k3d kubeconfig merge pc-auth --kubeconfig-merge-default --kubeconfig-switch-context
+      - name: Real managed signup, billing handoff, login and security checks
+        timeout-minutes: 9
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ASPNETCORE_URLS: "http://0.0.0.0:7700"
+          PlaceContext__PublicBaseUrl: "http://localhost:7700"
+          PlaceContext__ConnectionString: "Host=localhost;Port=5432;Database=auth_browser;Username=auth_browser;Password=auth_browser"
+          PlaceContext__Bootstrap__Enabled: "false"
+          PlaceContext__SaaS__ManagedHosting: "true"
+          PlaceContext__SaaS__RequireExplicitTenantProvisioning: "true"
+          PlaceContext__SaaS__Signup__Enabled: "true"
+          PlaceContext__SaaS__Signup__AllowUnverifiedDevelopmentSignup: "true"
+          SCREENSHOT_DIR: screenshots/auth
+          SAAS_TEST_ORIGIN: "http://localhost:7700"
+        run: |
+          set -euo pipefail
+          mkdir -p screenshots/auth
+          logfile="$RUNNER_TEMP/auth-host.log"
+          dotnet run --project src/PlaceContext.Host/PlaceContext.Host.csproj \
+            --configuration Release --no-build --no-launch-profile >"$logfile" 2>&1 &
+          host_pid=$!
+          trap 'kill "$host_pid" 2>/dev/null || true; echo "Host log tail"; tail -100 "$logfile" || true' EXIT
+          ready=0
+          for i in $(seq 1 100); do
+            if curl -fsS --max-time 3 http://localhost:7700/healthz >/dev/null; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$host_pid" 2>/dev/null; then break; fi
+            sleep 2
+          done
+          test "$ready" = "1" || { echo "Managed Host startup failed"; tail -150 "$logfile"; exit 1; }
+          python scripts/sandbox/test_managed_signup.py
+      - name: Remove k3d cluster
+        if: always()
+        run: |
+          if command -v k3d >/dev/null; then k3d cluster delete pc-auth || true; fi
+      - name: Upload authentic signup/login screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: placecontext-auth-signup-screenshots
+          path: screenshots/auth/
+          if-no-files-found: ignore
+          retention-days: 30

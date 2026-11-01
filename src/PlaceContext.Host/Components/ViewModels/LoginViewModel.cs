@@ -1,9 +1,13 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Options;
+using PlaceContext.Application.Billing;
 using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class LoginViewModel(IAuthService? auth = null, NavigationManager? navigation = null) : PageViewModel
+public sealed class LoginViewModel(
+    IAuthService? auth = null, NavigationManager? navigation = null,
+    IOptions<RunBillingDeploymentOptions>? hosting = null) : PageViewModel
 {
     public string? Error { get; private set; }
     public string? ReturnUrl { get; private set; }
@@ -18,7 +22,9 @@ public sealed class LoginViewModel(IAuthService? auth = null, NavigationManager?
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        if (auth is not null && navigation is not null && await auth.IsUnconfiguredAsync(cancellationToken))
+        if (hosting?.Value.ManagedHosting != true
+            && auth is not null && navigation is not null
+            && await auth.IsUnconfiguredAsync(cancellationToken))
         {
             var target = string.IsNullOrWhiteSpace(ReturnUrl)
                 ? "/setup"

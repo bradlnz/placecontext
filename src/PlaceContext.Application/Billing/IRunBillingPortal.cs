@@ -11,6 +11,7 @@ public interface IRunBillingPortal
 public sealed class RunBillingDeploymentOptions
 {
     public bool ManagedHosting { get; set; }
+    public bool RequireExplicitTenantProvisioning { get; set; }
 }
 
 /// <summary>Tenant-bound Enterprise contract for signed Stripe subscriptions.</summary>

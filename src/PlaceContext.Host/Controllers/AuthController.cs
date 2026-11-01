@@ -12,6 +12,7 @@ using PlaceContext.Application.Auth;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Host.Auth;
+using PlaceContext.Host.Tenancy;
 using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Controllers;
@@ -69,6 +70,10 @@ public sealed class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Portal(string? token, string? returnUrl)
     {
+        // The machine-operator token is a self-hosted provisioning mechanism.
+        // Hosted tenants must never mint or sign in the machine operator.
+        if (_config.GetValue<bool>("PlaceContext:SaaS:ManagedHosting"))
+            return NotFound();
         var portalSigningKey = _config["PlaceContext:Portal:SigningKey"];
         var devAutoLogin = _env.IsDevelopment() && string.IsNullOrWhiteSpace(portalSigningKey);
 
@@ -87,15 +92,23 @@ public sealed class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Locked()
     {
+        var hosted = _config.GetValue<bool>("PlaceContext:SaaS:ManagedHosting");
+        if (hosted && CurrentTenant.Current is null)
+            return Redirect("/login");
         var returnUrl = LocalOrHome(Request.Query["ReturnUrl"]);
 
         // First-run setup always wins, including in Development. Previously the development auto-login
         // created a machine operator first and made a brand-new install look configured from the browser,
         // so the human owner never saw the setup experience.
         if (await _auth.IsUnconfiguredAsync(HttpContext.RequestAborted))
+        {
+            if (hosted)
+                return Redirect(ManagedSignupUrls.PublicOrigin(_config) is { } origin
+                    ? new Uri(origin, "/signup").AbsoluteUri : "/login");
             return Redirect(returnUrl == "/"
                 ? "/setup"
                 : $"/setup?returnUrl={Uri.EscapeDataString(returnUrl)}");
+        }
 
         // A configured external identity provider is the default interactive login path. Keep /login
         // available for local recovery and after an explicit logout, but don't make normal users find
@@ -105,7 +118,7 @@ public sealed class AuthController : ControllerBase
                 ? "/auth/sso"
                 : $"/auth/sso?returnUrl={Uri.EscapeDataString(returnUrl)}");
 
-        if (_env.IsDevelopment() && !Request.Cookies.ContainsKey(ManualLogoutCookie))
+        if (!hosted && _env.IsDevelopment() && !Request.Cookies.ContainsKey(ManualLogoutCookie))
         {
             var operatorUser = await _auth.GetOrCreateOperatorAsync(HttpContext.RequestAborted);
             await SignInAsync(HttpContext, operatorUser);
@@ -128,6 +141,8 @@ public sealed class AuthController : ControllerBase
     public async Task<IActionResult> Setup([FromForm] string email, [FromForm] string? displayName,
         [FromForm] string password, [FromForm] string confirmPassword, [FromForm] string? returnUrl)
     {
+        if (_config.GetValue<bool>("PlaceContext:SaaS:ManagedHosting"))
+            return NotFound();
         if (!await ValidAntiforgeryAsync())
             return Redirect(BuildSetupErrorUrl("Your session expired — please try again.", returnUrl, email, displayName));
 
@@ -183,6 +198,8 @@ public sealed class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> SetupCli([FromBody] SetupCliRequest? body)
     {
+        if (_config.GetValue<bool>("PlaceContext:SaaS:ManagedHosting"))
+            return NotFound();
         if (!await _auth.IsUnconfiguredAsync(HttpContext.RequestAborted))
             return Conflict(new { error = "Admin already configured." });
 
@@ -211,6 +228,9 @@ public sealed class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromForm] string email, [FromForm] string password, [FromForm] string? returnUrl)
     {
+        if (_config.GetValue<bool>("PlaceContext:SaaS:ManagedHosting")
+            && CurrentTenant.Current is null)
+            return Redirect("/login");
         if (!await ValidAntiforgeryAsync())
             return Redirect("/login?error=" + Uri.EscapeDataString("Your session expired — please try again."));
 

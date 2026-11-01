@@ -26,6 +26,13 @@ public static class DependencyInjection
             configuration.GetSection("PlaceContext:Stripe"));
         services.Configure<PlaceContext.Application.Billing.RunBillingDeploymentOptions>(
             configuration.GetSection("PlaceContext:SaaS"));
+        services.Configure<PlaceContext.Application.Billing.WorkspaceSignupOptions>(
+            configuration.GetSection("PlaceContext:SaaS:Signup"));
+        services.AddScoped<Auth.ManagedWorkspaceSignup>();
+        services.AddScoped<PlaceContext.Application.Billing.IWorkspaceSignupEmailSender,
+            Auth.PostmarkWorkspaceSignupEmailSender>();
+        services.AddHttpClient("signup-mailer", client => client.Timeout = TimeSpan.FromSeconds(15))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.Configure<PlaceContext.Application.Connections.ManagedMicrosoftOAuthOptions>(
             configuration.GetSection("PlaceContext:ManagedOAuth:Microsoft"));
         services.AddScoped<PlaceContext.Application.Billing.IRunAllowance, Billing.DbRunAllowance>();

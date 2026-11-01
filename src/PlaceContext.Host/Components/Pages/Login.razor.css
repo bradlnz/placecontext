@@ -1,72 +1,75 @@
-.auth-card {
-    width: 100%;
-    max-width: 420px;
-    margin: 0 auto;
-    padding: 28px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    border-color: #373737;
-    border-radius: 12px;
-    background: linear-gradient(180deg, #202020 0%, #1b1b1b 100%);
-    box-shadow: 0 30px 80px rgba(0,0,0,.42), 0 2px 8px rgba(0,0,0,.3);
+.login-layout {
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr);
+    align-items: center; gap: clamp(36px, 8vw, 120px);
+    width: min(1020px, 100%); margin-inline: auto;
+}
+.login-intro { max-width: 505px; }
+.auth-brand { display: flex; align-items: center; gap: 12px; font-size: 17px; letter-spacing: -.045em; }
+.auth-mark { width: 38px; height: 38px; border-radius: 10px; }
+.login-eyebrow { color: var(--text-3); display: flex; gap: 9px; align-items: center; font-weight: 700;
+    text-transform: uppercase; font-size: 10px; letter-spacing: .16em; margin: 54px 0 17px; }
+.login-eyebrow-dot { width: 6px; height: 6px; background: var(--brand); border-radius: 50%; box-shadow: 0 0 16px var(--brand); }
+.login-intro h1 { font-size: clamp(36px, 4vw, 55px); line-height: 1.09; letter-spacing: -.055em;
+    font-weight: 750; margin: 0 0 20px; color: var(--text); }
+.login-intro h1 span { color: var(--brand); }
+.login-intro > p { color: var(--text-3); font-size: 14px; line-height: 1.75; max-width: 410px; margin: 0; }
+.login-benefits { margin-top: 40px; display: grid; gap: 19px; }
+.login-benefits > div { display: flex; align-items: center; gap: 14px; }
+.login-benefits .login-icon { display: grid; place-items: center; width: 36px; height: 36px;
+    border-radius: 9px; flex: none; color: var(--brand); background: rgba(67,214,117,.085);
+    border: 1px solid rgba(67,214,117,.18); font-size: 10px; font-weight: 750; }
+.login-benefits strong { display: block; font-size: 13px; line-height: 1.4; }
+.login-benefits small { display: block; color: var(--text-3); font-size: 11px; line-height: 1.6; }
+.auth-card { width: 100%; max-width: 430px; justify-self: end; box-sizing: border-box;
+    border: 1px solid var(--border-2); border-radius: 15px; padding: 38px;
+    background: linear-gradient(160deg, #1c201e, #151716 85%);
+    box-shadow: 0 30px 80px rgba(0,0,0,.32); }
+.login-card-eyebrow { color: var(--brand); font-size: 10px; text-transform: uppercase;
+    letter-spacing: .14em; font-weight: 750; margin-bottom: 14px; }
+.auth-title { font-size: 27px; line-height: 1.2; letter-spacing: -.045em; font-weight: 720; margin: 0; }
+.auth-sub { font-size: 12.5px; line-height: 1.65; color: var(--text-3); margin: 11px 0 0; }
+.auth-form { display: grid; gap: 17px; margin-top: 29px; }
+.dcfield { display: grid; gap: 9px; }
+.dcfield label { color: var(--text-2); font-size: 12px; font-weight: 650; }
+.dcinput { background: #0c100e; border: 1px solid var(--border-2);
+    min-height: 45px; padding: 11px 13px; border-radius: 8px; width: 100%; box-sizing: border-box; }
+.dcinput:focus { outline: 2px solid rgba(67,214,117,.38); outline-offset: 1px; }
+.auth-submit { min-height: 47px; width: 100%; justify-content: center; display: flex;
+    align-items: center; gap: 9px; font-size: 13px; font-weight: 750; margin-top: 4px; }
+.auth-submit span { font-size: 18px; }
+.auth-error { border: 1px solid rgba(245,86,86,.35); border-radius: 8px;
+    background: rgba(245,86,86,.07); color: #f4a9a9; font-size: 12px; line-height: 1.5;
+    padding: 12px 13px; margin-top: 22px; }
+.workspace-field { display: flex; align-items: center; position: relative; }
+.workspace-field .dcinput { padding-right: 133px; }
+.workspace-field span { position: absolute; right: 12px; font-size: 11px; color: var(--text-4); }
+.auth-switch { text-align: center; color: var(--text-3); border-top: 1px solid var(--border);
+    padding-top: 20px; margin-top: 23px; font-size: 12px; }
+.auth-switch a { color: var(--brand); font-weight: 700; text-decoration: none; }
+.auth-switch a:hover { text-decoration: underline; }
+.auth-hint { color: var(--text-4); font-size: 11.5px; text-align: center; margin: 19px 0 0; line-height: 1.6; }
+.login-secure { margin-top: 27px; text-align: center; color: var(--text-4);
+    font-size: 10px; display: flex; justify-content: center; gap: 7px; align-items: center; }
+.login-secure span { color: var(--brand); }
+.login-divider { margin: 22px 0; text-align: center; color: var(--text-4);
+    display: flex; align-items: center; gap: 11px; font-size: 11px; }
+.login-divider::before, .login-divider::after { content: ""; flex: 1; height: 1px; background: var(--border-2); }
+.sso-button { width: 100%; display: flex; align-items: center; justify-content: center;
+    min-height: 44px; box-sizing: border-box; background: var(--card-2); }
+@media (max-width: 810px) {
+    .login-layout { grid-template-columns: 1fr; width: min(490px,100%); gap: 32px; }
+    .login-intro { text-align: center; margin: auto; }
+    .login-intro .auth-brand { justify-content: center; }
+    .login-eyebrow, .login-benefits { display: none; }
+    .login-intro h1 { font-size: 34px; margin-top: 25px; }
+    .login-intro > p { font-size: 12.5px; }
+    .auth-card { justify-self: stretch; max-width: none; padding: 30px; }
+}
+@media (max-width: 460px) {
+    .auth-card { padding: 25px 21px; }
+    .login-intro h1 { font-size: 31px; }
 }
 
-.auth-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.auth-mark {
-    width: 30px;
-    height: 30px;
-    border-radius: 8px;
-    flex: none;
-}
-
-.auth-brand-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-2);
-    letter-spacing: -0.01em;
-}
-
-.auth-title {
-    font-size: 19px;
-    font-weight: 600;
-    margin: 4px 0 0;
-}
-
-.auth-sub {
-    font-size: 12.5px;
-    color: var(--text-3);
-    line-height: 1.5;
-    margin: 0;
-}
-
-.auth-form {
-    display: flex;
-    flex-direction: column;
-    gap: 13px;
-}
-
-.auth-error {
-    font-size: 12.5px;
-    color: var(--bad);
-    background: var(--bad-bg);
-    border: 1px solid var(--bad);
-    border-radius: 7px;
-    padding: 8px 11px;
-    line-height: 1.5;
-}
-
-.auth-submit {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 10px 12px;
-    font-size: 13px;
-    margin-top: 2px;
-    text-align: center;
-    min-height: 40px;
-}
+/* Blazor's FocusOnNavigate focuses headings programmatically for screen readers;
+   the large default outline is a poor visual indicator on non-interactive text. */
+.login-intro h1:focus { outline: none; }

@@ -22,6 +22,79 @@ namespace PlaceContext.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.PendingWorkspaceSignupRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("WorkspaceName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Plan")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ExchangeHash")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ExchangeExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ExchangeRedeemedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_pending_signup_token");
+                    b.HasIndex("ExchangeHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_pending_signup_exchange");
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_pending_signup_expiry");
+                    b.HasIndex("Slug")
+                        .HasDatabaseName("ix_pending_signup_slug");
+
+                    b.ToTable("pending_workspace_signups", (string)null);
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.TenantRunPlanRow", b =>
                 {
                     b.Property<Guid>("TenantId")
