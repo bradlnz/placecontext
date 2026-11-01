@@ -200,7 +200,7 @@ public class JobChainTests
         var current = await chains.GetByIdAsync(initial.Id);
         Assert.NotNull(current);
         Assert.Equal("new pipeline", current!.Name);
-        Assert.Equal([second.Id], current.StepJobIds);
+        Assert.Equal(new[] { second.Id }, current.StepJobIds);
     }
 
     [Fact]
