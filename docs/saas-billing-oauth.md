@@ -19,6 +19,12 @@ pricing. Actual prices must be configured in Stripe or agreed in signed contract
 Managed plans also enforce global concurrent top-level execution slots:
 **Basic 2**, **Standard 8**, and **Enterprise contract-specific
 `MaxConcurrentRuns`**. Workers wait for capacity; unlimited runs remain unlimited.
+Kubernetes tenant namespaces also enforce tier-specific resource quotas:
+Basic 8 pods/4 CPU/8 GiB, Standard 24 pods/16 CPU/32 GiB, Enterprise
+80 pods/64 CPU/128 GiB as guarded defaults (commercial contracts can require
+different infrastructure provisioning). Existing self-hosted defaults stay
+unchanged. Kubernetes quotas reconcile when a tenant changes tier.
+
 Leases heartbeat through PostgreSQL, expire after a worker crash, and
 cancel work when ownership is lost. A paused human-input workflow releases its
 slot; resumption reacquires without consuming another billed run.

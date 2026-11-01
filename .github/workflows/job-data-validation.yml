@@ -74,7 +74,7 @@ jobs:
         run: |
           dotnet test tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj \
             --configuration Release --no-restore \
-            --filter "FullyQualifiedName~StripeBillingSecurityTests|FullyQualifiedName~ManagedOAuthProtocolTests|FullyQualifiedName~RunAllowancePostgresTests|FullyQualifiedName~ChainQueueTests|FullyQualifiedName~ManagedJobSubmissionPostgresTests|FullyQualifiedName~ExecutionCapacityPostgresTests"
+            --filter "FullyQualifiedName~StripeBillingSecurityTests|FullyQualifiedName~ManagedOAuthProtocolTests|FullyQualifiedName~RunAllowancePostgresTests|FullyQualifiedName~ChainQueueTests|FullyQualifiedName~ManagedJobSubmissionPostgresTests|FullyQualifiedName~ExecutionCapacityPostgresTests|FullyQualifiedName~KubernetesTenantRuntimeTests"
           dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj \
             --configuration Release --no-restore \
             --filter "FullyQualifiedName~JobTemplateCatalogTests"
