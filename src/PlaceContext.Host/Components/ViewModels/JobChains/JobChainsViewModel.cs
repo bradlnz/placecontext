@@ -1,6 +1,8 @@
 using System.Threading;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using PlaceContext.Application.Billing;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
@@ -20,6 +22,8 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly NavigationManager _navigation;
     private readonly ParameterPromptState _runPrompt = new();
     private readonly IJobChainSubmissionQueue? _submissions;
+    private readonly bool _managedHosting;
+    private Guid? _pendingSubmissionId;
     private readonly IQemuEnvironmentCatalog? _qemuCatalog;
     private readonly IQemuLoginStore? _qemuLogins;
     private readonly ICurrentTenant? _tenant;
@@ -34,11 +38,13 @@ public sealed partial class JobChainsViewModel : PageViewModel
         IJobChainSubmissionQueue? submissions = null,
         IQemuEnvironmentCatalog? qemuCatalog = null,
         ICurrentTenant? tenant = null,
-        IQemuLoginStore? qemuLogins = null
+        IQemuLoginStore? qemuLogins = null,
+        IOptions<RunBillingDeploymentOptions>? hosting = null
     )
     {
         _svc = svc;
         _submissions = submissions;
+        _managedHosting = hosting?.Value.ManagedHosting ?? false;
         _qemuCatalog = qemuCatalog;
         _qemuLogins = qemuLogins;
         _tenant = tenant;

@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using PlaceContext.Application.Billing;
+using PlaceContext.Domain.Repositories;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Ports;
@@ -21,7 +24,17 @@ namespace PlaceContext.Host.Controllers.Api;
 public sealed class JobsController : ControllerBase
 {
     private readonly PlaceContextService _svc;
-    public JobsController(PlaceContextService svc) => _svc = svc;
+    private readonly IJobChainSubmissionQueue? _submissions;
+    private readonly IJobChainRepository? _chains;
+    private readonly bool _managedHosting;
+    public JobsController(PlaceContextService svc, IJobChainSubmissionQueue? submissions = null,
+        IJobChainRepository? chains = null, IOptions<RunBillingDeploymentOptions>? hosting = null)
+    {
+        _svc = svc;
+        _submissions = submissions;
+        _chains = chains;
+        _managedHosting = hosting?.Value.ManagedHosting ?? false;
+    }
 
     /// <summary>GET /api/v1/projects/{projectId}/jobs — every job defined under the project, or 404 if
     /// the project itself doesn't exist.</summary>
@@ -133,28 +146,48 @@ public sealed class JobsController : ControllerBase
     /// <summary>
     /// POST /api/v1/workflows/{chainId}/trigger — start a fresh chain run. The chain executes from
     /// the first stage, using the supplied input payload (or the first job's stored shard payloads
-    /// when null). Returns the new chain run view.
+    /// when null). Managed hosting returns a durable 202 receipt; self-host returns the run view.
     /// </summary>
     [HttpPost("workflows/{chainId:guid}/trigger")]
     [HttpPost("chains/{chainId:guid}/trigger")]
     [Authorize(Policy = Permission.JobsEdit)]
-    public async Task<ActionResult<ChainRunView>> TriggerChain(
+    public async Task<IActionResult> TriggerChain(
         Guid chainId,
-        [FromBody] TriggerChainRequest? request = null)
+        [FromBody] TriggerChainRequest? request = null,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey = null)
     {
         var ct = HttpContext.RequestAborted;
         try
         {
+            if (_managedHosting)
+            {
+                if (_submissions is null || _chains is null)
+                    return StatusCode(503, new { error = "Managed workflow queue is not configured." });
+                var chain = await _chains.GetByIdAsync(chainId, ct);
+                if (chain is null) return NotFound(new { error = "Workflow not found." });
+                var receipt = await _submissions.EnqueueAsync(chain.ProjectId, chainId,
+                    request?.InputPayload, idempotencyKey, ct);
+                return AcceptedAtAction(nameof(GetWorkflowSubmission),
+                    new { trackingId = receipt.TrackingId }, receipt);
+            }
             var result = await _svc.RunJobChainAsync(
                 chainId,
                 inputPayload: request?.InputPayload,
                 ct: ct);
             return Ok(result);
         }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+    }
+
+    [HttpGet("workflow-submissions/{trackingId:guid}")]
+    [Authorize(Policy = Permission.JobsView)]
+    public async Task<IActionResult> GetWorkflowSubmission(Guid trackingId)
+    {
+        if (_submissions is null) return NotFound();
+        var receipt = await _submissions.GetAsync(trackingId, HttpContext.RequestAborted);
+        return receipt is null ? NotFound() : Ok(receipt);
     }
 
     // ── Chain Replay ────────────────────────────────────────────────────────

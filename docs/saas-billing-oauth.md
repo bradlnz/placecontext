@@ -23,6 +23,21 @@ automatic retries and durable resumptions reuse the execution key. An intentiona
 manual replay is a new execution. A managed customer never reaches a *monthly*
 volume limit; starts that exceed admission throughput wait.
 
+### Durable managed workflow submissions
+
+On managed installations, the portal and authenticated management API now
+**persist new workflow starts** in the existing encrypted PostgreSQL queue.
+`POST /api/v1/workflows/{chainId}/trigger` returns HTTP 202 and a
+tenant-scoped `GET /api/v1/workflow-submissions/{trackingId}` polling link;
+self-hosted deployments retain synchronous responses. Workers restore
+tenant and user context and keep the same run id on crash-before-start
+retries. The durable handoff also preserves encrypted per-step input overrides.
+
+Distributed start pacing still occurs inside a queue worker, not the HTTP
+request. This protects workflow requests from browser timeouts, but direct
+standalone job API starts and manual workflow replays still need durable
+admission before a full production launch.
+
 ### What the implementation actually enforces
 
 - A PostgreSQL plan-row `FOR UPDATE` lock coordinates `NextDispatchAt` across replicas.
