@@ -77,6 +77,9 @@ public sealed class DbRunAllowance(
             var plan = await db.TenantRunPlans.FromSqlInterpolated(
                 $"""SELECT * FROM tenant_run_plans WHERE "TenantId" = {tenant.TenantId} FOR UPDATE""")
                 .SingleAsync(ct);
+            // A reused DbContext might already track an older plan snapshot. Reload
+            // after acquiring the row lock so the pacing cursor and counter are current.
+            await db.Entry(plan).ReloadAsync(ct);
             var key = $"{kind}:{executionId:N}";
 
             if (await db.BillableRuns.AnyAsync(r => r.RunKey == key, ct))
