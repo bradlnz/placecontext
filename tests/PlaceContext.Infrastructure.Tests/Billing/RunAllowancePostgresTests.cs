@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using PlaceContext.Application.Billing;
 using Npgsql;
 using PlaceContext.Infrastructure.Billing;
 using PlaceContext.Infrastructure.Persistence;
@@ -10,7 +12,7 @@ namespace PlaceContext.Infrastructure.Tests.Billing;
 public sealed class RunAllowancePostgresTests
 {
     [AgentPostgresFact]
-    public async Task Concurrent_run_starts_cannot_exceed_the_plan_and_duplicate_ids_charge_once()
+    public async Task Unlimited_starts_are_idempotent_and_managed_throughput_is_paced()
     {
         var schema = "quota_test_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(
@@ -46,8 +48,18 @@ public sealed class RunAllowancePostgresTests
             {
                 var plan = await setup.TenantRunPlans.SingleAsync();
                 Assert.Equal(1, plan.UsedRuns);
-                plan.IncludedRuns = 2;
+                plan.IncludedRuns = 2; // A legacy cap may exist; it must not block unlimited starts.
                 await setup.SaveChangesAsync();
+            }
+
+            // Hosted SaaS does not use the free self-hosted edition as a billing bypass.
+            await using (var hostedDb = new AppDbContext(opts, tenant))
+            {
+                var hosted = new DbRunAllowance(hostedDb, tenant, clock,
+                    Options.Create(new RunBillingDeploymentOptions { ManagedHosting = true }));
+                Assert.Equal("self_hosted_only", (await hosted.GetAsync()).Status);
+                await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    hosted.ReserveAsync(projectId, Guid.NewGuid(), "job"));
             }
 
             var attempts = await Task.WhenAll(Enumerable.Range(0, 12).Select(async _ =>
@@ -61,13 +73,41 @@ public sealed class RunAllowancePostgresTests
                 }
                 catch (InvalidOperationException) { return false; }
             }));
-            Assert.Equal(1, attempts.Count(x => x));
+            Assert.Equal(12, attempts.Count(x => x));
             await using (var verify = new AppDbContext(opts, tenant))
             {
                 var state = await new DbRunAllowance(verify, tenant, clock).GetAsync();
-                Assert.Equal(2, state.UsedRuns);
-                Assert.Equal(0, state.Remaining);
-                Assert.Equal(2, await verify.BillableRuns.CountAsync());
+                Assert.Equal(13L, state.UsedRuns);
+                Assert.True(state.UnlimitedRuns);
+                Assert.True(state.CanRun);
+                Assert.Equal(13, await verify.BillableRuns.CountAsync());
+            }
+            // Convert the same workspace to Basic: two concurrent starts must be
+            // admitted rather than rejected, with ordered one-second start slots.
+            await using (var setup = new AppDbContext(opts, tenant))
+            {
+                var plan = await setup.TenantRunPlans.SingleAsync();
+                plan.Plan = RunPlans.Basic;
+                plan.Status = "active";
+                plan.PeriodStart = clock.UtcNow.AddDays(-1);
+                plan.PeriodEnd = clock.UtcNow.AddDays(28);
+                plan.NextDispatchAt = null;
+                await setup.SaveChangesAsync();
+            }
+
+            await Task.WhenAll(Enumerable.Range(0, 2).Select(async _ =>
+            {
+                await using var context = new AppDbContext(opts, tenant);
+                await new DbRunAllowance(context, tenant, clock).ReserveAsync(
+                    projectId, Guid.NewGuid(), "workflow");
+            }));
+            await using (var verify = new AppDbContext(opts, tenant))
+            {
+                var plan = await verify.TenantRunPlans.SingleAsync();
+                Assert.Equal(15L, plan.UsedRuns);
+                Assert.Equal(RunPlans.Unlimited, plan.IncludedRuns);
+                Assert.True(plan.NextDispatchAt >= clock.UtcNow.AddSeconds(2));
+                Assert.Equal(15, await verify.BillableRuns.CountAsync());
             }
         }
         finally
