@@ -55,3 +55,6 @@
     .signup-step { flex-wrap:wrap; gap:7px; font-size:9.5px; }
     .plan-option { padding:12px 9px; }
 }
+
+/* Keep navigational heading focus for assistive tech without outlining the entire title. */
+.signup-card h1:focus { outline: none; }

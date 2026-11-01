@@ -3,6 +3,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Ports;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -159,6 +162,21 @@ public sealed class ManagedWorkspaceSignup(
                 Path = "/workspace/default", Status = "Registered",
                 DiscoveredAt = now, RegisteredAt = now
             });
+            // Materialize the built-in access roles atomically with the owner.
+            // A fresh portal opens several authenticated components in parallel;
+            // without these rows all of them race the lazy role seeder, producing
+            // expected-but-noisy PostgreSQL unique-key errors on first sign-in.
+            foreach (var role in Enum.GetValues<UserRole>())
+                db.RoleDefinitions.Add(new RoleDefinitionRow
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    Name = role.ToString(),
+                    IsSystem = true,
+                    PermissionsJson = JsonSerializer.Serialize(
+                        RolePermissionDefaults.GetDefaults(role)
+                            .OrderBy(permission => permission, StringComparer.Ordinal))
+                });
             pending.VerifiedAt = now;
             pending.TenantId = tenantId;
             pending.UserId = userId;

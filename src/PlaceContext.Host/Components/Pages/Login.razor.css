@@ -69,3 +69,7 @@
     .auth-card { padding: 25px 21px; }
     .login-intro h1 { font-size: 31px; }
 }
+
+/* Blazor's FocusOnNavigate focuses headings programmatically for screen readers;
+   the large default outline is a poor visual indicator on non-interactive text. */
+.login-intro h1:focus { outline: none; }

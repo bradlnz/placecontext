@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using PlaceContext.Application.Billing;
+using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
@@ -65,6 +66,10 @@ public sealed class ManagedWorkspaceSignupPostgresTests
             Assert.Equal(tenant.Id, project.TenantId);
             Assert.Equal("Default project", project.Name);
             Assert.Equal("Registered", project.Status);
+            var roles = await db.RoleDefinitions.IgnoreQueryFilters().ToListAsync();
+            Assert.Equal(Enum.GetValues<UserRole>().Length, roles.Count);
+            Assert.All(roles, role => Assert.True(role.IsSystem));
+            Assert.Contains(roles, role => role.Name == nameof(UserRole.Owner));
             Assert.Equal(0, await db.TenantRunPlans.IgnoreQueryFilters().CountAsync()); // Signup never grants a paid plan.
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.VerifyAsync(verificationToken));

@@ -11,7 +11,8 @@
 - **Verification**: a unique single-use, 30-minute email link first opens a
   confirmation screen. Only the CSRF-protected **Confirm** POST provisions the
   tenant, hashed owner password and default project together in one PostgreSQL
-  transaction. A second, short-lived, one-use code signs in on the **tenant's own
+  transaction, including the standard tenant access roles. A second, short-lived,
+one-use code signs in on the **tenant's own
   host**. No wildcard-domain auth cookies are required.
 - **Billing**: new owners land at \`/settings/billing?welcome=1&start=basic|standard\`.
   This screen explains that the workspace is created but **not active for managed
