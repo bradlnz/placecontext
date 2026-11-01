@@ -71,7 +71,7 @@ public sealed class ManagedJobSubmissionPostgresTests
         }
         finally
         {
-            await using var cleanup = new NpgsqlCommand($"DROP SCHEMA IF EXISTS "{schema}" CASCADE", conn);
+            await using var cleanup = new NpgsqlCommand($"DROP SCHEMA IF EXISTS \"{schema}\" CASCADE", conn);
             await cleanup.ExecuteNonQueryAsync();
         }
     }
