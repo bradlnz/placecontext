@@ -94,21 +94,20 @@ output into a question. Human steps and **External agent** steps pause until a r
 A No answer is a valid boolean response, not a missing answer. Configure the question model
 through `PlaceContext:Qemu:Agent` (Codex or a chat-completions endpoint).
 
-For an automatic verification call, select **Jev (TypeSafe)** in an agent step. Jev evaluates the
+For an automatic verification call, select **AI verification** in an agent step. The AI verifier evaluates the
 question against the preceding output and saves its probability of Yes in the response field's
 `noul` property, alongside the question and model version. Use a condition on a later stage,
 such as `gte:agent_response.noul:0.9`, to decide whether to proceed. Obtaining a result does not
-mean approval. An administrator must configure `PlaceContext__TypeSafe__ApiKey` or
-`TYPESAFE_API_KEY` on the server. Question generation or verification errors fail the step.
+mean approval. An administrator must configure the AI verification service. Question generation or verification errors fail the step.
 
 ### QEMU browser tasks
 
-Choose an image profile and give Jev a task in **Task prompt**, including the starting HTTP(S)
+Choose an image profile and give the browser assistant a task in **Task prompt**, including the starting HTTP(S)
 URL and the outcome to verify. For example, ask it to place a test order, wait for processing,
 check shipping and the total, and refresh to verify the saved record. Enable guest networking
 when the target site is outside the VM.
 
-Jev receives page text and available controls, chooses one action at a time, and checks completion.
+The browser assistant receives page text and available controls, chooses one action at a time, and checks completion.
 The configured workflow model supplies text for form fields. Passwords, uploads, iframes, and
 new-window workflows are not supported. Never put credentials in the prompt or workflow context.
 
@@ -117,7 +116,7 @@ The output field contains page evidence and a decision trace as JSON in `stdout`
 `stderr`, `exitCode`, `agentSteps`, and `activity`. Replay captures the browser along the way.
 A completion score is not proof; independently check consequential results in subsequent stages.
 
-An administrator must configure the prepared image and TypeSafe key. Model calls run on the host;
+An administrator must configure the browser image and AI verification provider. Model calls run on the host;
 keys stay outside the VM. The default browser executor is our Rust agent controlling the existing
 Chromium through a private pipe, with no Python or Node/npm runtime. Existing general desktop or terminal prompts
 require the legacy `PlaceContext:Qemu:Executor=model` setting and a vision/tool model.

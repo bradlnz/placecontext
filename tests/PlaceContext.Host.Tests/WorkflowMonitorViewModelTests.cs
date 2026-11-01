@@ -52,9 +52,24 @@ public sealed class WorkflowMonitorViewModelTests
         Assert.Single(vm.Snapshot!.Actions);
     }
 
+    [Fact]
+    public async Task Accepted_response_remains_recorded_when_the_followup_refresh_fails()
+    {
+        var stub = new Stub { FailReadAfterSubmit = true };
+        using var vm = new WorkflowMonitorViewModel(stub, new PortalUiState());
+        await vm.LoadAsync(Guid.NewGuid());
+        vm.Propose(Assert.Single(vm.Snapshot!.Actions), true);
+        await vm.ConfirmAsync();
+        Assert.Equal(1, stub.Submits);
+        Assert.Empty(vm.Snapshot!.Actions);
+        Assert.Null(vm.Error);
+        Assert.Contains("could not be refreshed", vm.Notice);
+    }
+
     private sealed class Stub : IWorkflowMonitor
     {
         public bool Fail;
+        public bool FailReadAfterSubmit;
         public int Reads;
         public int Submits;
         public (Guid Project, Guid Run, Guid Request, bool Answer) Last;
@@ -65,6 +80,7 @@ public sealed class WorkflowMonitorViewModelTests
         public Task<WorkflowMonitorSnapshot> LoadAsync(Guid projectId, CancellationToken cancellationToken = default)
         {
             Reads++;
+            if (FailReadAfterSubmit && Submits > 0) throw new InvalidOperationException("Refresh failed");
             return Task.FromResult(new WorkflowMonitorSnapshot(DateTimeOffset.UtcNow, 1, 1, 12, [],
                 Submits > 0 ? [] : [_action], true));
         }

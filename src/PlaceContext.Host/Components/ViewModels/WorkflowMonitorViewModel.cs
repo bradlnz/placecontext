@@ -73,7 +73,16 @@ public sealed class WorkflowMonitorViewModel(IWorkflowMonitor monitor, PortalUiS
                 Notice = answer
                     ? "Yes response recorded. The paused workflow is scheduled to continue on its configured path."
                     : "No response recorded. The paused workflow is scheduled to follow its configured No path; this does not necessarily stop it.";
-                Snapshot = await monitor.LoadAsync(ProjectId, _stop.Token);
+                try { Snapshot = await monitor.LoadAsync(ProjectId, _stop.Token); }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Submission succeeded; a later read failure must not report the approval
+                    // as failed or offer the same stale request for a second click.
+                    if (Snapshot is { } oldSnapshot)
+                        Snapshot = oldSnapshot with { Actions = oldSnapshot.Actions
+                            .Where(x => x.Key != action.Key).ToArray() };
+                    Notice += " The action list could not be refreshed; use Refresh to reload it.";
+                }
             }
             finally { Submitting = false; }
         });

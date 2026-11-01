@@ -21,11 +21,11 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
     internal static string GuestExecutable => Path.Combine(AppContext.BaseDirectory, "pc-jev");
     public string Model => typeSafe.Value.Model;
     public string? ConfigurationError =>
-        options.Value.Executor != "jev" ? "QEMU Executor must be jev or model."
+        options.Value.Executor != "jev" ? "Browser executor configuration is unsupported."
         : string.IsNullOrWhiteSpace(typeSafe.Value.ApiKey) || typeSafe.Value.ApiKey.Any(c => char.IsWhiteSpace(c) || char.IsControl(c))
-            || string.IsNullOrWhiteSpace(Model) ? "Configure PlaceContext:TypeSafe or TYPESAFE_API_KEY before running Jev browser tasks."
+            || string.IsNullOrWhiteSpace(Model) ? "Configure the AI browser verification provider before starting browser tasks."
         : options.Value.Agent.MaxSteps is < 1 or > 100 ? "QEMU agent MaxSteps must be between 1 and 100."
-        : !File.Exists(GuestExecutable) ? "Build and deploy the bundled pc-jev Rust executable before running browser tasks."
+        : !File.Exists(GuestExecutable) ? "Install the bundled browser executor before starting browser tasks."
         : new QemuPromptAgent(clients, options).ConfigurationError;
 
     private static string Encode(string text) => Convert.ToBase64String(Encoding.UTF8.GetBytes(text));
@@ -35,7 +35,7 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
         var match = Regex.Match(prompt, @"https?://[^\s<>""']+", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
         if (!match.Success || !Uri.TryCreate(match.Value.TrimEnd('.', ',', ';', ')'), UriKind.Absolute, out var uri)
             || uri.UserInfo.Length > 0)
-            throw new InvalidOperationException("Include the starting http:// or https:// URL in the Jev task prompt, without credentials.");
+            throw new InvalidOperationException("Include the starting http:// or https:// URL in the browser task prompt, without credentials.");
         return uri.AbsoluteUri;
     }
 
@@ -45,7 +45,7 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
     {
         if (ConfigurationError is { } error) throw new InvalidOperationException(error);
         if (string.IsNullOrWhiteSpace(prompt) || prompt.Length > 8192 || prompt.Contains('\0') || input?.Length > 65_536)
-            throw new InvalidOperationException("Jev tasks accept up to 8,192 prompt and 65,536 context characters.");
+            throw new InvalidOperationException("Browser tasks accept up to 8,192 prompt and 65,536 context characters.");
         var startUrl = StartUrl(prompt);
         var directory = "/tmp/pc-jev-" + Guid.NewGuid().ToString("N");
         var activity = new List<QemuAgentActivity>();
@@ -65,7 +65,7 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
         async Task Guest(string command)
         {
             var result = await executeGuest(command, 8192, ct);
-            if (result.ExitCode != 0 || result.OutputTruncated) throw new InvalidOperationException("Jev guest bridge failed. The prepared image must provide Chromium and support the bundled Rust executable.");
+            if (result.ExitCode != 0 || result.OutputTruncated) throw new InvalidOperationException("Browser executor failed. The prepared image must provide Chromium and support the bundled Rust executable.");
         }
         async Task Record(string description, JsonNode? pointer = null)
         {
@@ -102,7 +102,7 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
             }
             await Guest($"set -eu\nchmod 700 {directory}/pc-jev\n"
                 + $"{directory}/pc-jev {directory} >/dev/null 2>&1 < /dev/null &\necho $! > {directory}/pid");
-            if (interaction is null) await Record("Jev browser starting");
+            if (interaction is null) await Record("Browser review starting");
             using var client = clients.CreateClient("typesafe");
             var lastRequest = 0;
             // Each step requests one visual proposal and one independent image judgment.
@@ -113,7 +113,7 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
                 var poll = await executeGuest($"if test -f {directory}/result.json; then cat {directory}/result.json; "
                     + $"elif test -f {directory}/request.json; then cat {directory}/request.json; "
                     + $"elif ! kill -0 \"$(cat {directory}/pid)\" 2>/dev/null; then exit 1; fi", 131072, ct);
-                if (poll.ExitCode != 0 || poll.OutputTruncated) return Fail("Jev guest stopped or exceeded the response size limit.");
+                if (poll.ExitCode != 0 || poll.OutputTruncated) return Fail("Browser executor stopped or exceeded the response size limit.");
                 if (string.IsNullOrWhiteSpace(poll.Stdout)) { await Task.Delay(200, ct); continue; }
                 var envelope = JsonNode.Parse(poll.Stdout)!.AsObject();
                 if (envelope.ContainsKey("status"))
@@ -124,11 +124,11 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
                         evidence["transport"] = "live_desktop";
                         evidence["sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Convert.FromBase64String(screenshot)));
                     }
-                    if (interaction is null || screenshot is not null) await Record("Jev browser finished");
+                    if (interaction is null || screenshot is not null) await Record("Browser review finished");
                     return Complete(envelope, options.Value.Agent.MaxSteps);
                 }
                 var id = envelope["id"]!.GetValue<int>();
-                if (id != ++lastRequest) return Fail("Jev guest returned an invalid request sequence.");
+                if (id != ++lastRequest) return Fail("Browser executor returned an invalid request sequence.");
                 var body = envelope["body"]!.AsObject();
                 JsonNode reply;
                 switch (envelope["kind"]!.GetValue<string>())
@@ -152,8 +152,8 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
                     case "jev":
                         stage = "judgment request";
                         if (body["questions"] is not JsonObject questions || body["state"] is null)
-                            return Fail("Jev guest returned an invalid judgment request.");
-                        if (screenshot is null) return Fail("Jev judgment requires a captured screenshot.");
+                            return Fail("Browser executor returned an invalid assessment request.");
+                        if (screenshot is null) return Fail("Visual review requires a captured screenshot.");
                         using (var request = new HttpRequestMessage(HttpMethod.Post, "https://api.typesafe.ai/v1/systemone")
                         { Content = JsonContent.Create(new { model = Model, state = body["state"], questions,
                             assets = new Dictionary<string, object> { ["screen-image"] = new { type = "image", format = "png", data_base64 = screenshot } } }) })
@@ -161,40 +161,40 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
                             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", typeSafe.Value.ApiKey);
                             request.Headers.Add("TypeSafe-Danger-Zone-Images", "true");
                             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-                            if (!response.IsSuccessStatusCode) return Fail($"Jev returned HTTP {(int)response.StatusCode}. Check the TypeSafe configuration and quota.");
+                            if (!response.IsSuccessStatusCode) return Fail($"AI verification returned HTTP {(int)response.StatusCode}. Check provider configuration and quota.");
                             await response.Content.LoadIntoBufferAsync(65_536, ct);
                             reply = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct))!;
                         }
                         var approved = reply["answers"]?["action"]?["choice"]?.GetValue<string>() == "act";
                         var proposal = body["state"]?["proposal"];
-                        var description = proposal?["description"]?.GetValue<string>() ?? $"Jev visual step {turns}";
+                        var description = proposal?["description"]?.GetValue<string>() ?? $"Browser review step {turns}";
                         await Record(description[..Math.Min(description.Length, 200)], approved ? proposal : null);
                         break;
                     case "vision":
                         stage = "visual proposal";
-                        if (++turns > options.Value.Agent.MaxSteps) return Fail("Jev exceeded its step limit.");
+                        if (++turns > options.Value.Agent.MaxSteps) return Fail("Browser assessment exceeded its step limit.");
                         screenshot = await LiveFrame();
                         reply = await VisionAsync(body, screenshot, ct);
                         break;
-                    default: return Fail("Jev guest requested an unsupported operation.");
+                    default: return Fail("Browser executor requested an unsupported operation.");
                 }
                 // Publish the response last so the guest never reads a partial file.
                 stage = "guest response delivery";
                 await Guest($"set -eu\nrm {directory}/request.json\n" + Write(directory + "/response.tmp", new JsonObject
                     { ["id"] = id, ["body"] = reply }.ToJsonString()) + $"\nmv {directory}/response.tmp {directory}/response.json");
             }
-            return Fail("Jev exceeded its request limit.");
+            return Fail("Browser assessment exceeded its request limit.");
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return Fail("Jev model request timed out."); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return Fail("AI verification request timed out."); }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or FormatException or NullReferenceException or IOException)
-        { return Fail($"Jev {stage} failed. Check the prepared image and host model configuration."); }
+        { return Fail($"Browser verification {stage} failed. Check the prepared image and host model configuration."); }
     }
 
     internal static QemuEnvironmentResult Complete(JsonObject result, int maxSteps)
     {
-        var steps = result["steps"]?.AsArray() ?? throw new InvalidOperationException("Missing Jev trace.");
-        if (steps.Count > maxSteps) throw new InvalidOperationException("Too many Jev steps.");
+        var steps = result["steps"]?.AsArray() ?? throw new InvalidOperationException("Missing browser review trace.");
+        if (steps.Count > maxSteps) throw new InvalidOperationException("Too many browser review steps.");
         var activity = steps.Select(step =>
         {
             var description = step?["detail"]?.GetValue<string>() ?? "Browser judgment";
@@ -204,7 +204,7 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
         var goal = steps.LastOrDefault()?["goal_done"]?.GetValue<double>() ?? 0;
         var success = result["status"]?.GetValue<string>() is "done" or "goal_achieved"
             && double.IsFinite(goal) && goal is > 0.85 and <= 1;
-        return new(success ? 0 : 1, result.ToJsonString(), success ? "" : "Jev did not verify completion. Inspect the browser trace in stdout.",
+        return new(success ? 0 : 1, result.ToJsonString(), success ? "" : "AI verification could not verify completion. Inspect the browser trace in stdout.",
             AgentSteps: steps.Count, Activity: activity);
     }
 
@@ -231,7 +231,7 @@ public sealed class JevQemuTaskAgent(IHttpClientFactory clients, IOptions<QemuEn
                 {"product":"exact visible product name","price_aud":"5.00","pack":"575g","postcode":"4101"}.
                 Use null for unreadable fields. Read the actual public single-pack price, not unit/was/member prices.
                 Bring the product name, pack, price and selected location into view before finishing where possible.
-                Jev independently verifies the proposal and each price claim against the image; guesses will be rejected.
+                The automated reviewer independently verifies the proposal and each price claim against the image; guesses will be rejected.
                 """ },
             new JsonObject { ["role"] = "user", ["content"] = new JsonArray
             {

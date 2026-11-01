@@ -246,7 +246,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 {
                     question = _questions is null ? loop.Instructions : await _questions.GenerateAsync(loop, payload, ct);
                     if (loop.AgentProvider == LoopChainAction.JevAgent)
-                        verification = await (_jev ?? throw new InvalidOperationException("Jev review is not configured."))
+                        verification = await (_jev ?? throw new InvalidOperationException("AI verification is not configured."))
                             .EvaluateAsync(question, payload, ct, chain.ProjectId);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -254,7 +254,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 {
                     chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Failed, _clock.UtcNow,
                         error: ShortError((loop.AgentProvider == LoopChainAction.JevAgent
-                            ? "Could not complete Jev verification: " : "Could not generate validation question: ") + ex.Message));
+                            ? "Could not complete AI verification: " : "Could not generate validation question: ") + ex.Message));
                     status = ChainRunStatus.Failed;
                     break;
                 }

@@ -44,7 +44,7 @@ public sealed class QemuEnvironmentRunner(IOptions<QemuEnvironmentOptions> optio
 
         var interactive = context is not null && desktops is not null && tenant?.IsResolved == true && user?.IsAuthenticated == true && config.Executor == "jev";
         if ((action.PauseForLogin || action.LoginProfileId is not null) && !interactive)
-            throw new InvalidOperationException("Saved logins and human control require the Jev executor and an authenticated workflow run.");
+            throw new InvalidOperationException("Saved logins and human control require the configured browser executor and an authenticated workflow run.");
         await using var scope = scopes?.CreateAsyncScope();
         var logins = scope?.ServiceProvider.GetRequiredService<IQemuLoginStore>();
         var tenantId = tenant?.TenantId ?? Guid.Empty;
