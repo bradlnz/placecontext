@@ -26,6 +26,7 @@ public sealed class OperationCenterRunStatusNotifier : IRunStatusNotifier
         var status = update.Outcome switch
         {
             RunOutcome.Running => PortalOperationStatus.Running,
+            RunOutcome.NeedsInput => PortalOperationStatus.NeedsInput,
             RunOutcome.Failed => PortalOperationStatus.Failed,
             _ => PortalOperationStatus.Succeeded,
         };

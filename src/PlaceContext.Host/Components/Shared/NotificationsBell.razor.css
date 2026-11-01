@@ -13,6 +13,14 @@
 .i-muted { color:var(--text-3); }
 .i-good { color:var(--good); }
 .i-bad { color:var(--bad); }
+.i-attention { color:var(--warn); }
+.bell-needs-input { border-color:var(--warn); color:var(--warn); }
+.bell-badge-attention { background:var(--bad); color:#fff; }
+.pane-attention { display:flex; align-items:center; gap:7px; flex-wrap:wrap; border-radius:8px; padding:10px; background:var(--card-2); border:1px solid var(--warn); font-size:11px; }
+.pane-attention strong { color:var(--text); }
+.pane-attention > span { color:var(--text-3); }
+.op-needs-input { background:var(--card-2); border-left:3px solid var(--warn); border-radius:5px; }
+.op-needs-input .op-view { border-color:var(--warn); color:var(--text); }
 .op-spin { display:inline-block; color:var(--brand-2); animation:dcspin 1.2s linear infinite; }
 .op-body { flex:1; min-width:0; }
 .op-title { font-size:12px; font-weight:500; color:var(--text); }

@@ -136,6 +136,56 @@ public class OperationCenterTests
         Assert.Equal(PortalOperationStatus.Succeeded, center.ListForTenant(Tenant.Id).Single().Status);
     }
 
+    [Fact]
+    public void Needs_input_remains_actionable_until_resume_and_converges_on_one_notification()
+    {
+        var center = Center();
+        var project = Guid.NewGuid();
+        var run = Guid.NewGuid();
+        var chain = Guid.NewGuid();
+        var key = $"chain-run:{run:N}";
+        var deepLink = $"/project/{project}/workflows?chain={chain}&run={run}";
+        var op = center.Track(Tenant, project, "Run workflow", "/observability", key);
+
+        center.Sync(Tenant.Id, key, PortalOperationStatus.NeedsInput, "Run chain",
+            deepLink, project, "Workflow paused — input required", DateTimeOffset.UtcNow, null);
+        Assert.Equal(1, center.NeedsInputCount(Tenant.Id));
+        Assert.Equal(0, center.ActiveCount(Tenant.Id));
+        var paused = Assert.Single(center.ListForTenant(Tenant.Id));
+        Assert.Equal(op.Id, paused.Id);
+        Assert.Equal(deepLink, paused.Link);
+        Assert.Equal(PortalOperationStatus.NeedsInput, paused.Status);
+        center.MarkDone(op.Id, "workflow finished"); // stale advisory result from driver
+        Assert.Equal(PortalOperationStatus.NeedsInput, paused.Status);
+
+        center.Sync(Tenant.Id, key, PortalOperationStatus.NeedsInput, "Run chain",
+            deepLink, project, null, DateTimeOffset.UtcNow, null);
+        Assert.Single(center.ListForTenant(Tenant.Id));
+
+        center.Sync(Tenant.Id, key, PortalOperationStatus.Running, "Run chain",
+            "/observability?tab=workflows", project, "Resuming", DateTimeOffset.UtcNow, null);
+        Assert.Equal(0, center.NeedsInputCount(Tenant.Id));
+        Assert.Equal(1, center.ActiveCount(Tenant.Id));
+        Assert.Equal("/observability?tab=workflows", paused.Link);
+
+        center.Sync(Tenant.Id, key, PortalOperationStatus.Succeeded, "Run chain",
+            "/observability?tab=workflows", project, "Completed", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        Assert.Equal(0, center.NeedsInputCount(Tenant.Id));
+        Assert.Equal(0, center.ActiveCount(Tenant.Id));
+        Assert.Single(center.ListForTenant(Tenant.Id));
+    }
+
+    [Fact]
+    public void Needs_input_items_are_prioritised_above_routine_progress()
+    {
+        var center = Center();
+        center.Sync(Tenant.Id, "chain:needs", PortalOperationStatus.NeedsInput, "Needs input",
+            "/workflows", null, null, DateTimeOffset.UtcNow, null);
+        center.Sync(Tenant.Id, "job:running", PortalOperationStatus.Running, "Running",
+            "/jobs", null, null, DateTimeOffset.UtcNow, null);
+        Assert.Equal(PortalOperationStatus.NeedsInput, center.ListForTenant(Tenant.Id)[0].Status);
+    }
+
     // ── Retention ────────────────────────────────────────────────────────────────────────────────
 
     [Fact]

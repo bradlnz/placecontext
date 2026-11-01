@@ -50,10 +50,10 @@ public sealed class RunStatusWatchService
         // Fast path: nothing running, nothing newly finished, and no stale tracked state — skip processing.
         var hasActive = state.JobRuns.Count > 0
                      || state.Chains.Count > 0
-                     || chains.Any(c => c.Status == ChainRunStatus.Running)
+                     || chains.Any(c => c.Status is ChainRunStatus.Running or ChainRunStatus.Waiting or ChainRunStatus.AwaitingInput)
                      || jobRuns.Any(r => r.Status is JobRunStatus.Running or JobRunStatus.Queued);
         var floor = now - MemoryRetention;
-        var hasNewTerminal = chains.Any(c => c.Status != ChainRunStatus.Running
+        var hasNewTerminal = chains.Any(c => c.Status is not (ChainRunStatus.Running or ChainRunStatus.Waiting or ChainRunStatus.AwaitingInput)
                                          && (c.FinishedAt ?? now) >= floor
                                          && !state.NotifiedTerminal.ContainsKey(c.RunId))
                           || jobRuns.Any(r => r.Status is not (JobRunStatus.Running or JobRunStatus.Queued)
@@ -83,16 +83,24 @@ public sealed class RunStatusWatchService
         {
             var key = ChainRunKey(chain.RunId);
             var title = $"Run chain — {chain.ChainName}";
-            var link = $"/observability?tab=workflows&workflowRun={chain.RunId}";
+            var link = chain.Status == ChainRunStatus.AwaitingInput
+                ? $"/project/{chain.ProjectId}/workflows?chain={chain.ChainId}&run={chain.RunId}"
+                : $"/observability?tab=workflows&workflowRun={chain.RunId}";
 
-            if (chain.Status == ChainRunStatus.Running)
+            if (chain.Status is ChainRunStatus.Running or ChainRunStatus.Waiting or ChainRunStatus.AwaitingInput)
             {
                 seen.Add(chain.RunId);
-                var fingerprint = $"{chain.FinishedSteps}/{chain.TotalSteps}:{chain.CurrentStepName}";
+                // State is part of the fingerprint: a transition from executing → awaiting
+                // input → resumed must update one notification, not create duplicates.
+                var fingerprint = $"{chain.Status}:{chain.FinishedSteps}/{chain.TotalSteps}:{chain.CurrentStepName}";
                 if (state.Chains.TryGetValue(chain.RunId, out var prev) && prev == fingerprint) continue;
                 state.Chains[chain.RunId] = fingerprint;
-                _notifier.Sync(new RunStatusUpdate(key, chain.ProjectId, title, RunOutcome.Running,
-                    ChainProgress(chain), link, chain.StartedAt, null));
+                _notifier.Sync(new RunStatusUpdate(key, chain.ProjectId, title,
+                    chain.Status == ChainRunStatus.AwaitingInput ? RunOutcome.NeedsInput : RunOutcome.Running,
+                    chain.Status == ChainRunStatus.AwaitingInput ? "Workflow paused — input required"
+                        : chain.Status == ChainRunStatus.Waiting ? "Workflow waiting to continue"
+                        : ChainProgress(chain),
+                    link, chain.StartedAt, null));
             }
             else
             {

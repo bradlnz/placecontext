@@ -199,6 +199,17 @@ else
         @if (Vm.IsRunsTab && Vm.EditChainId.HasValue)
         {
             <div class="dcslide-body runs-body">
+                @if (Vm.RunsAwaitingInput > 0 && Vm.ChainRuns?.FirstOrDefault(run => run.Status == "AwaitingInput") is { } blocked)
+                {
+                    <div class="workflow-input-banner" role="status">
+                        <AppIcon Kind="human" />
+                        <div>
+                            <strong>@Vm.RunsAwaitingInput run@(Vm.RunsAwaitingInput == 1 ? "" : "s") awaiting input</strong>
+                            <p>These workflows are paused. Review the required response to continue.</p>
+                        </div>
+                        <button class="dcbtn primary" @onclick="() => Vm.OpenChainRunAsync(blocked)">Review input</button>
+                    </div>
+                }
                 @if (Vm.ChainRuns is { Count: > 0 })
                 {
                     <div class="run-health-strip" aria-label="Workflow execution status in recent runs">
@@ -1196,13 +1207,14 @@ else
     [Parameter] public Guid ProjectId { get; set; }
     [SupplyParameterFromQuery(Name = "workflow")] public Guid? WorkflowId { get; set; }
     [SupplyParameterFromQuery(Name = "chain")] public Guid? ChainId { get; set; }
+    [SupplyParameterFromQuery(Name = "run")] public Guid? RunId { get; set; }
 
     private string? _chainContextJson;
     private string? _chainContextJsonPath;
 
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
-    protected override Task OnParametersSetAsync() => Vm.LoadPageAsync(ProjectId, WorkflowId ?? ChainId);
+    protected override Task OnParametersSetAsync() => Vm.LoadPageAsync(ProjectId, WorkflowId ?? ChainId, RunId);
 
     public void Dispose()
     {

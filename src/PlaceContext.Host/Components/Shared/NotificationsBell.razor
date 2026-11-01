@@ -3,15 +3,18 @@
 @using PlaceContext.Infrastructure.Operations
 @using PlaceContext.Host.Components.ViewModels
 
-@* Azure-style notifications: the bell shows how many background operations are live; the pane
-   lists recent operations for this tenant. Operations run server-side in OperationCenter, so
-   navigating between pages (or closing the pane) never interrupts them. *@
+@* Notifications use persisted run-status changes. A workflow requiring input remains actionable
+   across navigation and page reloads until its durable checkpoint is resumed or cancelled. *@
 
-<button title="Notifications" @onclick="Vm.Toggle" class="bell-btn">
+<button title="@(Vm.NeedsInputCount > 0 ? $"{Vm.NeedsInputCount} workflow(s) need input" : "Notifications")" aria-label="Notifications" @onclick="Vm.Toggle" class="bell-btn @(Vm.NeedsInputCount > 0 ? "bell-needs-input" : "")">
     <svg class="bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M14 21h-4" />
     </svg>
-    @if (Vm.ActiveCount > 0)
+    @if (Vm.NeedsInputCount > 0)
+    {
+        <span class="bell-badge bell-badge-attention" aria-label="@($"{Vm.NeedsInputCount} workflows need input")">@Vm.NeedsInputCount</span>
+    }
+    else if (Vm.ActiveCount > 0)
     {
         <span class="bell-badge">@Vm.ActiveCount</span>
     }
@@ -25,6 +28,10 @@
             <span class="pane-title">Notifications</span>
             <span class="pane-status">@Vm.ActiveSummary</span>
         </div>
+        @if (Vm.NeedsInputCount > 0)
+        {
+            <div class="pane-attention"><AppIcon Kind="human" /> <strong>@Vm.NeedsInputCount workflow@(Vm.NeedsInputCount == 1 ? "" : "s") waiting for input</strong><span>Open a request to continue the paused run.</span></div>
+        }
         @if (Vm.Operations.Count == 0)
         {
             <div class="pane-empty">
@@ -33,7 +40,7 @@
         }
         @foreach (var op in Vm.Operations)
         {
-            <div class="op">
+            <div class="op @(op.Status == PortalOperationStatus.NeedsInput ? "op-needs-input" : "")">
                 <span class="op-icon">
                     <span class="@Vm.StatusClass(op.Status)"><AppIcon Kind="@Vm.StatusIcon(op.Status)" /></span>
                 </span>
@@ -50,7 +57,7 @@
                 @if (op.Link is not null)
                 {
                     <button class="dcbtn op-view"
-                            @onclick="@(() => Vm.Open(op.Link))">view</button>
+                            @onclick="@(() => Vm.Open(op.Link))">@(op.Status == PortalOperationStatus.NeedsInput ? "Review" : "view")</button>
                 }
             </div>
         }
@@ -58,10 +65,10 @@
 }
 
 @code {
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Vm.Attach(() => InvokeAsync(StateHasChanged));
-        Vm.Initialize();
+        await Vm.InitializeAsync();
     }
 
     public void Dispose() => Vm.Dispose();

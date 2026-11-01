@@ -12,24 +12,31 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
     private bool _initialized;
     private IDisposable? _operationSubscription;
     private readonly ICurrentUser? _user;
+    private readonly IPermissionService? _permissions;
+    private bool _canViewWorkflowInputs;
 
     public NotificationsViewModel(
         OperationCenter operationsCenter,
         ICurrentTenant tenant,
         NavigationManager navigation,
-        ICurrentUser? user = null
+        ICurrentUser? user = null,
+        IPermissionService? permissions = null
     )
     {
         _operationsCenter = operationsCenter;
         _tenant = tenant;
         _navigation = navigation;
         _user = user;
+        _permissions = permissions;
     }
 
     public bool IsOpen { get; private set; }
     public IReadOnlyList<PortalOperation> Operations { get; private set; } = [];
     public int ActiveCount { get; private set; }
-    public string ActiveSummary => ActiveCount > 0 ? $"{ActiveCount} in progress" : "all quiet";
+    public int NeedsInputCount { get; private set; }
+    public string ActiveSummary => NeedsInputCount > 0
+        ? $"{NeedsInputCount} need input" + (ActiveCount > 0 ? $" · {ActiveCount} in progress" : "")
+        : ActiveCount > 0 ? $"{ActiveCount} in progress" : "all quiet";
 
     public void Initialize()
     {
@@ -40,6 +47,22 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
             _operationSubscription = _operationsCenter.Subscribe(_tenant.TenantId, OnOperationsChanged, _user?.UserId);
         _initialized = true;
         Reload();
+    }
+
+    public async Task InitializeAsync()
+    {
+        Initialize();
+        if (_permissions is not null)
+        {
+            try
+            {
+                _canViewWorkflowInputs = await _permissions.HasAsync(Permission.ChainsManage)
+                    && await _permissions.HasAsync(Permission.JobsRun);
+            }
+            catch { _canViewWorkflowInputs = false; }
+        }
+        Reload();
+        NotifyStateChanged();
     }
 
     public void Toggle()
@@ -69,6 +92,8 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
                 $"queued {operation.QueuedAt.ToWorkspaceTime():HH:mm:ss}",
             PortalOperationStatus.Running =>
                 $"running for {Elapsed(operation.StartedAt ?? operation.QueuedAt)}",
+            PortalOperationStatus.NeedsInput =>
+                "Awaiting input · workflow paused",
             PortalOperationStatus.Succeeded =>
                 $"finished {operation.FinishedAt?.ToWorkspaceTime():HH:mm:ss} in {Duration(operation)}",
             PortalOperationStatus.Failed =>
@@ -81,6 +106,7 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
         {
             PortalOperationStatus.Queued => "clock",
             PortalOperationStatus.Running => "refresh",
+            PortalOperationStatus.NeedsInput => "human",
             PortalOperationStatus.Succeeded => "check",
             PortalOperationStatus.Failed => "close",
             _ => "about",
@@ -91,6 +117,7 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
         {
             PortalOperationStatus.Queued => "i-muted",
             PortalOperationStatus.Running => "op-spin",
+            PortalOperationStatus.NeedsInput => "i-attention",
             PortalOperationStatus.Succeeded => "i-good",
             PortalOperationStatus.Failed => "i-bad",
             _ => string.Empty,
@@ -113,14 +140,19 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
     private void OnOperationsChanged()
     {
         var previous = ActiveCount;
+        var previousInput = NeedsInputCount;
         Reload();
-        if (IsOpen || ActiveCount != previous) NotifyStateChanged();
+        if (IsOpen || ActiveCount != previous || NeedsInputCount != previousInput) NotifyStateChanged();
     }
 
     private void Reload()
     {
         ActiveCount = _tenant.IsResolved ? _operationsCenter.ActiveCount(_tenant.TenantId, _user?.UserId) : 0;
-        Operations = IsOpen && _tenant.IsResolved ? _operationsCenter.ListForTenant(_tenant.TenantId, _user?.UserId) : [];
+        NeedsInputCount = _tenant.IsResolved && _canViewWorkflowInputs
+            ? _operationsCenter.NeedsInputCount(_tenant.TenantId, _user?.UserId) : 0;
+        Operations = IsOpen && _tenant.IsResolved
+            ? _operationsCenter.ListForTenant(_tenant.TenantId, _user?.UserId)
+                .Where(o => _canViewWorkflowInputs || o.Status != PortalOperationStatus.NeedsInput).ToArray() : [];
     }
 
     private static string Elapsed(DateTimeOffset since) =>
