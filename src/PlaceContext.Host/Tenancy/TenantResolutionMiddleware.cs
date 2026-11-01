@@ -19,11 +19,20 @@ public sealed class TenantResolutionMiddleware
         // before the first tenant exists. Never bypass tenant lookup for other
         // hosts or tenant subdomains.
         if (configuration.GetValue<bool>("PlaceContext:SaaS:ManagedHosting")
-            && ManagedSignupUrls.IsApexHost(context.Request.Host.Host, configuration)
-            && ManagedSignupUrls.IsPublicApexPath(context.Request.Path))
+            && ManagedSignupUrls.IsApexHost(context.Request.Host.Host, configuration))
         {
-            await _next(context);
-            return;
+            // A newly installed managed apex has no tenant by design. The
+            // homepage must lead to workspace discovery rather than a 404.
+            if (context.Request.Path == "/")
+            {
+                context.Response.Redirect("/login");
+                return;
+            }
+            if (ManagedSignupUrls.IsPublicApexPath(context.Request.Path))
+            {
+                await _next(context);
+                return;
+            }
         }
         var slug = ResolveSlug(context.Request.Host.Host);
         // Public hosted SaaS must never allocate a fresh tenant simply because a visitor
