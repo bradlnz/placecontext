@@ -7,11 +7,11 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-CATALOG = ROOT / "src/PlaceContext.Host/Components/ViewModels/Jobs/JobTemplateCatalog.cs"
+CATALOG = ROOT / "src/PlaceContext.Host/Components/ViewModels/Jobs/DataQualityJobTemplate.cs"
 
 def source():
     text = CATALOG.read_text(encoding="utf-8")
-    match = re.search(r'private const string JsonDataQualitySource = @"(.*?)";', text, re.S)
+    match = re.search(r'private const string Source = @"(.*?)";', text, re.S)
     assert match is not None
     # C# verbatim literals double every embedded quote.
     return match.group(1).replace('""', '"')
