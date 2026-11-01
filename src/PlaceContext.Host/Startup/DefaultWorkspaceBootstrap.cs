@@ -321,12 +321,15 @@ public static class DefaultWorkspaceBootstrap
         }
 
         var mappings = await app.ListDataMappingsAsync(projectId, ct);
-        if (!mappings.Any(item => item.JobId == ingestJobId && item.TargetTable == "customer_accounts"))
+        if (!mappings.Any(item => item.JobId == ingestJobId))
         {
             await app.SaveDataMappingAsync(new SaveDataMappingCommand(
                 projectId,
                 ingestJobId,
-                "customer_accounts",
+                // Keep the project-owned customer_accounts input table separate from
+                // generated read-only ingestion datasets. The system data-map writer
+                // must not try to take ownership of an existing user table.
+                "customer_activity_ingested",
                 "customers",
                 [
                     new DataFieldDto("id", "id", "uuid"),
