@@ -876,6 +876,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private static string? MergeContext(string? context, string? output)
     {
         if (string.IsNullOrWhiteSpace(output)) return context;
+        // The first stage has no accumulated state. Forward its artifact
+        // unchanged; in particular, never synthesize a "previous": null field.
+        if (string.IsNullOrWhiteSpace(context)) return output;
         try
         {
             var next = System.Text.Json.Nodes.JsonNode.Parse(output);
