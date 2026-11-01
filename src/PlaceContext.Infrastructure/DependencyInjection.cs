@@ -268,6 +268,7 @@ public static class DependencyInjection
         // service (advisory-lock-elected schedule scan + atomic queue drain — correct across replicas).
         services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
         services.AddScoped<IJobRunQueue, Scheduling.DbJobRunQueue>();
+        services.AddScoped<IJobRunSubmissionQueue, Scheduling.DbJobRunSubmissionQueue>();
         services.AddScoped<IJobChainSubmissionQueue, Scheduling.DbJobChainSubmissionQueue>();
         services.AddScoped<Scheduling.DbChainQueueService>();
         services.AddScoped<IChainQueueService>(sp => sp.GetRequiredService<Scheduling.DbChainQueueService>());
@@ -275,6 +276,7 @@ public static class DependencyInjection
         services.AddHostedService<Scheduling.TriggerSchedulerService>();
         services.AddHostedService<Scheduling.ChainContinuationWorker>();
         services.AddHostedService<Scheduling.RpcChainSubmissionWorker>();
+        services.AddHostedService<Scheduling.RpcJobSubmissionWorker>();
 
         // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
         // worker (generation can be slow; the portal only enqueues and reads stored charts).
@@ -337,6 +339,7 @@ public static class DependencyInjection
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
         EnsureRpcChainSubmissionSchema(db);
+        EnsureRpcJobSubmissionSchema(db);
         EnsureWorkerNetworkingSchema(db);
         EnsureQemuReplaySchema(db);
         db.Database.ExecuteSqlRaw(DbQemuLoginStore.Schema);
@@ -397,6 +400,34 @@ public static class DependencyInjection
                 FOREIGN KEY ("TenantId", "ProjectId", "NetworkId") REFERENCES worker_networks ("TenantId", "ProjectId", "Id") ON DELETE CASCADE,
                 FOREIGN KEY ("JobId") REFERENCES jobs ("Id") ON DELETE CASCADE
             );
+            """);
+    }
+
+    private static void EnsureRpcJobSubmissionSchema(AppDbContext db)
+    {
+        db.Database.ExecuteSqlRaw("""
+            CREATE TABLE IF NOT EXISTS rpc_job_submissions (
+                "Id" uuid PRIMARY KEY,
+                "TenantId" uuid NOT NULL,
+                "ProjectId" uuid NOT NULL,
+                "JobId" uuid NOT NULL,
+                "RunId" uuid NOT NULL,
+                "InputPayload" text NULL,
+                "Status" text NOT NULL,
+                "Attempts" integer NOT NULL DEFAULT 0,
+                "LastError" text NULL,
+                "SubmittedAt" timestamptz NOT NULL,
+                "NextAttemptAt" timestamptz NOT NULL,
+                "StartedAt" timestamptz NULL,
+                "FinishedAt" timestamptz NULL,
+                "ClaimedBy" text NULL,
+                "ClaimedAt" timestamptz NULL,
+                "HeartbeatAt" timestamptz NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_rpc_job_submissions_tenant_run
+                ON rpc_job_submissions ("TenantId", "RunId");
+            CREATE INDEX IF NOT EXISTS ix_rpc_job_submissions_ready
+                ON rpc_job_submissions ("Status", "NextAttemptAt", "SubmittedAt");
             """);
     }
 

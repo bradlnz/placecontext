@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using PlaceContext.Application.Billing;
+using PlaceContext.Application.Ports;
 using PlaceContext.Application;
 using PlaceContext.Host.Api;
 using PlaceContext.Host.Auth;
@@ -15,11 +18,16 @@ public sealed class CoreApiJobsController : ControllerBase
 {
     private readonly PlaceContextService _svc;
     private readonly ICoreApiResourceResolver _resource;
+    private readonly IJobRunSubmissionQueue? _submissions;
+    private readonly bool _managedHosting;
 
-    public CoreApiJobsController(PlaceContextService svc, ICoreApiResourceResolver resource)
+    public CoreApiJobsController(PlaceContextService svc, ICoreApiResourceResolver resource,
+        IJobRunSubmissionQueue? submissions = null, IOptions<RunBillingDeploymentOptions>? hosting = null)
     {
         _svc = svc;
         _resource = resource;
+        _submissions = submissions;
+        _managedHosting = hosting?.Value.ManagedHosting ?? false;
     }
 
     [HttpGet("jobs")]
@@ -64,7 +72,7 @@ public sealed class CoreApiJobsController : ControllerBase
 
     [HttpPost("jobs/{jobId:guid}/run")]
     [Authorize(Policy = CoreApiScopes.JobsRun)]
-    public async Task<ActionResult<CoreJobRunDetailResponse>> RunJob(
+    public async Task<IActionResult> RunJob(
         Guid projectId,
         Guid jobId,
         [FromBody] CoreRunJobRequest request)
@@ -73,8 +81,33 @@ public sealed class CoreApiJobsController : ControllerBase
         if (job is null)
             return NotFound(new { error = "Job not found in this project." });
 
+        if (_managedHosting)
+        {
+            if (_submissions is null)
+                return StatusCode(503, new { error = "Managed job queue is not configured." });
+            try
+            {
+                var receipt = await _submissions.EnqueueAsync(projectId, jobId,
+                    request.InputPayload, request.RunId, HttpContext.RequestAborted);
+                return AcceptedAtAction(nameof(GetJobSubmission),
+                    new { projectId, jobId, trackingId = receipt.TrackingId }, receipt);
+            }
+            catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
+            catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        }
+
         var run = await _svc.RunJobAsync(jobId, request.InputPayload, request.RunId, HttpContext.RequestAborted);
         return Ok(CoreApiMapper.ToResponse(run));
+    }
+
+    [HttpGet("jobs/{jobId:guid}/submissions/{trackingId:guid}")]
+    [Authorize(Policy = CoreApiScopes.JobsRead)]
+    public async Task<IActionResult> GetJobSubmission(Guid projectId, Guid jobId, Guid trackingId)
+    {
+        if (_submissions is null || await _resource.GetJobAsync(projectId, jobId, HttpContext.RequestAborted) is null)
+            return NotFound();
+        var receipt = await _submissions.GetAsync(projectId, jobId, trackingId, HttpContext.RequestAborted);
+        return receipt is null ? NotFound() : Ok(receipt);
     }
 
     [HttpGet("jobs/{jobId:guid}/runs")]

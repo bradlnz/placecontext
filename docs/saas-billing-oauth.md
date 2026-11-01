@@ -34,9 +34,12 @@ tenant and user context and keep the same run id on crash-before-start
 retries. The durable handoff also preserves encrypted per-step input overrides.
 
 Distributed start pacing still occurs inside a queue worker, not the HTTP
-request. This protects workflow requests from browser timeouts, but direct
-standalone job API starts and manual workflow replays still need durable
-admission before a full production launch.
+request. Managed Core API standalone-job launches now also create their own
+durable, encrypted and idempotent receipt, with HTTP 202 plus
+`GET /api/core/v1/projects/{projectId}/jobs/{jobId}/submissions/{trackingId}`.
+Workers preserve the run id across retries and avoid redispatch when the
+job-run record already exists. Direct manual workflow replays and other
+legacy direct-execution surfaces still need durable submission before launch.
 
 ### What the implementation actually enforces
 
