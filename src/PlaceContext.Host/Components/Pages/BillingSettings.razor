@@ -64,8 +64,8 @@
                     <strong>Unlimited workflow &amp; job runs</strong>
                     <p class="text-3-12">@tier.Description</p>
                     <p class="text-3-12">
-                        @(tier.StartsPerMinute is { } rate
-                            ? $"Up to {rate:N0} new starts per minute"
+                        @(tier.StartsPerMinute is { } tierRate
+                            ? $"Up to {tierRate:N0} new starts per minute"
                             : tier.Code == RunPlans.Developer
                                 ? "Limited by your own infrastructure"
                                 : "Start rate agreed by contract")
