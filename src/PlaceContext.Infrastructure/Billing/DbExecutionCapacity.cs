@@ -28,7 +28,12 @@ public sealed class DbExecutionCapacity(
             throw new ArgumentException("An execution id and supported kind are required.");
         var id = tenant.TenantId;
         var runKey = $"{kind}:{executionId:N}";
-        var cs = db.Database.GetDbConnection().ConnectionString;
+        // GetDbConnection().ConnectionString may redact Password once Npgsql has
+        // opened the EF connection (Persist Security Info is false by default).
+        // Use the originally configured EF connection string for new leases instead.
+        // Never enable Persist Security Info or log this value.
+        var cs = db.Database.GetConnectionString()
+            ?? throw new InvalidOperationException("A PostgreSQL connection string is required.");
         while (true)
         {
             ct.ThrowIfCancellationRequested();
