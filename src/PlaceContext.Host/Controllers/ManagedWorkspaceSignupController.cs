@@ -96,7 +96,8 @@ public sealed class ManagedWorkspaceSignupController(
     [EnableRateLimiting("signup")]
     public async Task<IActionResult> Complete([FromQuery] string? code, CancellationToken ct)
     {
-        if (!registration.Enabled || CurrentTenant.Current is not { Slug: not "default" } tenant
+        var tenant = CurrentTenant.Current;
+        if (!registration.Enabled || tenant is null || tenant.Slug == "default"
             || code is null) return NotFound();
         if (!string.Equals(Request.Host.Host, ManagedSignupUrls.TenantUri(configuration, tenant.Slug).Host,
                 StringComparison.OrdinalIgnoreCase))
