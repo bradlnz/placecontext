@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using PlaceContext.Host.Controllers;
-using PlaceContext.Host.CoreApi;
+using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Tests;
 
