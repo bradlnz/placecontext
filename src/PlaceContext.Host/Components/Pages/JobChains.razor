@@ -22,10 +22,10 @@ else
         <header class="chains-head">
             <div>
                 <h2>Workflows</h2>
-                <p>Connect reusable jobs into ordered pipelines, including parallel stages and delivery actions.</p>
+                <p>Build, run and monitor workflows here, including human approvals, execution history and results.</p>
             </div>
             <div class="head-actions">
-                <a class="dcbtn" href="/project/@ProjectId/monitor"><AppIcon Kind="pulse" /> Monitor</a>
+                <a class="dcbtn" href="/observability?tab=workflows"><AppIcon Kind="pulse" /> Execution details</a>
                 <button class="dcbtn" @onclick="Vm.NavigateToJobs">View jobs</button>
                 <button class="dcbtn primary" @onclick="() => Vm.NewChain()"><AppIcon Kind="plus" /> New workflow</button>
             </div>
@@ -199,6 +199,14 @@ else
         @if (Vm.IsRunsTab && Vm.EditChainId.HasValue)
         {
             <div class="dcslide-body runs-body">
+                @if (Vm.ChainRuns is { Count: > 0 })
+                {
+                    <div class="run-health-strip" aria-label="Workflow execution status in recent runs">
+                        <span><strong>@Vm.RunsSucceeded</strong> succeeded</span>
+                        <span class="run-health-attention"><strong>@Vm.RunsAwaitingInput</strong> awaiting input</span>
+                        <span><strong>@Vm.RunsFailedOrPartial</strong> failed or partial</span>
+                    </div>
+                }
                 @if (Vm.OpenRun is null)
                 {
                     @if (Vm.ChainRuns is null or { Count: 0 })
@@ -207,11 +215,15 @@ else
                     }
                     else
                     {
-                        @foreach (var run in Vm.ChainRuns)
+                        @foreach (var run in Vm.ChainRuns.OrderByDescending(run => run.Status == "AwaitingInput").ThenByDescending(run => run.StartedAt))
                         {
                             <div class="dccard run-card" @onclick="@(() => Vm.OpenChainRunAsync(run))">
                                 <div class="run-row">
                                     <span class="status-chip" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
+                                    @if (run.Status == "AwaitingInput")
+                                    {
+                                        <span class="run-attention-label"><AppIcon Kind="human" /> Needs input</span>
+                                    }
                                     <span class="run-time">
                                         @Vm.Presentation.DateTime(run.StartedAt)
                                     </span>
@@ -270,7 +282,7 @@ else
                             }
                             @if (inputRequest.ResponseType == LoopChainAction.YesNoResponse)
                             {
-                                <p class="sub-note">Choose Yes or No to continue. The answer is saved as true or false for later jobs and conditions.</p>
+                                <p class="sub-note">Review the evidence and downstream steps before responding. A No answer follows the configured No branch; it does not automatically cancel execution.</p>
                             }
                             else
                             {
@@ -302,8 +314,8 @@ else
                             @if (inputRequest.ResponseType == LoopChainAction.YesNoResponse)
                             {
                                 <div class="human-decision-actions" aria-label="Answer the question">
-                                    <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="() => Vm.RespondYesNoAsync(true)"><AppIcon Kind="check" /> Yes</button>
-                                    <button class="dcbtn" disabled="@Vm.Resuming" @onclick="() => Vm.RespondYesNoAsync(false)"><AppIcon Kind="close" /> No</button>
+                                    <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="() => Vm.RequestHumanAnswer(true)"><AppIcon Kind="check" /> Yes</button>
+                                    <button class="dcbtn" disabled="@Vm.Resuming" @onclick="() => Vm.RequestHumanAnswer(false)"><AppIcon Kind="close" /> No</button>
                                     @if (Vm.Resuming) { <span role="status">Resuming…</span> }
                                 </div>
                             }
@@ -816,6 +828,25 @@ else
                     <div class="dcmodal-foot">
                         <button class="dcbtn" @onclick="Vm.CloseLoopEditor">Cancel</button>
                         <button class="dcbtn primary" @onclick="Vm.SaveLoopAction">Save step</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (Vm.HumanConfirmationCurrent && Vm.PendingHumanAnswer is { } requestedAnswer)
+        {
+            <div class="dcmodal-overlay">
+                <div class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="human-confirm-title">
+                    <div class="dcmodal-head"><h3 id="human-confirm-title">Confirm workflow response</h3></div>
+                    <div class="dcmodal-body">
+                        <p><strong>@(requestedAnswer ? "Yes" : "No")</strong> will resume this paused workflow from its saved checkpoint.</p>
+                        <p>@(Vm.OpenRun?.InputRequest?.Instructions ?? "Review the workflow evidence first.")</p>
+                        <p class="sub-note">The next steps depend on the configured branches. A No response does not automatically stop the workflow.</p>
+                    </div>
+                    @if (Vm.ResumeError is not null) { <p class="danger" role="alert">@Vm.ResumeError</p> }
+                    <div class="dcmodal-foot">
+                        <button class="dcbtn" disabled="@Vm.Resuming" @onclick="Vm.CancelHumanAnswer">Cancel</button>
+                        <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="Vm.ConfirmHumanAnswerAsync">@(Vm.Resuming ? "Submitting…" : requestedAnswer ? "Confirm Yes" : "Confirm No")</button>
                     </div>
                 </div>
             </div>

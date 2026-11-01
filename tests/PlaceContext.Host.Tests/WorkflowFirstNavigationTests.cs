@@ -12,26 +12,23 @@ public sealed class WorkflowFirstNavigationTests
         var ids = layout.Workspace.Select(item => item.Id).ToArray();
         Assert.Contains("build.chat", ids);
         Assert.Contains("chains", ids);
-        Assert.Contains("monitor", ids);
-        Assert.True(Array.IndexOf(ids, "build.chat") < Array.IndexOf(ids, "chains"));
-        Assert.True(Array.IndexOf(ids, "chains") < Array.IndexOf(ids, "monitor"));
         Assert.DoesNotContain("build.library", ids);
         Assert.DoesNotContain("dashboards", ids);
-        Assert.DoesNotContain("dashboard", ids);
+        Assert.DoesNotContain("monitor", ids);
         Assert.True(Array.IndexOf(ids, "chains") < Array.IndexOf(ids, "jobs"));
     }
 
     [Fact]
-    public void Monitor_page_is_a_workflow_execution_and_human_action_surface()
+    public void Monitoring_and_human_approvals_remain_within_workflows()
     {
         var root = HostRoot();
-        var page = File.ReadAllText(Path.Combine(root, "Components", "Pages", "WorkflowMonitor.razor"));
-        Assert.Contains("@page \"/project/{ProjectId:guid}/monitor\"", page);
-        Assert.Contains("Human actions", page);
-        Assert.Contains("Recent workflow runs", page);
-        Assert.Contains("Vm.ConfirmAsync", page);
-        Assert.DoesNotContain("Agent Store", page);
-        Assert.DoesNotContain("Data profiles", page);
+        var page = File.ReadAllText(Path.Combine(root, "Components", "Pages", "JobChains.razor"));
+        Assert.Contains("RunsAwaitingInput", page);
+        Assert.Contains("RunsFailedOrPartial", page);
+        Assert.Contains("RequestHumanAnswer(true)", page);
+        Assert.Contains("ConfirmHumanAnswerAsync", page);
+        Assert.DoesNotContain("/monitor", page);
+        Assert.False(File.Exists(Path.Combine(root, "Components", "Pages", "WorkflowMonitor.razor")));
     }
 
     [Fact]

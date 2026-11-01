@@ -79,6 +79,55 @@ public sealed partial class JobChainsViewModel
     private Guid? _resumeRequestId;
     public string? ResumeError { get; private set; }
     public bool Resuming { get; private set; }
+    public bool? PendingHumanAnswer { get; private set; }
+    private Guid? _pendingHumanRunId;
+    private Guid? _pendingHumanRequestId;
+    public bool HumanConfirmationCurrent => PendingHumanAnswer is not null
+        && OpenRun?.Id == _pendingHumanRunId
+        && OpenRun.InputRequest is { } request
+        && request.Id == _pendingHumanRequestId
+        && request.SubmittedValues is null
+        && request.Kind == LoopChainAction.HumanType
+        && request.ResponseType == LoopChainAction.YesNoResponse;
+
+    public int RunsAwaitingInput => ChainRuns?.Count(run => run.Status == "AwaitingInput") ?? 0;
+    public int RunsFailedOrPartial => ChainRuns?.Count(run => run.Status is "Failed" or "Partial") ?? 0;
+    public int RunsSucceeded => ChainRuns?.Count(run => run.Status == "Succeeded") ?? 0;
+    public static bool NeedsHumanInput(ChainRunView run) =>
+        run.Status == "AwaitingInput" && run.InputRequest is { Kind: LoopChainAction.HumanType };
+
+    public void RequestHumanAnswer(bool answer)
+    {
+        if (Resuming || _submissions is null || OpenRun is not { } run || !NeedsHumanInput(run)
+            || run.InputRequest is not { ResponseType: LoopChainAction.YesNoResponse, SubmittedValues: null } request)
+            return;
+        PendingHumanAnswer = answer;
+        _pendingHumanRunId = run.Id;
+        _pendingHumanRequestId = request.Id;
+        NotifyStateChanged();
+    }
+
+    public void CancelHumanAnswer()
+    {
+        if (Resuming) return;
+        ClearHumanConfirmation();
+        NotifyStateChanged();
+    }
+
+    public async Task ConfirmHumanAnswerAsync()
+    {
+        if (!HumanConfirmationCurrent || PendingHumanAnswer is not { } answer || Resuming) return;
+        await ResumeWithInputsCoreAsync(answer);
+        if (ResumeError is null) ClearHumanConfirmation();
+        NotifyStateChanged();
+    }
+
+    private void ClearHumanConfirmation()
+    {
+        PendingHumanAnswer = null;
+        _pendingHumanRunId = null;
+        _pendingHumanRequestId = null;
+    }
 
     public string GetResumeArg(int index, string name)
     {
@@ -259,6 +308,7 @@ public sealed partial class JobChainsViewModel
     {
         StopPolling();
         StepOutputError = null;
+        ClearHumanConfirmation();
         OpenRun = run;
         StepRunDetail = null;
         SelectedStepRunId = null;
@@ -271,6 +321,7 @@ public sealed partial class JobChainsViewModel
 
     public void CloseChainRun()
     {
+        ClearHumanConfirmation();
         StopPolling();
         StepOutputError = null;
         OpenRun = null;
@@ -338,6 +389,8 @@ public sealed partial class JobChainsViewModel
             var runs = await _svc.ListChainRunsAsync(chainId);
             if (version != _pageVersion || EditChainId != chainId) return;
             ChainRuns = runs;
+            if (PendingHumanAnswer is not null && !HumanConfirmationCurrent)
+                ClearHumanConfirmation();
 
             var targetId = pendingChainRunId ?? PendingChainRunId;
             if (targetId is { } pending)

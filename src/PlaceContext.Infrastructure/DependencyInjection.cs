@@ -34,7 +34,6 @@ public static class DependencyInjection
         services.Configure<AgentWorkflows.AgentWorkflowOptions>(configuration.GetSection("PlaceContext:AgentWorkflows"));
         services.AddScoped<PlaceContext.Application.AgentWorkflows.IAgentWorkflows, AgentWorkflows.AgentWorkflowService>();
         services.AddScoped<PlaceContext.Application.Dashboards.IPersonalDashboards, Dashboards.PersonalDashboardService>();
-        services.AddScoped<PlaceContext.Application.Workflows.IWorkflowMonitor, Workflows.WorkflowMonitorService>();
         services.AddScoped<PlaceContext.Application.Build.IBuildModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
         services.AddHttpClient("build-model", client => client.Timeout = Timeout.InfiniteTimeSpan)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
