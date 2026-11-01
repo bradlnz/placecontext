@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using PlaceContext.Application;
+using PlaceContext.Application.Connections;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Infrastructure.OpenSearch;
 using PlaceContext.Infrastructure.ProjectData;
@@ -14,7 +15,9 @@ namespace PlaceContext.Host.Components.ViewModels;
 /// </summary>
 public sealed class ConnectionsSettingsViewModel(
     PlaceContextService service,
-    PortalUiState ui
+    PortalUiState ui,
+    IManagedOAuthConnections? managed = null,
+    NavigationManager? navigation = null
 ) : PageViewModel
 {
     public const string PageTitle = "Connections";
@@ -41,6 +44,27 @@ public sealed class ConnectionsSettingsViewModel(
 
     public IReadOnlyList<ProjectSummaryView>? Projects { get; private set; }
     public IReadOnlyList<ProjectSecretView> Secrets { get; private set; } = Array.Empty<ProjectSecretView>();
+    public IReadOnlyList<ManagedConnectionView> ManagedConnections { get; private set; } = [];
+    public bool MicrosoftConnected => ManagedConnections.Any(x => x.Provider == "microsoft");
+    public async Task ConnectMicrosoftAsync()
+    {
+        if (managed is null || navigation is null || SelectedProjectId is not { } id) return;
+        try { navigation.NavigateTo((await managed.BeginAsync(id)).ToString(), forceLoad: true); }
+        catch (Exception ex) { Message = ex.Message; MessageIsError = true; NotifyStateChanged(); }
+    }
+    public async Task DisconnectMicrosoftAsync()
+    {
+        if (managed is null || SelectedProjectId is not { } id) return;
+        try
+        {
+            await managed.DisconnectAsync(id);
+            ManagedConnections = await managed.ListAsync(id);
+            Message = "Microsoft Graph disconnected.";
+            MessageIsError = false;
+        }
+        catch (Exception ex) { Message = ex.Message; MessageIsError = true; }
+        NotifyStateChanged();
+    }
     public Guid? SelectedProjectId { get; set; }
     public bool Loading { get; private set; } = true;
     public bool Busy { get; private set; }
@@ -86,6 +110,8 @@ public sealed class ConnectionsSettingsViewModel(
             else if (Projects.Count > 0 && SelectedProjectId is null)
                 SelectedProjectId = Projects[0].Id;
             await LoadSecretsAsync();
+            if (SelectedProjectId is { } managedProject && managed is not null)
+                ManagedConnections = await managed.ListAsync(managedProject);
         }
         catch (Exception ex)
         {
@@ -114,6 +140,8 @@ public sealed class ConnectionsSettingsViewModel(
         Message = null;
         ClearForms();
         await LoadSecretsAsync();
+        ManagedConnections = managed is not null && SelectedProjectId is { } managedProject
+            ? await managed.ListAsync(managedProject) : [];
     }
 
     public async Task SaveExternalDatabaseAsync()

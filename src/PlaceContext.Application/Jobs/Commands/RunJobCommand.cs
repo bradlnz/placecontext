@@ -32,5 +32,6 @@ public sealed record RunJobCommand(
     Guid? RunId = null,
     Guid? ReplayOfRunId = null,
     int AttemptNumber = 1,
-    Guid? OriginalRunId = null)
+    Guid? OriginalRunId = null,
+    bool IsWorkflowStep = false)
     : ICommand<JobRunDetailView>;

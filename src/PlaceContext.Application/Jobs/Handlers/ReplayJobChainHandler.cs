@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Billing;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Observability;
 using PlaceContext.Application.Ports;
@@ -24,15 +25,21 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
     private readonly IJobChainRepository _chains;
     private readonly IChainRunRepository _runs;
     private readonly IDispatcher _dispatcher;
+    private readonly IRunAllowance? _allowance;
+    private readonly IExecutionCapacity? _capacity;
 
     public ReplayJobChainHandler(
         IJobChainRepository chains,
         IChainRunRepository runs,
-        IDispatcher dispatcher)
+        IDispatcher dispatcher,
+        IRunAllowance? allowance = null,
+        IExecutionCapacity? capacity = null)
     {
         _chains = chains;
         _runs = runs;
         _dispatcher = dispatcher;
+        _allowance = allowance;
+        _capacity = capacity;
     }
 
     public async Task<ChainRunView> HandleAsync(ReplayJobChainCommand command, CancellationToken ct = default)
@@ -71,10 +78,21 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
         // fromStep onward, threading outputs as inputs, exactly like the chain handler does.
         // This avoids needing to modify the chain definition.
 
+        // A replay is one new top-level billable workflow, regardless of its
+        // child steps. Capacity is held for the replay's whole execution.
+        var newRunId = command.ReplayRunId ?? Guid.NewGuid();
+        if (_allowance is not null)
+            await _allowance.ReserveAsync(chain.ProjectId, newRunId, "workflow", ct);
+        await using var capacityLease = _capacity is null ? null
+            : await _capacity.AcquireAsync(newRunId, "workflow", ct);
+        using var linkedCapacity = capacityLease is null ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(ct, capacityLease.LostToken);
+        if (linkedCapacity is not null) ct = linkedCapacity.Token;
+
         var replayNames = chain.Stages.SelectMany(stage => stage.Action is { } action
             ? new[] { action.DisplayName }
             : stage.JobIds.Select(_ => "(replay)")).ToList();
-        var chainRun = ChainRun.Start(chain, replayNames, DateTimeOffset.UtcNow);
+        var chainRun = ChainRun.Start(chain, replayNames, DateTimeOffset.UtcNow, newRunId);
         await _runs.AddAsync(chainRun, ct);
 
         var status = ChainRunStatus.Succeeded;
@@ -129,7 +147,7 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
                     ? overridePayload : payload;
 
                 // Dispatch the individual job run
-                var run = await _dispatcher.Send(new RunJobCommand(jobId, stepPayload, stepRunId), ct);
+                var run = await _dispatcher.Send(new RunJobCommand(jobId, stepPayload, stepRunId, IsWorkflowStep: true), ct);
 
                 var outcome = run.Status switch
                 {

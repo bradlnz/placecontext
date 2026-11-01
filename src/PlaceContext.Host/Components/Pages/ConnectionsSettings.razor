@@ -48,6 +48,34 @@ else
 
         @if (Vm.SelectedProjectId is not null)
         {
+            <section class="dccard card" aria-label="Managed OAuth connections">
+                <div class="card-head">
+                    <span class="add-title">Managed app connections</span>
+                    @if (Vm.MicrosoftConnected)
+                    {
+                        <span class="dui-badge dui-badge-success">Connected</span>
+                    }
+                </div>
+                <p class="card-intro">Connect Microsoft 365 securely through OAuth. No manual API keys
+                    or copied tokens. The selected project's jobs can explicitly request
+                    this connection with <code>PC_USE_MANAGED_MICROSOFT_GRAPH=true</code>.</p>
+                <p class="card-intro">Delegated scopes: User.Read and Mail.Read. Tokens remain encrypted
+                    on the server and are refreshed automatically. Only grant job editing rights to
+                    trusted users who should access this project's connected account.</p>
+                @if (Vm.MicrosoftConnected)
+                {
+                    <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.DisconnectMicrosoftAsync">
+                        Disconnect Microsoft 365
+                    </button>
+                }
+                else
+                {
+                    <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.ConnectMicrosoftAsync">
+                        <AppIcon Kind="plug" /> Connect Microsoft 365
+                    </button>
+                }
+            </section>
+
             <div class="dccard card">
                 <div class="card-head">
                     <span class="add-title">External database</span>

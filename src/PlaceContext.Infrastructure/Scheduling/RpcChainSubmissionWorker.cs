@@ -109,7 +109,7 @@ public class RpcChainSubmissionWorker : BackgroundService
         // Expiry applies before dispatch, including abandoned claims that never created a run.
         await db.Database.ExecuteSqlRawAsync("""
             UPDATE rpc_chain_submissions submission
-            SET "Status" = 'Expired', "FinishedAt" = now(), "InputPayload" = NULL,
+            SET "Status" = 'Expired', "FinishedAt" = now(), "InputPayload" = NULL, "StepPayloadOverrides" = NULL,
                 "ClaimedBy" = NULL, "ClaimedAt" = NULL, "HeartbeatAt" = NULL
             WHERE "ExpiresAt" <= now()
               AND ("Status" = 'Queued' OR ("Status" = 'Running' AND "HeartbeatAt" < now() - interval '2 minutes'))
@@ -137,7 +137,9 @@ public class RpcChainSubmissionWorker : BackgroundService
             WHERE submission."Id" = candidate."Id"
             RETURNING submission."Id", submission."TenantId", submission."ProjectId",
                       submission."ChainId", submission."ChainRunId", submission."InputPayload",
-                      submission."SubmitterUserId", submission."SubmitterRole"
+                      submission."SubmitterUserId", submission."SubmitterRole",
+                      submission."StepPayloadOverrides",
+                      submission."ReplayOfRunId", submission."ReplayFromStepIndex"
             """;
         command.Parameters.AddWithValue("worker", _instanceId);
         command.Parameters.AddWithValue("batch", available);
@@ -149,7 +151,10 @@ public class RpcChainSubmissionWorker : BackgroundService
             values.Add(new ClaimedSubmission(
                 reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2), reader.GetGuid(3),
                 reader.GetGuid(4), reader.IsDBNull(5) ? null : reader.GetString(5),
-                reader.GetGuid(6), reader.GetString(7)));
+                reader.GetGuid(6), reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetGuid(9),
+                reader.IsDBNull(10) ? null : reader.GetInt32(10)));
         }
         return values;
     }
@@ -184,6 +189,10 @@ public class RpcChainSubmissionWorker : BackgroundService
                     : encryptor.Unprotect(
                         submission.ProtectedPayload,
                         IDataEncryptor.Purpose.RpcChainSubmission);
+                IReadOnlyDictionary<int, string>? stepOverrides = submission.ProtectedOverrides is null
+                    ? null : System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, string>>(
+                        encryptor.Unprotect(submission.ProtectedOverrides,
+                            IDataEncryptor.Purpose.RpcChainSubmission));
                 var handler = scope.ServiceProvider.GetRequiredService<
                     ICommandHandler<RunJobChainCommand, ChainRunView>>();
 
@@ -192,8 +201,19 @@ public class RpcChainSubmissionWorker : BackgroundService
                 ChainRunView result;
                 try
                 {
-                    result = await handler.HandleAsync(new RunJobChainCommand(
-                        submission.ChainId, payload, submission.ChainRunId), ct);
+                    if (submission.ReplayOfRunId is { } original)
+                    {
+                        var replay = scope.ServiceProvider.GetRequiredService<
+                            ICommandHandler<ReplayJobChainCommand, ChainRunView>>();
+                        result = await replay.HandleAsync(new ReplayJobChainCommand(
+                            submission.ChainId, original, submission.ReplayFromStepIndex,
+                            payload, stepOverrides, submission.ChainRunId), ct);
+                    }
+                    else
+                    {
+                        result = await handler.HandleAsync(new RunJobChainCommand(
+                            submission.ChainId, payload, submission.ChainRunId, stepOverrides), ct);
+                    }
                 }
                 finally
                 {
@@ -271,6 +291,9 @@ public class RpcChainSubmissionWorker : BackgroundService
 
     private async Task<UserIdentity?> LoadSubmitterAsync(Guid tenantId, Guid userId, CancellationToken ct)
     {
+        // A management API key has a reserved owner subject rather than a tenant user row.
+        if (userId == TrustedServicePrincipals.ManagementApiUserId)
+            return new UserIdentity(userId, nameof(UserRole.Owner));
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var row = await db.Users.IgnoreQueryFilters().AsNoTracking()
@@ -296,7 +319,8 @@ public class RpcChainSubmissionWorker : BackgroundService
             SET "Status" = CASE WHEN "QueueId" IS NOT NULL AND {run.Status} = 'Failed' THEN 'RetryPending' ELSE {run.Status} END, "ClaimedBy" = NULL, "ClaimedAt" = NULL,
                 "HeartbeatAt" = now(), "FinishedAt" = {run.FinishedAt},
                 "LastError" = NULL,
-                "InputPayload" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR {run.Status} <> 'Failed') THEN NULL ELSE "InputPayload" END
+                "InputPayload" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR {run.Status} <> 'Failed') THEN NULL ELSE "InputPayload" END,
+                "StepPayloadOverrides" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR {run.Status} <> 'Failed') THEN NULL ELSE "StepPayloadOverrides" END
             WHERE "Id" = {id} AND "ChainRunId" = {run.Id}
               AND "Status" NOT IN ('Queued', 'Failed', 'Expired', 'Succeeded', 'Cancelled')
             """, ct);
@@ -351,5 +375,7 @@ public class RpcChainSubmissionWorker : BackgroundService
         Guid ChainRunId,
         string? ProtectedPayload,
         Guid SubmitterUserId,
-        string SubmitterRole);
+        string SubmitterRole,
+        string? ProtectedOverrides = null,
+        Guid? ReplayOfRunId = null, int? ReplayFromStepIndex = null);
 }

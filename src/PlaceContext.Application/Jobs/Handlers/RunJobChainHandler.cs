@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Billing;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Observability;
 using PlaceContext.Application.Ports;
@@ -60,6 +61,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IQemuReplayStore? _qemuReplay;
     private readonly IChainQuestionGenerator? _questions;
     private readonly IJevReviewer? _jev;
+    private readonly IRunAllowance? _allowance;
+    private readonly IExecutionCapacity? _capacity;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
         IUnitOfWork uow, IClock clock, IJobRunner jobRunner,
@@ -70,7 +73,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         IChainContextStore? contextStore = null,
         ILogger<RunJobChainHandler>? log = null,
         IQemuEnvironmentRunner? qemu = null, IQemuReplayStore? qemuReplay = null,
-        IChainQuestionGenerator? questions = null, IJevReviewer? jev = null)
+        IChainQuestionGenerator? questions = null, IJevReviewer? jev = null,
+        IRunAllowance? allowance = null,
+        IExecutionCapacity? capacity = null)
     {
         _dataMappings = dataMappings;
         _chains = chains;
@@ -87,6 +92,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _qemuReplay = qemuReplay;
         _questions = questions;
         _jev = jev;
+        _allowance = allowance;
+        _capacity = capacity;
     }
 
     private readonly DataMappingIngestionService? _dataMappings;
@@ -124,6 +131,18 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
         ChainRun chainRun;
         var startStageIndex = command.ResumeFromStageIndex ?? 0;
+        var executionId = command.ChainRunId ?? Guid.NewGuid();
+        if (command.ResumeFromStageIndex is null && _allowance is not null)
+            await _allowance.ReserveAsync(chain.ProjectId, executionId, "workflow", ct);
+
+        // A paused workflow releases its capacity slot. Continuations reacquire a
+        // slot under the same run id without consuming another billable start.
+        await using var capacityLease = _capacity is null ? null
+            : await _capacity.AcquireAsync(executionId, "workflow", ct);
+        using var linkedCapacity = capacityLease is null ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(ct, capacityLease.LostToken);
+        if (linkedCapacity is not null) ct = linkedCapacity.Token;
+
         if (command.ResumeFromStageIndex is { } resumeStage)
         {
             if (command.ChainRunId is not { } existingRunId)
@@ -137,7 +156,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         }
         else
         {
-            chainRun = ChainRun.Start(chain, names, chainStartedAt, command.ChainRunId);
+            // Reserve before side effects and before creating any durable chain-run row.
+            // A replay is a new billable execution; a continuation does not reserve again.
+            chainRun = ChainRun.Start(chain, names, chainStartedAt, executionId);
             await _runs.AddAsync(chainRun, ct);
             await _uow.SaveChangesAsync(ct);
         }
@@ -442,7 +463,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 await dispatchGate.WaitAsync(ct);
                 try
                 {
-                    run = await _jobRunner.RunAsync(stage.JobIds[branchIndex], stepPayload, stepRunId, ct: ct);
+                    run = await _jobRunner.RunWorkflowStepAsync(stage.JobIds[branchIndex], stepPayload, stepRunId, ct);
                 }
                 finally
                 {
@@ -692,7 +713,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             JobRunDetailView run;
             try
             {
-                run = await _jobRunner.RunAsync(stage.JobIds[branchIndex], stagePayload, stepRunId, ct: ct);
+                run = await _jobRunner.RunWorkflowStepAsync(stage.JobIds[branchIndex], stagePayload, stepRunId, ct);
             }
             finally
             {

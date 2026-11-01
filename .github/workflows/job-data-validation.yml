@@ -1,10 +1,14 @@
 name: Validate job and workflow changes
 
 on:
+  push:
+    branches:
+      - codex/saas-run-plans-managed-oauth
   pull_request:
     branches:
       - main
       - codex/workflow-first-architecture
+      - codex/job-data-saas-foundation
   workflow_dispatch:
 
 permissions:
@@ -19,6 +23,22 @@ jobs:
     name: .NET build and data-contract checks
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: placecontext_ci
+          POSTGRES_PASSWORD: placecontext_ci
+          POSTGRES_DB: placecontext_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U placecontext_ci -d placecontext_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PLACECONTEXT_TEST_POSTGRES: "Host=localhost;Port=5432;Database=placecontext_ci;Username=placecontext_ci;Password=placecontext_ci"
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -42,13 +62,22 @@ jobs:
         run: |
           dotnet test tests/PlaceContext.Application.Tests/PlaceContext.Application.Tests.csproj \
             --configuration Release --no-restore \
-            --filter "FullyQualifiedName~WorkflowReadinessTests|FullyQualifiedName~JobChainTests"
+            --filter "FullyQualifiedName~WorkflowReadinessTests|FullyQualifiedName~Updating_a_workflow_rejects_stale_editor_revisions|FullyQualifiedName~Workflow_domain_keeps_its_loaded_revision_across_mutations"
 
       - name: Run job template and editor contracts
         run: |
           dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj \
             --configuration Release --no-restore \
-            --filter "FullyQualifiedName~JobTemplateCatalogTests|FullyQualifiedName~DataWorkflowSaasFoundationTests|FullyQualifiedName~WorkflowConditionalPathTests"
+            --filter "FullyQualifiedName~JobTemplateCatalogTests|FullyQualifiedName~DataWorkflowSaasFoundationTests|FullyQualifiedName~WorkflowConditionalPathTests|FullyQualifiedName~ManagedWorkflowQueueContractTests|FullyQualifiedName~ManagedJobSubmissionContractTests|FullyQualifiedName~RpcChainIngestionContractTests"
+
+      - name: Validate SaaS allowance, signed billing and OAuth
+        run: |
+          dotnet test tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj \
+            --configuration Release --no-restore \
+            --filter "FullyQualifiedName~StripeBillingSecurityTests|FullyQualifiedName~ManagedOAuthProtocolTests|FullyQualifiedName~RunAllowancePostgresTests|FullyQualifiedName~ChainQueueTests|FullyQualifiedName~ManagedJobSubmissionPostgresTests|FullyQualifiedName~ExecutionCapacityPostgresTests|FullyQualifiedName~KubernetesTenantRuntimeTests|FullyQualifiedName~StripeBillingWebhookPostgresTests|FullyQualifiedName~ReplayQueuePostgresTests"
+          dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj \
+            --configuration Release --no-restore \
+            --filter "FullyQualifiedName~JobTemplateCatalogTests"
 
       - name: Run exact data-quality job source tests
         run: |

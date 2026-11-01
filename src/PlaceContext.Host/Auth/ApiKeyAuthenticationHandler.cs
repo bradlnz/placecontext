@@ -37,7 +37,7 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAu
     /// <summary>Fixed subject id for every API-key-authenticated request. Reserved (not a real user row) —
     /// chosen away from <see cref="Guid.Empty"/> so it can't collide with an uninitialized/default id
     /// elsewhere in the system.</summary>
-    public static readonly Guid PrincipalId = Guid.Parse("00000000-0000-0000-0000-00000000a9a9");
+    public static readonly Guid PrincipalId = TrustedServicePrincipals.ManagementApiUserId;
 
     private readonly IConfiguration _config;
 

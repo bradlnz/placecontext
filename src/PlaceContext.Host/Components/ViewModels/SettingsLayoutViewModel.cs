@@ -13,6 +13,8 @@ public sealed class SettingsLayoutViewModel : PageViewModel
         new("Artifacts", "artifacts"),
         new("Communications", "communications"),
         new("Models", "models"),
+        new("Connections", "connections"),
+        new("Billing", "billing"),
         new("MCP servers", "mcp"),
         new("Locality", "locality"),
         new("Backup", "backup"),

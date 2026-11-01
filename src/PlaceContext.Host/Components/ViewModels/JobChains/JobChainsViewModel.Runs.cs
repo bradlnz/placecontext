@@ -225,23 +225,45 @@ public sealed partial class JobChainsViewModel
     {
         Message = null;
         var chainRunId = Guid.NewGuid();
-        var err = _ops.TryRun(
-            ProjectId,
-            $"Run workflow — {chain.Name}",
-            $"/observability?tab=workflows&workflowRun={chainRunId}",
-            async (sp, ct) =>
-            {
-                var result = await sp.GetRequiredService<PlaceContextService>()
-                    .RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
-                return $"workflow finished — {result.Status}";
-            },
-            correlationKey: RunStatusWatchService.ChainRunKey(chainRunId)
-        );
-        if (err is not null)
+        if (_managedHosting)
         {
-            Message = err;
-            NotifyStateChanged();
-            return;
+            try
+            {
+                if (_submissions is null)
+                    throw new InvalidOperationException("Managed workflow submissions are not configured.");
+                var receipt = await _submissions.EnqueueAsync(ProjectId, chain.Id, payload,
+                    idempotencyKey: "portal:" + chainRunId.ToString("N"),
+                    stepPayloadOverrides: stepOverrides);
+                chainRunId = receipt.ChainRunId;
+                _pendingSubmissionId = receipt.TrackingId;
+            }
+            catch (Exception ex)
+            {
+                Message = ex.Message;
+                NotifyStateChanged();
+                return;
+            }
+        }
+        else
+        {
+            var err = _ops.TryRun(
+                ProjectId,
+                $"Run workflow — {chain.Name}",
+                $"/observability?tab=workflows&workflowRun={chainRunId}",
+                async (sp, ct) =>
+                {
+                    var result = await sp.GetRequiredService<PlaceContextService>()
+                        .RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
+                    return $"workflow finished — {result.Status}";
+                },
+                correlationKey: RunStatusWatchService.ChainRunKey(chainRunId)
+            );
+            if (err is not null)
+            {
+                Message = err;
+                NotifyStateChanged();
+                return;
+            }
         }
 
         RunPromptChain = null;
@@ -250,7 +272,9 @@ public sealed partial class JobChainsViewModel
         RunAttachment = "";
         PendingChainRunId = chainRunId;
         PendingChainId = chain.Id;
-        Message = $"Run of {chain.Name} started — follow it in the notifications bell.";
+        Message = _managedHosting
+            ? $"Run of {chain.Name} queued durably — it will appear here when a worker starts it."
+            : $"Run of {chain.Name} started — follow it in the notifications bell.";
 
         // Open the editor and switch to the runs tab so the user sees the run appear live.
         EditChainId = chain.Id;
@@ -399,6 +423,7 @@ public sealed partial class JobChainsViewModel
                 if (ChainRuns.FirstOrDefault(r => r.Id == pending) is { } pendingRun)
                 {
                     OpenRun = pendingRun;
+                    _pendingSubmissionId = null;
                     FollowNewest = true;
                     await RefreshStepOutputAsync(pendingRun);
                     if (IsTerminal(pendingRun.Status))
@@ -407,8 +432,20 @@ public sealed partial class JobChainsViewModel
                         PendingChainId = null;
                     }
                 }
-                // Keep polling until the pending run is found and terminal.
-                StartPolling(chainId);
+                else if (_pendingSubmissionId is { } receiptId && _submissions is not null)
+                {
+                    var receipt = await _submissions.GetAsync(receiptId);
+                    if (receipt is null || receipt.Status is "Failed" or "Expired" or "Cancelled")
+                    {
+                        Message = receipt?.Error ?? "This queued workflow could not be started.";
+                        PendingChainRunId = null;
+                        PendingChainId = null;
+                        _pendingSubmissionId = null;
+                    }
+                }
+                // Keep polling until a queued run appears or the submission fails.
+                if (PendingChainRunId is not null)
+                    StartPolling(chainId);
             }
             else if (OpenRun is { } current)
             {

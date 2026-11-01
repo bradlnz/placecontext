@@ -22,6 +22,22 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<PlaceContextOptions>(configuration.GetSection("PlaceContext"));
+        services.Configure<PlaceContext.Application.Billing.StripeRunBillingOptions>(
+            configuration.GetSection("PlaceContext:Stripe"));
+        services.Configure<PlaceContext.Application.Billing.RunBillingDeploymentOptions>(
+            configuration.GetSection("PlaceContext:SaaS"));
+        services.Configure<PlaceContext.Application.Connections.ManagedMicrosoftOAuthOptions>(
+            configuration.GetSection("PlaceContext:ManagedOAuth:Microsoft"));
+        services.AddScoped<PlaceContext.Application.Billing.IRunAllowance, Billing.DbRunAllowance>();
+        services.AddScoped<PlaceContext.Application.Billing.IExecutionCapacity, Billing.DbExecutionCapacity>();
+        services.AddScoped<PlaceContext.Application.Billing.IRunBillingPortal, Billing.StripeRunBillingPortal>();
+        services.AddScoped<Billing.StripeRunBillingWebhook>();
+        services.AddScoped<PlaceContext.Application.Connections.IManagedOAuthConnections, Connections.ManagedMicrosoftOAuthConnections>();
+        services.AddHttpClient("stripe-billing", client => client.Timeout = TimeSpan.FromSeconds(25))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddHttpClient("managed-microsoft-oauth", client => client.Timeout = TimeSpan.FromSeconds(25))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+
         services.Configure<OpenSearch.OpenSearchOptions>(
             configuration.GetSection("PlaceContext:OpenSearch"));
 
@@ -253,6 +269,7 @@ public static class DependencyInjection
         // service (advisory-lock-elected schedule scan + atomic queue drain — correct across replicas).
         services.AddSingleton<ICronSchedule, Scheduling.CronosCronSchedule>();
         services.AddScoped<IJobRunQueue, Scheduling.DbJobRunQueue>();
+        services.AddScoped<IJobRunSubmissionQueue, Scheduling.DbJobRunSubmissionQueue>();
         services.AddScoped<IJobChainSubmissionQueue, Scheduling.DbJobChainSubmissionQueue>();
         services.AddScoped<Scheduling.DbChainQueueService>();
         services.AddScoped<IChainQueueService>(sp => sp.GetRequiredService<Scheduling.DbChainQueueService>());
@@ -260,6 +277,7 @@ public static class DependencyInjection
         services.AddHostedService<Scheduling.TriggerSchedulerService>();
         services.AddHostedService<Scheduling.ChainContinuationWorker>();
         services.AddHostedService<Scheduling.RpcChainSubmissionWorker>();
+        services.AddHostedService<Scheduling.RpcJobSubmissionWorker>();
 
         // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
         // worker (generation can be slow; the portal only enqueues and reads stored charts).
@@ -322,6 +340,7 @@ public static class DependencyInjection
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
         EnsureRpcChainSubmissionSchema(db);
+        EnsureRpcJobSubmissionSchema(db);
         EnsureWorkerNetworkingSchema(db);
         EnsureQemuReplaySchema(db);
         db.Database.ExecuteSqlRaw(DbQemuLoginStore.Schema);
@@ -385,6 +404,34 @@ public static class DependencyInjection
             """);
     }
 
+    private static void EnsureRpcJobSubmissionSchema(AppDbContext db)
+    {
+        db.Database.ExecuteSqlRaw("""
+            CREATE TABLE IF NOT EXISTS rpc_job_submissions (
+                "Id" uuid PRIMARY KEY,
+                "TenantId" uuid NOT NULL,
+                "ProjectId" uuid NOT NULL,
+                "JobId" uuid NOT NULL,
+                "RunId" uuid NOT NULL,
+                "InputPayload" text NULL,
+                "Status" text NOT NULL,
+                "Attempts" integer NOT NULL DEFAULT 0,
+                "LastError" text NULL,
+                "SubmittedAt" timestamptz NOT NULL,
+                "NextAttemptAt" timestamptz NOT NULL,
+                "StartedAt" timestamptz NULL,
+                "FinishedAt" timestamptz NULL,
+                "ClaimedBy" text NULL,
+                "ClaimedAt" timestamptz NULL,
+                "HeartbeatAt" timestamptz NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_rpc_job_submissions_tenant_run
+                ON rpc_job_submissions ("TenantId", "RunId");
+            CREATE INDEX IF NOT EXISTS ix_rpc_job_submissions_ready
+                ON rpc_job_submissions ("Status", "NextAttemptAt", "SubmittedAt");
+            """);
+    }
+
     private static void EnsureRpcChainSubmissionSchema(AppDbContext db)
     {
         // This operational queue deliberately lives outside the EF aggregate model: workers claim it
@@ -400,6 +447,10 @@ public static class DependencyInjection
                 "ChainRunId" uuid NOT NULL UNIQUE,
                 "IdempotencyKey" text NULL,
                 "InputPayload" text NULL,
+                "StepPayloadOverrides" text NULL,
+                "RequestDigest" text NULL,
+                "ReplayOfRunId" uuid NULL,
+                "ReplayFromStepIndex" integer NULL,
                 "SubmitterUserId" uuid NOT NULL,
                 "SubmitterRole" text NOT NULL,
                 "Status" text NOT NULL,
@@ -432,7 +483,11 @@ public static class DependencyInjection
             ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "DeliveryDelaySeconds" integer NOT NULL DEFAULT 0;
             ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "MaxAttempts" integer NOT NULL DEFAULT 3;
             ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "RetryDelaySeconds" integer NOT NULL DEFAULT 3;
-            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "MaxAttempts" integer NOT NULL DEFAULT 3;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "StepPayloadOverrides" text NULL;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "RequestDigest" text NULL;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "ReplayOfRunId" uuid NULL;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "ReplayFromStepIndex" integer NULL;
+             ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "MaxAttempts" integer NOT NULL DEFAULT 3;
             ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "RetryDelaySeconds" integer NOT NULL DEFAULT 3;
             ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "MessageTtlSeconds" integer NULL;
             ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "PreviousRunIds" uuid[] NOT NULL DEFAULT ARRAY[]::uuid[];

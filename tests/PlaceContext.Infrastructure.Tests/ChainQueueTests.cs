@@ -45,6 +45,45 @@ public sealed class ChainQueueTests
             DbChainQueueService Service(AppDbContext context, FakeCurrentTenant owner) => new(context, owner, permissions,
                 new DbJobChainSubmissionQueue(context, owner, new CurrentUser(), encryptor, permissions), encryptor);
             var queues = Service(db, tenant);
+            var submit = new DbJobChainSubmissionQueue(
+                db, tenant, new CurrentUser(), encryptor, permissions);
+            var stepValues = new Dictionary<int, string>
+            {
+                [0] = "{\"account\":\"Ada\"}",
+                [2] = "{\"approved\":true}"
+            };
+            var portalRun = await submit.EnqueueAsync(project, chain, null,
+                "portal:test-durable-overrides", stepPayloadOverrides: stepValues);
+            var repeated = await submit.EnqueueAsync(project, chain, null,
+                "portal:test-durable-overrides", stepPayloadOverrides: stepValues);
+            Assert.Equal(portalRun.TrackingId, repeated.TrackingId);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                submit.EnqueueAsync(project, chain, "{\"different\":true}",
+                    "portal:test-durable-overrides", stepPayloadOverrides: stepValues));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                submit.EnqueueAsync(project, chain, null, "portal:test-durable-overrides",
+                    stepPayloadOverrides: new Dictionary<int, string> { [0] = "{}" }));
+            await using (var sql = new NpgsqlCommand(
+                "SELECT \"StepPayloadOverrides\" FROM rpc_chain_submissions WHERE \"Id\" = @id", connection))
+            {
+                sql.Parameters.AddWithValue("id", portalRun.TrackingId);
+                var persisted = (string?)await sql.ExecuteScalarAsync();
+                Assert.NotNull(persisted);
+                var recovered = JsonSerializer.Deserialize<Dictionary<int, string>>(
+                    encryptor.Unprotect(persisted!, IDataEncryptor.Purpose.RpcChainSubmission));
+                Assert.Equal(stepValues, recovered);
+            }
+            await Assert.ThrowsAsync<ArgumentException>(() =>
+                submit.EnqueueAsync(Guid.NewGuid(), chain, null));
+            // Scrub completed payloads; retries must still validate the saved digest.
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE rpc_chain_submissions SET \"Status\" = 'Succeeded', \"FinishedAt\" = now(), \"InputPayload\" = NULL, \"StepPayloadOverrides\" = NULL WHERE \"Id\" = {portalRun.TrackingId}");
+            var afterCompletion = await submit.EnqueueAsync(project, chain, null,
+                "portal:test-durable-overrides", stepPayloadOverrides: stepValues);
+            Assert.Equal(portalRun.TrackingId, afterCompletion.TrackingId);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                submit.EnqueueAsync(project, chain, null, "portal:test-durable-overrides",
+                    stepPayloadOverrides: new Dictionary<int, string> { [0] = "{}" }));
             var queue = await queues.SaveAsync(null, project, chain, "incoming", true);
             var second = await queues.SaveAsync(null, project, chain, "other", true);
             await Assert.ThrowsAsync<ArgumentException>(() => queues.SaveAsync(null, project, chain, "invalid TTL", true, 0));

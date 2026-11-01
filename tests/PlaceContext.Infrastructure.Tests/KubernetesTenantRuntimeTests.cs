@@ -47,6 +47,19 @@ public sealed class KubernetesTenantRuntimeTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => new KubernetesTenantRuntime(client, cache).EnsureAsync(Guid.NewGuid()));
     }
 
+    [Theory]
+    [InlineData("free", "20", "16", "32Gi")]
+    [InlineData("basic", "8", "4", "8Gi")]
+    [InlineData("standard", "24", "16", "32Gi")]
+    [InlineData("enterprise", "80", "64", "128Gi")]
+    public void Managed_tiers_receive_bounded_resource_quotas(string tier, string pods, string cpu, string memory)
+    {
+        var quota = KubernetesTenantRuntime.BuildResourceQuota(tier);
+        Assert.Equal(pods, quota.Spec.Hard["pods"].ToString());
+        Assert.Equal(cpu, quota.Spec.Hard["limits.cpu"].ToString());
+        Assert.Equal(memory, quota.Spec.Hard["limits.memory"].ToString());
+    }
+
     [Fact]
     public async Task Unresolved_tenants_cannot_start_or_cancel_cluster_workloads()
     {
@@ -73,6 +86,12 @@ public sealed class KubernetesTenantRuntimeTests
                 var key = path + "/" + body["metadata"]!["name"];
                 if (!Resources.TryAdd(key, body)) return Reply(HttpStatusCode.Conflict, new());
                 return Reply(HttpStatusCode.Created, body);
+            }
+            if (request.Method == HttpMethod.Put)
+            {
+                var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject();
+                Resources[path] = body;
+                return Reply(HttpStatusCode.OK, body);
             }
             var value = Resources[path].DeepClone().AsObject();
             if (Tamper == "owner" && path.StartsWith("/api/v1/namespaces/"))
