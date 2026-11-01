@@ -241,11 +241,16 @@ public class JobChainTests
 
         Assert.Equal("Succeeded", view.Status);
         Assert.Equal(2, view.Steps.Count);
-        // First step gets the caller's payload; second gets the first's artifact.
+        // Downstream stages retain accumulated JSON context, including the
+        // caller inputs, so human gates can inspect earlier evidence.
         Assert.Equal("{\"from\":\"caller\"}", dispatcher.Payloads[0]);
-        Assert.Equal("{\"rows\":3}", dispatcher.Payloads[1]);
-        // The chain's result is the last step's output.
-        Assert.Equal("{\"report\":\"done\"}", view.FinalOutput);
+        using var secondInput = System.Text.Json.JsonDocument.Parse(dispatcher.Payloads[1]!);
+        Assert.Equal("caller", secondInput.RootElement.GetProperty("from").GetString());
+        Assert.Equal(3, secondInput.RootElement.GetProperty("rows").GetInt32());
+        using var finalContext = System.Text.Json.JsonDocument.Parse(view.FinalOutput!);
+        Assert.Equal("caller", finalContext.RootElement.GetProperty("from").GetString());
+        Assert.Equal(3, finalContext.RootElement.GetProperty("rows").GetInt32());
+        Assert.Equal("done", finalContext.RootElement.GetProperty("report").GetString());
     }
 
     [Fact]
@@ -293,8 +298,16 @@ public class JobChainTests
 
         await RunHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
 
-        Assert.Equal("{\"total\":10}", dispatcher.Payloads[1]);              // reduce wins over shards
-        Assert.Equal("[{\"n\":1},\"plain text\"]", dispatcher.Payloads[2]);  // shards → JSON array, text JSON-encoded
+        // Reduce wins over shards; no "previous": null is injected for the
+        // first stage of a workflow started without an upstream payload.
+        Assert.Equal("{\"total\":10}", dispatcher.Payloads[1]);
+        // Multiple shard outputs appear in a "branches" context envelope.
+        using var wrapped = System.Text.Json.JsonDocument.Parse(dispatcher.Payloads[2]!);
+        Assert.Equal(10, wrapped.RootElement.GetProperty("total").GetInt32());
+        var branches = wrapped.RootElement.GetProperty("branches");
+        Assert.Equal(2, branches.GetArrayLength());
+        Assert.Equal(1, branches[0].GetProperty("n").GetInt32());
+        Assert.Equal("plain text", branches[1].GetString());
     }
 
     [Fact]
@@ -670,10 +683,16 @@ public class JobChainTests
         var view = await RunHandler(chains, jobs, dispatcher).HandleAsync(new RunJobChainCommand(chain.Id));
 
         Assert.Equal("Succeeded", view.Status);
-        // The join (4th dispatched job) received a JSON array of both branches' outputs, in branch order.
+        // The join receives both branches in-order in the cumulative context.
         var joinPayload = dispatcher.Payloads[dispatcher.DispatchedJobIds.IndexOf(join.Id)];
-        Assert.Equal("[{\"branch\":1},{\"branch\":2}]", joinPayload);
-        Assert.Equal("{\"joined\":true}", view.FinalOutput);
+        using var input = System.Text.Json.JsonDocument.Parse(joinPayload!);
+        var branches = input.RootElement.GetProperty("branches");
+        Assert.Equal(2, branches.GetArrayLength());
+        Assert.Equal(1, branches[0].GetProperty("branch").GetInt32());
+        Assert.Equal(2, branches[1].GetProperty("branch").GetInt32());
+        using var final = System.Text.Json.JsonDocument.Parse(view.FinalOutput!);
+        Assert.True(final.RootElement.GetProperty("joined").GetBoolean());
+        Assert.Equal(2, final.RootElement.GetProperty("branches").GetArrayLength());
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Domain.Repositories;
@@ -9,11 +10,27 @@ public sealed class JobRunner : IJobRunner
 {
     private readonly IJobRepository _jobs;
     private readonly IDispatcher _dispatcher;
+    private readonly IServiceScopeFactory? _scopes;
 
-    public JobRunner(IJobRepository jobs, IDispatcher dispatcher)
+    public JobRunner(IJobRepository jobs, IDispatcher dispatcher,
+        IServiceScopeFactory? scopes = null)
     {
         _jobs = jobs;
         _dispatcher = dispatcher;
+        _scopes = scopes;
+    }
+
+    private async Task<PlaceContext.Domain.Entities.Job?> LoadJobAsync(Guid id, CancellationToken ct)
+    {
+        if (_scopes is null)
+            return await _jobs.GetByIdAsync(id, ct); // Lightweight unit tests.
+        // A single workflow may dispatch multiple branches concurrently. The
+        // JobRunner itself is scoped to the parent handler; its injected job
+        // repository would share the parent's DbContext across parallel tasks.
+        // Resolve job metadata in an independent scope for each branch instead.
+        await using var scope = _scopes.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IJobRepository>()
+            .GetByIdAsync(id, ct);
     }
 
     public Task<JobRunDetailView> RunAsync(
@@ -29,7 +46,7 @@ public sealed class JobRunner : IJobRunner
         Guid jobId, string? inputPayload, Guid? runId, Guid? replayOfRunId,
         bool isWorkflowStep, CancellationToken ct)
     {
-        var job = await _jobs.GetByIdAsync(jobId, ct)
+        var job = await LoadJobAsync(jobId, ct)
             ?? throw new InvalidOperationException($"Job {jobId} not found.");
 
         var originalRunId = runId ?? Guid.NewGuid();

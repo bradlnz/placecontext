@@ -43,6 +43,10 @@ public sealed class ExecutionCapacityPostgresTests
             async Task<IExecutionLease> Acquire(Guid id, CancellationToken ct = default)
             {
                 await using var context = new AppDbContext(opts, owner);
+                // Simulate a real workflow handler whose DbContext already opened
+                // a PostgreSQL connection during billing before acquiring a lease.
+                // Npgsql can clear credentials from the opened connection object.
+                await context.Database.OpenConnectionAsync(ct);
                 return await new DbExecutionCapacity(context, owner,
                     Options.Create(new RunBillingDeploymentOptions { ManagedHosting = true }),
                     Options.Create(new StripeRunBillingOptions()),

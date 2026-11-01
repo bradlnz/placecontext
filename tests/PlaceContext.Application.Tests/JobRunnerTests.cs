@@ -1,7 +1,9 @@
+using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Domain.Entities;
+using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
 using Xunit;
@@ -164,6 +166,68 @@ public class JobRunnerTests
         var runner = new JobRunner(jobs, dispatcher);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public async Task Parallel_workflow_steps_use_independent_job_repositories()
+    {
+        // An actual workflow handler fans out several branches using its one
+        // scoped JobRunner. The job metadata read must not reuse that handler's
+        // DbContext; a concurrent access would throw (as PostgreSQL does).
+        var job = CreateJob();
+        var seen = new AccessCounter();
+        var services = new ServiceCollection();
+        services.AddScoped<IJobRepository>(_ => new ConcurrentReadGuardRepository(job, seen));
+        await using var provider = services.BuildServiceProvider();
+        var parentRepository = new ConcurrentReadGuardRepository(job, seen);
+        var runner = new JobRunner(parentRepository,
+            new SuccessOnlyDispatcher(), provider.GetRequiredService<IServiceScopeFactory>());
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => runner.RunWorkflowStepAsync(job.Id)));
+        Assert.All(results, result => Assert.Equal("Succeeded", result.Status));
+        Assert.Equal(8, seen.Value);
+    }
+
+    private sealed class AccessCounter { public int Value; }
+
+    private sealed class ConcurrentReadGuardRepository(Job job, AccessCounter counter) : IJobRepository
+    {
+        private int _inFlight;
+        public async Task<Job?> GetByIdAsync(Guid id, CancellationToken ct = default)
+        {
+            if (Interlocked.Increment(ref _inFlight) != 1)
+            {
+                Interlocked.Decrement(ref _inFlight);
+                throw new InvalidOperationException("Concurrent job reads shared one scoped repository.");
+            }
+            try
+            {
+                await Task.Delay(30, ct);
+                Interlocked.Increment(ref counter.Value);
+                return id == job.Id ? job : null;
+            }
+            finally { Interlocked.Decrement(ref _inFlight); }
+        }
+
+        public Task AddAsync(Job item, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task UpdateAsync(Job item, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task RemoveAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyDictionary<Guid, string>> GetNamesAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct = default)
+            => throw new NotSupportedException();
+        public Task<IReadOnlyList<Job>> ListForProjectAsync(Guid projectId, CancellationToken ct = default)
+            => throw new NotSupportedException();
+    }
+
+    private sealed class SuccessOnlyDispatcher : IDispatcher
+    {
+        public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
+        {
+            if (command is not RunJobCommand run) throw new NotSupportedException();
+            return Task.FromResult((TResult)(object)DetailView(run.RunId ?? Guid.NewGuid(), "Succeeded"));
+        }
+        public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class RecordingDispatcher : IDispatcher
