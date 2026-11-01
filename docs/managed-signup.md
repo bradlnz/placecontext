@@ -37,6 +37,11 @@ PlaceContext__Stripe__BasicPriceId=<configured-price-id>
 PlaceContext__Stripe__StandardPriceId=<configured-price-id>
 \`\`\`
 
+The shared apex allows only its login/signup forms, health checks and the
+public Blazor hub (which still enforces the page authorization policies).
+Requests to workspace data APIs, billing and the signup ticket-completion
+endpoint must resolve a real tenant subdomain.
+
 The sender uses a **platform-owned** Postmark transaction stream; it does not
 depend on a tenant's yet-to-be-created communication preferences. Its credentials
 must not be committed or put into sample env files. Configure verified sender

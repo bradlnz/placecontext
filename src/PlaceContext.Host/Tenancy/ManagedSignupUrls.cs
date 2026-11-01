@@ -49,8 +49,14 @@ public static class ManagedSignupUrls
     private static bool ManagedWorkspaceSlugInvalid(string slug) =>
         PlaceContext.Infrastructure.Auth.ManagedWorkspaceSignup.ValidateSlug(slug) is not null;
 
+    // Public UI infrastructure routes are allowed only on the canonical apex.
+    // They expose no workspace data: resource assets are served earlier by
+    // static-file middleware, while the Blazor circuit still enforces per-page
+    // authorization. Tenant APIs and signup completion remain tenant-scoped.
     public static bool IsPublicApexPath(PathString path) =>
-        path.StartsWithSegments("/signup")
+        path.Equals("/healthz", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWithSegments("/_blazor")
+        || path.StartsWithSegments("/signup")
         || path.Equals("/login", StringComparison.OrdinalIgnoreCase)
         || path.Equals("/locked", StringComparison.OrdinalIgnoreCase)
         || path.Equals("/auth/workspace", StringComparison.OrdinalIgnoreCase)
