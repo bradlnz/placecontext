@@ -51,7 +51,6 @@ public sealed class RpcChainIngestionContractTests
         Assert.Contains("LoadSubmitterAsync", worker);
         Assert.Contains("stepOverrides", worker);
         Assert.Contains("ReplayJobChainCommand", worker);
-        Assert.Contains("ReplayOriginalRunId", queue);
         Assert.Contains("submission.\"StepPayloadOverrides\"", worker);
     }
 
@@ -69,6 +68,7 @@ public sealed class RpcChainIngestionContractTests
         Assert.Contains("ON CONFLICT (\"TenantId\", \"IdempotencyKey\")", queue);
         Assert.Contains("_encryptor.Protect(inputPayload", queue);
         Assert.Contains("protectedOverrides", queue);
+        Assert.Contains("ReplayOriginalRunId", queue);
         Assert.Contains("ADD COLUMN IF NOT EXISTS \"StepPayloadOverrides\"", infrastructure);
     }
 
