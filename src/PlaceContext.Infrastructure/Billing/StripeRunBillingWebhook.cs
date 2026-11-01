@@ -100,7 +100,7 @@ public sealed class StripeRunBillingWebhook(AppDbContext db, IOptions<StripeRunB
         var subscription = TryString(obj, "id");
         var status = TryString(obj, "status") ?? "inactive";
         // Match the exact subscription item and its period to an operator-configured
-        // entitlement. Enterprise prices and run quotas are bound to a specific tenant.
+        // entitlement. Enterprise prices and admission rates are bound to a specific tenant.
         var matches = obj.GetProperty("items").GetProperty("data").EnumerateArray()
             .Select(item => (Item: item, Price: TryString(item.GetProperty("price"), "id")))
             .Where(item => settings.Value.EntitlementForPrice(item.Price, tenantId) is not null)
@@ -113,7 +113,6 @@ public sealed class StripeRunBillingWebhook(AppDbContext db, IOptions<StripeRunB
             throw new InvalidOperationException("Run plan subscriptions must have quantity one.");
         var entitlement = settings.Value.EntitlementForPrice(matches[0].Price, tenantId)!;
         var plan = entitlement.Plan;
-        var includedRuns = entitlement.IncludedRuns;
         var start = Unix(matchedItem, "current_period_start")
             ?? Unix(obj, "current_period_start")
             ?? throw new InvalidOperationException("Subscription period start missing.");
@@ -126,12 +125,12 @@ public sealed class StripeRunBillingWebhook(AppDbContext db, IOptions<StripeRunB
         var entitlementStatus = status is "active" or "trialing" ? status : "inactive";
 
         // Signed event, known price ID, verified tenant ID, monotonic timestamp; no
-        // self-service setting endpoint can increase IncludedRuns.
+        // self-service endpoint can change paid entitlements.
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO tenant_run_plans ("TenantId", "Plan", "Status", "IncludedRuns",
                 "UsedRuns", "PeriodStart", "PeriodEnd", "StripeCustomerId",
                 "StripeSubscriptionId", "LastStripeEventCreated")
-            VALUES ({tenantId}, {plan}, {entitlementStatus}, {includedRuns}, {0},
+            VALUES ({tenantId}, {plan}, {entitlementStatus}, {RunPlans.Unlimited}, {0},
                 {start}, {end}, {customer}, {subscription}, {created})
             ON CONFLICT ("TenantId") DO UPDATE SET
                 "Plan" = EXCLUDED."Plan",

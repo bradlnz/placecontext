@@ -6,15 +6,21 @@ public interface IRunBillingPortal
     Task<Uri> PortalAsync(Uri returnBase, CancellationToken ct = default);
 }
 
-/// <summary>Operator-controlled enterprise contract: the signed Stripe subscription must use
-/// the exact price and tenant association provisioned for this customer.</summary>
+/// <summary>Host-only setting: Developer Edition is self-hosted, not an unlimited
+/// free sandbox on the paid public SaaS instance.</summary>
+public sealed class RunBillingDeploymentOptions
+{
+    public bool ManagedHosting { get; set; }
+}
+
+/// <summary>Tenant-bound Enterprise contract for signed Stripe subscriptions.</summary>
 public sealed class EnterpriseBillingContract
 {
     public string PriceId { get; set; } = "";
-    public int IncludedRuns { get; set; }
+    public int MaxStartsPerMinute { get; set; }
 }
 
-public sealed record StripeRunEntitlement(string Plan, int IncludedRuns);
+public sealed record StripeRunEntitlement(string Plan);
 
 public sealed class StripeRunBillingOptions
 {
@@ -26,8 +32,7 @@ public sealed class StripeRunBillingOptions
     public Dictionary<string, EnterpriseBillingContract> EnterpriseContracts { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
 
-    // Accept existing configured Stripe prices for subscriptions created before these tiers.
-    // Never expose these legacy products in new Checkout.
+    // Legacy prices remain valid for pre-existing subscriptions but never for new Checkout.
     public string StarterPriceId { get; set; } = "";
     public string GrowthPriceId { get; set; } = "";
     public string BusinessPriceId { get; set; } = "";
@@ -36,25 +41,30 @@ public sealed class StripeRunBillingOptions
     {
         RunPlans.Basic when !string.IsNullOrWhiteSpace(BasicPriceId) => BasicPriceId,
         RunPlans.Standard when !string.IsNullOrWhiteSpace(StandardPriceId) => StandardPriceId,
-        _ => null // Developer is free; Enterprise requires a sales-led contract.
+        _ => null
     };
+
+    public EnterpriseBillingContract? ContractFor(Guid tenantId)
+    {
+        if (tenantId == Guid.Empty) return null;
+        return EnterpriseContracts.TryGetValue(tenantId.ToString("D"), out var contract)
+            && contract is { MaxStartsPerMinute: > 0 }
+            && !string.IsNullOrWhiteSpace(contract.PriceId) ? contract : null;
+    }
 
     public StripeRunEntitlement? EntitlementForPrice(string? price, Guid tenantId)
     {
         if (string.IsNullOrWhiteSpace(price) || tenantId == Guid.Empty) return null;
-        if (EnterpriseContracts.TryGetValue(tenantId.ToString("D"), out var contract)
-            && contract is { IncludedRuns: > 0 } && !string.IsNullOrWhiteSpace(contract.PriceId)
-            && price == contract.PriceId)
-            return new StripeRunEntitlement(RunPlans.Enterprise, contract.IncludedRuns);
-
+        if (ContractFor(tenantId) is { } contract && price == contract.PriceId)
+            return new StripeRunEntitlement(RunPlans.Enterprise);
         if (price == BasicPriceId && !string.IsNullOrWhiteSpace(BasicPriceId)
             || price == StarterPriceId && !string.IsNullOrWhiteSpace(StarterPriceId))
-            return new StripeRunEntitlement(RunPlans.Basic, RunPlans.BasicRuns);
+            return new StripeRunEntitlement(RunPlans.Basic);
         if (price == StandardPriceId && !string.IsNullOrWhiteSpace(StandardPriceId)
             || price == GrowthPriceId && !string.IsNullOrWhiteSpace(GrowthPriceId))
-            return new StripeRunEntitlement(RunPlans.Standard, RunPlans.StandardRuns);
+            return new StripeRunEntitlement(RunPlans.Standard);
         if (price == BusinessPriceId && !string.IsNullOrWhiteSpace(BusinessPriceId))
-            return new StripeRunEntitlement("business", RunPlans.Included("business"));
+            return new StripeRunEntitlement("business");
         return null;
     }
 

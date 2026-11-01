@@ -24,6 +24,8 @@ public static class DependencyInjection
         services.Configure<PlaceContextOptions>(configuration.GetSection("PlaceContext"));
         services.Configure<PlaceContext.Application.Billing.StripeRunBillingOptions>(
             configuration.GetSection("PlaceContext:Stripe"));
+        services.Configure<PlaceContext.Application.Billing.RunBillingDeploymentOptions>(
+            configuration.GetSection("PlaceContext:SaaS"));
         services.Configure<PlaceContext.Application.Connections.ManagedMicrosoftOAuthOptions>(
             configuration.GetSection("PlaceContext:ManagedOAuth:Microsoft"));
         services.AddScoped<PlaceContext.Application.Billing.IRunAllowance, Billing.DbRunAllowance>();

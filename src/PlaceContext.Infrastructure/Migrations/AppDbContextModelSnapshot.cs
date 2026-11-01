@@ -39,13 +39,16 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<int>("IncludedRuns")
                         .HasColumnType("integer");
 
-                    b.Property<int>("UsedRuns")
-                        .HasColumnType("integer");
+                    b.Property<long>("UsedRuns")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTimeOffset>("PeriodStart")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("PeriodEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("NextDispatchAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("StripeCustomerId")
