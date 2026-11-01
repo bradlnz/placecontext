@@ -27,7 +27,7 @@ volume limit; starts that exceed admission throughput wait.
 
 - A PostgreSQL plan-row `FOR UPDATE` lock coordinates `NextDispatchAt` across replicas.
 - Basic permits at most one new start per second; Standard ten per second; Enterprise is configured per tenant.
-- Every accepted top-level execution gets an immutable ledger key in `billable_runs` and increments the 64-bit reporting counter `UsedRuns`.
+- Every accepted top-level execution gets an immutable ledger key in `billable_runs` and increments the 64-bit reporting counter `UsedRuns`. The ledger also stores the scheduled admission time, so cancelling and retrying the same execution cannot skip its original delay.
 - The old `IncludedRuns` column remains for migration compatibility but is set to **0**, meaning unlimited. It is not used to reject starts.
 - The admission delay happens in the execution handler after committing the reservation; no DB connection is held while waiting.
 - Active subscription status is rechecked after the delay; cancelled/expired paid plans do not start more work.

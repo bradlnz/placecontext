@@ -118,6 +118,47 @@ public sealed class RunAllowancePostgresTests
                     "Managed starts should be paced rather than run immediately.");
                 Assert.Equal(15, await verify.BillableRuns.CountAsync());
             }
+
+            // A cancelled handler does not throw away its scheduled start slot. A
+            // duplicate attempt must keep the original admission delay, and the
+            // accounting ledger must still contain only one row for that run id.
+            var retryRunId = Guid.NewGuid();
+            await using (var setup = new AppDbContext(opts, tenant))
+            {
+                var plan = await setup.TenantRunPlans.SingleAsync();
+                plan.NextDispatchAt = DateTimeOffset.UtcNow.AddSeconds(4);
+                await setup.SaveChangesAsync();
+            }
+            await using (var cancelledAttempt = new AppDbContext(opts, tenant))
+            {
+                using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                    new DbRunAllowance(cancelledAttempt, tenant,
+                        new FakeClock(DateTimeOffset.UtcNow)).ReserveAsync(
+                            projectId, retryRunId, "workflow", cancel.Token));
+            }
+            await using (var verify = new AppDbContext(opts, tenant))
+            {
+                var key = "workflow:" + retryRunId.ToString("N");
+                var reservation = await verify.BillableRuns.SingleAsync(r => r.RunKey == key);
+                Assert.NotNull(reservation.DispatchAfter);
+                Assert.Equal(16L, (await verify.TenantRunPlans.SingleAsync()).UsedRuns);
+                Assert.Equal(16, await verify.BillableRuns.CountAsync());
+            }
+            var retryElapsed = System.Diagnostics.Stopwatch.StartNew();
+            await using (var retry = new AppDbContext(opts, tenant))
+            {
+                await new DbRunAllowance(retry, tenant,
+                    new FakeClock(DateTimeOffset.UtcNow)).ReserveAsync(
+                        projectId, retryRunId, "workflow");
+            }
+            Assert.True(retryElapsed.Elapsed >= TimeSpan.FromMilliseconds(500),
+                "A duplicate run must not bypass its previously scheduled admission slot.");
+            await using (var verify = new AppDbContext(opts, tenant))
+            {
+                Assert.Equal(16L, (await verify.TenantRunPlans.SingleAsync()).UsedRuns);
+                Assert.Equal(16, await verify.BillableRuns.CountAsync());
+            }
         }
         finally
         {

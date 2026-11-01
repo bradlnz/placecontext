@@ -81,12 +81,6 @@ public sealed class DbRunAllowance(
             // after acquiring the row lock so the pacing cursor and counter are current.
             await db.Entry(plan).ReloadAsync(ct);
             var key = $"{kind}:{executionId:N}";
-
-            if (await db.BillableRuns.AnyAsync(r => r.RunKey == key, ct))
-            {
-                await tx.CommitAsync(ct);
-                return; // Already accounted; retries do not consume another paced start.
-            }
             if (plan.Plan == RunPlans.Developer && Hosted)
                 throw new InvalidOperationException(
                     "Developer Edition is self-hosted only. Choose a managed subscription on hosted PlaceContext.");
@@ -101,27 +95,42 @@ public sealed class DbRunAllowance(
                 throw new InvalidOperationException(
                     "This workspace does not have an active subscription period. Review its billing status.");
 
-            var startsPerMinute = RateFor(plan.Plan);
-            if (startsPerMinute > 0)
+            // A previously admitted request may have been cancelled while waiting,
+            // before its chain/job row was created. Reuse the original durable
+            // dispatch slot instead of letting a retry bypass the tenant's pace.
+            var existing = await db.BillableRuns.AsNoTracking()
+                .SingleOrDefaultAsync(r => r.RunKey == key, ct);
+            if (existing is not null)
             {
-                // Admission schedule is shared by all replicas but not a lifetime quota.
-                if (plan.NextDispatchAt is { } upcoming && upcoming > startAt)
-                    startAt = upcoming;
-                var spacing = TimeSpan.FromTicks(Math.Max(1,
-                    TimeSpan.TicksPerMinute / startsPerMinute));
-                plan.NextDispatchAt = startAt.Add(spacing);
-                spaced = true;
+                startAt = existing.DispatchAfter ?? now;
+                spaced = existing.DispatchAfter.HasValue;
+                await tx.CommitAsync(ct);
             }
-
-            plan.IncludedRuns = RunPlans.Unlimited;
-            checked { plan.UsedRuns++; }
-            db.BillableRuns.Add(new BillableRunRow
+            else
             {
-                TenantId = tenant.TenantId, RunKey = key, ProjectId = projectId,
-                Kind = kind, PeriodStart = plan.PeriodStart, ReservedAt = now
-            });
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
+                var startsPerMinute = RateFor(plan.Plan);
+                if (startsPerMinute > 0)
+                {
+                    // Admission schedule is shared by all replicas but not a lifetime quota.
+                    if (plan.NextDispatchAt is { } upcoming && upcoming > startAt)
+                        startAt = upcoming;
+                    var spacing = TimeSpan.FromTicks(Math.Max(1,
+                        TimeSpan.TicksPerMinute / startsPerMinute));
+                    plan.NextDispatchAt = startAt.Add(spacing);
+                    spaced = true;
+                }
+
+                plan.IncludedRuns = RunPlans.Unlimited;
+                checked { plan.UsedRuns++; }
+                db.BillableRuns.Add(new BillableRunRow
+                {
+                    TenantId = tenant.TenantId, RunKey = key, ProjectId = projectId,
+                    Kind = kind, PeriodStart = plan.PeriodStart, ReservedAt = now,
+                    DispatchAfter = spaced ? startAt : null
+                });
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+            }
         }
 
         // The DB lock is released before waiting. The existing RPC/scheduled queues

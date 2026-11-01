@@ -8,5 +8,7 @@ public sealed class BillableRunRow : ITenantOwned
     public Guid ProjectId { get; set; }
     public string Kind { get; set; } = "";
     public DateTimeOffset ReservedAt { get; set; }
+    /// <summary>Persisted managed admission slot; duplicate starts must wait for this same time.</summary>
+    public DateTimeOffset? DispatchAfter { get; set; }
     public DateTimeOffset PeriodStart { get; set; }
 }

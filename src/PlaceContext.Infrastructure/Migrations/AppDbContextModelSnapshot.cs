@@ -91,6 +91,9 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<DateTimeOffset>("ReservedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("DispatchAfter")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("PeriodStart")
                         .HasColumnType("timestamp with time zone");
 
