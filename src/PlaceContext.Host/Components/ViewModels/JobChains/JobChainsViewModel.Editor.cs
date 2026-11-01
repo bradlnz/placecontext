@@ -23,9 +23,13 @@ public sealed partial class JobChainsViewModel
     public string EdName { get; set; } = "";
     public string EdDescription { get; set; } = "";
     public WorkflowReadinessReport? Readiness { get; private set; }
+
+    private IReadOnlyList<JobChainStageView> SaveableStageViews() => BuildCanvasStageViews()
+        .Where(stage => stage.Jobs.Count > 0 || stage.Action is not null).ToArray();
+
     public void CheckReadiness()
     {
-        Readiness = WorkflowReadiness.Evaluate(ProjectId, BuildCanvasStageViews(), Jobs ?? []);
+        Readiness = WorkflowReadiness.Evaluate(ProjectId, SaveableStageViews(), Jobs ?? []);
         NotifyStateChanged();
     }
 
@@ -928,7 +932,7 @@ public sealed partial class JobChainsViewModel
         // Test-only/minimal callers without a catalogue still rely on server-side
         // CreateJobChainHandler.ValidateStepsAsync for authoritative job ownership.
         Readiness = Jobs is null ? null
-            : WorkflowReadiness.Evaluate(ProjectId, BuildCanvasStageViews(), Jobs);
+            : WorkflowReadiness.Evaluate(ProjectId, SaveableStageViews(), Jobs);
         if (Readiness is { Ready: false })
         {
             EditorError = "Resolve the readiness errors before saving this workflow.";
