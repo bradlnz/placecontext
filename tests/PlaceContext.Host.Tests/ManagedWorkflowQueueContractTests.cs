@@ -16,6 +16,9 @@ public sealed class ManagedWorkflowQueueContractTests
         var content = File.ReadAllText(Path.Combine(FindRoot(), "src/PlaceContext.Host/Controllers/Api/JobsController.cs"));
         Assert.Contains("AcceptedAtAction(nameof(GetWorkflowSubmission)", content);
         Assert.Contains("idempotencyKey", content);
+        Assert.Contains("AcceptedAtAction(nameof(GetWorkflowSubmission)", content);
+        Assert.Contains("replayOriginalRunId:", content);
+        Assert.Contains("replayFromStepIndex:", content);
     }
 
     private static string FindRoot()

@@ -57,7 +57,9 @@ retries. The durable handoff also preserves encrypted per-step input overrides.
 Managed management API workflow replays also create durable queue receipts:
 `POST /api/v1/workflows/{chainId}/replay` returns HTTP 202. The worker replays
 from the requested failing step, preserving original run history and charging
-only one new top-level workflow run. Individual replayed child jobs do not
+only one new top-level workflow run. Clients can provide an
+`Idempotency-Key` header to retry the same replay request without creating
+another replay run. Individual replayed child jobs do not
 consume additional billing or concurrency slots. A crash after a durable run
 has already been established is reconciled without blindly repeating side
 effects.

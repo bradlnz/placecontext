@@ -50,6 +50,8 @@ public sealed class RpcChainIngestionContractTests
         Assert.Contains("IDataEncryptor.Purpose.RpcChainSubmission", worker);
         Assert.Contains("LoadSubmitterAsync", worker);
         Assert.Contains("stepOverrides", worker);
+        Assert.Contains("ReplayJobChainCommand", worker);
+        Assert.Contains("ReplayOriginalRunId", queue);
         Assert.Contains("submission.\"StepPayloadOverrides\"", worker);
     }
 

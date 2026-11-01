@@ -202,7 +202,8 @@ public sealed class JobsController : ControllerBase
     [Authorize(Policy = Permission.JobsEdit)]
     public async Task<IActionResult> ReplayChain(
         Guid chainId,
-        [FromBody] ReplayChainRequest request)
+        [FromBody] ReplayChainRequest request,
+        [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey = null)
     {
         var ct = HttpContext.RequestAborted;
         try
@@ -221,7 +222,8 @@ public sealed class JobsController : ControllerBase
                 var receipt = await _submissions.EnqueueAsync(chain.ProjectId, chainId,
                     request.InputPayload,
                     idempotencyKey: "replay:" + request.OriginalRunId.ToString("N")
-                        + ":" + Guid.NewGuid().ToString("N"),
+                        + ":" + (string.IsNullOrWhiteSpace(idempotencyKey)
+                            ? Guid.NewGuid().ToString("N") : idempotencyKey.Trim()),
                     ct: ct, stepPayloadOverrides: request.StepPayloadOverrides,
                     replayOriginalRunId: request.OriginalRunId,
                     replayFromStepIndex: request.FromStepIndex);
