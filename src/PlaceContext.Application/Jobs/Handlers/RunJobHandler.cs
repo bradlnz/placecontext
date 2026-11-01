@@ -52,6 +52,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IJobRunHeartbeat? _heartbeat;
     private readonly IRunAllowance? _allowance;
     private readonly IManagedOAuthConnections? _managedOAuth;
+    private readonly IExecutionCapacity? _capacity;
     private WorkerNetworkPolicy? _network;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
     private IReadOnlyDictionary<string, string> _mcpEnv = new Dictionary<string, string>();
@@ -80,11 +81,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IWorkerNetworkService? networks = null,
         IJobRunHeartbeat? heartbeat = null,
         IRunAllowance? allowance = null,
-        IManagedOAuthConnections? managedOAuth = null)
+        IManagedOAuthConnections? managedOAuth = null,
+        IExecutionCapacity? capacity = null)
     {
         _heartbeat = heartbeat;
         _allowance = allowance;
         _managedOAuth = managedOAuth;
+        _capacity = capacity;
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
         _postActions = postActions;
@@ -116,6 +119,12 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var billingRunId = command.OriginalRunId ?? command.RunId ?? Guid.NewGuid();
         if (!command.IsWorkflowStep && _allowance is not null)
             await _allowance.ReserveAsync(job.ProjectId, billingRunId, "job", ct);
+        // Workflow child jobs share the parent workflow's held concurrency lease.
+        await using var capacityLease = !command.IsWorkflowStep && _capacity is not null
+            ? await _capacity.AcquireAsync(billingRunId, "job", ct) : null;
+        using var linkedCapacity = capacityLease is null ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(ct, capacityLease.LostToken);
+        if (linkedCapacity is not null) ct = linkedCapacity.Token;
 
         // OpenTelemetry: one span (and a started/completed metric pair) per run — the realtime,
         // exportable view into the jobs pipeline. Inert unless the Host wired an exporter.

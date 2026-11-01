@@ -62,6 +62,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IChainQuestionGenerator? _questions;
     private readonly IJevReviewer? _jev;
     private readonly IRunAllowance? _allowance;
+    private readonly IExecutionCapacity? _capacity;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
         IUnitOfWork uow, IClock clock, IJobRunner jobRunner,
@@ -73,7 +74,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         ILogger<RunJobChainHandler>? log = null,
         IQemuEnvironmentRunner? qemu = null, IQemuReplayStore? qemuReplay = null,
         IChainQuestionGenerator? questions = null, IJevReviewer? jev = null,
-        IRunAllowance? allowance = null)
+        IRunAllowance? allowance = null,
+        IExecutionCapacity? capacity = null)
     {
         _dataMappings = dataMappings;
         _chains = chains;
@@ -91,6 +93,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _questions = questions;
         _jev = jev;
         _allowance = allowance;
+        _capacity = capacity;
     }
 
     private readonly DataMappingIngestionService? _dataMappings;
@@ -128,6 +131,18 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
         ChainRun chainRun;
         var startStageIndex = command.ResumeFromStageIndex ?? 0;
+        var executionId = command.ChainRunId ?? Guid.NewGuid();
+        if (command.ResumeFromStageIndex is null && _allowance is not null)
+            await _allowance.ReserveAsync(chain.ProjectId, executionId, "workflow", ct);
+
+        // A paused workflow releases its capacity slot. Continuations reacquire a
+        // slot under the same run id without consuming another billable start.
+        await using var capacityLease = _capacity is null ? null
+            : await _capacity.AcquireAsync(executionId, "workflow", ct);
+        using var linkedCapacity = capacityLease is null ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(ct, capacityLease.LostToken);
+        if (linkedCapacity is not null) ct = linkedCapacity.Token;
+
         if (command.ResumeFromStageIndex is { } resumeStage)
         {
             if (command.ChainRunId is not { } existingRunId)
@@ -143,10 +158,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         {
             // Reserve before side effects and before creating any durable chain-run row.
             // A replay is a new billable execution; a continuation does not reserve again.
-            var newRunId = command.ChainRunId ?? Guid.NewGuid();
-            if (_allowance is not null)
-                await _allowance.ReserveAsync(chain.ProjectId, newRunId, "workflow", ct);
-            chainRun = ChainRun.Start(chain, names, chainStartedAt, newRunId);
+            chainRun = ChainRun.Start(chain, names, chainStartedAt, executionId);
             await _runs.AddAsync(chainRun, ct);
             await _uow.SaveChangesAsync(ct);
         }

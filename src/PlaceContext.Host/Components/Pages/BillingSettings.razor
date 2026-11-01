@@ -70,6 +70,11 @@
                                 ? "Limited by your own infrastructure"
                                 : "Start rate agreed by contract")
                     </p>
+                    @if (tier.Code is RunPlans.Basic or RunPlans.Standard)
+                    {
+                        <p class="text-3-12">Up to @RunPlans.ConcurrentRuns(tier.Code) concurrent
+                            top-level executions across the cluster</p>
+                    }
                     <p class="text-3-12">@tier.Availability</p>
                     <p class="text-3-12">@tier.Support</p>
                     <ul class="text-3-12">
@@ -111,7 +116,8 @@
         </div>
         <p class="text-3-12" style="margin-top:18px">
             Usage is metered for reporting, never volume caps. Start pacing is shared across
-            replicas but does not guarantee execution speed, concurrency, dedicated CPU or memory.
+            replicas. Concurrent top-level runs share a cluster-wide capacity limit,
+            not a monthly run cap; dedicated CPU/memory still requires an agreement.
             SLAs and resource terms require separate service agreements.
         </p>
     }

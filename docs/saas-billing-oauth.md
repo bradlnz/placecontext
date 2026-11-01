@@ -16,6 +16,13 @@ pricing. Actual prices must be configured in Stripe or agreed in signed contract
 | Standard Managed (`standard`) | $825/month | Unlimited | **600 starts/minute**, 10 per second | Shared managed; 99.9% SLA target by agreement |
 | Enterprise (`enterprise`) | From $99,000/year | Unlimited | Per-tenant contractual rate | Dedicated or customer-hosted options; up to 99.99% SLA and TAM by contract |
 
+Managed plans also enforce global concurrent top-level execution slots:
+**Basic 2**, **Standard 8**, and **Enterprise contract-specific
+`MaxConcurrentRuns`**. Workers wait for capacity; unlimited runs remain unlimited.
+Leases heartbeat through PostgreSQL, expire after a worker crash, and
+cancel work when ownership is lost. A paused human-input workflow releases its
+slot; resumption reacquires without consuming another billed run.
+
 These are **start admission rates**, not guarantees of execution completion time,
 CPU speed, memory capacity, max concurrent jobs or Kubernetes isolation.
 One top-level workflow or standalone job start is metered once; all child steps,
@@ -105,6 +112,7 @@ configure the tenant-specific Stripe price ID and positive start rate:
 ```sh
 PlaceContext__Stripe__EnterpriseContracts__11111111-1111-1111-1111-111111111111__PriceId=price_enterprise_annual
 PlaceContext__Stripe__EnterpriseContracts__11111111-1111-1111-1111-111111111111__MaxStartsPerMinute=1500
+PlaceContext__Stripe__EnterpriseContracts__11111111-1111-1111-1111-111111111111__MaxConcurrentRuns=32
 ```
 
 The GUID and Price IDs are placeholders. The enterprise subscription must carry

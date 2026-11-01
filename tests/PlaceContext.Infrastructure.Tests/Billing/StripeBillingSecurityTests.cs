@@ -69,13 +69,16 @@ public sealed class StripeBillingSecurityTests
         {
             EnterpriseContracts = new Dictionary<string, EnterpriseBillingContract>
             {
-                [tenant.ToString("D")] = new() { PriceId = "price_contract_annual", MaxStartsPerMinute = 1500 }
+                [tenant.ToString("D")] = new() { PriceId = "price_contract_annual", MaxStartsPerMinute = 1500, MaxConcurrentRuns = 32 }
             }
         };
         var entitlement = options.EntitlementForPrice("price_contract_annual", tenant);
         Assert.NotNull(entitlement);
         Assert.Equal(RunPlans.Enterprise, entitlement!.Plan);
         Assert.Equal(1500, options.ContractFor(tenant)!.MaxStartsPerMinute);
+        Assert.Equal(32, options.ContractFor(tenant)!.MaxConcurrentRuns);
+        Assert.Equal(2, RunPlans.ConcurrentRuns(RunPlans.Basic));
+        Assert.Equal(8, RunPlans.ConcurrentRuns(RunPlans.Standard));
         Assert.Null(options.EntitlementForPrice("price_contract_annual", otherTenant));
         Assert.Null(options.PriceFor(RunPlans.Enterprise));
 
