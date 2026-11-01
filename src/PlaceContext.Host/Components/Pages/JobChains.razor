@@ -188,6 +188,31 @@ else
             <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseEditor()"><AppIcon Kind="close" /></button>
         </div>
 
+        <section class="workflow-readiness" aria-label="Workflow readiness checks">
+            <div class="workflow-readiness-head">
+                <div><strong>Pre-run checks</strong><small>Inspect referenced jobs, source configuration and human gates before saving.</small></div>
+                <button type="button" class="dcbtn btn-2-8" disabled="@Vm.Saving" @onclick="Vm.CheckReadiness"><AppIcon Kind="test" /> Check</button>
+            </div>
+            @if (Vm.Readiness is { } preflight)
+            {
+                <div class="workflow-readiness-summary @(preflight.Ready ? "ready" : "blocked")" role="status">
+                    <AppIcon Kind="@(preflight.Ready ? "check" : "warning")" />
+                    @(preflight.Ready ? "Definition checks passed" : $"{preflight.ErrorCount} issues need fixing")
+                    <span>@preflight.UniqueJobCount job(s) · @preflight.StageCount stages · @preflight.WarningCount warnings</span>
+                </div>
+                @if (preflight.Findings.Count > 0)
+                {
+                    <ul class="workflow-readiness-findings">
+                        @foreach (var issue in preflight.Findings.Take(12))
+                        {
+                            <li class="@issue.Severity"><strong>@issue.Title</strong><span>@issue.Detail</span></li>
+                        }
+                    </ul>
+                }
+                <small class="workflow-readiness-note">Definition checks do not validate live credentials, source data, or future external side effects. Test jobs before production use.</small>
+            }
+        </section>
+
         @if (Vm.EditChainId.HasValue)
         {
             <div class="dctabs editor-tabs">

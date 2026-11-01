@@ -284,6 +284,11 @@ public sealed partial class JobsViewModel
     public void SelectTemplate(JobTemplate template)
     {
         SelectedTemplate = template;
+        // Templates with a supported runtime should never silently fall back to
+        // placeholder code in a different language (especially validation gates).
+        if (template.SourcesByRuntime.Count > 0
+            && !template.SourcesByRuntime.ContainsKey(SelectedTemplateRuntime))
+            SelectedTemplateRuntime = template.MapRuntimeId ?? template.SourcesByRuntime.Keys.First();
         NotifyStateChanged();
     }
 

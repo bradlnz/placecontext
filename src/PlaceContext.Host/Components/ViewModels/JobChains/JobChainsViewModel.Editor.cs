@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Workflows;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.ViewModels.Helpers;
@@ -21,6 +22,14 @@ public sealed partial class JobChainsViewModel
     public string EditorView { get; set; } = "canvas";
     public string EdName { get; set; } = "";
     public string EdDescription { get; set; } = "";
+    public WorkflowReadinessReport? Readiness { get; private set; }
+    public void CheckReadiness()
+    {
+        Readiness = WorkflowReadiness.Evaluate(ProjectId, BuildCanvasStageViews(), Jobs ?? []);
+        NotifyStateChanged();
+    }
+
+    private DateTimeOffset? _openedWorkflowUpdatedAt;
     public List<List<Guid>> EdStages { get; } = new();
     public string EdAddJobId { get; set; } = "";
 
@@ -80,6 +89,8 @@ public sealed partial class JobChainsViewModel
     // ── Editor ────────────────────────────────────────────────────────────────────────────────
     public void NewChain()
     {
+        _openedWorkflowUpdatedAt = null;
+        Readiness = null;
         EditChainId = null;
         EdName = "";
         EdDescription = "";
@@ -101,6 +112,8 @@ public sealed partial class JobChainsViewModel
         StopPolling();
         ChainRuns = null;
         EditChainId = chain.Id;
+        _openedWorkflowUpdatedAt = chain.UpdatedAt;
+        Readiness = null;
         EdName = chain.Name;
         EdDescription = chain.Description ?? "";
         EdStages.Clear();
@@ -909,6 +922,16 @@ public sealed partial class JobChainsViewModel
                 .Select(item => EdStageGates.GetValueOrDefault(item.OriginalIndex))
                 .ToList();
 
+        // Authoring preflight validates definition metadata before a revision is saved.
+        // Credential health and actual data contents must be tested by executing jobs.
+        Readiness = WorkflowReadiness.Evaluate(ProjectId, BuildCanvasStageViews(), Jobs ?? []);
+        if (!Readiness.Ready)
+        {
+            EditorError = "Resolve the readiness errors before saving this workflow.";
+            NotifyStateChanged();
+            return;
+        }
+
         Saving = true;
         try
         {
@@ -920,7 +943,8 @@ public sealed partial class JobChainsViewModel
                     flatJobIds,
                     stages,
                     stageGates,
-                    stageActions
+                    stageActions,
+                    expectedUpdatedAt: _openedWorkflowUpdatedAt
                 );
             else
                 await _svc.CreateJobChainAsync(

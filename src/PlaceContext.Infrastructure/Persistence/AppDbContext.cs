@@ -472,6 +472,9 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("job_chains");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.ProjectId);
+            // Atomic compare-and-swap at SaveChanges: a competing edit that commits
+            // after our read cannot silently replace the workflow definition.
+            e.Property(x => x.UpdatedAt).IsConcurrencyToken();
             e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 
