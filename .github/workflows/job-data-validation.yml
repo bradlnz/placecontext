@@ -68,13 +68,13 @@ jobs:
         run: |
           dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj \
             --configuration Release --no-restore \
-            --filter "FullyQualifiedName~JobTemplateCatalogTests|FullyQualifiedName~DataWorkflowSaasFoundationTests|FullyQualifiedName~WorkflowConditionalPathTests|FullyQualifiedName~ManagedWorkflowQueueContractTests|FullyQualifiedName~RpcChainIngestionContractTests"
+            --filter "FullyQualifiedName~JobTemplateCatalogTests|FullyQualifiedName~DataWorkflowSaasFoundationTests|FullyQualifiedName~WorkflowConditionalPathTests|FullyQualifiedName~ManagedWorkflowQueueContractTests|FullyQualifiedName~ManagedJobSubmissionContractTests|FullyQualifiedName~RpcChainIngestionContractTests"
 
       - name: Validate SaaS allowance, signed billing and OAuth
         run: |
           dotnet test tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj \
             --configuration Release --no-restore \
-            --filter "FullyQualifiedName~StripeBillingSecurityTests|FullyQualifiedName~ManagedOAuthProtocolTests|FullyQualifiedName~RunAllowancePostgresTests|FullyQualifiedName~ChainQueueTests"
+            --filter "FullyQualifiedName~StripeBillingSecurityTests|FullyQualifiedName~ManagedOAuthProtocolTests|FullyQualifiedName~RunAllowancePostgresTests|FullyQualifiedName~ChainQueueTests|FullyQualifiedName~ManagedJobSubmissionPostgresTests"
           dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj \
             --configuration Release --no-restore \
             --filter "FullyQualifiedName~JobTemplateCatalogTests"

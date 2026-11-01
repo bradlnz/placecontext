@@ -38,7 +38,9 @@ request. Managed Core API standalone-job launches now also create their own
 durable, encrypted and idempotent receipt, with HTTP 202 plus
 `GET /api/core/v1/projects/{projectId}/jobs/{jobId}/submissions/{trackingId}`.
 Workers preserve the run id across retries and avoid redispatch when the
-job-run record already exists. Direct manual workflow replays and other
+job-run record already exists. The Core API submission receipt and original
+run id are stable even when the caller retries an HTTP request with the same
+`RunId`. Direct manual workflow replays and other
 legacy direct-execution surfaces still need durable submission before launch.
 
 ### What the implementation actually enforces
