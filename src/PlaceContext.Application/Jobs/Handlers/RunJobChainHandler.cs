@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Billing;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Observability;
 using PlaceContext.Application.Ports;
@@ -60,6 +61,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IQemuReplayStore? _qemuReplay;
     private readonly IChainQuestionGenerator? _questions;
     private readonly IJevReviewer? _jev;
+    private readonly IRunAllowance? _allowance;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
         IUnitOfWork uow, IClock clock, IJobRunner jobRunner,
@@ -70,7 +72,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         IChainContextStore? contextStore = null,
         ILogger<RunJobChainHandler>? log = null,
         IQemuEnvironmentRunner? qemu = null, IQemuReplayStore? qemuReplay = null,
-        IChainQuestionGenerator? questions = null, IJevReviewer? jev = null)
+        IChainQuestionGenerator? questions = null, IJevReviewer? jev = null,
+        IRunAllowance? allowance = null)
     {
         _dataMappings = dataMappings;
         _chains = chains;
@@ -87,6 +90,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _qemuReplay = qemuReplay;
         _questions = questions;
         _jev = jev;
+        _allowance = allowance;
     }
 
     private readonly DataMappingIngestionService? _dataMappings;
@@ -137,7 +141,12 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         }
         else
         {
-            chainRun = ChainRun.Start(chain, names, chainStartedAt, command.ChainRunId);
+            // Reserve before side effects and before creating any durable chain-run row.
+            // A replay is a new billable execution; a continuation does not reserve again.
+            var newRunId = command.ChainRunId ?? Guid.NewGuid();
+            if (_allowance is not null)
+                await _allowance.ReserveAsync(chain.ProjectId, newRunId, "workflow", ct);
+            chainRun = ChainRun.Start(chain, names, chainStartedAt, newRunId);
             await _runs.AddAsync(chainRun, ct);
             await _uow.SaveChangesAsync(ct);
         }
@@ -442,7 +451,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 await dispatchGate.WaitAsync(ct);
                 try
                 {
-                    run = await _jobRunner.RunAsync(stage.JobIds[branchIndex], stepPayload, stepRunId, ct: ct);
+                    run = await _jobRunner.RunWorkflowStepAsync(stage.JobIds[branchIndex], stepPayload, stepRunId, ct);
                 }
                 finally
                 {
@@ -692,7 +701,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             JobRunDetailView run;
             try
             {
-                run = await _jobRunner.RunAsync(stage.JobIds[branchIndex], stagePayload, stepRunId, ct: ct);
+                run = await _jobRunner.RunWorkflowStepAsync(stage.JobIds[branchIndex], stagePayload, stepRunId, ct);
             }
             finally
             {

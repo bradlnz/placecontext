@@ -16,12 +16,18 @@ public sealed class JobRunner : IJobRunner
         _dispatcher = dispatcher;
     }
 
-    public async Task<JobRunDetailView> RunAsync(
-        Guid jobId,
-        string? inputPayload = null,
-        Guid? runId = null,
-        Guid? replayOfRunId = null,
-        CancellationToken ct = default)
+    public Task<JobRunDetailView> RunAsync(
+        Guid jobId, string? inputPayload = null, Guid? runId = null,
+        Guid? replayOfRunId = null, CancellationToken ct = default)
+        => RunCoreAsync(jobId, inputPayload, runId, replayOfRunId, false, ct);
+
+    public Task<JobRunDetailView> RunWorkflowStepAsync(
+        Guid jobId, string? inputPayload = null, Guid? runId = null, CancellationToken ct = default)
+        => RunCoreAsync(jobId, inputPayload, runId, null, true, ct);
+
+    private async Task<JobRunDetailView> RunCoreAsync(
+        Guid jobId, string? inputPayload, Guid? runId, Guid? replayOfRunId,
+        bool isWorkflowStep, CancellationToken ct)
     {
         var job = await _jobs.GetByIdAsync(jobId, ct)
             ?? throw new InvalidOperationException($"Job {jobId} not found.");
@@ -38,7 +44,8 @@ public sealed class JobRunner : IJobRunner
                 currentRunId,
                 attemptNumber == 1 ? replayOfRunId : originalRunId,
                 attemptNumber,
-                attemptNumber == 1 ? null : originalRunId), ct);
+                attemptNumber == 1 ? null : originalRunId,
+                IsWorkflowStep: isWorkflowStep), ct);
 
             // Terminal statuses other than Failed (Succeeded/Partial) stop immediately.
             if (result.Status != "Failed" || attemptNumber > job.RetryCount)

@@ -3,6 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text;
 using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Billing;
+using PlaceContext.Application.Connections;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Observability;
 using PlaceContext.Application.Ports;
@@ -48,6 +50,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IOpenSearchConnectionResolver? _openSearchConnections;
     private readonly IWorkerNetworkService? _networks;
     private readonly IJobRunHeartbeat? _heartbeat;
+    private readonly IRunAllowance? _allowance;
+    private readonly IManagedOAuthConnections? _managedOAuth;
     private WorkerNetworkPolicy? _network;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
     private IReadOnlyDictionary<string, string> _mcpEnv = new Dictionary<string, string>();
@@ -74,9 +78,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IObjectStore? objectStore = null,
         IOpenSearchConnectionResolver? openSearchConnections = null,
         IWorkerNetworkService? networks = null,
-        IJobRunHeartbeat? heartbeat = null)
+        IJobRunHeartbeat? heartbeat = null,
+        IRunAllowance? allowance = null,
+        IManagedOAuthConnections? managedOAuth = null)
     {
         _heartbeat = heartbeat;
+        _allowance = allowance;
+        _managedOAuth = managedOAuth;
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
         _postActions = postActions;
@@ -103,6 +111,11 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     {
         var job = await _jobs.GetByIdAsync(command.JobId, ct)
             ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
+        // Replays are new executions; automatic retries share the original top-level
+        // reservation, while workflow child jobs are charged to their parent workflow.
+        var billingRunId = command.OriginalRunId ?? command.RunId ?? Guid.NewGuid();
+        if (!command.IsWorkflowStep && _allowance is not null)
+            await _allowance.ReserveAsync(job.ProjectId, billingRunId, "job", ct);
 
         // OpenTelemetry: one span (and a started/completed metric pair) per run — the realtime,
         // exportable view into the jobs pipeline. Inert unless the Host wired an exporter.
@@ -159,11 +172,29 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             allowEgress = job.AllowNetworkEgress;
         }
 
+        // Explicit job opt-in to the project-scoped Microsoft Graph connection.
+        // The real bearer token is injected as a transient sandbox env variable only,
+        // never written to the persisted job source, env configuration or run snapshot.
+        if (effectiveMap.Env.TryGetValue("PC_USE_MANAGED_MICROSOFT_GRAPH", out var useGraph)
+            && string.Equals(useGraph, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!allowEgress)
+                throw new InvalidOperationException("Microsoft Graph jobs require outbound network access.");
+            if (_managedOAuth is null)
+                throw new InvalidOperationException("Managed Microsoft Graph connections are unavailable.");
+            var graphToken = await _managedOAuth.ResolveForJobAsync(job.ProjectId, ct);
+            var merged = new Dictionary<string, string>(_mcpEnv)
+            {
+                ["PC_MICROSOFT_GRAPH_ACCESS_TOKEN"] = graphToken
+            };
+            _mcpEnv = merged;
+        }
+
         // Snapshot the effective spec onto the run at start-time (captures AllowNetworkEgress too).
         _network = _networks is null ? null : await _networks.ResolveAsync(job.ProjectId, job.Id, ct);
         var snapshot = WorkloadSnapshot.From(effectiveMap, effectiveReduce, concurrency, allowEgress, _network);
         var startedAt = _clock.UtcNow;
-        var run = JobRun.Start(job.Id, job.ProjectId, startedAt, snapshot, command.RunId,
+        var run = JobRun.Start(job.Id, job.ProjectId, startedAt, snapshot, command.RunId ?? billingRunId,
             command.AttemptNumber, command.OriginalRunId);
         runSpan?.SetTag("run.id", run.Id);
         runSpan?.SetTag("run.attempt", command.AttemptNumber);

@@ -22,6 +22,19 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<PlaceContextOptions>(configuration.GetSection("PlaceContext"));
+        services.Configure<PlaceContext.Application.Billing.StripeRunBillingOptions>(
+            configuration.GetSection("PlaceContext:Stripe"));
+        services.Configure<PlaceContext.Application.Connections.ManagedMicrosoftOAuthOptions>(
+            configuration.GetSection("PlaceContext:ManagedOAuth:Microsoft"));
+        services.AddScoped<PlaceContext.Application.Billing.IRunAllowance, Billing.DbRunAllowance>();
+        services.AddScoped<PlaceContext.Application.Billing.IRunBillingPortal, Billing.StripeRunBillingPortal>();
+        services.AddScoped<Billing.StripeRunBillingWebhook>();
+        services.AddScoped<PlaceContext.Application.Connections.IManagedOAuthConnections, Connections.ManagedMicrosoftOAuthConnections>();
+        services.AddHttpClient("stripe-billing", client => client.Timeout = TimeSpan.FromSeconds(25))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddHttpClient("managed-microsoft-oauth", client => client.Timeout = TimeSpan.FromSeconds(25))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+
         services.Configure<OpenSearch.OpenSearchOptions>(
             configuration.GetSection("PlaceContext:OpenSearch"));
 

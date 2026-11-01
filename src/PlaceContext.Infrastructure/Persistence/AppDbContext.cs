@@ -18,6 +18,11 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
 {
     private readonly ICurrentTenant _tenant;
     internal DbContextOptions<AppDbContext> ContextOptions { get; }
+    public DbSet<TenantRunPlanRow> TenantRunPlans => Set<TenantRunPlanRow>();
+    public DbSet<BillableRunRow> BillableRuns => Set<BillableRunRow>();
+    public DbSet<StripeBillingEventRow> StripeBillingEvents => Set<StripeBillingEventRow>();
+    public DbSet<ManagedOAuthConnectionRow> ManagedOAuthConnections => Set<ManagedOAuthConnectionRow>();
+    public DbSet<ManagedOAuthStateRow> ManagedOAuthStates => Set<ManagedOAuthStateRow>();
     public DbSet<AgentSubscriptionRow> AgentSubscriptions => Set<AgentSubscriptionRow>();
     public DbSet<AgentRunRow> AgentRuns => Set<AgentRunRow>();
 
@@ -101,6 +106,42 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<TenantRunPlanRow>(e =>
+        {
+            e.ToTable("tenant_run_plans");
+            e.HasKey(x => x.TenantId);
+            e.HasIndex(x => x.StripeCustomerId).IsUnique().HasDatabaseName("ix_tenant_run_plans_customer");
+            e.HasIndex(x => x.StripeSubscriptionId).IsUnique().HasDatabaseName("ix_tenant_run_plans_subscription");
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
+        b.Entity<BillableRunRow>(e =>
+        {
+            e.ToTable("billable_runs");
+            e.HasKey(x => new { x.TenantId, x.RunKey });
+            e.HasIndex(x => new { x.TenantId, x.PeriodStart }).HasDatabaseName("ix_billable_runs_period");
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
+        b.Entity<StripeBillingEventRow>(e =>
+        {
+            e.ToTable("stripe_billing_events");
+            e.HasKey(x => x.EventId);
+        });
+        b.Entity<ManagedOAuthConnectionRow>(e =>
+        {
+            e.ToTable("managed_oauth_connections");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.TenantId, x.ProjectId, x.Provider }).IsUnique().HasDatabaseName("ix_managed_oauth_connection_project");
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
+        b.Entity<ManagedOAuthStateRow>(e =>
+        {
+            e.ToTable("managed_oauth_states");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.StateHash).IsUnique().HasDatabaseName("ix_managed_oauth_states_StateHash");
+            e.HasIndex(x => x.ExpiresAt).HasDatabaseName("ix_managed_oauth_states_expiry");
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
+
         b.Entity<AgentSubscriptionRow>(e =>
         {
             e.ToTable("agent_subscriptions");

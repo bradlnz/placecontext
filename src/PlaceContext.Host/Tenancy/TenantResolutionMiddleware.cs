@@ -12,10 +12,20 @@ public sealed class TenantResolutionMiddleware
     private readonly RequestDelegate _next;
     public TenantResolutionMiddleware(RequestDelegate next) => _next = next;
 
-    public async Task Invoke(HttpContext context, ITenantStore store, TenantHolder holder)
+    public async Task Invoke(HttpContext context, ITenantStore store, TenantHolder holder,
+        IConfiguration configuration)
     {
-        var host = context.Request.Host.Host;
-        var tenant = await store.GetOrCreateAsync(ResolveSlug(host), context.RequestAborted);
+        var slug = ResolveSlug(context.Request.Host.Host);
+        // Public hosted SaaS must never allocate a fresh tenant simply because a visitor
+        // typed a new subdomain. Tenant creation is a privileged onboarding operation.
+        var tenant = configuration.GetValue<bool>("PlaceContext:SaaS:RequireExplicitTenantProvisioning")
+            ? await store.FindBySlugAsync(slug, context.RequestAborted)
+            : await store.GetOrCreateAsync(slug, context.RequestAborted);
+        if (tenant is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
         CurrentTenant.Set(tenant);
         holder.Tenant = tenant;
         await _next(context);

@@ -1,0 +1,66 @@
+@page "/settings/billing"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
+@using PlaceContext.Application.Billing
+@inject BillingSettingsViewModel Vm
+@implements IDisposable
+
+<PageTitle>PlaceContext — Billing and run allowance</PageTitle>
+<div class="page">
+    <div class="page-head">
+        <div><h1 class="page-title">Billing &amp; usage</h1>
+            <p class="page-sub">Each workflow or standalone job run uses one included run. Retries,
+                continuation steps and jobs inside a workflow do not add charges.</p></div>
+        <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.LoadAsync"><AppIcon Kind="refresh" /> Refresh</button>
+    </div>
+
+    @if (Vm.Error is { } error)
+    {
+        <div class="dccard" role="alert" style="padding:16px; color:var(--bad)">@error</div>
+    }
+    @if (Vm.Current is { } plan)
+    {
+        <section class="dccard" style="padding:24px; margin:16px 0" aria-label="Current plan">
+            <span class="text-3-12">Current plan</span>
+            <h2 style="font-size:22px; margin:6px 0">@plan.Plan.ToUpperInvariant() · @plan.Status</h2>
+            <div style="font-size:30px; font-weight:700; font-variant-numeric:tabular-nums">
+                @plan.Remaining.ToString("N0") <span style="font-size:14px; font-weight:400">runs remaining</span>
+            </div>
+            <progress value="@plan.UsedRuns" max="@plan.IncludedRuns"
+                      aria-label="Included runs consumed" style="width:100%; margin-top:14px"></progress>
+            <p class="text-3-12">@plan.UsedRuns.ToString("N0") used of @plan.IncludedRuns.ToString("N0")
+                included. Period: @plan.PeriodStart.ToLocalTime().ToString("d") to @plan.PeriodEnd.ToLocalTime().ToString("d").</p>
+            @if (!plan.CanRun)
+            {
+                <p role="alert">The included allowance is exhausted or the subscription is inactive.
+                    New executions are blocked; existing run history remains available.</p>
+            }
+            <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ManageAsync">Manage subscription at Stripe</button>
+        </section>
+
+        <h2 class="title-16" style="margin:24px 0 12px">Run plans</h2>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px">
+            @foreach (var tier in new[] { ("starter", RunPlans.Included("starter")), ("growth", RunPlans.Included("growth")), ("business", RunPlans.Included("business")) })
+            {
+                <section class="dccard" style="padding:20px" @key="tier.Item1">
+                    <h3>@tier.Item1.ToUpperInvariant()</h3>
+                    <strong>@tier.Item2.ToString("N0") runs per billing period</strong>
+                    <p class="text-3-12">View the current subscription price and terms in Stripe Checkout.</p>
+                    <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="() => Vm.CheckoutAsync(tier.Item1)">
+                        Choose @tier.Item1
+                    </button>
+                </section>
+            }
+        </div>
+        <p class="text-3-12" style="margin-top:18px">
+            A run is counted when execution is accepted. Failed executions consume an allowance;
+            automatic retries and workflow child jobs do not. Upgrading does not reset the
+            current period's usage. Payments and changes to subscription status are verified server-side.
+        </p>
+    }
+</div>
+@code {
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnInitializedAsync() => Vm.LoadAsync();
+    public void Dispose() => Vm.Detach();
+}
