@@ -138,7 +138,8 @@ public class RpcChainSubmissionWorker : BackgroundService
             RETURNING submission."Id", submission."TenantId", submission."ProjectId",
                       submission."ChainId", submission."ChainRunId", submission."InputPayload",
                       submission."SubmitterUserId", submission."SubmitterRole",
-                      submission."StepPayloadOverrides"
+                      submission."StepPayloadOverrides",
+                      submission."ReplayOfRunId", submission."ReplayFromStepIndex"
             """;
         command.Parameters.AddWithValue("worker", _instanceId);
         command.Parameters.AddWithValue("batch", available);
@@ -151,7 +152,9 @@ public class RpcChainSubmissionWorker : BackgroundService
                 reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2), reader.GetGuid(3),
                 reader.GetGuid(4), reader.IsDBNull(5) ? null : reader.GetString(5),
                 reader.GetGuid(6), reader.GetString(7),
-                reader.IsDBNull(8) ? null : reader.GetString(8)));
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetGuid(9),
+                reader.IsDBNull(10) ? null : reader.GetInt32(10)));
         }
         return values;
     }
@@ -198,8 +201,19 @@ public class RpcChainSubmissionWorker : BackgroundService
                 ChainRunView result;
                 try
                 {
-                    result = await handler.HandleAsync(new RunJobChainCommand(
-                        submission.ChainId, payload, submission.ChainRunId, stepOverrides), ct);
+                    if (submission.ReplayOfRunId is { } original)
+                    {
+                        var replay = scope.ServiceProvider.GetRequiredService<
+                            ICommandHandler<ReplayJobChainCommand, ChainRunView>>();
+                        result = await replay.HandleAsync(new ReplayJobChainCommand(
+                            submission.ChainId, original, submission.ReplayFromStepIndex,
+                            payload, stepOverrides, submission.ChainRunId), ct);
+                    }
+                    else
+                    {
+                        result = await handler.HandleAsync(new RunJobChainCommand(
+                            submission.ChainId, payload, submission.ChainRunId, stepOverrides), ct);
+                    }
                 }
                 finally
                 {
@@ -362,5 +376,6 @@ public class RpcChainSubmissionWorker : BackgroundService
         string? ProtectedPayload,
         Guid SubmitterUserId,
         string SubmitterRole,
-        string? ProtectedOverrides = null);
+        string? ProtectedOverrides = null,
+        Guid? ReplayOfRunId = null, int? ReplayFromStepIndex = null);
 }

@@ -54,6 +54,14 @@ self-hosted deployments retain synchronous responses. Workers restore
 tenant and user context and keep the same run id on crash-before-start
 retries. The durable handoff also preserves encrypted per-step input overrides.
 
+Managed management API workflow replays also create durable queue receipts:
+`POST /api/v1/workflows/{chainId}/replay` returns HTTP 202. The worker replays
+from the requested failing step, preserving original run history and charging
+only one new top-level workflow run. Individual replayed child jobs do not
+consume additional billing or concurrency slots. A crash after a durable run
+has already been established is reconciled without blindly repeating side
+effects.
+
 Distributed start pacing still occurs inside a queue worker, not the HTTP
 request. Managed Core API standalone-job launches now also create their own
 durable, encrypted and idempotent receipt, with HTTP 202 plus

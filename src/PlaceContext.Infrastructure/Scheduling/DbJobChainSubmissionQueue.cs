@@ -48,7 +48,8 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         string? idempotencyKey = null,
         CancellationToken ct = default,
         Guid? queueId = null, int? messageTtlSeconds = null, int receiptRetentionDays = 30, int maxAttempts = 3, int retryDelaySeconds = 3, DateTimeOffset? availableAt = null,
-        IReadOnlyDictionary<int, string>? stepPayloadOverrides = null)
+        IReadOnlyDictionary<int, string>? stepPayloadOverrides = null,
+        Guid? replayOriginalRunId = null, int? replayFromStepIndex = null)
     {
         if (!_tenant.IsResolved)
             throw new InvalidOperationException("A tenant is required to submit a job chain.");
@@ -61,6 +62,14 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             throw new InvalidOperationException("A managed subscription must be active before queuing workflows.");
         if (!await _db.JobChains.AsNoTracking().AnyAsync(c => c.Id == chainId && c.ProjectId == projectId, ct))
             throw new ArgumentException("Workflow does not belong to this project.", nameof(chainId));
+        if (replayOriginalRunId == Guid.Empty
+            || (replayOriginalRunId is null && replayFromStepIndex is not null)
+            || replayFromStepIndex is < 0)
+            throw new ArgumentException("Replay metadata is invalid.");
+        if (replayOriginalRunId is { } originalId
+            && !await _db.ChainRuns.AsNoTracking().AnyAsync(r =>
+                r.Id == originalId && r.ChainId == chainId, ct))
+            throw new ArgumentException("Original run does not belong to this workflow.");
 
         idempotencyKey = string.IsNullOrWhiteSpace(idempotencyKey) ? null : idempotencyKey.Trim();
         if (idempotencyKey?.Length > MaxIdempotencyKeyLength)
@@ -84,6 +93,8 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         var digestSource = JsonSerializer.Serialize(new
         {
             Payload = inputPayload,
+            ReplayOriginalRunId = replayOriginalRunId,
+            ReplayFromStepIndex = replayFromStepIndex,
             Overrides = stepPayloadOverrides is { Count: > 0 }
                 ? stepPayloadOverrides.OrderBy(pair => pair.Key)
                     .Select(pair => new { pair.Key, pair.Value }).ToArray()
@@ -115,11 +126,11 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             WITH inserted AS (
                 INSERT INTO rpc_chain_submissions
                     ("Id", "TenantId", "ProjectId", "ChainId", "ChainRunId", "IdempotencyKey", "QueueId",
-                     "InputPayload", "StepPayloadOverrides", "RequestDigest", "SubmitterUserId", "SubmitterRole", "Status", "Attempts",
+                     "InputPayload", "StepPayloadOverrides", "RequestDigest", "ReplayOfRunId", "ReplayFromStepIndex", "SubmitterUserId", "SubmitterRole", "Status", "Attempts",
                      "SubmittedAt", "NextAttemptAt", "ExpiresAt", "ReceiptRetentionDays", "MessageTtlSeconds", "MaxAttempts", "RetryDelaySeconds")
                 VALUES
                     (@id, @tenant, @project, @chain, @run, @key, @queue,
-                     @payload, @overrides, @digest, @user, @role, 'Queued', 0, now(), COALESCE(@available, now()), COALESCE(@available, now()) + make_interval(secs => @ttl), @retention, @ttl, @maxAttempts, @retryDelay)
+                     @payload, @overrides, @digest, @original, @from, @user, @role, 'Queued', 0, now(), COALESCE(@available, now()), COALESCE(@available, now()) + make_interval(secs => @ttl), @retention, @ttl, @maxAttempts, @retryDelay)
                 ON CONFLICT ("TenantId", "IdempotencyKey")
                     WHERE "IdempotencyKey" IS NOT NULL
                 DO NOTHING
@@ -150,6 +161,10 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         command.Parameters.AddWithValue("payload", (object?)protectedPayload ?? DBNull.Value);
         command.Parameters.AddWithValue("overrides", (object?)protectedOverrides ?? DBNull.Value);
         command.Parameters.AddWithValue("digest", requestDigest);
+        command.Parameters.AddWithValue("original", NpgsqlTypes.NpgsqlDbType.Uuid,
+            (object?)replayOriginalRunId ?? DBNull.Value);
+        command.Parameters.AddWithValue("from", NpgsqlTypes.NpgsqlDbType.Integer,
+            (object?)replayFromStepIndex ?? DBNull.Value);
         command.Parameters.AddWithValue("user", _user.UserId);
         command.Parameters.AddWithValue("role", _user.Role);
 

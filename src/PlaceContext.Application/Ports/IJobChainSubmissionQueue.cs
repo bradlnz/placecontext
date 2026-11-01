@@ -35,7 +35,8 @@ public interface IJobChainSubmissionQueue
         string? idempotencyKey = null,
         CancellationToken ct = default,
         Guid? queueId = null, int? messageTtlSeconds = null, int receiptRetentionDays = 30, int maxAttempts = 3, int retryDelaySeconds = 3, DateTimeOffset? availableAt = null,
-        IReadOnlyDictionary<int, string>? stepPayloadOverrides = null);
+        IReadOnlyDictionary<int, string>? stepPayloadOverrides = null,
+        Guid? replayOriginalRunId = null, int? replayFromStepIndex = null);
 
     Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default);
 

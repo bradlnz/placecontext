@@ -200,20 +200,38 @@ public sealed class JobsController : ControllerBase
     [HttpPost("workflows/{chainId:guid}/replay")]
     [HttpPost("chains/{chainId:guid}/replay")]
     [Authorize(Policy = Permission.JobsEdit)]
-    public async Task<ActionResult<ChainRunView>> ReplayChain(
+    public async Task<IActionResult> ReplayChain(
         Guid chainId,
         [FromBody] ReplayChainRequest request)
     {
         var ct = HttpContext.RequestAborted;
         try
         {
+            if (_managedHosting)
+            {
+                if (_submissions is null || _chains is null)
+                    return StatusCode(503, new { error = "Managed workflow queue is not configured." });
+                var chain = await _chains.GetByIdAsync(chainId, ct);
+                var original = await _svc.GetChainRunAsync(request.OriginalRunId, ct);
+                if (chain is null || original is null || original.ChainId != chainId
+                    || original.ProjectId != chain.ProjectId)
+                    return NotFound(new { error = "Original workflow run not found." });
+                if (request.FromStepIndex is { } step && (step < 0 || step >= original.Steps.Count))
+                    return BadRequest(new { error = "Replay step index is out of range." });
+                var receipt = await _submissions.EnqueueAsync(chain.ProjectId, chainId,
+                    request.InputPayload,
+                    idempotencyKey: "replay:" + request.OriginalRunId.ToString("N")
+                        + ":" + Guid.NewGuid().ToString("N"),
+                    ct: ct, stepPayloadOverrides: request.StepPayloadOverrides,
+                    replayOriginalRunId: request.OriginalRunId,
+                    replayFromStepIndex: request.FromStepIndex);
+                return AcceptedAtAction(nameof(GetWorkflowSubmission),
+                    new { trackingId = receipt.TrackingId }, receipt);
+            }
             var result = await _svc.ReplayJobChainAsync(
                 new PlaceContext.Application.Features.ReplayJobChainCommand(
-                    chainId,
-                    request.OriginalRunId,
-                    request.FromStepIndex,
-                    request.InputPayload,
-                    request.StepPayloadOverrides), ct);
+                    chainId, request.OriginalRunId, request.FromStepIndex,
+                    request.InputPayload, request.StepPayloadOverrides), ct);
             return Ok(result);
         }
         catch (InvalidOperationException ex)
