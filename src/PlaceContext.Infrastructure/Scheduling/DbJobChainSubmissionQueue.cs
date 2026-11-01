@@ -36,14 +36,17 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         string? inputPayload,
         string? idempotencyKey = null,
         CancellationToken ct = default,
-        Guid? queueId = null, int? messageTtlSeconds = null, int receiptRetentionDays = 30, int maxAttempts = 3, int retryDelaySeconds = 3, DateTimeOffset? availableAt = null)
+        Guid? queueId = null, int? messageTtlSeconds = null, int receiptRetentionDays = 30, int maxAttempts = 3, int retryDelaySeconds = 3, DateTimeOffset? availableAt = null,
+        IReadOnlyDictionary<int, string>? stepPayloadOverrides = null)
     {
         if (!_tenant.IsResolved)
             throw new InvalidOperationException("A tenant is required to submit a job chain.");
-        if (!_user.IsAuthenticated)
-            throw new InvalidOperationException("An authenticated user is required to submit a job chain.");
+        if (!_user.IsAuthenticated || !await _permissions.HasAsync(Permission.JobsRun, ct))
+            throw new UnauthorizedAccessException("Permission to start workflows is required.");
         if (projectId == Guid.Empty) throw new ArgumentException("Project id is required.", nameof(projectId));
         if (chainId == Guid.Empty) throw new ArgumentException("Chain id is required.", nameof(chainId));
+        if (!await _db.JobChains.AsNoTracking().AnyAsync(c => c.Id == chainId && c.ProjectId == projectId, ct))
+            throw new ArgumentException("Workflow does not belong to this project.", nameof(chainId));
 
         idempotencyKey = string.IsNullOrWhiteSpace(idempotencyKey) ? null : idempotencyKey.Trim();
         if (idempotencyKey?.Length > MaxIdempotencyKeyLength)
@@ -56,6 +59,12 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         var protectedPayload = inputPayload is null
             ? null
             : _encryptor.Protect(inputPayload, IDataEncryptor.Purpose.RpcChainSubmission);
+        var overridesJson = stepPayloadOverrides is { Count: > 0 }
+            ? JsonSerializer.Serialize(stepPayloadOverrides) : null;
+        if (overridesJson is { Length: > 262144 })
+            throw new ArgumentException("Workflow step inputs exceed 256 KiB.", nameof(stepPayloadOverrides));
+        var protectedOverrides = overridesJson is null
+            ? null : _encryptor.Protect(overridesJson, IDataEncryptor.Purpose.RpcChainSubmission);
 
         var connection = (NpgsqlConnection)_db.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open) await connection.OpenAsync(ct);
@@ -80,11 +89,11 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             WITH inserted AS (
                 INSERT INTO rpc_chain_submissions
                     ("Id", "TenantId", "ProjectId", "ChainId", "ChainRunId", "IdempotencyKey", "QueueId",
-                     "InputPayload", "SubmitterUserId", "SubmitterRole", "Status", "Attempts",
+                     "InputPayload", "StepPayloadOverrides", "SubmitterUserId", "SubmitterRole", "Status", "Attempts",
                      "SubmittedAt", "NextAttemptAt", "ExpiresAt", "ReceiptRetentionDays", "MessageTtlSeconds", "MaxAttempts", "RetryDelaySeconds")
                 VALUES
                     (@id, @tenant, @project, @chain, @run, @key, @queue,
-                     @payload, @user, @role, 'Queued', 0, now(), COALESCE(@available, now()), COALESCE(@available, now()) + make_interval(secs => @ttl), @retention, @ttl, @maxAttempts, @retryDelay)
+                     @payload, @overrides, @user, @role, 'Queued', 0, now(), COALESCE(@available, now()), COALESCE(@available, now()) + make_interval(secs => @ttl), @retention, @ttl, @maxAttempts, @retryDelay)
                 ON CONFLICT ("TenantId", "IdempotencyKey")
                     WHERE "IdempotencyKey" IS NOT NULL
                 DO NOTHING
@@ -113,6 +122,7 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         command.Parameters.AddWithValue("retryDelay", retryDelaySeconds);
         command.Parameters.AddWithValue("available", NpgsqlTypes.NpgsqlDbType.TimestampTz, (object?)availableAt?.ToUniversalTime() ?? DBNull.Value);
         command.Parameters.AddWithValue("payload", (object?)protectedPayload ?? DBNull.Value);
+        command.Parameters.AddWithValue("overrides", (object?)protectedOverrides ?? DBNull.Value);
         command.Parameters.AddWithValue("user", _user.UserId);
         command.Parameters.AddWithValue("role", _user.Role);
 
@@ -121,6 +131,8 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             throw new InvalidOperationException("The chain submission could not be persisted.");
         var result = Read(reader);
         await reader.DisposeAsync();
+        if (result.ProjectId != projectId || result.ChainId != chainId)
+            throw new InvalidOperationException("This idempotency key already belongs to another workflow.");
         await transaction.CommitAsync(ct);
         return result;
     }

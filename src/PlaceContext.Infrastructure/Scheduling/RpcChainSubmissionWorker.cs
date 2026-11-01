@@ -137,7 +137,8 @@ public class RpcChainSubmissionWorker : BackgroundService
             WHERE submission."Id" = candidate."Id"
             RETURNING submission."Id", submission."TenantId", submission."ProjectId",
                       submission."ChainId", submission."ChainRunId", submission."InputPayload",
-                      submission."SubmitterUserId", submission."SubmitterRole"
+                      submission."SubmitterUserId", submission."SubmitterRole",
+                      submission."StepPayloadOverrides"
             """;
         command.Parameters.AddWithValue("worker", _instanceId);
         command.Parameters.AddWithValue("batch", available);
@@ -149,7 +150,8 @@ public class RpcChainSubmissionWorker : BackgroundService
             values.Add(new ClaimedSubmission(
                 reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2), reader.GetGuid(3),
                 reader.GetGuid(4), reader.IsDBNull(5) ? null : reader.GetString(5),
-                reader.GetGuid(6), reader.GetString(7)));
+                reader.GetGuid(6), reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8)));
         }
         return values;
     }
@@ -184,6 +186,10 @@ public class RpcChainSubmissionWorker : BackgroundService
                     : encryptor.Unprotect(
                         submission.ProtectedPayload,
                         IDataEncryptor.Purpose.RpcChainSubmission);
+                IReadOnlyDictionary<int, string>? stepOverrides = submission.ProtectedOverrides is null
+                    ? null : System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, string>>(
+                        encryptor.Unprotect(submission.ProtectedOverrides,
+                            IDataEncryptor.Purpose.RpcChainSubmission));
                 var handler = scope.ServiceProvider.GetRequiredService<
                     ICommandHandler<RunJobChainCommand, ChainRunView>>();
 
@@ -193,7 +199,7 @@ public class RpcChainSubmissionWorker : BackgroundService
                 try
                 {
                     result = await handler.HandleAsync(new RunJobChainCommand(
-                        submission.ChainId, payload, submission.ChainRunId), ct);
+                        submission.ChainId, payload, submission.ChainRunId, stepOverrides), ct);
                 }
                 finally
                 {
@@ -271,6 +277,9 @@ public class RpcChainSubmissionWorker : BackgroundService
 
     private async Task<UserIdentity?> LoadSubmitterAsync(Guid tenantId, Guid userId, CancellationToken ct)
     {
+        // A management API key has a reserved owner subject rather than a tenant user row.
+        if (userId == TrustedServicePrincipals.ManagementApiUserId)
+            return new UserIdentity(userId, nameof(UserRole.Owner));
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var row = await db.Users.IgnoreQueryFilters().AsNoTracking()
@@ -351,5 +360,6 @@ public class RpcChainSubmissionWorker : BackgroundService
         Guid ChainRunId,
         string? ProtectedPayload,
         Guid SubmitterUserId,
-        string SubmitterRole);
+        string SubmitterRole,
+        string? ProtectedOverrides = null);
 }

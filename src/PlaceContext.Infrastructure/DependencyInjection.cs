@@ -415,6 +415,7 @@ public static class DependencyInjection
                 "ChainRunId" uuid NOT NULL UNIQUE,
                 "IdempotencyKey" text NULL,
                 "InputPayload" text NULL,
+                "StepPayloadOverrides" text NULL,
                 "SubmitterUserId" uuid NOT NULL,
                 "SubmitterRole" text NOT NULL,
                 "Status" text NOT NULL,
@@ -447,7 +448,8 @@ public static class DependencyInjection
             ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "DeliveryDelaySeconds" integer NOT NULL DEFAULT 0;
             ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "MaxAttempts" integer NOT NULL DEFAULT 3;
             ALTER TABLE chain_queues ADD COLUMN IF NOT EXISTS "RetryDelaySeconds" integer NOT NULL DEFAULT 3;
-            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "MaxAttempts" integer NOT NULL DEFAULT 3;
+            ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "StepPayloadOverrides" text NULL;
+             ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "MaxAttempts" integer NOT NULL DEFAULT 3;
             ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "RetryDelaySeconds" integer NOT NULL DEFAULT 3;
             ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "MessageTtlSeconds" integer NULL;
             ALTER TABLE rpc_chain_submissions ADD COLUMN IF NOT EXISTS "PreviousRunIds" uuid[] NOT NULL DEFAULT ARRAY[]::uuid[];
