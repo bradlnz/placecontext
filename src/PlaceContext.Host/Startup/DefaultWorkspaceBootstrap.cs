@@ -22,6 +22,11 @@ public static class DefaultWorkspaceBootstrap
         ILogger logger,
         CancellationToken ct = default)
     {
+        // A public managed deployment must never create a passwordless machine
+        // operator or an implicit default tenant, even in a Development sandbox.
+        // Verified signup is its only public tenant-creation path.
+        if (configuration.GetValue<bool>("PlaceContext:SaaS:ManagedHosting"))
+            return;
         var enabled = configuration.GetValue<bool?>("PlaceContext:Bootstrap:Enabled")
             ?? environment.IsDevelopment();
         if (!enabled)

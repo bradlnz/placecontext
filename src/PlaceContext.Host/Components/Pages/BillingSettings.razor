@@ -16,6 +16,20 @@
         </div>
         <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.LoadAsync"><AppIcon Kind="refresh" /> Refresh</button>
     </div>
+    @if (Welcome == "1")
+    {
+        <section class="dccard" aria-label="Welcome to PlaceContext"
+                 style="padding:20px 24px; margin:16px 0; border-color:var(--brand)">
+            <strong>Your workspace is ready</strong>
+            <p class="text-3-12">Your account and default project are created.
+                Choose your managed plan below to activate executions. No payment has been taken yet.</p>
+            @if (StartPlan is RunPlans.Basic or RunPlans.Standard)
+            {
+                <p class="text-3-12">You selected <strong>@RunPlans.NameFor(StartPlan)</strong>.
+                    Review its features and proceed with secure Stripe Checkout.</p>
+            }
+        </section>
+    }
     @if (Vm.Error is { } error)
     {
         <div class="dccard" role="alert" style="padding:16px; color:var(--bad)">@error</div>
@@ -26,8 +40,12 @@
             && (plan.Status == "active" || plan.Status == "trialing");
         <section class="dccard" style="padding:24px; margin:16px 0" aria-label="Current plan">
             <span class="text-3-12">Current plan</span>
-            <h2 style="font-size:22px; margin:6px 0">@RunPlans.NameFor(plan.Plan) · @plan.Status</h2>
-            <div style="font-size:30px; font-weight:700">Unlimited runs</div>
+            <h2 style="font-size:22px; margin:6px 0">
+                @(plan.Status == "self_hosted_only" ? "Subscription required" : RunPlans.NameFor(plan.Plan) + " · " + plan.Status)
+            </h2>
+            <div style="font-size:30px; font-weight:700">
+                @(plan.Status == "self_hosted_only" ? "Choose a managed plan" : "Unlimited runs")
+            </div>
             <p class="text-3-12">
                 @plan.UsedRuns.ToString("N0") top-level starts reserved this period.
                 Period: @plan.PeriodStart.ToLocalTime().ToString("d") to @plan.PeriodEnd.ToLocalTime().ToString("d").
@@ -58,7 +76,8 @@
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px">
             @foreach (var tier in RunPlans.Tiers)
             {
-                <section class="dccard" style="padding:20px" @key="tier.Code">
+                <section class="dccard" id="@("plan-" + tier.Code)"
+                         style="padding:20px; @(StartPlan == tier.Code ? "border-color:var(--brand);" : "")" @key="tier.Code">
                     <h3>@tier.Name</h3>
                     <div style="font-size:20px; font-weight:700">@tier.PriceLabel</div>
                     <strong>Unlimited workflow &amp; job runs</strong>
@@ -123,6 +142,9 @@
     }
 </div>
 @code {
+    [SupplyParameterFromQuery(Name = "start")] public string? StartPlan { get; set; }
+    [SupplyParameterFromQuery(Name = "welcome")] public string? Welcome { get; set; }
+
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override Task OnInitializedAsync() => Vm.LoadAsync();
     public void Dispose() => Vm.Detach();
