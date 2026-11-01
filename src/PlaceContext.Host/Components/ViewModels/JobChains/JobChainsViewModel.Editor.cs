@@ -924,8 +924,12 @@ public sealed partial class JobChainsViewModel
 
         // Authoring preflight validates definition metadata before a revision is saved.
         // Credential health and actual data contents must be tested by executing jobs.
-        Readiness = WorkflowReadiness.Evaluate(ProjectId, BuildCanvasStageViews(), Jobs ?? []);
-        if (!Readiness.Ready)
+        // If the metadata catalogue is loaded, fail closed on unresolved source jobs.
+        // Test-only/minimal callers without a catalogue still rely on server-side
+        // CreateJobChainHandler.ValidateStepsAsync for authoritative job ownership.
+        Readiness = Jobs is null ? null
+            : WorkflowReadiness.Evaluate(ProjectId, BuildCanvasStageViews(), Jobs);
+        if (Readiness is { Ready: false })
         {
             EditorError = "Resolve the readiness errors before saving this workflow.";
             NotifyStateChanged();
