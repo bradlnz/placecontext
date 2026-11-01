@@ -109,7 +109,7 @@ public class RpcChainSubmissionWorker : BackgroundService
         // Expiry applies before dispatch, including abandoned claims that never created a run.
         await db.Database.ExecuteSqlRawAsync("""
             UPDATE rpc_chain_submissions submission
-            SET "Status" = 'Expired', "FinishedAt" = now(), "InputPayload" = NULL,
+            SET "Status" = 'Expired', "FinishedAt" = now(), "InputPayload" = NULL, "StepPayloadOverrides" = NULL,
                 "ClaimedBy" = NULL, "ClaimedAt" = NULL, "HeartbeatAt" = NULL
             WHERE "ExpiresAt" <= now()
               AND ("Status" = 'Queued' OR ("Status" = 'Running' AND "HeartbeatAt" < now() - interval '2 minutes'))
@@ -305,7 +305,8 @@ public class RpcChainSubmissionWorker : BackgroundService
             SET "Status" = CASE WHEN "QueueId" IS NOT NULL AND {run.Status} = 'Failed' THEN 'RetryPending' ELSE {run.Status} END, "ClaimedBy" = NULL, "ClaimedAt" = NULL,
                 "HeartbeatAt" = now(), "FinishedAt" = {run.FinishedAt},
                 "LastError" = NULL,
-                "InputPayload" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR {run.Status} <> 'Failed') THEN NULL ELSE "InputPayload" END
+                "InputPayload" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR {run.Status} <> 'Failed') THEN NULL ELSE "InputPayload" END,
+                "StepPayloadOverrides" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR {run.Status} <> 'Failed') THEN NULL ELSE "StepPayloadOverrides" END
             WHERE "Id" = {id} AND "ChainRunId" = {run.Id}
               AND "Status" NOT IN ('Queued', 'Failed', 'Expired', 'Succeeded', 'Cancelled')
             """, ct);

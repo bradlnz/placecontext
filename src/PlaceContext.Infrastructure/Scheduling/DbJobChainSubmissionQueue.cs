@@ -4,6 +4,8 @@ using System.Text.Json.Nodes;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using PlaceContext.Application.Billing;
 using Npgsql;
 using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Persistence;
@@ -22,13 +24,20 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
     private readonly ICurrentUser _user;
     private readonly IDataEncryptor _encryptor;
     private readonly IPermissionService _permissions;
+    private readonly IOptions<RunBillingDeploymentOptions>? _hosting;
+    private readonly IRunAllowance? _allowance;
 
     public DbJobChainSubmissionQueue(
         AppDbContext db,
         ICurrentTenant tenant,
         ICurrentUser user,
-        IDataEncryptor encryptor, IPermissionService permissions)
-        => (_db, _tenant, _user, _encryptor, _permissions) = (db, tenant, user, encryptor, permissions);
+        IDataEncryptor encryptor, IPermissionService permissions,
+        IOptions<RunBillingDeploymentOptions>? hosting = null, IRunAllowance? allowance = null)
+    {
+        (_db, _tenant, _user, _encryptor, _permissions) = (db, tenant, user, encryptor, permissions);
+        _hosting = hosting;
+        _allowance = allowance;
+    }
 
     public async Task<JobChainSubmission> EnqueueAsync(
         Guid projectId,
@@ -45,6 +54,9 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             throw new UnauthorizedAccessException("Permission to start workflows is required.");
         if (projectId == Guid.Empty) throw new ArgumentException("Project id is required.", nameof(projectId));
         if (chainId == Guid.Empty) throw new ArgumentException("Chain id is required.", nameof(chainId));
+        if (_hosting?.Value.ManagedHosting == true
+            && (_allowance is null || !(await _allowance.GetAsync(ct)).CanRun))
+            throw new InvalidOperationException("A managed subscription must be active before queuing workflows.");
         if (!await _db.JobChains.AsNoTracking().AnyAsync(c => c.Id == chainId && c.ProjectId == projectId, ct))
             throw new ArgumentException("Workflow does not belong to this project.", nameof(chainId));
 
@@ -98,12 +110,12 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
                     WHERE "IdempotencyKey" IS NOT NULL
                 DO NOTHING
                 RETURNING "Id", "ProjectId", "ChainId", "ChainRunId", "Status", "Attempts",
-                          "LastError", "SubmittedAt", "StartedAt", "FinishedAt"
+                          "LastError", "SubmittedAt", "StartedAt", "FinishedAt", "InputPayload", "StepPayloadOverrides"
             )
             SELECT * FROM inserted
             UNION ALL
             SELECT "Id", "ProjectId", "ChainId", "ChainRunId", "Status", "Attempts",
-                   "LastError", "SubmittedAt", "StartedAt", "FinishedAt"
+                   "LastError", "SubmittedAt", "StartedAt", "FinishedAt", "InputPayload", "StepPayloadOverrides"
             FROM rpc_chain_submissions
             WHERE @key IS NOT NULL AND "TenantId" = @tenant AND "IdempotencyKey" = @key
               AND NOT EXISTS (SELECT 1 FROM inserted)
@@ -130,9 +142,18 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         if (!await reader.ReadAsync(ct))
             throw new InvalidOperationException("The chain submission could not be persisted.");
         var result = Read(reader);
+        var storedPayload = reader.IsDBNull(10) ? null :
+            _encryptor.Unprotect(reader.GetString(10), IDataEncryptor.Purpose.RpcChainSubmission);
+        var storedOverrides = reader.IsDBNull(11) ? null :
+            _encryptor.Unprotect(reader.GetString(11), IDataEncryptor.Purpose.RpcChainSubmission);
         await reader.DisposeAsync();
         if (result.ProjectId != projectId || result.ChainId != chainId)
             throw new InvalidOperationException("This idempotency key already belongs to another workflow.");
+        if (!string.Equals(storedPayload, inputPayload, StringComparison.Ordinal)
+            || (storedOverrides is null) != (overridesJson is null)
+            || (storedOverrides is not null && !JsonNode.DeepEquals(
+                JsonNode.Parse(storedOverrides), JsonNode.Parse(overridesJson!))))
+            throw new InvalidOperationException("This idempotency key was submitted with different workflow inputs.");
         await transaction.CommitAsync(ct);
         return result;
     }

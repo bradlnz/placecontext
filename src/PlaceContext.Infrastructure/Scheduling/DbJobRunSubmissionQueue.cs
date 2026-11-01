@@ -1,5 +1,7 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using PlaceContext.Application.Billing;
 using Npgsql;
 using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Persistence;
@@ -9,7 +11,8 @@ namespace PlaceContext.Infrastructure.Scheduling;
 /// <summary>Encrypted, tenant-isolated and idempotent durable intake for managed API job runs.
 /// The caller must be authorized by the Core API JobsRun policy before invoking this service.</summary>
 public sealed class DbJobRunSubmissionQueue(
-    AppDbContext db, ICurrentTenant tenant, IDataEncryptor encryptor) : IJobRunSubmissionQueue
+    AppDbContext db, ICurrentTenant tenant, IDataEncryptor encryptor,
+    IOptions<RunBillingDeploymentOptions>? hosting = null, IRunAllowance? allowance = null) : IJobRunSubmissionQueue
 {
     private static string Purpose => IDataEncryptor.Purpose.PendingRun;
 
@@ -20,6 +23,9 @@ public sealed class DbJobRunSubmissionQueue(
             throw new UnauthorizedAccessException("A resolved tenant is required.");
         if (projectId == Guid.Empty || jobId == Guid.Empty || runId == Guid.Empty)
             throw new ArgumentException("A nonempty project, job and run id are required.");
+        if (hosting?.Value.ManagedHosting == true
+            && (allowance is null || !(await allowance.GetAsync(ct)).CanRun))
+            throw new InvalidOperationException("A managed subscription must be active before queuing jobs.");
 
         var id = runId ?? Guid.NewGuid();
         var trackingId = Guid.NewGuid();

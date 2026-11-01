@@ -57,6 +57,12 @@ public sealed class ChainQueueTests
             var repeated = await submit.EnqueueAsync(project, chain, null,
                 "portal:test-durable-overrides", stepPayloadOverrides: stepValues);
             Assert.Equal(portalRun.TrackingId, repeated.TrackingId);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                submit.EnqueueAsync(project, chain, "{\"different\":true}",
+                    "portal:test-durable-overrides", stepPayloadOverrides: stepValues));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                submit.EnqueueAsync(project, chain, null, "portal:test-durable-overrides",
+                    stepPayloadOverrides: new Dictionary<int, string> { [0] = "{}" }));
             await using (var sql = new NpgsqlCommand(
                 "SELECT \"StepPayloadOverrides\" FROM rpc_chain_submissions WHERE \"Id\" = @id", connection))
             {
