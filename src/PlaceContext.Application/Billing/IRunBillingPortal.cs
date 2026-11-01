@@ -18,6 +18,7 @@ public sealed class EnterpriseBillingContract
 {
     public string PriceId { get; set; } = "";
     public int MaxStartsPerMinute { get; set; }
+    public int MaxConcurrentRuns { get; set; }
 }
 
 public sealed record StripeRunEntitlement(string Plan);
@@ -48,7 +49,7 @@ public sealed class StripeRunBillingOptions
     {
         if (tenantId == Guid.Empty) return null;
         return EnterpriseContracts.TryGetValue(tenantId.ToString("D"), out var contract)
-            && contract is { MaxStartsPerMinute: > 0 }
+            && contract is { MaxStartsPerMinute: > 0, MaxConcurrentRuns: > 0 }
             && !string.IsNullOrWhiteSpace(contract.PriceId) ? contract : null;
     }
 

@@ -36,6 +36,9 @@ public static class RunPlans
 
     public const int BasicStartsPerMinute = 60;
     public const int StandardStartsPerMinute = 600;
+    // Cluster-wide top-level workload concurrency, not a volume limit.
+    public const int BasicConcurrentRuns = 2;
+    public const int StandardConcurrentRuns = 8;
 
     public static IReadOnlyList<RunPlanTier> Tiers { get; } = Array.AsReadOnly(new[]
     {
@@ -48,12 +51,12 @@ public static class RunPlans
             "Managed workflows with a lower start rate; excess starts wait their turn.",
             "99.9% SLA target, subject to agreement", "Standard support", true,
             BasicStartsPerMinute, new[] { "Unlimited workflow and job starts",
-                "Shared managed execution", "Usage history and billing controls" }),
+                "2 concurrent top-level executions", "Shared managed execution", "Usage history and billing controls" }),
         new RunPlanTier(Standard, "Standard Managed", "$825 / month",
             "Managed workflows with higher start throughput.",
             "99.9% SLA target, subject to agreement", "Standard support", true,
             StandardStartsPerMinute, new[] { "Unlimited workflow and job starts",
-                "Higher managed start throughput", "Usage history and billing controls" }),
+                "8 concurrent top-level executions", "Higher managed start throughput", "Usage history and billing controls" }),
         new RunPlanTier(Enterprise, "Enterprise", "From $99,000 / year",
             "Dedicated or customer-hosted deployment options are scoped by contract.",
             "Up to 99.99% SLA, by contract", "Dedicated support / TAM by contract",
@@ -67,6 +70,15 @@ public static class RunPlans
         "growth" => "Standard Managed (legacy)",
         "business" => "Business (legacy)",
         _ => Tiers.FirstOrDefault(tier => tier.Code == plan)?.Name ?? plan
+    };
+
+    public static int ConcurrentRuns(string plan) => plan switch
+    {
+        Developer => 0,
+        Basic or "starter" => BasicConcurrentRuns,
+        Standard or "growth" => StandardConcurrentRuns,
+        "business" => 16,
+        _ => throw new ArgumentException("Unknown or contract-controlled run plan.", nameof(plan))
     };
 
     public static int StartsPerMinute(string plan) => plan switch

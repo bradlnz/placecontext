@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.Configure<PlaceContext.Application.Connections.ManagedMicrosoftOAuthOptions>(
             configuration.GetSection("PlaceContext:ManagedOAuth:Microsoft"));
         services.AddScoped<PlaceContext.Application.Billing.IRunAllowance, Billing.DbRunAllowance>();
+        services.AddScoped<PlaceContext.Application.Billing.IExecutionCapacity, Billing.DbExecutionCapacity>();
         services.AddScoped<PlaceContext.Application.Billing.IRunBillingPortal, Billing.StripeRunBillingPortal>();
         services.AddScoped<Billing.StripeRunBillingWebhook>();
         services.AddScoped<PlaceContext.Application.Connections.IManagedOAuthConnections, Connections.ManagedMicrosoftOAuthConnections>();
