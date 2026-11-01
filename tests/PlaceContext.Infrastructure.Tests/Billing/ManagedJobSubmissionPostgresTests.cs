@@ -66,6 +66,11 @@ public sealed class ManagedJobSubmissionPostgresTests
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO job_runs VALUES ({runId}, {tenant.TenantId}, {"Succeeded"})");
             Assert.Equal("Succeeded", (await queue.GetAsync(projectId, jobId, receipt.TrackingId))!.Status);
+            Assert.Equal(1, await RpcJobSubmissionWorker.ReconcileFinishedAsync(db));
+            Assert.Equal("Succeeded", await db.Database
+                .SqlQueryRaw<string>("SELECT \"Status\" AS \"Value\" FROM rpc_job_submissions")
+                .SingleAsync());
+            Assert.Equal(0, await RpcJobSubmissionWorker.ReconcileFinishedAsync(db));
             Assert.Equal(1L, await db.Database
                 .SqlQueryRaw<long>("SELECT count(*) AS \"Value\" FROM rpc_job_submissions")
                 .SingleAsync());
