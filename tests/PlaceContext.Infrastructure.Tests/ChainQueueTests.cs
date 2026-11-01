@@ -75,9 +75,15 @@ public sealed class ChainQueueTests
             }
             await Assert.ThrowsAsync<ArgumentException>(() =>
                 submit.EnqueueAsync(Guid.NewGuid(), chain, null));
-            // Mark the extra fixture submission terminal, keeping the claim-count tests intact.
+            // Scrub completed payloads; retries must still validate the saved digest.
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"UPDATE rpc_chain_submissions SET \"Status\" = 'Succeeded', \"FinishedAt\" = now() WHERE \"Id\" = {portalRun.TrackingId}");
+                $"UPDATE rpc_chain_submissions SET \"Status\" = 'Succeeded', \"FinishedAt\" = now(), \"InputPayload\" = NULL, \"StepPayloadOverrides\" = NULL WHERE \"Id\" = {portalRun.TrackingId}");
+            var afterCompletion = await submit.EnqueueAsync(project, chain, null,
+                "portal:test-durable-overrides", stepPayloadOverrides: stepValues);
+            Assert.Equal(portalRun.TrackingId, afterCompletion.TrackingId);
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                submit.EnqueueAsync(project, chain, null, "portal:test-durable-overrides",
+                    stepPayloadOverrides: new Dictionary<int, string> { [0] = "{}" }));
             var queue = await queues.SaveAsync(null, project, chain, "incoming", true);
             var second = await queues.SaveAsync(null, project, chain, "other", true);
             await Assert.ThrowsAsync<ArgumentException>(() => queues.SaveAsync(null, project, chain, "invalid TTL", true, 0));

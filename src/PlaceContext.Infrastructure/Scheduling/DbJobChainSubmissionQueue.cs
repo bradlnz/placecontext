@@ -1,4 +1,6 @@
 using System.Data;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using PlaceContext.Application.Dtos;
@@ -77,6 +79,18 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             throw new ArgumentException("Workflow step inputs exceed 256 KiB.", nameof(stepPayloadOverrides));
         var protectedOverrides = overridesJson is null
             ? null : _encryptor.Protect(overridesJson, IDataEncryptor.Purpose.RpcChainSubmission);
+        // Compute before encrypting; retaining a digest lets completed receipts be
+        // checked after the encrypted payload has been cleared.
+        var digestSource = JsonSerializer.Serialize(new
+        {
+            Payload = inputPayload,
+            Overrides = stepPayloadOverrides is { Count: > 0 }
+                ? stepPayloadOverrides.OrderBy(pair => pair.Key)
+                    .Select(pair => new { pair.Key, pair.Value }).ToArray()
+                : null
+        });
+        var requestDigest = Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(digestSource)));
 
         var connection = (NpgsqlConnection)_db.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open) await connection.OpenAsync(ct);
@@ -101,21 +115,21 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             WITH inserted AS (
                 INSERT INTO rpc_chain_submissions
                     ("Id", "TenantId", "ProjectId", "ChainId", "ChainRunId", "IdempotencyKey", "QueueId",
-                     "InputPayload", "StepPayloadOverrides", "SubmitterUserId", "SubmitterRole", "Status", "Attempts",
+                     "InputPayload", "StepPayloadOverrides", "RequestDigest", "SubmitterUserId", "SubmitterRole", "Status", "Attempts",
                      "SubmittedAt", "NextAttemptAt", "ExpiresAt", "ReceiptRetentionDays", "MessageTtlSeconds", "MaxAttempts", "RetryDelaySeconds")
                 VALUES
                     (@id, @tenant, @project, @chain, @run, @key, @queue,
-                     @payload, @overrides, @user, @role, 'Queued', 0, now(), COALESCE(@available, now()), COALESCE(@available, now()) + make_interval(secs => @ttl), @retention, @ttl, @maxAttempts, @retryDelay)
+                     @payload, @overrides, @digest, @user, @role, 'Queued', 0, now(), COALESCE(@available, now()), COALESCE(@available, now()) + make_interval(secs => @ttl), @retention, @ttl, @maxAttempts, @retryDelay)
                 ON CONFLICT ("TenantId", "IdempotencyKey")
                     WHERE "IdempotencyKey" IS NOT NULL
                 DO NOTHING
                 RETURNING "Id", "ProjectId", "ChainId", "ChainRunId", "Status", "Attempts",
-                          "LastError", "SubmittedAt", "StartedAt", "FinishedAt", "InputPayload", "StepPayloadOverrides"
+                          "LastError", "SubmittedAt", "StartedAt", "FinishedAt", "InputPayload", "StepPayloadOverrides", "RequestDigest"
             )
             SELECT * FROM inserted
             UNION ALL
             SELECT "Id", "ProjectId", "ChainId", "ChainRunId", "Status", "Attempts",
-                   "LastError", "SubmittedAt", "StartedAt", "FinishedAt", "InputPayload", "StepPayloadOverrides"
+                   "LastError", "SubmittedAt", "StartedAt", "FinishedAt", "InputPayload", "StepPayloadOverrides", "RequestDigest"
             FROM rpc_chain_submissions
             WHERE @key IS NOT NULL AND "TenantId" = @tenant AND "IdempotencyKey" = @key
               AND NOT EXISTS (SELECT 1 FROM inserted)
@@ -135,6 +149,7 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         command.Parameters.AddWithValue("available", NpgsqlTypes.NpgsqlDbType.TimestampTz, (object?)availableAt?.ToUniversalTime() ?? DBNull.Value);
         command.Parameters.AddWithValue("payload", (object?)protectedPayload ?? DBNull.Value);
         command.Parameters.AddWithValue("overrides", (object?)protectedOverrides ?? DBNull.Value);
+        command.Parameters.AddWithValue("digest", requestDigest);
         command.Parameters.AddWithValue("user", _user.UserId);
         command.Parameters.AddWithValue("role", _user.Role);
 
@@ -146,14 +161,24 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             _encryptor.Unprotect(reader.GetString(10), IDataEncryptor.Purpose.RpcChainSubmission);
         var storedOverrides = reader.IsDBNull(11) ? null :
             _encryptor.Unprotect(reader.GetString(11), IDataEncryptor.Purpose.RpcChainSubmission);
+        var storedDigest = reader.IsDBNull(12) ? null : reader.GetString(12);
         await reader.DisposeAsync();
         if (result.ProjectId != projectId || result.ChainId != chainId)
             throw new InvalidOperationException("This idempotency key already belongs to another workflow.");
-        if (!string.Equals(storedPayload, inputPayload, StringComparison.Ordinal)
+        // New receipts compare the digest even after ciphertext is scrubbed.
+        // Pre-digest receipts use retained encrypted inputs for comparison.
+        if (storedDigest is not null)
+        {
+            if (!string.Equals(storedDigest, requestDigest, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "This idempotency key was submitted with different workflow inputs.");
+        }
+        else if (!string.Equals(storedPayload, inputPayload, StringComparison.Ordinal)
             || (storedOverrides is null) != (overridesJson is null)
             || (storedOverrides is not null && !JsonNode.DeepEquals(
                 JsonNode.Parse(storedOverrides), JsonNode.Parse(overridesJson!))))
-            throw new InvalidOperationException("This idempotency key was submitted with different workflow inputs.");
+            throw new InvalidOperationException(
+                "This legacy idempotency key was submitted with different workflow inputs.");
         await transaction.CommitAsync(ct);
         return result;
     }

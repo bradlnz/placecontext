@@ -23,6 +23,14 @@ automatic retries and durable resumptions reuse the execution key. An intentiona
 manual replay is a new execution. A managed customer never reaches a *monthly*
 volume limit; starts that exceed admission throughput wait.
 
+### Idempotency after payload cleanup
+
+New submission records retain a SHA-256 fingerprint of the initial payload
+and sorted step overrides, even after encrypted run inputs are scrubbed from
+completed receipts. This prevents conflicting idempotent retries without
+retaining completed workflow inputs. Pre-existing records fall back to
+comparing their still-retained encrypted inputs.
+
 ### Durable managed workflow submissions
 
 On managed installations, the portal and authenticated management API now
