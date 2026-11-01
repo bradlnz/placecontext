@@ -376,3 +376,20 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 }
 
 .qemu-login-actions { display:flex; flex-wrap:wrap; gap:8px }
+
+/* Workflow monitoring lives in the existing Runs tab, not a second product page. */
+.run-health-strip { display:flex; align-items:center; flex-wrap:wrap; gap:9px; border:1px solid var(--border); border-radius:10px; padding:10px 13px; background:var(--card-2); font-size:11px; color:var(--text-3); }
+.run-health-strip span { display:inline-flex; align-items:center; gap:6px; }
+.run-health-strip strong { font-weight:700; color:var(--text); font-size:14px; font-variant-numeric:tabular-nums; }
+.run-health-attention strong { color:var(--warn); }
+.run-attention-label { display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--warn); border:1px solid color-mix(in srgb,var(--warn) 45%,var(--border)); border-radius:15px; padding:4px 7px; }
+.run-attention-label ::deep svg { width:13px; height:13px; flex:none; }
+@media (max-width:640px) { .run-health-strip { gap:7px; }.run-health-strip span { flex:1; min-width:80px; } }
+
+.workflow-input-banner { display:flex; align-items:center; gap:12px; padding:14px 16px; border:1px solid var(--warn); border-radius:10px; background:var(--card-2); color:var(--text); }
+.workflow-input-banner > ::deep svg { color:var(--warn); flex:none; width:23px; height:23px; }
+.workflow-input-banner > div { flex:1; min-width:0; }
+.workflow-input-banner strong { display:block; font-size:13px; }
+.workflow-input-banner p { margin:3px 0 0; font-size:11px; color:var(--text-3); line-height:1.55; }
+.workflow-input-banner .dcbtn { flex:none; }
+@media (max-width:600px) { .workflow-input-banner { flex-wrap:wrap; }.workflow-input-banner .dcbtn { margin-left:35px; } }

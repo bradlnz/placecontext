@@ -217,6 +217,61 @@ public class RunStatusWatchServiceTests
         Assert.Contains(ctx.Notifier.Synced, u => u.Key == RunStatusWatchService.JobRunKey(standalone));
     }
 
+    [Fact]
+    public async Task PausedWorkflow_notifies_needs_input_once_and_opens_the_exact_run()
+    {
+        var ctx = new Ctx();
+        var runId = Guid.NewGuid();
+        var chain = ChainRow(runId, ChainRunStatus.AwaitingInput, 3, 1, null);
+        ctx.Reader.ChainRuns.Add(chain);
+
+        await ctx.Sweep();
+        ctx.Clock.UtcNow = T0.AddSeconds(4);
+        await ctx.Sweep();
+
+        var update = Assert.Single(ctx.Notifier.Synced);
+        Assert.Equal(RunOutcome.NeedsInput, update.Outcome);
+        Assert.Equal(RunStatusWatchService.ChainRunKey(runId), update.Key);
+        Assert.Equal($" /project/{Project}/workflows?chain={chain.ChainId}&run={runId}".Trim(), update.Link);
+        Assert.Contains("input required", update.Detail);
+        Assert.Null(update.FinishedAt);
+    }
+
+    [Fact]
+    public async Task Paused_workflow_resumes_and_finishes_on_the_same_notification_key()
+    {
+        var ctx = new Ctx();
+        var runId = Guid.NewGuid();
+        ctx.Reader.ChainRuns.Add(ChainRow(runId, ChainRunStatus.Running, 3, 1, "validate"));
+        await ctx.Sweep();
+
+        ctx.Reader.ChainRuns[0] = ChainRow(runId, ChainRunStatus.AwaitingInput, 3, 1, null);
+        ctx.Clock.UtcNow = T0.AddSeconds(2);
+        await ctx.Sweep();
+
+        ctx.Clock.UtcNow = T0.AddSeconds(4);
+        await ctx.Sweep(); // no duplicate
+
+        ctx.Reader.ChainRuns[0] = ChainRow(runId, ChainRunStatus.Waiting, 3, 1, null);
+        ctx.Clock.UtcNow = T0.AddSeconds(6);
+        await ctx.Sweep();
+
+        ctx.Reader.ChainRuns[0] = ChainRow(runId, ChainRunStatus.Running, 3, 2, "deliver");
+        ctx.Clock.UtcNow = T0.AddSeconds(8);
+        await ctx.Sweep();
+
+        ctx.Reader.ChainRuns[0] = ChainRow(runId, ChainRunStatus.Succeeded, 3, 3, null, finished: T0.AddSeconds(10));
+        ctx.Clock.UtcNow = T0.AddSeconds(12);
+        await ctx.Sweep();
+
+        Assert.Equal(5, ctx.Notifier.Synced.Count);
+        Assert.All(ctx.Notifier.Synced, update =>
+            Assert.Equal(RunStatusWatchService.ChainRunKey(runId), update.Key));
+        Assert.Equal(
+            [RunOutcome.Running, RunOutcome.NeedsInput, RunOutcome.Running, RunOutcome.Running, RunOutcome.Succeeded],
+            ctx.Notifier.Synced.Select(x => x.Outcome).ToArray());
+    }
+
     // ── State hygiene ────────────────────────────────────────────────────────────────────────────
 
     [Fact]

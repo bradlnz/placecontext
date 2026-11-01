@@ -5,7 +5,7 @@ using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Operations;
 
-public enum PortalOperationStatus { Queued, Running, Succeeded, Failed }
+public enum PortalOperationStatus { Queued, Running, NeedsInput, Succeeded, Failed }
 
 /// <summary>
 /// The portal's background-operation ledger — the Azure-notifications-pane pattern. Pages enqueue
@@ -51,8 +51,19 @@ public sealed class OperationCenter
     {
         lock (_gate)
             return _tenantOps.TryGetValue(tenantId, out var operations)
-                ? operations.Where(o => o.UserId is null || o.UserId == userId).OrderByDescending(o => o.QueuedAt).ToList()
+                ? operations.Where(o => o.UserId is null || o.UserId == userId)
+                    .OrderByDescending(o => o.Status == PortalOperationStatus.NeedsInput)
+                    .ThenByDescending(o => o.QueuedAt).ToList()
                 : [];
+    }
+
+    public int NeedsInputCount(Guid tenantId, Guid? userId = null)
+    {
+        lock (_gate)
+            return _tenantOps.TryGetValue(tenantId, out var operations)
+                ? operations.Count(o => (o.UserId is null || o.UserId == userId)
+                    && o.Status == PortalOperationStatus.NeedsInput)
+                : 0;
     }
 
     public int ActiveCount(Guid tenantId, Guid? userId = null)
@@ -140,6 +151,7 @@ public sealed class OperationCenter
             {
                 if (op.Sealed) return;
                 op.Status = status;
+                if (link is not null) op.Link = link;
                 op.StartedAt ??= startedAt;
                 op.FinishedAt = finishedAt ?? op.FinishedAt;
                 if (outcome is not null) op.Outcome = outcome;
@@ -151,7 +163,7 @@ public sealed class OperationCenter
 
     public void MarkRunning(Guid opId) => Update(opId, o =>
     {
-        if (o.Sealed || o.Status is PortalOperationStatus.Succeeded or PortalOperationStatus.Failed) return false;
+        if (o.Sealed || o.Status is PortalOperationStatus.NeedsInput or PortalOperationStatus.Succeeded or PortalOperationStatus.Failed) return false;
         o.Status = PortalOperationStatus.Running;
         o.StartedAt = DateTimeOffset.UtcNow;
         return true;
@@ -160,7 +172,7 @@ public sealed class OperationCenter
     public void MarkDone(Guid opId, string? outcome = null)
         => Update(opId, o =>
         {
-            if (o.Sealed) return false;
+            if (o.Sealed || o.Status == PortalOperationStatus.NeedsInput) return false;
             o.Status = PortalOperationStatus.Succeeded;
             o.FinishedAt = DateTimeOffset.UtcNow;
             o.Outcome = outcome;
@@ -170,7 +182,7 @@ public sealed class OperationCenter
     public void MarkFailed(Guid opId, string error)
         => Update(opId, o =>
         {
-            if (o.Sealed) return false;
+            if (o.Sealed || o.Status == PortalOperationStatus.NeedsInput) return false;
             o.Status = PortalOperationStatus.Failed;
             o.FinishedAt = DateTimeOffset.UtcNow;
             o.Outcome = error.Length > 300 ? error[..300] + "…" : error;

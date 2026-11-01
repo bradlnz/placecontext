@@ -32,22 +32,21 @@ public sealed class MenuConfigService : IMenuConfigService
         _currentUser = currentUser;
     }
 
-    /// <summary>Built-in catalog — ids are stable; do not rename without a migration of stored layouts.</summary>
+    /// <summary>Public navigation catalog. Retired store/dashboard ids are intentionally absent;
+    /// existing tenant overrides are dropped by MergeSide without deleting persisted user data.</summary>
     internal static readonly CatalogItem[] WorkspaceCatalog =
     {
         new("dashboard", "Dashboard", "link", "/", Permission.ProjectsView, "grid", null, null),
         new("build.chat", "Build", "link", "/project/{projectId}/build", Permission.ProjectsView, "agent", null, null),
-        new("build.library", "Workflow store", "link", "/project/{projectId}/build/workflows", Permission.ChainsManage, "chain", null, null),
+        new("chains", "Workflows", "link", "/project/{projectId}/workflows", Permission.ChainsManage, "chain", null, null),
         new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", "Automation", null),
         new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", "Automation", null),
-        new("chains", "Workflows", "link", "/project/{projectId}/workflows", Permission.ChainsManage, "chain", "Automation", null),
         new("queues", "Queues", "link", "/project/{projectId}/queues", Permission.ChainsManage, "queue", "Infrastructure", null),
         new("networking", "Networking", "link", "/project/{projectId}/networking", Permission.SettingsManage, "box", "Infrastructure", null),
         new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.TriggersManage, "clock", "Automation", null),
         new("data", "Data", "link", "/project/{projectId}/data", Permission.DataRead, "data", "Data & storage", null),
         new("vault", "Vault", "link", "/project/{projectId}/secrets", Permission.SecretsManage, "key", "Infrastructure", null),
         new("project.events", "Events", "link", "/project/{projectId}/events", Permission.EventsManage, "pulse", "Automation", null),
-        new("dashboards", "My dashboards", "link", "/project/{projectId}/dashboards", Permission.DataRead, "data.graph", "Data & storage", null),
         new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", "Data & storage", null),
         new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null, null),
         new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", "Infrastructure", null),
@@ -141,7 +140,8 @@ public sealed class MenuConfigService : IMenuConfigService
                 .Replace("{projectId}", projectId?.ToString() ?? "", StringComparison.Ordinal);
             items.Add(new ResolvedMenuItem(
                 cat.Id, o.Label ?? cat.DefaultLabel, cat.Kind, href, cat.Icon,
-                NormalizeSection(o.Section) ?? NormalizeSection(cat.DefaultSection), o.Order, cat.Parent));
+                cat.Id == "chains" && o.Section == "Automation"
+                    ? null : NormalizeSection(o.Section) ?? NormalizeSection(cat.DefaultSection), o.Order, cat.Parent));
         }
         return GroupSections(items);
     }

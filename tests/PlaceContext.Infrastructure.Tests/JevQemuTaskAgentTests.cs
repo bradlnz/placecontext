@@ -41,7 +41,7 @@ public sealed class JevQemuTaskAgentTests
         var result = await Agent(api).RunAsync(Prompt, null, (_, limit, _) => Task.FromResult(new QemuEnvironmentResult(0,
             limit == 131072 ? """{"id":1,"kind":"vision","body":{"private":"private field data"}}""" : "", "")), default, readLiveFrame: LiveFrame);
         Assert.Equal(1, result.ExitCode);
-        Assert.Contains("Jev visual proposal failed", result.Stderr);
+        Assert.Contains("Browser verification visual proposal failed", result.Stderr);
         Assert.DoesNotContain("private", result.Stderr);
     }
 

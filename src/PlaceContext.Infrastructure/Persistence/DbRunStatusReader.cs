@@ -43,6 +43,8 @@ public sealed class DbRunStatusReader : IRunStatusReader
     {
         var rows = await _db.ChainRuns.AsNoTracking()
             .Where(r => r.Status == nameof(ChainRunStatus.Running)
+                || r.Status == nameof(ChainRunStatus.Waiting)
+                || r.Status == nameof(ChainRunStatus.AwaitingInput)
                 || (r.FinishedAt != null && r.FinishedAt >= finishedSince))
             .Select(r => new { r.Id, r.ChainId, r.ChainName, r.ProjectId, r.Status, r.StepsJson, r.StartedAt, r.FinishedAt })
             .ToListAsync(ct);

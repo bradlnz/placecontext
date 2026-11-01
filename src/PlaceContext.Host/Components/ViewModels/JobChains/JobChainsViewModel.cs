@@ -68,15 +68,26 @@ public sealed partial class JobChainsViewModel : PageViewModel
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
     private int _pageVersion;
 
-    public async Task LoadPageAsync(Guid projectId, Guid? chainId)
+    public async Task LoadPageAsync(Guid projectId, Guid? chainId, Guid? runId = null)
     {
         var version = ++_pageVersion;
         Initialize(projectId);
         await LoadAsync();
         if (version != _pageVersion) return;
-        if (chainId is { } id && Chains?.FirstOrDefault(chain => chain.Id == id) is { } chain
-            && (!ShowEditor || EditChainId != id))
+        if (chainId is not { } id
+            || Chains?.FirstOrDefault(chain => chain.Id == id) is not { } chain) return;
+        if (!ShowEditor || EditChainId != id)
             await OpenChainEditorAsync(chain);
+        // A bell notification deep-links to the actual paused run and its inputs,
+        // not merely the workflow editor. Verify both project and chain ownership.
+        if (runId is { } wanted && (OpenRun?.Id != wanted || !IsRunsTab))
+        {
+            var run = ChainRuns?.FirstOrDefault(x => x.Id == wanted)
+                ?? await _svc.GetChainRunAsync(wanted);
+            if (run is null || run.ProjectId != projectId || run.ChainId != id) return;
+            EditorTab = "runs";
+            await OpenChainRunAsync(run);
+        }
     }
 
     public void Initialize(Guid projectId)

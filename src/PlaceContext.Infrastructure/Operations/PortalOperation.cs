@@ -14,7 +14,7 @@ public sealed class PortalOperation
     public Guid? UserId { get; init; }
     public required string Title { get; init; }
     /// <summary>Where to go to see the result (e.g. the job's run history).</summary>
-    public string? Link { get; init; }
+    public string? Link { get; internal set; }
     /// <summary>Stable identity of the work this op tracks (e.g. <c>job-run:{id:N}</c>), so an
     /// authoritative status source (the run-status watcher) converges on the same entry the
     /// initiating page created instead of duplicating it.</summary>
