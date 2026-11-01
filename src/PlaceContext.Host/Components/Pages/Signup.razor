@@ -6,7 +6,7 @@
 @using PlaceContext.Application.Billing
 @using PlaceContext.Host.Tenancy
 @inject IOptions<RunBillingDeploymentOptions> Hosting
-@inject IOptions<WorkspaceSignupOptions> Signup
+@inject IOptions<WorkspaceSignupOptions> SignupSettings
 @inject IConfiguration Config
 @inject NavigationManager Nav
 
@@ -136,7 +136,7 @@
     [SupplyParameterFromQuery(Name = "workspace")] public string? Workspace { get; set; }
 
     private bool Enabled => Hosting.Value.ManagedHosting && Hosting.Value.RequireExplicitTenantProvisioning
-        && Signup.Value.Enabled && ManagedSignupUrls.IsApexHost(new Uri(Nav.Uri).Host, Config);
+        && SignupSettings.Value.Enabled && ManagedSignupUrls.IsApexHost(new Uri(Nav.Uri).Host, Config);
     private string SelectedPlan => Plan == RunPlans.Standard ? RunPlans.Standard : RunPlans.Basic;
     private string WorkspaceSuffix => "." + (ManagedSignupUrls.PublicOrigin(Config)?.Host ?? "placecontext.io");
 }
