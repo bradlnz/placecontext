@@ -51,14 +51,17 @@ public sealed class StripeBillingSecurityTests
         Assert.Equal("business", options.PlanForPrice("price_legacy_business", tenant));
         Assert.Null(options.PlanForPrice("price_malicious", tenant));
         Assert.Null(options.PlanForPrice("price_basic", Guid.Empty));
-        Assert.Equal(100, RunPlans.Included(RunPlans.Developer));
-        Assert.Equal(1000, RunPlans.Included(RunPlans.Basic));
-        Assert.Equal(10000, RunPlans.Included(RunPlans.Standard));
-        Assert.Throws<ArgumentException>(() => RunPlans.Included(RunPlans.Enterprise));
+        Assert.Equal(0, RunPlans.Included(RunPlans.Developer));
+        Assert.Equal(0, RunPlans.Included(RunPlans.Basic));
+        Assert.Equal(0, RunPlans.Included(RunPlans.Standard));
+        Assert.Equal(0, RunPlans.Included(RunPlans.Enterprise));
+        Assert.Equal(0, RunPlans.StartsPerMinute(RunPlans.Developer));
+        Assert.Equal(60, RunPlans.StartsPerMinute(RunPlans.Basic));
+        Assert.Equal(600, RunPlans.StartsPerMinute(RunPlans.Standard));
     }
 
     [Fact]
-    public void Enterprise_contract_price_and_quota_are_tenant_specific_and_not_in_checkout()
+    public void Enterprise_contract_price_and_throughput_are_tenant_specific_and_not_in_checkout()
     {
         var tenant = Guid.NewGuid();
         var otherTenant = Guid.NewGuid();
@@ -66,17 +69,17 @@ public sealed class StripeBillingSecurityTests
         {
             EnterpriseContracts = new Dictionary<string, EnterpriseBillingContract>
             {
-                [tenant.ToString("D")] = new() { PriceId = "price_contract_annual", IncludedRuns = 125000 }
+                [tenant.ToString("D")] = new() { PriceId = "price_contract_annual", MaxStartsPerMinute = 1500 }
             }
         };
         var entitlement = options.EntitlementForPrice("price_contract_annual", tenant);
         Assert.NotNull(entitlement);
         Assert.Equal(RunPlans.Enterprise, entitlement!.Plan);
-        Assert.Equal(125000, entitlement.IncludedRuns);
+        Assert.Equal(1500, options.ContractFor(tenant)!.MaxStartsPerMinute);
         Assert.Null(options.EntitlementForPrice("price_contract_annual", otherTenant));
         Assert.Null(options.PriceFor(RunPlans.Enterprise));
 
-        options.EnterpriseContracts[tenant.ToString("D")].IncludedRuns = 0;
+        options.EnterpriseContracts[tenant.ToString("D")].MaxStartsPerMinute = 0;
         Assert.Null(options.EntitlementForPrice("price_contract_annual", tenant));
     }
 
@@ -86,21 +89,23 @@ public sealed class StripeBillingSecurityTests
         Assert.Equal(new[] { RunPlans.Developer, RunPlans.Basic, RunPlans.Standard, RunPlans.Enterprise },
             RunPlans.Tiers.Select(t => t.Code));
         Assert.False(RunPlans.Tiers.Single(t => t.Code == RunPlans.Developer).SelfService);
-        Assert.Null(RunPlans.Tiers.Single(t => t.Code == RunPlans.Enterprise).IncludedRuns);
+        Assert.Null(RunPlans.Tiers.Single(t => t.Code == RunPlans.Enterprise).StartsPerMinute);
         Assert.Equal("Developer Edition", RunPlans.NameFor(RunPlans.Developer));
         Assert.Equal("Basic Managed (legacy)", RunPlans.NameFor("starter"));
     }
 
     [Fact]
-    public void Billing_snapshot_counts_only_remaining_runs_and_expired_access_fails_closed()
+    public void Billing_snapshot_has_unlimited_runs_and_expired_access_fails_closed()
     {
         var now = DateTimeOffset.UtcNow;
-        var plan = new RunAllowanceSnapshot(RunPlans.Basic, "active", 1000, 999,
-            now.AddDays(-3), now.AddDays(20));
-        Assert.Equal(1, plan.Remaining);
+        var plan = new RunAllowanceSnapshot(RunPlans.Basic, "active", long.MaxValue,
+            now.AddDays(-3), now.AddDays(20), 60);
+        Assert.True(plan.UnlimitedRuns);
         Assert.True(plan.CanRun);
-        Assert.False((plan with { UsedRuns = 1000 }).CanRun);
+        Assert.True((plan with { UsedRuns = long.MaxValue }).CanRun);
         Assert.False((plan with { Status = "inactive" }).CanRun);
+        Assert.False((plan with { Status = "self_hosted_only" }).CanRun);
+        Assert.False((plan with { PeriodStart = now.AddMinutes(1) }).CanRun);
         Assert.False((plan with { PeriodStart = now.AddMinutes(1) }).CanRun);
         Assert.False((plan with { PeriodEnd = now.AddDays(-1) }).CanRun);
     }
