@@ -55,6 +55,19 @@ services are retained for compatibility pending a separately planned data-retent
 No saved data is deleted by the navigation change. The workflow editor and Build no longer expose
 library-agent purchase/simulation actions as a primary workflow.
 
+## Job + data workflows
+
+PlaceContext combines isolated jobs and project-owned data into durable workflows. Add a
+**Validate data contract** job between ingestion and downstream actions to enforce required
+fields, field types, row count, null-rate and unique-key rules. Failed data checks stop later
+workflow stages and produce structured evidence instead of silently forwarding invalid rows.
+
+The workflow editor offers **Pre-run checks** for job source readiness and human
+approval gates. Workflow edits carry an expected revision, protecting against silent
+concurrent overwrites. These are foundational safety features, not a complete deployment
+promotion system. See [the SaaS job/data foundation](docs/job-data-saas-foundation.md) for
+current functionality and remaining SaaS work.
+
 ## Connect your AI harness
 
 PlaceContext exposes the same tools at `<workspace-url>/mcp`. These examples connect to the local quick-start

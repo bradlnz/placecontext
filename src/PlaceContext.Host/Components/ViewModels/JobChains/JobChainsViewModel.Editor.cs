@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components;
 using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Workflows;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.ViewModels.Helpers;
@@ -21,6 +22,18 @@ public sealed partial class JobChainsViewModel
     public string EditorView { get; set; } = "canvas";
     public string EdName { get; set; } = "";
     public string EdDescription { get; set; } = "";
+    public WorkflowReadinessReport? Readiness { get; private set; }
+
+    private IReadOnlyList<JobChainStageView> SaveableStageViews() => BuildCanvasStageViews()
+        .Where(stage => stage.Jobs.Count > 0 || stage.Action is not null).ToArray();
+
+    public void CheckReadiness()
+    {
+        Readiness = WorkflowReadiness.Evaluate(ProjectId, SaveableStageViews(), Jobs ?? []);
+        NotifyStateChanged();
+    }
+
+    private DateTimeOffset? _openedWorkflowUpdatedAt;
     public List<List<Guid>> EdStages { get; } = new();
     public string EdAddJobId { get; set; } = "";
 
@@ -80,6 +93,8 @@ public sealed partial class JobChainsViewModel
     // ── Editor ────────────────────────────────────────────────────────────────────────────────
     public void NewChain()
     {
+        _openedWorkflowUpdatedAt = null;
+        Readiness = null;
         EditChainId = null;
         EdName = "";
         EdDescription = "";
@@ -101,6 +116,8 @@ public sealed partial class JobChainsViewModel
         StopPolling();
         ChainRuns = null;
         EditChainId = chain.Id;
+        _openedWorkflowUpdatedAt = chain.UpdatedAt;
+        Readiness = null;
         EdName = chain.Name;
         EdDescription = chain.Description ?? "";
         EdStages.Clear();
@@ -909,6 +926,20 @@ public sealed partial class JobChainsViewModel
                 .Select(item => EdStageGates.GetValueOrDefault(item.OriginalIndex))
                 .ToList();
 
+        // Authoring preflight validates definition metadata before a revision is saved.
+        // Credential health and actual data contents must be tested by executing jobs.
+        // If the metadata catalogue is loaded, fail closed on unresolved source jobs.
+        // Test-only/minimal callers without a catalogue still rely on server-side
+        // CreateJobChainHandler.ValidateStepsAsync for authoritative job ownership.
+        Readiness = Jobs is null ? null
+            : WorkflowReadiness.Evaluate(ProjectId, SaveableStageViews(), Jobs);
+        if (Readiness is { Ready: false })
+        {
+            EditorError = "Resolve the readiness errors before saving this workflow.";
+            NotifyStateChanged();
+            return;
+        }
+
         Saving = true;
         try
         {
@@ -920,7 +951,8 @@ public sealed partial class JobChainsViewModel
                     flatJobIds,
                     stages,
                     stageGates,
-                    stageActions
+                    stageActions,
+                    expectedUpdatedAt: _openedWorkflowUpdatedAt
                 );
             else
                 await _svc.CreateJobChainAsync(

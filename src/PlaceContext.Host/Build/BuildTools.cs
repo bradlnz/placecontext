@@ -6,6 +6,7 @@ using PlaceContext.Application.Build;
 using PlaceContext.Application.AgentWorkflows;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Workflows;
 using PlaceContext.Application.Ports;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Api;
@@ -136,6 +137,16 @@ public sealed class BuildTools(Guid projectId, PlaceContextService service, IPer
     public async Task<object> list_job_runs(Guid jobId, CancellationToken ct)
     { await RequireAsync(Permission.JobsView, ct); await JobAsync(jobId, ct); return await service.ListJobRunsAsync(jobId, ct); }
 
+    [Description("Inspect a workflow's job definitions before running it. Returns metadata-only readiness findings for missing jobs, missing source/runtime, required inputs and external actions. This does not execute jobs or verify live credentials and data.")]
+    public async Task<WorkflowReadinessReport> check_workflow_readiness(Guid workflowId, CancellationToken ct)
+    {
+        await RequireAsync(Permission.ChainsManage, ct);
+        await RequireAsync(Permission.JobsView, ct);
+        var workflow = await WorkflowAsync(workflowId, ct);
+        var jobs = await service.ListJobsAsync(projectId, ct);
+        return WorkflowReadiness.Evaluate(projectId, workflow.Stages, jobs);
+    }
+
     [Description("List complete workflow definitions in the current project.")]
     public async Task<object> list_workflows(CancellationToken ct)
     { await RequireAsync(Permission.ChainsManage, ct); return (await service.ListJobChainsAsync(projectId, ct)).Select(x => new { x.Id, x.Name, x.Description, Stages = x.Stages.Select(WorkflowStage.FromView).ToArray() }).ToArray(); }
@@ -152,8 +163,9 @@ public sealed class BuildTools(Guid projectId, PlaceContextService service, IPer
         var actions = converted.Select(x => x.Action).ToArray();
         if (workflowId is { } idToUpdate)
         {
-            await WorkflowAsync(idToUpdate, ct);
-            return await service.UpdateJobChainAsync(idToUpdate, name, description, [], jobs, gates, actions, ct);
+            var existing = await WorkflowAsync(idToUpdate, ct);
+            return await service.UpdateJobChainAsync(idToUpdate, name, description, [], jobs, gates, actions, ct,
+                expectedUpdatedAt: existing.UpdatedAt);
         }
         return await service.CreateJobChainAsync(projectId, name, description, [], jobs, gates, actions, ct);
     }

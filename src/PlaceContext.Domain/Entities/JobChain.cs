@@ -28,6 +28,7 @@ public sealed class JobChain
         _stages = stages;
         CreatedAt = createdAt;
         UpdatedAt = updatedAt;
+        OriginalUpdatedAt = updatedAt;
     }
 
     public Guid Id { get; }
@@ -50,6 +51,8 @@ public sealed class JobChain
 
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset UpdatedAt { get; private set; }
+    /// <summary>Revision loaded from storage, held across edits for atomic optimistic concurrency.</summary>
+    public DateTimeOffset OriginalUpdatedAt { get; }
 
     public static JobChain Create(Guid projectId, string name, string? description,
         IReadOnlyList<ChainStage> stages, DateTimeOffset now)

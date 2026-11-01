@@ -14,5 +14,6 @@ public sealed record UpdateJobChainCommand(
     Guid ChainId, string Name, string? Description, IReadOnlyList<Guid> StepJobIds,
     IReadOnlyList<IReadOnlyList<Guid>>? Stages = null,
     IReadOnlyList<ChainGate?>? StageGates = null,
-    IReadOnlyList<ChainAction?>? StageActions = null)
+    IReadOnlyList<ChainAction?>? StageActions = null,
+    DateTimeOffset? ExpectedUpdatedAt = null)
     : ICommand<JobChainView>;

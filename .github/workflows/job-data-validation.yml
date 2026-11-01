@@ -1,0 +1,56 @@
+name: Validate job and workflow changes
+
+on:
+  pull_request:
+    branches:
+      - main
+      - codex/workflow-first-architecture
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-workflows-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  job-data:
+    name: .NET build and data-contract checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Configure .NET SDK from global.json
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Configure Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Restore and build solution
+        run: |
+          dotnet restore PlaceContext.slnx
+          dotnet build PlaceContext.slnx --configuration Release --no-restore
+
+      - name: Run workflow and edit-conflict tests
+        run: |
+          dotnet test tests/PlaceContext.Application.Tests/PlaceContext.Application.Tests.csproj \
+            --configuration Release --no-restore \
+            --filter "FullyQualifiedName~WorkflowReadinessTests|FullyQualifiedName~JobChainTests"
+
+      - name: Run job template and editor contracts
+        run: |
+          dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj \
+            --configuration Release --no-restore \
+            --filter "FullyQualifiedName~JobTemplateCatalogTests|FullyQualifiedName~DataWorkflowSaasFoundationTests|FullyQualifiedName~WorkflowConditionalPathTests"
+
+      - name: Run exact data-quality job source tests
+        run: |
+          python -m pip install "pytest>=8,<10"
+          python -m pytest -q tests/deploy/test_data_quality_template.py

@@ -21,6 +21,9 @@ public sealed class EfJobChainRepository : IJobChainRepository
         var existing = await _db.JobChains.FindAsync(new object[] { chain.Id }, ct);
         if (existing is null) return;
 
+        // The domain aggregate retains the revision it was loaded with. Compare against
+        // that revision rather than the freshly fetched row to prevent concurrent overwrites.
+        _db.Entry(existing).Property(x => x.UpdatedAt).OriginalValue = chain.OriginalUpdatedAt;
         existing.Name = chain.Name;
         existing.Description = chain.Description;
         existing.StagesJson = SerializeStages(chain.Stages);

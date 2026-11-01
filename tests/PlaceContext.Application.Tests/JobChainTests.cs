@@ -176,6 +176,44 @@ public class JobChainTests
     }
 
     [Fact]
+    public async Task Updating_a_workflow_rejects_stale_editor_revisions_without_mutating_the_definition()
+    {
+        var jobs = new InMemoryJobRepository();
+        var first = MakeJob("initial");
+        var second = MakeJob("updated");
+        await jobs.AddAsync(first);
+        await jobs.AddAsync(second);
+        var chains = new InMemoryJobChainRepository();
+        var initial = JobChain.Create(ProjectId, "pipeline", null, [first.Id], T0);
+        await chains.AddAsync(initial);
+        var handler = new UpdateJobChainHandler(chains, jobs, new RecordingUnitOfWork(), new FakeClock(T0));
+
+        var updated = await handler.HandleAsync(new UpdateJobChainCommand(
+            initial.Id, "new pipeline", null, [second.Id], ExpectedUpdatedAt: T0));
+        Assert.True(updated.UpdatedAt > T0);
+        Assert.Equal("new pipeline", updated.Name);
+
+        var stale = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            handler.HandleAsync(new UpdateJobChainCommand(
+                initial.Id, "stale overwrite", null, [first.Id], ExpectedUpdatedAt: T0)));
+        Assert.Contains("Reload before saving", stale.Message);
+        var current = await chains.GetByIdAsync(initial.Id);
+        Assert.NotNull(current);
+        Assert.Equal("new pipeline", current!.Name);
+        Assert.Equal(new[] { second.Id }, current.StepJobIds);
+    }
+
+    [Fact]
+    public void Workflow_domain_keeps_its_loaded_revision_across_mutations()
+    {
+        var original = JobChain.Create(ProjectId, "pipeline", null, [Guid.NewGuid()], T0);
+        Assert.Equal(T0, original.OriginalUpdatedAt);
+        original.Update("after", null, [Guid.NewGuid()], T0.AddTicks(10));
+        Assert.Equal(T0, original.OriginalUpdatedAt);
+        Assert.True(original.UpdatedAt > original.OriginalUpdatedAt);
+    }
+
+    [Fact]
     public void Chain_requires_a_name_and_at_least_one_step()
     {
         Assert.Throws<ArgumentException>(() => JobChain.Create(ProjectId, " ", null, new[] { Guid.NewGuid() }, T0));

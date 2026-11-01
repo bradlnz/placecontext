@@ -256,8 +256,8 @@ public sealed class PlaceContextService
     public Task<JobChainView> CreateJobChainAsync(Guid projectId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, IReadOnlyList<Domain.ValueObjects.ChainAction?>? stageActions = null, CancellationToken ct = default)
         => _dispatcher.Send(new CreateJobChainCommand(projectId, name, description, stepJobIds, stages, stageGates, stageActions), ct);
 
-    public Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, IReadOnlyList<Domain.ValueObjects.ChainAction?>? stageActions = null, CancellationToken ct = default)
-        => _dispatcher.Send(new UpdateJobChainCommand(chainId, name, description, stepJobIds, stages, stageGates, stageActions), ct);
+    public Task<JobChainView> UpdateJobChainAsync(Guid chainId, string name, string? description, IReadOnlyList<Guid> stepJobIds, IReadOnlyList<IReadOnlyList<Guid>>? stages = null, IReadOnlyList<Domain.ValueObjects.ChainGate?>? stageGates = null, IReadOnlyList<Domain.ValueObjects.ChainAction?>? stageActions = null, CancellationToken ct = default, DateTimeOffset? expectedUpdatedAt = null)
+        => _dispatcher.Send(new UpdateJobChainCommand(chainId, name, description, stepJobIds, stages, stageGates, stageActions, expectedUpdatedAt), ct);
 
     public Task<bool> CancelJobRunAsync(Guid runId, CancellationToken ct = default)
         => _dispatcher.Send(new CancelJobRunCommand(runId), ct);

@@ -16,6 +16,7 @@ public static class JobTemplateCatalog
         WebhookReceiver(),
         CsvToDatabase(),
         EmailReport(),
+        DataQualityJobTemplate.Create(),
     };
 
     public static JobTemplate? GetById(string id) =>

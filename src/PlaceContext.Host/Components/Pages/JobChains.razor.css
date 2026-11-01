@@ -393,3 +393,21 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .workflow-input-banner p { margin:3px 0 0; font-size:11px; color:var(--text-3); line-height:1.55; }
 .workflow-input-banner .dcbtn { flex:none; }
 @media (max-width:600px) { .workflow-input-banner { flex-wrap:wrap; }.workflow-input-banner .dcbtn { margin-left:35px; } }
+
+/* Authoring readiness lives beside the real workflow editor, not in a separate dashboard. */
+.workflow-readiness { margin:10px 14px; border:1px solid var(--border); border-radius:10px; padding:12px; background:var(--card); display:grid; gap:9px; }
+.workflow-readiness-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.workflow-readiness-head > div { display:grid; gap:3px; }
+.workflow-readiness-head strong { font-size:12px; }
+.workflow-readiness-head small { font-size:10.5px; line-height:1.5; color:var(--text-3); }
+.workflow-readiness-summary { display:flex; align-items:center; flex-wrap:wrap; gap:6px; font-size:11.5px; font-weight:600; }
+.workflow-readiness-summary.ready { color:var(--good); }
+.workflow-readiness-summary.blocked { color:var(--bad); }
+.workflow-readiness-summary span { font-size:10px; font-weight:400; color:var(--text-3); }
+.workflow-readiness-summary ::deep svg { width:14px; height:14px; }
+.workflow-readiness-findings { max-height:170px; overflow-y:auto; margin:0; padding:0; list-style:none; display:grid; gap:7px; }
+.workflow-readiness-findings li { display:grid; gap:3px; padding:7px 9px; border:1px solid var(--border); border-radius:7px; font-size:11px; }
+.workflow-readiness-findings li.error { border-left:3px solid var(--bad); }
+.workflow-readiness-findings li.warning { border-left:3px solid var(--warn); }
+.workflow-readiness-findings li.info { border-left:3px solid var(--brand-2); }
+.workflow-readiness-findings li span, .workflow-readiness-note { color:var(--text-3); font-size:10.5px; line-height:1.5; }
