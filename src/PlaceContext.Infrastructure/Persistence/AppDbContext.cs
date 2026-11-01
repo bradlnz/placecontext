@@ -18,6 +18,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
 {
     private readonly ICurrentTenant _tenant;
     internal DbContextOptions<AppDbContext> ContextOptions { get; }
+    public DbSet<PendingWorkspaceSignupRow> PendingWorkspaceSignups => Set<PendingWorkspaceSignupRow>();
     public DbSet<TenantRunPlanRow> TenantRunPlans => Set<TenantRunPlanRow>();
     public DbSet<BillableRunRow> BillableRuns => Set<BillableRunRow>();
     public DbSet<StripeBillingEventRow> StripeBillingEvents => Set<StripeBillingEventRow>();
@@ -106,6 +107,16 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        b.Entity<PendingWorkspaceSignupRow>(e =>
+        {
+            e.ToTable("pending_workspace_signups");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.TokenHash).IsUnique().HasDatabaseName("ux_pending_signup_token");
+            e.HasIndex(x => x.ExchangeHash).IsUnique().HasDatabaseName("ux_pending_signup_exchange");
+            e.HasIndex(x => x.ExpiresAt).HasDatabaseName("ix_pending_signup_expiry");
+            e.HasIndex(x => x.Slug).HasDatabaseName("ix_pending_signup_slug");
+        });
+
         b.Entity<TenantRunPlanRow>(e =>
         {
             e.ToTable("tenant_run_plans");
