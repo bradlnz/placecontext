@@ -1,0 +1,72 @@
+name: Validate SaaS authentication and signup
+
+on:
+  push:
+    branches:
+      - codex/saas-auth-signup-flow
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: saas-auth-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signup:
+    name: .NET authentication, PostgreSQL and tenant-isolation tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: signup_ci
+          POSTGRES_PASSWORD: signup_ci
+          POSTGRES_DB: signup_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U signup_ci -d signup_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PLACECONTEXT_TEST_POSTGRES: "Host=localhost;Port=5432;Database=signup_ci;Username=signup_ci;Password=signup_ci"
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore and build
+        run: |
+          dotnet restore PlaceContext.slnx
+          dotnet build PlaceContext.slnx --configuration Release --no-restore
+
+      - name: Test auth, navigation and form contracts
+        run: |
+          dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj \
+            --configuration Release --no-build --no-restore \
+            --filter "FullyQualifiedName~ManagedSignupRouteTests|FullyQualifiedName~LoginViewModelTests|FullyQualifiedName~ExternalSsoLoginTests|FullyQualifiedName~PublicUrlAndTenantSlugTests"
+
+      - name: Test signup transaction, verification and credential safety
+        run: |
+          dotnet test tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj \
+            --configuration Release --no-build --no-restore \
+            --filter "FullyQualifiedName~ManagedWorkspaceSignupPostgresTests|FullyQualifiedName~AuthServiceTests|FullyQualifiedName~TenantWriteIsolationTests"
+
+      - name: Verify existing workflow execution suite is unaffected
+        run: |
+          dotnet test tests/PlaceContext.Application.Tests/PlaceContext.Application.Tests.csproj \
+            --configuration Release --no-build --no-restore \
+            --filter "FullyQualifiedName~JobChainTests|FullyQualifiedName~JobRunnerTests"
