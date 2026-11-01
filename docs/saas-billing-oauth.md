@@ -1,93 +1,107 @@
-# SaaS run plans and managed Microsoft OAuth (first integration)
+# PlaceContext SaaS: unlimited workflow runs, managed throughput and OAuth
 
-This change is built on the workflow-first/job-data foundation. It does **not** create a
-separate Agent Store or data-profile product. Jobs and Workflows remain the primary
-execution surface; plan management lives under Settings → Billing, and Microsoft 365
-authorisation lives under Settings → Connections.
+PlaceContext sells managed hosting, execution throughput, reliability and support
+rather than a monthly number of workflow runs. Billing and usage live under
+Settings → Billing; managed Microsoft authorisation lives under Settings → Connections.
 
-## Plan entitlements and run accounting
+## Plan catalogue
 
-One **top-level workflow start** uses one included run, however many child jobs execute.
-One **standalone job start** also uses one run. Automatic retries and durable workflow
-continuations reuse their original execution's key, and do not use another run.
-A manual replay is a new top-level execution and consumes one run.
+These are proposed PlaceContext USD prices, excluding taxes, not verified competitor
+pricing. Actual prices must be configured in Stripe or agreed in signed contracts.
 
-The included allowances are currently code-configured defaults, **not confirmed prices**:
+| Plan | Price | Workflow/job run starts | Admission throughput | Hosting |
+| --- | ---: | --- | --- | --- |
+| Developer Edition (`free`) | $0 | Unlimited | No application pacing | Self-hosted only, non-production; community support, no managed SLA |
+| Basic Managed (`basic`) | $600/month | Unlimited | **60 starts/minute**, 1 per second | Shared managed; 99.9% SLA target by agreement |
+| Standard Managed (`standard`) | $825/month | Unlimited | **600 starts/minute**, 10 per second | Shared managed; 99.9% SLA target by agreement |
+| Enterprise (`enterprise`) | From $99,000/year | Unlimited | Per-tenant contractual rate | Dedicated or customer-hosted options; up to 99.99% SLA and TAM by contract |
 
-| Plan | Included runs per billing period |
-| --- | ---: |
-| Free | 100 per calendar month |
-| Starter | 1,000 |
-| Growth | 10,000 |
-| Business | 50,000 |
+These are **start admission rates**, not guarantees of execution completion time,
+CPU speed, memory capacity, max concurrent jobs or Kubernetes isolation.
+One top-level workflow or standalone job start is metered once; all child steps,
+automatic retries and durable resumptions reuse the execution key. An intentional
+manual replay is a new execution. A managed customer never reaches a *monthly*
+volume limit; starts that exceed admission throughput wait.
 
-The authenticated workspace's paid billing period comes from its verified Stripe
-subscription item, not from client time or a query parameter. Free plans reset on
-the UTC calendar month. Reserves are written atomically under a PostgreSQL row lock
-in `tenant_run_plans`. The immutable `billable_runs` key
-(`workflow:<run GUID>` / `job:<root GUID>`) prevents duplicate charging
-on retries, same-run submissions and concurrent workers.
+### What the implementation actually enforces
 
-Run reservations happen immediately **before** a new execution starts.
-Failed runs consume an allowance; background/scheduled submissions may be accepted
-into a queue but cannot start when the allowance is exhausted. A suspended run
-can always be resumed without another charge. Reads, stored data, existing run
-history and billing management remain available when runs are exhausted.
+- A PostgreSQL plan-row `FOR UPDATE` lock coordinates `NextDispatchAt` across replicas.
+- Basic permits at most one new start per second; Standard ten per second; Enterprise is configured per tenant.
+- Every accepted top-level execution gets an immutable ledger key in `billable_runs` and increments the 64-bit reporting counter `UsedRuns`.
+- The old `IncludedRuns` column remains for migration compatibility but is set to **0**, meaning unlimited. It is not used to reject starts.
+- The admission delay happens in the execution handler after committing the reservation; no DB connection is held while waiting.
+- Active subscription status is rechecked after the delay; cancelled/expired paid plans do not start more work.
+- Queued RPC workflow submissions and scheduled jobs already use durable submission queues, but bursty direct UI/API calls may time out while waiting.
 
-For existing tenants without a plan record, the first execution creates a
-100-run Free entitlement. This is a deliberate initial default; change the
-Free allocation and product onboarding policy before public release.
+Fully durable admission backlog processing, fair tenant scheduling, real workload
+concurrency caps, CPU/memory resource quotas and safeguards against costly
+long-running jobs remain operational work. **Unlimited runs does not imply
+unlimited infrastructure resources, free third-party APIs, or unlimited parallelism.**
 
-### Prevent free-trial tenant abuse on hosted SaaS
+### Self-hosted versus public hosted SaaS
 
-Enable `PlaceContext__SaaS__RequireExplicitTenantProvisioning=true` on a hosted deployment.
-With this flag, visiting an unknown subdomain returns 404 instead of creating
-another tenant automatically. Provision the initial default tenant and customer
-tenants through an authenticated administrative onboarding process before
-enabling the flag. The current change does **not** implement public self-service
-tenant signup, email-domain verification or payment-gated trial creation;
-do not expose unbounded subdomain auto-provisioning when run plans are enabled.
-Self-hosted/lab installations can retain the previous auto-provisioning behaviour
-with the flag disabled.
+Developer Edition is free and self-hosted, with no application-level pacing.
+Do not market it as an open-source distribution until packaging and licensing
+are verified. For a public managed deployment, configure both:
 
-## Stripe configuration
-
-Set these secrets server-side. Never expose them through the browser or job env:
-
+```sh
+PlaceContext__SaaS__ManagedHosting=true
+PlaceContext__SaaS__RequireExplicitTenantProvisioning=true
 ```
+
+The first setting prevents a free/self-hosted Developer tenant from starting runs
+on the paid SaaS service. The second prevents automatic workspace creation from
+unknown subdomains. Both default to false for existing self-hosted installations.
+
+## Stripe setup
+
+Configure secrets and recurring price IDs server-side, never in the browser or
+customer jobs. The following are placeholders, **not** actual Stripe IDs:
+
+```sh
 PlaceContext__Stripe__SecretKey=sk_live_...
 PlaceContext__Stripe__WebhookSecret=whsec_...
-PlaceContext__Stripe__StarterPriceId=price_...
-PlaceContext__Stripe__GrowthPriceId=price_...
-PlaceContext__Stripe__BusinessPriceId=price_...
+PlaceContext__Stripe__BasicPriceId=price_basic_monthly
+PlaceContext__Stripe__StandardPriceId=price_standard_monthly
+PlaceContext__Stripe__EnterpriseSalesUrl=https://example.com/enterprise
 ```
 
-Create Stripe **fixed monthly subscription** prices for each plan, set the
-corresponding Price IDs, and configure the webhook endpoint at
-`https://<your-service>/api/billing/stripe/webhook`.
+Create monthly recurring Stripe prices for Basic ($600) and Standard ($825).
+Checkout uses only configured server-side Price IDs; UI price amounts are
+indicative and not fetched/verified against Stripe's product catalogue.
+Stripe Billing Portal handles subscription management.
 
-Subscribe to:
-- `checkout.session.completed` (links verified customer identity; does not grant paid runs);
-- `customer.subscription.created`;
-- `customer.subscription.updated`;
-- `customer.subscription.deleted`.
+Enterprise is never sold through public Checkout. Following a signed agreement,
+configure the tenant-specific Stripe price ID and positive start rate:
 
-Only the HMAC-SHA256-signed Stripe events can update a paid run entitlement.
-Webhook signatures have a five-minute freshness window, event IDs are persisted
-to deduplicate deliveries, and older subscription timestamps cannot roll back
-newer entitlement periods. The server validates the price against its configured
-plan IDs, tenant linkage and the subscription billing period. Active/trialing
-subscriptions can start new runs; past-due, unpaid and cancelled subscriptions
-are blocked pending a valid subscription update.
+```sh
+PlaceContext__Stripe__EnterpriseContracts__11111111-1111-1111-1111-111111111111__PriceId=price_enterprise_annual
+PlaceContext__Stripe__EnterpriseContracts__11111111-1111-1111-1111-111111111111__MaxStartsPerMinute=1500
+```
 
-Checkout and billing portal are hosted by Stripe. Billing status is never
-changed because of the checkout success-return URL.
+The GUID and Price IDs are placeholders. The enterprise subscription must carry
+`metadata.tenant_id=<workspace-guid>`, match the configured PriceId, and use
+quantity one. Only signed subscription events activate paid access. Legacy
+Starter/Growth/Business price IDs are recognised for existing subscriptions but
+cannot be purchased from the new plan screen.
 
-**Production hardening still required:** race/load tests against a real Postgres
-database, authenticated billing-portal/checkout end-to-end tests in Stripe test
-mode, webhook delivery ordering tests, and accurate plan pricing/cancellation
-policies. This is a guarded implementation, not a completed billing launch.
+Webhook endpoint: `https://<your-service>/api/billing/stripe/webhook`.
+Listen for `checkout.session.completed`, `customer.subscription.created`,
+`customer.subscription.updated`, and `customer.subscription.deleted`.
+Only fresh HMAC-SHA256 signed events can update paid plans. Event IDs are
+deduplicated and stale subscription events cannot roll back newer state.
+Checkout success redirects do not grant paid execution.
 
+## SLA and readiness limitations
+
+The listed 99.9% / up-to-99.99% uptime SLA targets are **commercial goals**,
+not achieved or guaranteed by this billing change. Dedicated hosting, customer
+cloud AWS/Azure/GCP deployment options, compliance assurances, security controls
+and dedicated technical account management must be delivered and contracted.
+
+Before public launch, test Stripe Checkout/Portal, signed webhook ordering,
+subscription cancellations during pacing, large backlogs, multi-tenant resource
+fairness, self-hosted Developer deployment and quota-free reporting.
 ## Microsoft 365 managed OAuth
 
 Register a Microsoft Entra **Web** application and exact redirect URI:
@@ -141,19 +155,11 @@ requires a central OAuth callback broker with securely bound browser sessions
 before onboarding arbitrary SaaS tenants. Do not claim that arbitrary new
 subdomains can connect automatically in this initial version.
 
-## Run/plan edge cases requiring validation
+## Remaining test and launch work
 
-- Two simultaneous starts against the last allowance: exactly one can reserve.
-- Queued submissions do not bypass the reserve at execution start.
-- Automatic job retries and workflow child jobs do not consume more runs.
-- A replay uses one new execution key and consumes one allowance.
-- A continuation of an existing paused workflow does not consume a new run.
-- Duplicated and out-of-order subscription webhooks cannot grant extra runs.
-- An upgrade in the same billing period preserves used runs.
-- A new billing period starts the new paid allowance.
-- A failed Microsoft token refresh does not expose credentials and requires reconnecting.
-
-See the added unit tests for signature verification, PKCE S256, plan rules,
-data-quality job configuration and workflow-run calls. These tests have **not
-yet been executed in this environment** and real provider integration tests
-remain required before production rollout.
+- Verify unlimited ledger accounting and per-tenant pacing against PostgreSQL across replicas.
+- Confirm direct UI/API backlog timeouts and migrate long waits to fully durable queued admission.
+- Add per-tenant concurrency/pod/resource limits to complement start pacing.
+- Complete live/test-mode Stripe checkout and signed-webhook integration tests.
+- Complete Microsoft consent, callback and refresh tests with a configured provider.
+- Finalize SLA remedies, billing currency, VAT/GST treatment and enterprise operations.
