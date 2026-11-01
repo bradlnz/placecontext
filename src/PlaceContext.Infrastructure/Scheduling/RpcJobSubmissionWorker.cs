@@ -58,12 +58,26 @@ public sealed class RpcJobSubmissionWorker(
         }
     }
 
+    /// <summary>Reconcile completed jobs after worker crashes without replaying established runs.</summary>
+    internal static Task<int> ReconcileFinishedAsync(AppDbContext db, CancellationToken ct = default)
+        => db.Database.ExecuteSqlRawAsync("""
+            UPDATE rpc_job_submissions s
+            SET "Status" = j."Status", "FinishedAt" = now(),
+                "ClaimedBy" = NULL, "ClaimedAt" = NULL, "HeartbeatAt" = NULL,
+                "LastError" = NULL
+            FROM job_runs j
+            WHERE s."TenantId" = j."TenantId" AND s."RunId" = j."Id"
+              AND j."Status" IN ('Succeeded', 'Partial', 'Failed', 'Cancelled')
+              AND s."Status" IN ('Queued', 'Running')
+            """, ct);
+
     private async Task<IReadOnlyList<Claimed>> ClaimAsync(int capacity, CancellationToken ct)
     {
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var conn = (NpgsqlConnection)db.Database.GetDbConnection();
         if (conn.State != ConnectionState.Open) await conn.OpenAsync(ct);
+        await ReconcileFinishedAsync(db, ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             UPDATE rpc_job_submissions s
@@ -71,11 +85,16 @@ public sealed class RpcJobSubmissionWorker(
                 "ClaimedAt" = now(), "HeartbeatAt" = now(),
                 "StartedAt" = COALESCE("StartedAt", now())
             FROM (
-                SELECT "Id" FROM rpc_job_submissions
-                WHERE ("Status" = 'Queued' AND "NextAttemptAt" <= now())
-                   OR ("Status" = 'Running' AND "HeartbeatAt" < now() - interval '2 minutes')
-                ORDER BY "SubmittedAt"
-                FOR UPDATE SKIP LOCKED
+                SELECT candidate."Id" FROM rpc_job_submissions candidate
+                WHERE (("Status" = 'Queued' AND "NextAttemptAt" <= now())
+                   OR ("Status" = 'Running' AND "HeartbeatAt" < now() - interval '2 minutes'))
+                  AND NOT EXISTS (
+                      SELECT 1 FROM job_runs established
+                      WHERE established."TenantId" = candidate."TenantId"
+                        AND established."Id" = candidate."RunId"
+                  )
+                ORDER BY candidate."SubmittedAt"
+                FOR UPDATE OF candidate SKIP LOCKED
                 LIMIT @capacity
             ) c
             WHERE s."Id" = c."Id"
