@@ -5,15 +5,17 @@
 @inject BillingSettingsViewModel Vm
 @implements IDisposable
 
-<PageTitle>PlaceContext — Billing and run allowance</PageTitle>
+<PageTitle>PlaceContext — Billing and usage</PageTitle>
 <div class="page">
     <div class="page-head">
-        <div><h1 class="page-title">Billing &amp; usage</h1>
-            <p class="page-sub">One top-level workflow or standalone job execution uses one run.
-                Retries, continuation steps and child jobs do not add charges.</p></div>
+        <div>
+            <h1 class="page-title">Billing &amp; usage</h1>
+            <p class="page-sub">Unlimited workflow and standalone job starts on every edition.
+                Managed tiers pace new starts rather than charging per execution.
+                Child jobs, retries and resumptions do not add usage.</p>
+        </div>
         <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.LoadAsync"><AppIcon Kind="refresh" /> Refresh</button>
     </div>
-
     @if (Vm.Error is { } error)
     {
         <div class="dccard" role="alert" style="padding:16px; color:var(--bad)">@error</div>
@@ -25,35 +27,49 @@
         <section class="dccard" style="padding:24px; margin:16px 0" aria-label="Current plan">
             <span class="text-3-12">Current plan</span>
             <h2 style="font-size:22px; margin:6px 0">@RunPlans.NameFor(plan.Plan) · @plan.Status</h2>
-            <div style="font-size:30px; font-weight:700; font-variant-numeric:tabular-nums">
-                @plan.Remaining.ToString("N0") <span style="font-size:14px; font-weight:400">runs remaining</span>
-            </div>
-            <progress value="@plan.UsedRuns" max="@plan.IncludedRuns"
-                      aria-label="Included runs consumed" style="width:100%; margin-top:14px"></progress>
-            <p class="text-3-12">@plan.UsedRuns.ToString("N0") used of @plan.IncludedRuns.ToString("N0")
-                included. Period: @plan.PeriodStart.ToLocalTime().ToString("d") to @plan.PeriodEnd.ToLocalTime().ToString("d").</p>
-            @if (!plan.CanRun)
+            <div style="font-size:30px; font-weight:700">Unlimited runs</div>
+            <p class="text-3-12">
+                @plan.UsedRuns.ToString("N0") top-level starts reserved this period.
+                Period: @plan.PeriodStart.ToLocalTime().ToString("d") to @plan.PeriodEnd.ToLocalTime().ToString("d").
+            </p>
+            <p class="text-3-12">
+                @(plan.StartsPerMinute is { } rate
+                    ? $"Up to {rate:N0} workflow/job starts per minute (admission rate)"
+                    : "No application-imposed start pacing on this edition")
+            </p>
+            @if (plan.Status == "self_hosted_only")
             {
-                <p role="alert">The allowance is exhausted or the subscription is inactive.
-                    New executions are blocked; existing run history remains available.</p>
+                <p role="alert">Developer Edition is self-hosted only.
+                    Choose a managed plan to run workflows on hosted PlaceContext.</p>
+            }
+            else if (!plan.CanRun)
+            {
+                <p role="alert">New runs cannot start because the subscription is inactive,
+                    expired or unconfigured. Existing run history remains available.</p>
             }
             @if (activePaid)
             {
                 <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ManageAsync">Manage subscription at Stripe</button>
             }
         </section>
-
         <h2 class="title-16" style="margin:24px 0 12px">Plans</h2>
-        <p class="text-3-12">Indicative prices in USD, excluding taxes. Your Stripe Checkout or signed
-            Enterprise agreement confirms the applicable price and service terms.</p>
+        <p class="text-3-12">Proposed prices in USD, excluding taxes. Stripe Checkout or a signed
+            Enterprise agreement confirms prices, SLAs and terms.</p>
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px">
             @foreach (var tier in RunPlans.Tiers)
             {
                 <section class="dccard" style="padding:20px" @key="tier.Code">
                     <h3>@tier.Name</h3>
-                    <div style="font-size:20px;font-weight:700">@tier.PriceLabel</div>
+                    <div style="font-size:20px; font-weight:700">@tier.PriceLabel</div>
+                    <strong>Unlimited workflow &amp; job runs</strong>
                     <p class="text-3-12">@tier.Description</p>
-                    <strong>@(tier.IncludedRuns is { } included ? included.ToString("N0") + " runs per billing period" : "Contract-specific run allowance")</strong>
+                    <p class="text-3-12">
+                        @(tier.StartsPerMinute is { } rate
+                            ? $"Up to {rate:N0} new starts per minute"
+                            : tier.Code == RunPlans.Developer
+                                ? "Limited by your own infrastructure"
+                                : "Start rate agreed by contract")
+                    </p>
                     <p class="text-3-12">@tier.Availability</p>
                     <p class="text-3-12">@tier.Support</p>
                     <ul class="text-3-12">
@@ -66,7 +82,7 @@
                     {
                         @if (activePaid)
                         {
-                            <p class="text-3-12">Use Manage subscription above to change an existing subscription.</p>
+                            <p class="text-3-12">Use Manage subscription above to change plans.</p>
                         }
                         else
                         {
@@ -78,24 +94,25 @@
                     {
                         @if (Vm.EnterpriseSalesUrl is { } salesUrl)
                         {
-                            <a class="dcbtn" href="@salesUrl.AbsoluteUri" rel="noopener noreferrer">Discuss Enterprise</a>
+                            <a class="dcbtn" href="@salesUrl.AbsoluteUri"
+                               rel="noopener noreferrer">Discuss Enterprise</a>
                         }
                         else
                         {
-                            <p class="text-3-12">Contact the PlaceContext team for a custom contract.</p>
+                            <p class="text-3-12">Contact PlaceContext for a custom contract.</p>
                         }
                     }
                     else
                     {
-                        <p class="text-3-12">Included for non-production development workspaces.</p>
+                        <p class="text-3-12">Available for self-hosted development installations.</p>
                     }
                 </section>
             }
         </div>
         <p class="text-3-12" style="margin-top:18px">
-            A run is counted when execution is accepted. Failed runs consume an allowance,
-            but retries and workflow child jobs do not. Quotas are enforced server-side.
-            SLA targets and dedicated hosting are subject to separate service agreements.
+            Usage is metered for reporting, never volume caps. Start pacing is shared across
+            replicas but does not guarantee execution speed, concurrency, dedicated CPU or memory.
+            SLAs and resource terms require separate service agreements.
         </p>
     }
 </div>
