@@ -99,16 +99,25 @@ public sealed class StripeRunBillingWebhook(AppDbContext db, IOptions<StripeRunB
         }
         var subscription = TryString(obj, "id");
         var status = TryString(obj, "status") ?? "inactive";
-        var price = obj.GetProperty("items").GetProperty("data").EnumerateArray()
-            .Select(item => TryString(item.GetProperty("price"), "id"))
-            .FirstOrDefault(x => settings.Value.PlanForPrice(x ?? "") is not null);
-        var plan = settings.Value.PlanForPrice(price ?? "")
-            ?? throw new InvalidOperationException("Unrecognised Stripe subscription price.");
-        var firstItem = obj.GetProperty("items").GetProperty("data").EnumerateArray().First();
-        var start = Unix(firstItem, "current_period_start")
+        // Match the exact subscription item and its period to an operator-configured
+        // entitlement. Enterprise prices and run quotas are bound to a specific tenant.
+        var matches = obj.GetProperty("items").GetProperty("data").EnumerateArray()
+            .Select(item => (Item: item, Price: TryString(item.GetProperty("price"), "id")))
+            .Where(item => settings.Value.EntitlementForPrice(item.Price, tenantId) is not null)
+            .ToArray();
+        if (matches.Length != 1)
+            throw new InvalidOperationException("A subscription must contain exactly one recognised run plan price.");
+        var matchedItem = matches[0].Item;
+        if (matchedItem.TryGetProperty("quantity", out var quantity)
+            && (!quantity.TryGetInt32(out var units) || units != 1))
+            throw new InvalidOperationException("Run plan subscriptions must have quantity one.");
+        var entitlement = settings.Value.EntitlementForPrice(matches[0].Price, tenantId)!;
+        var plan = entitlement.Plan;
+        var includedRuns = entitlement.IncludedRuns;
+        var start = Unix(matchedItem, "current_period_start")
             ?? Unix(obj, "current_period_start")
             ?? throw new InvalidOperationException("Subscription period start missing.");
-        var end = Unix(firstItem, "current_period_end")
+        var end = Unix(matchedItem, "current_period_end")
             ?? Unix(obj, "current_period_end")
             ?? throw new InvalidOperationException("Subscription period end missing.");
         if (start >= end || end - start > TimeSpan.FromDays(400))
@@ -122,7 +131,7 @@ public sealed class StripeRunBillingWebhook(AppDbContext db, IOptions<StripeRunB
             INSERT INTO tenant_run_plans ("TenantId", "Plan", "Status", "IncludedRuns",
                 "UsedRuns", "PeriodStart", "PeriodEnd", "StripeCustomerId",
                 "StripeSubscriptionId", "LastStripeEventCreated")
-            VALUES ({tenantId}, {plan}, {entitlementStatus}, {RunPlans.Included(plan)}, {0},
+            VALUES ({tenantId}, {plan}, {entitlementStatus}, {includedRuns}, {0},
                 {start}, {end}, {customer}, {subscription}, {created})
             ON CONFLICT ("TenantId") DO UPDATE SET
                 "Plan" = EXCLUDED."Plan",

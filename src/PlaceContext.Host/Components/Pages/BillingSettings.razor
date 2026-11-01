@@ -9,8 +9,8 @@
 <div class="page">
     <div class="page-head">
         <div><h1 class="page-title">Billing &amp; usage</h1>
-            <p class="page-sub">Each workflow or standalone job run uses one included run. Retries,
-                continuation steps and jobs inside a workflow do not add charges.</p></div>
+            <p class="page-sub">One top-level workflow or standalone job execution uses one run.
+                Retries, continuation steps and child jobs do not add charges.</p></div>
         <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.LoadAsync"><AppIcon Kind="refresh" /> Refresh</button>
     </div>
 
@@ -20,9 +20,11 @@
     }
     @if (Vm.Current is { } plan)
     {
+        var activePaid = plan.Plan != RunPlans.Developer
+            && (plan.Status == "active" || plan.Status == "trialing");
         <section class="dccard" style="padding:24px; margin:16px 0" aria-label="Current plan">
             <span class="text-3-12">Current plan</span>
-            <h2 style="font-size:22px; margin:6px 0">@plan.Plan.ToUpperInvariant() · @plan.Status</h2>
+            <h2 style="font-size:22px; margin:6px 0">@RunPlans.NameFor(plan.Plan) · @plan.Status</h2>
             <div style="font-size:30px; font-weight:700; font-variant-numeric:tabular-nums">
                 @plan.Remaining.ToString("N0") <span style="font-size:14px; font-weight:400">runs remaining</span>
             </div>
@@ -32,30 +34,68 @@
                 included. Period: @plan.PeriodStart.ToLocalTime().ToString("d") to @plan.PeriodEnd.ToLocalTime().ToString("d").</p>
             @if (!plan.CanRun)
             {
-                <p role="alert">The included allowance is exhausted or the subscription is inactive.
+                <p role="alert">The allowance is exhausted or the subscription is inactive.
                     New executions are blocked; existing run history remains available.</p>
             }
-            <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ManageAsync">Manage subscription at Stripe</button>
+            @if (activePaid)
+            {
+                <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ManageAsync">Manage subscription at Stripe</button>
+            }
         </section>
 
-        <h2 class="title-16" style="margin:24px 0 12px">Run plans</h2>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px">
-            @foreach (var tier in new[] { ("starter", RunPlans.Included("starter")), ("growth", RunPlans.Included("growth")), ("business", RunPlans.Included("business")) })
+        <h2 class="title-16" style="margin:24px 0 12px">Plans</h2>
+        <p class="text-3-12">Indicative prices in USD, excluding taxes. Your Stripe Checkout or signed
+            Enterprise agreement confirms the applicable price and service terms.</p>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px">
+            @foreach (var tier in RunPlans.Tiers)
             {
-                <section class="dccard" style="padding:20px" @key="tier.Item1">
-                    <h3>@tier.Item1.ToUpperInvariant()</h3>
-                    <strong>@tier.Item2.ToString("N0") runs per billing period</strong>
-                    <p class="text-3-12">View the current subscription price and terms in Stripe Checkout.</p>
-                    <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="() => Vm.CheckoutAsync(tier.Item1)">
-                        Choose @tier.Item1
-                    </button>
+                <section class="dccard" style="padding:20px" @key="tier.Code">
+                    <h3>@tier.Name</h3>
+                    <div style="font-size:20px;font-weight:700">@tier.PriceLabel</div>
+                    <p class="text-3-12">@tier.Description</p>
+                    <strong>@(tier.IncludedRuns is { } included ? included.ToString("N0") + " runs per billing period" : "Contract-specific run allowance")</strong>
+                    <p class="text-3-12">@tier.Availability</p>
+                    <p class="text-3-12">@tier.Support</p>
+                    <ul class="text-3-12">
+                        @foreach (var feature in tier.Features)
+                        {
+                            <li>@feature</li>
+                        }
+                    </ul>
+                    @if (tier.SelfService)
+                    {
+                        @if (activePaid)
+                        {
+                            <p class="text-3-12">Use Manage subscription above to change an existing subscription.</p>
+                        }
+                        else
+                        {
+                            <button class="dcbtn primary" disabled="@Vm.Busy"
+                                    @onclick="() => Vm.CheckoutAsync(tier.Code)">Choose @tier.Name</button>
+                        }
+                    }
+                    else if (tier.Code == RunPlans.Enterprise)
+                    {
+                        @if (Vm.EnterpriseSalesUrl is { } salesUrl)
+                        {
+                            <a class="dcbtn" href="@salesUrl.AbsoluteUri" rel="noopener noreferrer">Discuss Enterprise</a>
+                        }
+                        else
+                        {
+                            <p class="text-3-12">Contact the PlaceContext team for a custom contract.</p>
+                        }
+                    }
+                    else
+                    {
+                        <p class="text-3-12">Included for non-production development workspaces.</p>
+                    }
                 </section>
             }
         </div>
         <p class="text-3-12" style="margin-top:18px">
-            A run is counted when execution is accepted. Failed executions consume an allowance;
-            automatic retries and workflow child jobs do not. Upgrading does not reset the
-            current period's usage. Payments and changes to subscription status are verified server-side.
+            A run is counted when execution is accepted. Failed runs consume an allowance,
+            but retries and workflow child jobs do not. Quotas are enforced server-side.
+            SLA targets and dedicated hosting are subject to separate service agreements.
         </p>
     }
 </div>

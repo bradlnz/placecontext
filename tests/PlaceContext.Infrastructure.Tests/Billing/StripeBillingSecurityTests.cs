@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using Microsoft.Extensions.Options;
 using PlaceContext.Application.Billing;
 using PlaceContext.Infrastructure.Billing;
 
@@ -29,35 +28,80 @@ public sealed class StripeBillingSecurityTests
     }
 
     [Fact]
-    public void Only_server_configured_price_ids_map_to_paid_allowances()
+    public void Only_server_configured_prices_map_to_self_service_entitlements()
     {
+        var tenant = Guid.NewGuid();
         var options = new StripeRunBillingOptions
         {
-            StarterPriceId = "price_starter",
-            GrowthPriceId = "price_growth",
-            BusinessPriceId = "price_business"
+            BasicPriceId = "price_basic",
+            StandardPriceId = "price_standard",
+            StarterPriceId = "price_legacy_starter",
+            GrowthPriceId = "price_legacy_growth",
+            BusinessPriceId = "price_legacy_business"
         };
-        Assert.Equal("starter", options.PlanForPrice("price_starter"));
-        Assert.Equal("growth", options.PlanForPrice("price_growth"));
-        Assert.Equal("business", options.PlanForPrice("price_business"));
-        Assert.Null(options.PlanForPrice("price_malicious"));
-        Assert.Null(options.PriceFor("unknown"));
-        Assert.Equal(100, RunPlans.Included("free"));
-        Assert.Equal(1000, RunPlans.Included("starter"));
-        Assert.Equal(10000, RunPlans.Included("growth"));
-        Assert.Equal(50000, RunPlans.Included("business"));
+        Assert.Equal("price_basic", options.PriceFor(RunPlans.Basic));
+        Assert.Equal("price_standard", options.PriceFor(RunPlans.Standard));
+        Assert.Null(options.PriceFor(RunPlans.Developer));
+        Assert.Null(options.PriceFor(RunPlans.Enterprise));
+        Assert.Null(options.PriceFor("arbitrary"));
+        Assert.Equal(RunPlans.Basic, options.PlanForPrice("price_basic", tenant));
+        Assert.Equal(RunPlans.Standard, options.PlanForPrice("price_standard", tenant));
+        Assert.Equal(RunPlans.Basic, options.PlanForPrice("price_legacy_starter", tenant));
+        Assert.Equal(RunPlans.Standard, options.PlanForPrice("price_legacy_growth", tenant));
+        Assert.Equal("business", options.PlanForPrice("price_legacy_business", tenant));
+        Assert.Null(options.PlanForPrice("price_malicious", tenant));
+        Assert.Null(options.PlanForPrice("price_basic", Guid.Empty));
+        Assert.Equal(100, RunPlans.Included(RunPlans.Developer));
+        Assert.Equal(1000, RunPlans.Included(RunPlans.Basic));
+        Assert.Equal(10000, RunPlans.Included(RunPlans.Standard));
+        Assert.Throws<ArgumentException>(() => RunPlans.Included(RunPlans.Enterprise));
+    }
+
+    [Fact]
+    public void Enterprise_contract_price_and_quota_are_tenant_specific_and_not_in_checkout()
+    {
+        var tenant = Guid.NewGuid();
+        var otherTenant = Guid.NewGuid();
+        var options = new StripeRunBillingOptions
+        {
+            EnterpriseContracts = new Dictionary<string, EnterpriseBillingContract>
+            {
+                [tenant.ToString("D")] = new() { PriceId = "price_contract_annual", IncludedRuns = 125000 }
+            }
+        };
+        var entitlement = options.EntitlementForPrice("price_contract_annual", tenant);
+        Assert.NotNull(entitlement);
+        Assert.Equal(RunPlans.Enterprise, entitlement!.Plan);
+        Assert.Equal(125000, entitlement.IncludedRuns);
+        Assert.Null(options.EntitlementForPrice("price_contract_annual", otherTenant));
+        Assert.Null(options.PriceFor(RunPlans.Enterprise));
+
+        options.EnterpriseContracts[tenant.ToString("D")].IncludedRuns = 0;
+        Assert.Null(options.EntitlementForPrice("price_contract_annual", tenant));
+    }
+
+    [Fact]
+    public void Tier_catalog_marks_developer_nonproduction_and_enterprise_quote_only()
+    {
+        Assert.Equal(new[] { RunPlans.Developer, RunPlans.Basic, RunPlans.Standard, RunPlans.Enterprise },
+            RunPlans.Tiers.Select(t => t.Code));
+        Assert.False(RunPlans.Tiers.Single(t => t.Code == RunPlans.Developer).SelfService);
+        Assert.Null(RunPlans.Tiers.Single(t => t.Code == RunPlans.Enterprise).IncludedRuns);
+        Assert.Equal("Developer Edition", RunPlans.NameFor(RunPlans.Developer));
+        Assert.Equal("Basic Managed (legacy)", RunPlans.NameFor("starter"));
     }
 
     [Fact]
     public void Billing_snapshot_counts_only_remaining_runs_and_expired_access_fails_closed()
     {
         var now = DateTimeOffset.UtcNow;
-        var plan = new RunAllowanceSnapshot("starter", "active", 1000, 999,
+        var plan = new RunAllowanceSnapshot(RunPlans.Basic, "active", 1000, 999,
             now.AddDays(-3), now.AddDays(20));
         Assert.Equal(1, plan.Remaining);
         Assert.True(plan.CanRun);
         Assert.False((plan with { UsedRuns = 1000 }).CanRun);
         Assert.False((plan with { Status = "inactive" }).CanRun);
+        Assert.False((plan with { PeriodStart = now.AddMinutes(1) }).CanRun);
         Assert.False((plan with { PeriodEnd = now.AddDays(-1) }).CanRun);
     }
 }

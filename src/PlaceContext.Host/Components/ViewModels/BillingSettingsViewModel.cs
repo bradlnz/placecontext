@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Options;
 using PlaceContext.Application.Billing;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -7,11 +8,20 @@ namespace PlaceContext.Host.Components.ViewModels;
 /// checkout and portal navigation use Stripe-hosted pages.</summary>
 public sealed class BillingSettingsViewModel(
     IRunAllowance allowance, IRunBillingPortal portal, NavigationManager navigation,
-    PortalUiState ui) : PageViewModel
+    IOptions<StripeRunBillingOptions> settings, PortalUiState ui) : PageViewModel
 {
     public RunAllowanceSnapshot? Current { get; private set; }
     public string? Error { get; private set; }
     public bool Busy { get; private set; }
+
+    public Uri? EnterpriseSalesUrl
+    {
+        get
+        {
+            return Uri.TryCreate(settings.Value.EnterpriseSalesUrl, UriKind.Absolute, out var url)
+                && url.Scheme == Uri.UriSchemeHttps ? url : null;
+        }
+    }
 
     public async Task LoadAsync()
     {
