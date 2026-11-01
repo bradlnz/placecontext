@@ -82,6 +82,7 @@ public sealed class RunAllowancePostgresTests
                 Assert.True(state.CanRun);
                 Assert.Equal(13, await verify.BillableRuns.CountAsync());
             }
+            var pacedClock = new FakeClock(DateTimeOffset.UtcNow);
             // Convert the same workspace to Basic: two concurrent starts must be
             // admitted rather than rejected, with ordered one-second start slots.
             await using (var setup = new AppDbContext(opts, tenant))
@@ -89,16 +90,17 @@ public sealed class RunAllowancePostgresTests
                 var plan = await setup.TenantRunPlans.SingleAsync();
                 plan.Plan = RunPlans.Basic;
                 plan.Status = "active";
-                plan.PeriodStart = clock.UtcNow.AddDays(-1);
-                plan.PeriodEnd = clock.UtcNow.AddDays(28);
+                plan.PeriodStart = pacedClock.UtcNow.AddDays(-1);
+                plan.PeriodEnd = pacedClock.UtcNow.AddDays(28);
                 plan.NextDispatchAt = null;
                 await setup.SaveChangesAsync();
             }
 
+            var pacingElapsed = System.Diagnostics.Stopwatch.StartNew();
             await Task.WhenAll(Enumerable.Range(0, 2).Select(async _ =>
             {
                 await using var context = new AppDbContext(opts, tenant);
-                await new DbRunAllowance(context, tenant, clock).ReserveAsync(
+                await new DbRunAllowance(context, tenant, pacedClock).ReserveAsync(
                     projectId, Guid.NewGuid(), "workflow");
             }));
             await using (var verify = new AppDbContext(opts, tenant))
@@ -106,7 +108,9 @@ public sealed class RunAllowancePostgresTests
                 var plan = await verify.TenantRunPlans.SingleAsync();
                 Assert.Equal(15L, plan.UsedRuns);
                 Assert.Equal(RunPlans.Unlimited, plan.IncludedRuns);
-                Assert.True(plan.NextDispatchAt >= clock.UtcNow.AddSeconds(2));
+                Assert.True(plan.NextDispatchAt >= pacedClock.UtcNow.AddSeconds(2));
+                Assert.True(pacingElapsed.Elapsed >= TimeSpan.FromMilliseconds(500),
+                    "Managed starts should be paced rather than run immediately.");
                 Assert.Equal(15, await verify.BillableRuns.CountAsync());
             }
         }
