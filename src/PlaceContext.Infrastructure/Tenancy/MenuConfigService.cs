@@ -36,9 +36,9 @@ public sealed class MenuConfigService : IMenuConfigService
     /// existing tenant overrides are dropped by MergeSide without deleting persisted user data.</summary>
     internal static readonly CatalogItem[] WorkspaceCatalog =
     {
-        new("dashboard", "Dashboard", "link", "/", Permission.ProjectsView, "grid", null, null),
         new("build.chat", "Build", "link", "/project/{projectId}/build", Permission.ProjectsView, "agent", null, null),
         new("chains", "Workflows", "link", "/project/{projectId}/workflows", Permission.ChainsManage, "chain", null, null),
+        new("monitor", "Monitor", "link", "/project/{projectId}/monitor", Permission.JobsView, "pulse", null, null),
         new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", "Automation", null),
         new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", "Automation", null),
         new("queues", "Queues", "link", "/project/{projectId}/queues", Permission.ChainsManage, "queue", "Infrastructure", null),

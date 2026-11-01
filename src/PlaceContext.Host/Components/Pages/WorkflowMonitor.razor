@@ -1,0 +1,171 @@
+@page "/project/{ProjectId:guid}/monitor"
+@attribute [Authorize(Policy = Permission.JobsView)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@using PlaceContext.Application.Workflows
+@inject WorkflowMonitorViewModel Vm
+@implements IDisposable
+
+<PageTitle>PlaceContext — Monitor</PageTitle>
+
+<div class="wf-monitor">
+    <header class="wf-monitor-head">
+        <div>
+            <span class="wf-monitor-eyebrow"><AppIcon Kind="pulse" /> WORKFLOW OPERATIONS</span>
+            <h1>Monitor</h1>
+            <p>Follow execution outcomes and respond when workflows need a person.</p>
+        </div>
+        <div class="wf-monitor-actions">
+            <a class="dcbtn" href="/project/@ProjectId/build"><AppIcon Kind="agent" /> Build</a>
+            <a class="dcbtn" href="/project/@ProjectId/workflows"><AppIcon Kind="chain" /> Workflows</a>
+            <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /> Refresh</button>
+        </div>
+    </header>
+
+    @if (Vm.Error is { } error)
+    {
+        <p class="wf-monitor-error" role="alert"><AppIcon Kind="warning" /> @error</p>
+    }
+    @if (Vm.Notice is { } notice)
+    {
+        <p class="wf-monitor-notice" role="status"><AppIcon Kind="check-circle" /> @notice</p>
+    }
+
+    @if (Vm.Snapshot is { } snapshot)
+    {
+        <section class="wf-monitor-metrics" aria-label="Observed workflow indicators">
+            <div class="wf-monitor-metric">
+                <span>Workflows</span><strong>@snapshot.WorkflowCount</strong>
+                <small>@snapshot.WorkflowsScanned scanned</small>
+            </div>
+            <div class="wf-monitor-metric">
+                <span>Actions pending</span><strong>@(snapshot.CanRespond ? snapshot.Actions.Count.ToString() : "—")</strong>
+                <small>Human or missing input</small>
+            </div>
+            <div class="wf-monitor-metric">
+                <span>Running or waiting</span><strong>@snapshot.RunningCount</strong>
+                <small>Recent persisted runs</small>
+            </div>
+            <div class="wf-monitor-metric">
+                <span>Completed successfully</span><strong>@(snapshot.SuccessPercent?.ToString() ?? "—")@(snapshot.SuccessPercent is not null ? "%" : "")</strong>
+                <small>@snapshot.SucceededCount of @snapshot.CompletedCount completed in sample</small>
+            </div>
+        </section>
+
+        <section class="wf-monitor-panel" aria-labelledby="workflow-actions-title">
+            <div class="wf-monitor-panel-head">
+                <div><span class="wf-monitor-eyebrow">NEEDS YOUR ATTENTION</span><h2 id="workflow-actions-title">Human actions</h2>
+                    <p>Requests from actual paused workflow runs—not AI-generated approval suggestions.</p>
+                </div>
+                <span class="wf-monitor-count">@snapshot.Actions.Count pending</span>
+            </div>
+            @if (!snapshot.CanRespond)
+            {
+                <p class="wf-monitor-empty"><AppIcon Kind="shield" /> Viewing execution indicators only. Approval requests require workflow management and run permissions.</p>
+            }
+            else if (snapshot.Actions.Count == 0)
+            {
+                <p class="wf-monitor-empty"><AppIcon Kind="check-circle" /> No pending human requests in the sampled workflows.</p>
+            }
+            else
+            {
+                <div class="wf-monitor-requests">
+                    @foreach (var action in snapshot.Actions)
+                    {
+                        <article class="wf-monitor-request" @key="action.Key">
+                            <span class="wf-monitor-request-icon"><AppIcon Kind="human" /></span>
+                            <div class="wf-monitor-request-main">
+                                <div class="wf-monitor-request-title"><h3>@action.WorkflowName</h3>
+                                    <span class="wf-monitor-tag">@(action.IsApproval ? "Approval required" : action.CanAnswerYesNo ? "Decision required" : "Input required")</span>
+                                </div>
+                                <p>@action.Instructions</p>
+                                <small>Started @action.StartedAt.ToLocalTime().ToString("g") · Run @(action.RunId.ToString("N")[..8])</small>
+                            </div>
+                            <div class="wf-monitor-request-buttons">
+                                <a class="dcbtn btn-sm" href="/project/@ProjectId/workflows?chain=@action.WorkflowId">Review workflow <AppIcon Kind="arrow-right" /></a>
+                                @if (action.CanAnswerYesNo)
+                                {
+                                    <button class="dcbtn btn-sm" disabled="@Vm.Busy" @onclick="() => Vm.Propose(action, false)">@(action.IsApproval ? "Decline" : "No")</button>
+                                    <button class="dcbtn btn-sm primary" disabled="@Vm.Busy" @onclick="() => Vm.Propose(action, true)">@(action.IsApproval ? "Approve" : "Yes")</button>
+                                }
+                                else
+                                {
+                                    <a class="dcbtn btn-sm primary" href="/project/@ProjectId/workflows?chain=@action.WorkflowId">Supply input <AppIcon Kind="arrow-right" /></a>
+                                }
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="wf-monitor-panel" aria-labelledby="workflow-runs-title">
+            <div class="wf-monitor-panel-head">
+                <div><span class="wf-monitor-eyebrow">EXECUTION INTELLIGENCE</span><h2 id="workflow-runs-title">Recent workflow runs</h2>
+                    <p>Measured status and completed steps from persisted execution records.</p>
+                </div>
+                <a class="dcbtn btn-sm" href="/observability?tab=workflows">Full observability <AppIcon Kind="arrow-right" /></a>
+            </div>
+            @if (snapshot.Runs.Count == 0)
+            {
+                <p class="wf-monitor-empty">No runs found in the sampled workflow history. <a href="/project/@ProjectId/workflows">Create or run a workflow</a>.</p>
+            }
+            else
+            {
+                <div class="wf-monitor-runs">
+                    @foreach (var run in snapshot.Runs)
+                    {
+                        <a class="wf-monitor-run" href="/observability?tab=workflows&amp;workflowRun=@run.RunId" @key="run.RunId">
+                            <span class="wf-monitor-run-icon @WorkflowMonitorViewModel.StatusTone(run.Status)">
+                                <AppIcon Kind="@WorkflowMonitorViewModel.StatusIcon(run.Status)" />
+                            </span>
+                            <div class="wf-monitor-run-main"><strong>@run.WorkflowName</strong><small>@run.StartedAt.ToLocalTime().ToString("g")</small></div>
+                            <span class="wf-monitor-steps">@run.CompletedSteps / @run.TotalSteps steps</span>
+                            <span class="wf-monitor-status @WorkflowMonitorViewModel.StatusTone(run.Status)">@run.Status</span>
+                            <AppIcon Kind="chevron-right" />
+                        </a>
+                    }
+                </div>
+            }
+            <footer class="wf-monitor-scope">
+                @snapshot.Runs.Count most recent displayed runs from up to @snapshot.WorkflowsScanned workflows,
+                at most @snapshot.PerWorkflowRunLimit runs per workflow. Percentages describe only completed runs in this bounded sample,
+                not all historical executions. Refreshed @snapshot.LoadedAt.ToLocalTime().ToString("g").
+            </footer>
+        </section>
+    }
+    else if (Vm.Error is null)
+    {
+        <div class="wf-monitor-loading"><Skeleton Kind="cards" Rows="3" /></div>
+    }
+</div>
+
+@if (Vm.PendingConfirmation is { } confirmation && Vm.ProposedAnswer is { } answer)
+{
+    <div class="wf-monitor-backdrop">
+        <section class="wf-monitor-dialog" role="dialog" aria-modal="true" aria-labelledby="wf-confirm-title">
+            <span class="wf-monitor-eyebrow">HUMAN IN THE LOOP</span>
+            <h2 id="wf-confirm-title">@(answer ? confirmation.IsApproval ? "Approve this step?" : "Submit Yes?" : confirmation.IsApproval ? "Decline this step?" : "Submit No?")</h2>
+            <strong>@confirmation.WorkflowName</strong>
+            <p>@confirmation.Instructions</p>
+            <div class="wf-monitor-dialog-warning">
+                @(answer ? "Submitting Yes will resume this paused workflow through its configured path."
+                    : "Submitting No follows the configured No path. It does not necessarily cancel or stop the workflow.")
+                Check the workflow evidence and next stages before confirming.
+            </div>
+            <div class="wf-monitor-dialog-buttons">
+                <a class="dcbtn" href="/project/@ProjectId/workflows?chain=@confirmation.WorkflowId">Inspect workflow</a>
+                <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.Cancel">Cancel</button>
+                <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.ConfirmAsync">
+                    @(Vm.Submitting ? "Submitting…" : answer ? "Confirm Yes" : "Confirm No")
+                </button>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId);
+    public void Dispose() => Vm.Dispose();
+}

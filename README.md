@@ -40,7 +40,8 @@ cluster is required. The installer pulls the versioned multi-architecture
 
 PlaceContext is a self-hosted workflow engine. **Build** creates and edits executable pipelines,
 **Workflows** is the canonical place to manage stages, conditions, human approvals, and execution,
-and the **Workflow overview** and **Observability** show runs, outcomes, and failures.
+and **Monitor** shows recent workflow outcomes and pending human input. The Workflow overview
+and **Observability** provide quick actions, cross-project traces and detailed execution evidence.
 
 Connect data and services as workflow inputs. Create jobs and compose them into flows; use
 AI verification when evidence is uncertain, and durable human-input steps for consequential
