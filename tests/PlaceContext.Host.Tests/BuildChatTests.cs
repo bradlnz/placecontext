@@ -22,6 +22,7 @@ using PlaceContext.Application.Build;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Ports;
 using PlaceContext.Host.Build;
 using PlaceContext.Infrastructure.Build;
@@ -943,6 +944,15 @@ public sealed class BuildChatTests
         Assert.Contains("Available MCP servers", html);
         Assert.Contains("alpha", html);
         Assert.DoesNotContain("Other project", html);
+        var selected = vm.AvailableMcps[0];
+        Assert.True(await vm.SelectMcpAsync(selected.Id));
+        Assert.Equal("@alpha Keep my question", vm.Draft);
+        Assert.True(await vm.SelectMcpAsync(selected.Id));
+        Assert.Equal("@alpha Keep my question", vm.Draft);
+        Assert.False(await vm.SelectMcpAsync(Guid.NewGuid()));
+        vm.Conversation.Status = BuildRunStatus.Running;
+        Assert.False(await vm.SelectMcpAsync(selected.Id));
+        vm.Conversation.Status = BuildRunStatus.Idle;
         dispatcher.Mcps = project => [Server("New server", project)];
         await vm.OpenMcpMenuAsync();
         Assert.Equal("New server", Assert.Single(vm.AvailableMcps).Name);
@@ -1145,6 +1155,142 @@ public sealed class BuildChatTests
         Assert.Null(vm.ResultChart(message));
     }
 
+    [Theory]
+    [InlineData("Warehouse")]
+    [InlineData("Commerce MCP")]
+    [InlineData("API.v2")]
+    [InlineData("MCP \"quoted\"")]
+    [InlineData("倉庫")]
+    public void Mcp_mentions_round_trip_names_and_ignore_email_addresses(string name)
+    {
+        var mention = BuildMcpTools.Mention(name);
+        Assert.Equal(name, Assert.Single(BuildMcpTools.MentionNames($"Ask {mention} for stock. Email user@example.test. {mention}")));
+        Assert.Empty(BuildMcpTools.MentionNames("Email user@example.test"));
+    }
+
+    [Fact]
+    public async Task Mcp_mentions_route_the_current_message_through_selected_tools_and_survive_storage()
+    {
+        await using var fixture = new Fixture(); await fixture.SeedAsync();
+        var server = new McpConnectionView(Guid.NewGuid(), fixture.ProjectId, "Commerce MCP", "http",
+            "https://private.test/mcp", null, null, null, true, null, null, DateTimeOffset.UtcNow, "private-token");
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Mcps = _ => [server] };
+        var service = new PlaceContextService(dispatcher, null!, null!, null!);
+        var client = new McpClient();
+        var tools = new BuildMcpTools(service, client, fixture.Permissions, fixture.Members, fixture.User);
+        var gateway = new McpModel(server.Id);
+        var agent = new BuildChatAgent(fixture.Store, gateway, service, fixture.Permissions, fixture.Tenant, mcps: tools);
+        var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await agent.QueueAsync(conversation, "@\"Commerce MCP\" How many orders?", []);
+        var stored = await fixture.Store.LoadAsync(fixture.ProjectId, conversation.Id);
+        Assert.Equal(server.Id, stored.Messages[0]!["mcp_connections"]![0]!.GetValue<Guid>());
+        await agent.RunAsync(stored, default);
+        Assert.Equal(BuildRunStatus.Completed, stored.Status);
+        Assert.Equal(1, client.Lists);
+        Assert.Equal(1, client.Calls);
+        Assert.Equal("orders", client.ToolName);
+        Assert.Equal("There are 3 orders.", stored.Messages.Last()!["content"]!.GetValue<string>());
+        Assert.DoesNotContain("private-token", gateway.LastMessages);
+        Assert.DoesNotContain("private.test", gateway.LastMessages);
+
+        gateway.ExpectMcp = false;
+        await agent.QueueAsync(stored, "Thanks", []);
+        await agent.RunAsync(stored, default);
+        Assert.Equal(BuildRunStatus.Completed, stored.Status);
+        Assert.Equal(1, client.Calls);
+    }
+
+    [Fact]
+    public async Task Mcp_selection_rejects_unknown_ambiguous_disabled_foreign_and_unauthorized_servers()
+    {
+        await using var fixture = new Fixture(); await fixture.SeedAsync();
+        var server = new McpConnectionView(Guid.NewGuid(), fixture.ProjectId, "Warehouse", "http", null, null, null,
+            null, true, null, null, DateTimeOffset.UtcNow);
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Mcps = _ => [server] };
+        var client = new McpClient();
+        var tools = new BuildMcpTools(new PlaceContextService(dispatcher, null!, null!, null!), client,
+            fixture.Permissions, fixture.Members, fixture.User);
+        Assert.Equal(server.Id, Assert.Single(await tools.ResolveAsync(fixture.ProjectId, "@warehouse stock?", default)).Id);
+        await Assert.ThrowsAsync<ArgumentException>(() => tools.ResolveAsync(fixture.ProjectId, "@Unknown stock?", default));
+        await Assert.ThrowsAsync<ArgumentException>(() => tools.ResolveAsync(fixture.ProjectId, "@Warehouse", default));
+        dispatcher.Mcps = _ => [server, server with { Id = Guid.NewGuid() }];
+        await Assert.ThrowsAsync<ArgumentException>(() => tools.ResolveAsync(fixture.ProjectId, "@Warehouse stock?", default));
+
+        var function = tools.Functions(fixture.ProjectId, [server.Id]).Single(f => f.Name == "call_mcp_tool");
+        var args = new AIFunctionArguments(new Dictionary<string, object?> {
+            ["connectionId"] = server.Id, ["toolName"] = "orders", ["arguments"] = JsonSerializer.SerializeToElement(new { }) });
+        foreach (var unavailable in new[] { server with { Enabled = false }, server with { ProjectId = Guid.NewGuid() } })
+        {
+            dispatcher.Mcps = _ => [unavailable];
+            await Assert.ThrowsAsync<ArgumentException>(() => tools.ResolveAsync(fixture.ProjectId, "@Warehouse stock?", default));
+            await Assert.ThrowsAnyAsync<Exception>(async () => await function.InvokeAsync(args));
+        }
+        dispatcher.Mcps = _ => [server];
+        args["connectionId"] = Guid.NewGuid();
+        await Assert.ThrowsAnyAsync<Exception>(async () => await function.InvokeAsync(args));
+        args["connectionId"] = server.Id;
+        ((MembersProxy)(object)fixture.Members).Allowed = false;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.ResolveAsync(fixture.ProjectId, "@Warehouse stock?", default));
+        await Assert.ThrowsAnyAsync<Exception>(async () => await function.InvokeAsync(args));
+        Assert.Equal(0, client.Calls);
+        Assert.Equal(0, client.Lists);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Mcp_error_content_is_not_reported_as_a_successful_tool_call(bool isError)
+    {
+        await using var fixture = new Fixture(); await fixture.SeedAsync();
+        using var scope = fixture.Provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var server = new McpConnectionRow { Id = Guid.NewGuid(), ProjectId = fixture.ProjectId,
+            Name = "Test", Transport = "http", EndpointUrl = "https://mcp.test", AuthType = "none", Enabled = true };
+        db.McpConnections.Add(server);
+        await db.SaveChangesAsync();
+        fixture.Http.PostResponse = JsonSerializer.Serialize(new { result = new { isError, content = new[] { new { type = "text", text = "Tool result" } } } });
+        var client = new McpClientService(new EfMcpConnectionRepository(db), null!, fixture.Http, null!, NullLogger<McpClientService>.Instance);
+        var result = await client.CallToolAsync(server.Id, "lookup");
+        Assert.Equal(!isError, result.Success);
+        Assert.Contains("Tool result", isError ? result.Error : result.Content);
+    }
+
+    private sealed class McpClient : IMcpClientService
+    {
+        public int Lists, Calls;
+        public string? ToolName;
+        public Task<IReadOnlyList<McpToolDefinition>> ListToolsAsync(Guid id, CancellationToken ct = default)
+        {
+            Lists++;
+            return Task.FromResult<IReadOnlyList<McpToolDefinition>>([new("orders", "Read order counts", JsonSerializer.SerializeToElement(new { type = "object" }))]);
+        }
+        public Task<McpToolResult> CallToolAsync(Guid id, string name, JsonElement? arguments = null, CancellationToken ct = default)
+        {
+            Calls++; ToolName = name;
+            return Task.FromResult(new McpToolResult(true, "3 orders", null));
+        }
+        public Task<IReadOnlyList<McpConnectionInfo>> ListConnectionsAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    private sealed class McpModel(Guid id) : IBuildModelGateway
+    {
+        private int _requests;
+        public bool ExpectMcp = true;
+        public string LastMessages = "";
+        public Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct)
+        {
+            LastMessages = messages.ToJsonString();
+            Assert.All(messages.OfType<JsonObject>(), message => Assert.False(message.ContainsKey("mcp_connections")));
+            Assert.Equal(ExpectMcp, tools.Any(tool => tool?["function"]?["name"]?.ToString() == "call_mcp_tool"));
+            if (!ExpectMcp || ++_requests > 2) return Task.FromResult(new JsonObject { ["content"] = "There are 3 orders." });
+            var function = _requests == 1 ? "list_mcp_tools" : "call_mcp_tool";
+            var arguments = _requests == 1 ? JsonSerializer.Serialize(new { connectionId = id })
+                : JsonSerializer.Serialize(new { connectionId = id, toolName = "orders", arguments = new { } });
+            return Task.FromResult(new JsonObject { ["tool_calls"] = new JsonArray(new JsonObject {
+                ["id"] = "mcp-" + _requests, ["type"] = "function", ["function"] = new JsonObject { ["name"] = function, ["arguments"] = arguments } }) });
+        }
+    }
+
     private sealed class ToolDispatcher(Guid projectId) : IDispatcher
     {
         public int Commands;
@@ -1221,11 +1367,12 @@ public sealed class BuildChatTests
     {
         public string? Authorization;
         public string ModelsResponse = """{"data":[]}""";
+        public string PostResponse = """{"choices":[{"message":{"role":"assistant","content":"OK"}}]}""";
         public HttpClient CreateClient(string name) => new(this, disposeHandler: false);
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Authorization = request.Headers.Authorization?.ToString();
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(request.Method == HttpMethod.Get ? ModelsResponse : """{"choices":[{"message":{"role":"assistant","content":"OK"}}]}""") });
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(request.Method == HttpMethod.Get ? ModelsResponse : PostResponse) });
         }
     }
     private sealed class Fixture : IAsyncDisposable

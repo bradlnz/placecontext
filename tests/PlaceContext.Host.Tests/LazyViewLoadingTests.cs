@@ -585,18 +585,63 @@ public sealed class LazyViewLoadingTests
     private static ArtifactsViewModel Artifacts(Dispatcher dispatcher) => new(Service(dispatcher), new PortalUiState(), new Navigation(), null!, null!, null!, null!, null!);
     private static ProjectTablePageResult Page(int page) => new(["name"], [new string?[] { $"row {page}" }], 100, page, 50);
 
+    [Fact]
+    public async Task Observability_cancels_running_jobs_once_refreshes_details_and_rechecks_permissions()
+    {
+        var dispatcher = new Dispatcher();
+        var run = new JobRunDetailView(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Running",
+            DateTimeOffset.UtcNow, null, [], null, new("code", "python", null, null, null, 1, 1, false));
+        var report = new RunReportView(run.JobId, "Test job", "Test project", run);
+        dispatcher.Delay = query => query switch
+        {
+            ListRecentRunReportsQuery => Task.FromResult<object>(new[] { report }),
+            GetJobRunQuery => Task.FromResult<object>(run),
+            _ => null,
+        };
+        var permissions = new Permissions { Allowed = true };
+        using var vm = new ObservabilityViewModel(Service(dispatcher), new PortalUiState(), new Navigation(),
+            new OperationCenter(null!, null!), new JobTelemetryCollector(), null!, null!, permissions: permissions);
+        await vm.InitializeAsync();
+        await vm.OpenRun(report);
+        Assert.True(vm.CanCancelRun(run));
+        Assert.False(vm.CanCancelRun(run with { Status = "Succeeded", FinishedAt = DateTimeOffset.UtcNow }));
+        permissions.Allowed = false;
+        await vm.CancelRunAsync(run.Id);
+        Assert.Empty(dispatcher.Commands);
+        Assert.Contains("permission", vm.Message);
+        permissions.Allowed = true;
+        var pending = new TaskCompletionSource<object>();
+        dispatcher.CommandResult = _ => pending.Task;
+        var cancelling = vm.CancelRunAsync(run.Id);
+        Assert.Equal(run.Id, vm.CancellingRunId);
+        await vm.CancelRunAsync(run.Id);
+        var command = Assert.IsType<CancelJobRunCommand>(Assert.Single(dispatcher.Commands));
+        Assert.Equal(run.Id, command.RunId);
+        Assert.Equal(Permission.JobsRun, ((IRequiresPermission)command).RequiredPermission);
+        run = run with { Status = "Cancelled", FinishedAt = DateTimeOffset.UtcNow };
+        report = report with { Run = run };
+        pending.SetResult(true);
+        await cancelling;
+        Assert.Null(vm.CancellingRunId);
+        Assert.Equal("Cancelled", vm.Open!.Run.Status);
+        Assert.Equal("Cancelled", Assert.Single(vm.Reports!).Run.Status);
+        Assert.Equal("Run cancellation requested.", vm.Message);
+    }
+
     private sealed class Dispatcher : IDispatcher
     {
         public List<object> Queries { get; } = [];
         public List<object> Commands { get; } = [];
         public Func<object, Task<object>?>? Delay { get; set; }
+        public Func<object, Task<object>>? CommandResult { get; set; }
         private readonly ArtifactFileView[] _files = Enumerable.Range(0, 230).Select(index => new ArtifactFileView(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.Empty, "report", $"file {index}", "text/plain", 1, DateTimeOffset.UtcNow)).ToArray();
 
-        public Task<T> Send<T>(ICommand<T> command, CancellationToken ct = default)
+        public async Task<T> Send<T>(ICommand<T> command, CancellationToken ct = default)
         {
             Commands.Add(command);
-            return Task.FromResult((T)(object)new ProjectQueryResult(["name"], [], 0, false));
+            return CommandResult is not null ? (T)await CommandResult(command)
+                : (T)(object)new ProjectQueryResult(["name"], [], 0, false);
         }
 
         public async Task<T> Query<T>(IQuery<T> query, CancellationToken ct = default)

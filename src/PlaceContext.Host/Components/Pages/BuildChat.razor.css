@@ -22,6 +22,11 @@ button:focus-visible,select:focus-visible,.attach-button:focus-within { outline:
 .preview-heading { display: flex; align-items: center; gap: 10px; padding: 12px; border-bottom: 1px solid var(--border); flex: none; }
 .preview-heading h2 { flex: 1; min-width: 0; margin: 0; font-size: 14px; overflow-wrap: anywhere; }
 .preview-content { padding: 18px; overflow: auto; flex: 1; min-height: 0; }
+.preview-workflow { display: flex; flex-direction: column; overflow: hidden; }
+.preview-workflow > .preview-description { flex: none; max-height: 20%; overflow-y: auto; }
+.preview-workflow ::deep .chain-canvas { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.preview-workflow ::deep .canvas-toolbar,.preview-workflow ::deep .canvas-legend { flex: none; }
+.preview-workflow ::deep .canvas-viewport { flex: 1; min-height: 0; height: 0; }
 .preview-description { color: var(--text-3); font-size: 12px; line-height: 1.7; }
 .result-items { display: grid; gap: 8px; margin: 12px 0; }
 .result-items:empty { display: none; }
@@ -98,9 +103,7 @@ h1 { font-size: clamp(24px, 2.4vw, 30px); line-height: 1.3; letter-spacing: -.02
 .composer-menu-item ::deep svg { width: 18px; height: 18px; flex: none; }
 .mcp-menu-list { border-block: 1px solid var(--border); max-height: min(280px, 40vh); overflow-y: auto; }
 .mcp-menu-list ul { list-style: none; margin: 0; padding: 4px 0; }
-.mcp-menu-server { display: flex; align-items: center; gap: 12px; padding: 12px; font-size: 13px; }
-.mcp-menu-server span { display: grid; gap: 4px; overflow-wrap: anywhere; min-width: 0; }
-.mcp-menu-server small { color: var(--text-3); font-size: 11px; }
+.mcp-menu-list .composer-menu-item span { overflow-wrap: anywhere; }
 .mcp-menu-note { padding: 12px; margin: 0; color: var(--text-3); font-size: 12px; line-height: 1.6; }
 .mcp-add-modal { width: min(480px, calc(100vw - 32px)); }
 .composer-note,.model-setup { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 12px 4px 0; color: var(--text-3); font-size: 10px; line-height: 1.6; }

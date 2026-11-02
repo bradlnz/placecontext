@@ -2,6 +2,12 @@
 
 *Connect an MCP client to PlaceContext.*
 
+In the Dashboard assistant, choose **+ → MCP tools → a server** to add it to your message,
+or type `@MCPName` followed by your question. Use `@"Commerce MCP"` for names with spaces;
+the menu inserts the correct mention for you. Workspace administrators can use enabled
+servers from the current project. The selection applies only to that message, and the
+assistant discovers and calls the server's tools to answer. Remove a mention to deselect it.
+
 ## Connect
 
 The workspace MCP endpoint is shown on **Onboarding**. For a local install it is:

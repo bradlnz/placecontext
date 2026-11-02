@@ -1,5 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Ports;
 
 namespace PlaceContext.Application.Features;
 
@@ -7,4 +8,7 @@ namespace PlaceContext.Application.Features;
 /// Cancels a running job run: kills the workload containers/pods and marks the run as Cancelled.
 /// Idempotent — safe to call on a run that already reached a terminal state.
 /// </summary>
-public sealed record CancelJobRunCommand(Guid RunId) : ICommand<bool>;
+public sealed record CancelJobRunCommand(Guid RunId) : ICommand<bool>, IRequiresPermission
+{
+    public string RequiredPermission => Permission.JobsRun;
+}

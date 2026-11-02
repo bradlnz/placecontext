@@ -163,7 +163,7 @@ public sealed class ResponsiveShellContractTests
         Assert.Contains("class=\"summary-strip\"", page);
         Assert.Contains("class=\"dccard run-suite\"", page);
         Assert.Contains("class=\"suite-head\"", page);
-        Assert.Contains("width: min(1120px, 100%);", styles);
+        Assert.Contains("max-width: none;", styles);
         Assert.Contains("border-bottom: 1px solid var(--border);", styles);
         Assert.Contains("@media (max-width: 950px)", styles);
     }

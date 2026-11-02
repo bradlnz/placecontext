@@ -623,6 +623,9 @@ public sealed class KubernetesWorkloadRunner : IWorkloadRunner
     internal static V1PodSecurityContext BuildPodSecurityContext(WorkloadRunnerOptions options)
         => new()
         {
+            RunAsNonRoot = true,
+            RunAsUser = options.RunAsUser,
+            RunAsGroup = options.RunAsGroup,
             SeccompProfile = new V1SeccompProfile { Type = "RuntimeDefault" },
             FsGroup = options.RunAsGroup,
         };

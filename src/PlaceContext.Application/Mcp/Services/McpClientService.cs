@@ -122,6 +122,13 @@ public sealed class McpClientService : IMcpClientService
             var result = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
             if (result.TryGetProperty("result", out var resultObj))
             {
+                if (resultObj.TryGetProperty("isError", out var isError) && isError.GetBoolean())
+                {
+                    var error = resultObj.TryGetProperty("content", out var errContent)
+                        ? errContent.ToString()
+                        : "Unknown error";
+                    return new McpToolResult(false, null, error);
+                }
                 if (resultObj.TryGetProperty("content", out var content))
                 {
                     var text = content.EnumerateArray()
@@ -129,13 +136,6 @@ public sealed class McpClientService : IMcpClientService
                         .Select(c => c.GetProperty("text").GetString())
                         .FirstOrDefault();
                     return new McpToolResult(true, text, null, RawContent: content);
-                }
-                if (resultObj.TryGetProperty("isError", out var isError) && isError.GetBoolean())
-                {
-                    var error = resultObj.TryGetProperty("content", out var errContent)
-                        ? errContent.ToString()
-                        : "Unknown error";
-                    return new McpToolResult(false, null, error);
                 }
             }
             if (result.TryGetProperty("error", out var errorObj))

@@ -211,6 +211,12 @@ else
                                             @Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value)
                                         </span>
                                     }
+                                    @if (Vm.CanCancelRun(run))
+                                    {
+                                        <button type="button" class="dcbtn text-bad" disabled="@(Vm.CancellingRunId is not null)" @onclick="() => Vm.CancelRunAsync(run.Id)" @onclick:stopPropagation>
+                                            @(Vm.CancellingRunId == run.Id ? "Cancelling…" : "Cancel run")
+                                        </button>
+                                    }
                                     <span class="details-link">Details <AppIcon Kind="arrow-right" /></span>
                                 </div>
                             </article>
@@ -532,6 +538,12 @@ else
                     @Vm.Open.ProjectName · run @Vm.Presentation.AbbreviatedId(run.Id) · @Vm.Presentation.DateTime(run.StartedAt)
                 </div>
             </div>
+            @if (Vm.CanCancelRun(run))
+            {
+                <button type="button" class="dcbtn text-bad" disabled="@(Vm.CancellingRunId is not null)" @onclick="() => Vm.CancelRunAsync(run.Id)">
+                    @(Vm.CancellingRunId == run.Id ? "Cancelling…" : "Cancel run")
+                </button>
+            }
             <button class="dcbtn btn-replay" title="Re-run this run's exact captured inputs"
                     @onclick="@(() => Vm.ReplayRun(run.Id, run.ProjectId))"><AppIcon Kind="refresh" /> Replay</button>
             <button class="dcbtn btn-open-project"
@@ -546,6 +558,8 @@ else
                     · @run.Snapshot.ShardCount shard(s) · concurrency @run.Snapshot.ConcurrencyLimit
                 </span>
             </div>
+
+            @if (Vm.Message is not null) { <div class="message-banner" role="status">@Vm.Message</div> }
 
             <div class="dccard panel-card run-details-card">
                 <div class="panel-title">Run details</div>

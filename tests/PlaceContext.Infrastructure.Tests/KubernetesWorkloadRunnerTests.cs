@@ -245,6 +245,9 @@ public class KubernetesWorkloadRunnerTests
     {
         var pod = KubernetesWorkloadRunner.BuildPodSecurityContext(new WorkloadRunnerOptions());
 
+        Assert.True(pod.RunAsNonRoot);
+        Assert.Equal(65534, pod.RunAsUser);
+        Assert.Equal(65534, pod.RunAsGroup);
         Assert.Equal("RuntimeDefault", pod.SeccompProfile.Type);
         Assert.Equal(65534, pod.FsGroup); // emptyDir volumes stay writable for the nobody container
     }

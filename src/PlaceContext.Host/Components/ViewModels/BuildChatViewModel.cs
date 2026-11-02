@@ -98,6 +98,22 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
     public string? McpError { get; private set; }
     public IReadOnlyList<McpConnectionView> AvailableMcps { get; private set; } = [];
 
+    public async Task<bool> SelectMcpAsync(Guid id)
+    {
+        if (Locked || Listening || AvailableMcps.FirstOrDefault(server => server.Id == id && server.Enabled
+            && server.ProjectId == Conversation.ProjectId) is not { } server) return false;
+        var mention = BuildMcpTools.Mention(server.Name);
+        if (!BuildMcpTools.MentionNames(Draft).Contains(server.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var draft = mention + " " + Draft;
+            if (draft.Length > 16000) { Error = "Shorten your message before adding an MCP."; return false; }
+            Draft = draft;
+        }
+        ShowMcpMenu = false;
+        if (_module is not null) await _module.InvokeVoidAsync("setComposerMenu", ViewId, false);
+        return true;
+    }
+
     public async Task OpenMcpMenuAsync()
     {
         ShowMcpMenu = true;

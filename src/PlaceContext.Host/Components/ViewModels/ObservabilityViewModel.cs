@@ -53,6 +53,36 @@ public sealed partial class ObservabilityViewModel(
     public bool IsTracesTab => Tab == TracesTab;
     public bool IsLogsTab => Tab == LogsTab;
     public string? Message { get; private set; }
+    public bool CanCancelRuns { get; private set; }
+    public Guid? CancellingRunId { get; private set; }
+    public bool CanCancelRun(JobRunDetailView run) => CanCancelRuns && run.Status == "Running" && run.FinishedAt is null;
+
+    public async Task CancelRunAsync(Guid runId)
+    {
+        if (CancellingRunId is not null) return;
+        var run = Open?.Run.Id == runId ? Open.Run : Reports?.FirstOrDefault(report => report.Run.Id == runId)?.Run;
+        if (run is null || !CanCancelRun(run)) return;
+        CancellingRunId = runId;
+        Message = null;
+        NotifyStateChanged();
+        try
+        {
+            if (permissions is null || !await permissions.HasAsync(Permission.JobsRun))
+                throw new UnauthorizedAccessException("You do not have permission to cancel jobs.");
+            var cancelled = await service.CancelJobRunAsync(runId);
+            await RefreshAsync();
+            if (Open?.Run.Id == runId)
+            {
+                var version = _detailVersion;
+                var detail = await service.GetJobRunAsync(runId);
+                if (version == _detailVersion && Open?.Run.Id == runId && detail is not null)
+                    Open = Open with { Run = detail };
+            }
+            Message = cancelled ? "Run cancellation requested." : "That job run could not be found.";
+        }
+        catch (Exception ex) { Message = ex.Message; }
+        finally { CancellingRunId = null; NotifyStateChanged(); }
+    }
     public bool Loading { get; private set; } = true;
     public int ActiveRunCount =>
         Tab switch
@@ -188,6 +218,7 @@ public sealed partial class ObservabilityViewModel(
         var tab = Tab;
         try
         {
+            CanCancelRuns = permissions is not null && await permissions.HasAsync(Permission.JobsRun);
             if (tab == RunsTab)
                 Reports = await service.ListRecentRunReportsAsync(take: 50);
             else if (tab == TracesTab)

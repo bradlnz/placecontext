@@ -28,6 +28,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- shortcut: unused agent setup draft references missing APIs; compile when its implementation is complete. -->
+    <Compile Remove="Components\ViewModels\AgentWorkflowsViewModel.Setup.cs" />
     <Content Include="Auth\templates\*.html" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\join.sh" Link="wwwroot\join.sh" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\deploy\release\install.sh" Link="wwwroot\install.sh" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

@@ -172,6 +172,7 @@ builder.Services.AddScoped<PortalUiState>();
 builder.Services.AddScoped<BrandingService>();
 
 builder.Services.AddScoped<PlaceContext.Host.Build.BuildChatAgent>();
+builder.Services.AddScoped<PlaceContext.Host.Build.BuildMcpTools>();
 builder.Services.AddHostedService<PlaceContext.Host.Build.BuildChatWorker>();
 
 // ── Page ViewModels ──────────────────────────────────────────────────────────

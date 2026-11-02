@@ -2,6 +2,9 @@
 
 *Run code, connect steps, and keep the output.*
 
+In **Observability → Job history**, running jobs have **Cancel run** controls in the list
+and run details. Cancellation requires permission to run jobs and refreshes the recorded status.
+
 ## Jobs
 
 A job uses either source code or a container image. Code jobs support Python, Node.js, Go, Ruby,
@@ -93,6 +96,7 @@ Human and agent steps use the configured model to turn validation instructions a
 output into a question. Human steps and **External agent** steps pause until a response arrives.
 A No answer is a valid boolean response, not a missing answer. Configure the question model
 through `PlaceContext:Qemu:Agent` (Codex or a chat-completions endpoint).
+Local Development configuration uses the signed-in Codex CLI with `gpt-6-astra`; override these settings to use another provider or model.
 
 For an automatic verification call, select **AI verification** in an agent step. The AI verifier evaluates the
 question against the preceding output and saves its probability of Yes in the response field's

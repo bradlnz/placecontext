@@ -3,6 +3,7 @@
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IAsyncDisposable
 @inject BuildChatViewModel Vm
+@using PlaceContext.Host.Build
 
 <PageTitle>PlaceContext — Dashboard</PageTitle>
 <div id="@Vm.ViewId" class="build-chat @(Vm.ShowHistory ? "history-open" : "") @(Vm.WorkspaceVisible ? "conversation-active" : "") @(Vm.WorkspaceOpen ? "workspace-preview-open" : "")">
@@ -120,7 +121,7 @@
                     {
                         <div class="attachments">@foreach (var image in Vm.Images) { <div><img src="@image.DataUrl" alt="@image.Name" /><button type="button" disabled="@Vm.Locked" aria-label="@($"Remove {image.Name}")" @onclick="() => Vm.Images.Remove(image)"><AppIcon Kind="close" /></button></div> }</div>
                     }
-                    <textarea @ref="_composer" class="chat-input" aria-label="Message assistant" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Describe what you want to build or improve…" rows="2" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
+                    <textarea @ref="_composer" class="chat-input" aria-label="Message assistant" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Ask a question, or use @@MCPName to ask a connected server…" rows="2" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
                     <div class="composer-actions">
                         <div class="composer-tools">
                             <button type="button" class="chat-icon-button" aria-label="Add to conversation" title="Add to conversation" popovertarget="@(Vm.ViewId + "-composer-menu")" disabled="@Vm.Locked" @onclick="() => Vm.ShowMcpMenu = false"><AppIcon Kind="plus" /></button>
@@ -141,7 +142,7 @@
                                             <ul aria-label="Available MCP servers">
                                                 @foreach (var server in Vm.AvailableMcps)
                                                 {
-                                                    <li class="mcp-menu-server"><AppIcon Kind="chain" /><span>@server.Name<small>@server.Transport</small></span></li>
+                                                    <li><button type="button" class="composer-menu-item" disabled="@(Vm.Locked || Vm.Listening)" @onclick="() => SelectMcpAsync(server.Id)"><AppIcon Kind="chain" /><span>@server.Name<small>@BuildMcpTools.Mention(server.Name)</small></span></button></li>
                                                 }
                                             </ul>
                                         }
@@ -152,7 +153,7 @@
                                 {
                                 <label class="composer-menu-item attach-button"><AppIcon Kind="plus" /><span>Attach images<small>Up to 4 images · 2 MB each</small></span><InputFile OnChange="Vm.UploadAsync" accept="image/png,image/jpeg,image/webp" multiple disabled="@Vm.Locked" aria-label="Attach images" /></label>
                                 <button type="button" class="composer-menu-item" popovertarget="@(Vm.ViewId + "-composer-menu")" popovertargetaction="hide" @onclick="() => Vm.ShowMemory = true"><AppIcon Kind="ledger" /><span>Project memory<small>Add context for your conversations</small></span></button>
-                                <button type="button" class="composer-menu-item" @onclick="Vm.OpenMcpMenuAsync"><AppIcon Kind="chain" /><span>MCP tools<small>Browse available servers</small></span><AppIcon Kind="chevron-right" /></button>
+                                <button type="button" class="composer-menu-item" @onclick="Vm.OpenMcpMenuAsync"><AppIcon Kind="chain" /><span>MCP tools<small>Select a server to ask</small></span><AppIcon Kind="chevron-right" /></button>
                                 }
                             </div>
                         </div>
@@ -209,7 +210,7 @@
                 }
                 else if (Vm.PreviewItem is { } preview)
                 {
-                    <div class="preview-content">
+                    <div class="preview-content @(Vm.PreviewWorkflow is not null ? "preview-workflow" : "")">
                         @if (Vm.PreviewLoading) { <Skeleton Kind="list" Rows="3" /> }
                         else if (Vm.PreviewError is not null) { <p role="alert">@Vm.PreviewError</p><button class="dcbtn" @onclick="() => Vm.OpenPreviewAsync(preview)">Try again</button> }
                         else if (Vm.PreviewWorkflow is { } workflow)
@@ -280,6 +281,10 @@
     [Parameter, SupplyParameterFromQuery(Name = "conversation")] public Guid? ConversationId { get; set; }
     private ElementReference _composer;
     private bool _focusComposer;
+    private async Task SelectMcpAsync(Guid id)
+    {
+        if (await Vm.SelectMcpAsync(id)) _focusComposer = true;
+    }
     private void CloseWorkspace()
     {
         Vm.CloseWorkspace();
