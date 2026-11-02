@@ -6,7 +6,6 @@ namespace PlaceContext.Host.Tests;
 public sealed class DashboardObservabilityClusterAnalyticsMvvmTests
 {
     [Theory]
-    [InlineData("Dashboard", "DashboardViewModel")]
     [InlineData("Observability", "ObservabilityViewModel")]
     [InlineData("ProjectAnalytics", "ProjectAnalyticsViewModel")]
     [InlineData("Cluster", "ClusterViewModel")]

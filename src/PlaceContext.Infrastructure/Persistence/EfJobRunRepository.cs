@@ -85,10 +85,11 @@ public sealed class EfJobRunRepository : IJobRunRepository
         return rows.Select(ToDomain).ToList();
     }
 
-    public async Task<IReadOnlyList<JobRun>> ListRecentAsync(int take, CancellationToken ct = default)
+    public async Task<IReadOnlyList<JobRun>> ListRecentAsync(int take, CancellationToken ct = default, Guid? projectId = null)
     {
-        // Cross-job, newest first; tenant isolation comes from the global query filter on JobRuns.
+        // Tenant isolation comes from the global query filter; filter the project before limiting.
         var rows = await _db.JobRuns.AsNoTracking()
+            .Where(r => projectId == null || r.ProjectId == projectId)
             .OrderByDescending(r => r.StartedAt)
             .Take(Math.Clamp(take, 1, 200))
             .Select(r => new JobRunRow
@@ -108,6 +109,12 @@ public sealed class EfJobRunRepository : IJobRunRepository
             .ToListAsync(ct);
         return rows.Select(ToDomain).ToList();
     }
+
+    public async Task<IReadOnlyDictionary<string, int>> CountByStatusAsync(Guid projectId, DateTimeOffset since, CancellationToken ct = default)
+        => await _db.JobRuns.AsNoTracking()
+            .Where(r => r.ProjectId == projectId && (r.StartedAt >= since || r.Status == "Running" || r.Status == "Queued"))
+            .GroupBy(r => r.Status).Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Count, ct);
 
     /// <summary>
     /// Removes terminal job runs older than the newest <paramref name="keepLatest"/> terminal runs

@@ -5,8 +5,8 @@ public sealed class DashboardQuickActionsContractTests
     [Fact]
     public void Dashboard_offers_job_chain_quick_runs_without_a_redundant_submit_job_action()
     {
-        var page = ReadHostFile("Components", "Pages", "Dashboard.razor");
-        var css = ReadHostFile("Components", "Pages", "Dashboard.razor.css");
+        var page = ReadHostFile("Components", "Shared", "ProjectOverview.razor");
+        var css = ReadHostFile("Components", "Shared", "ProjectOverview.razor.css");
         var viewModel = ReadHostFile("Components", "ViewModels", "DashboardViewModel.cs");
         var prompt = ReadHostFile(
             "Components",

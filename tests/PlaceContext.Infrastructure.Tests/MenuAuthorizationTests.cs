@@ -9,7 +9,8 @@ public sealed class MenuAuthorizationTests
     public void Hosted_apps_and_databases_are_not_part_of_the_workflow_navigation()
     {
         Assert.DoesNotContain(MenuConfigService.WorkspaceCatalog, item => item.Id is "services" or "databases");
-        Assert.Contains(MenuConfigService.WorkspaceCatalog, item => item.Id == "build.chat");
+        Assert.Equal("Dashboard", Assert.Single(MenuConfigService.WorkspaceCatalog, item => item.Id == "build.chat").DefaultLabel);
+        Assert.DoesNotContain(MenuConfigService.WorkspaceCatalog, item => item.Id == "dashboard");
         Assert.Contains(MenuConfigService.WorkspaceCatalog, item => item.Id == "chains");
     }
 
@@ -25,7 +26,7 @@ public sealed class MenuAuthorizationTests
             grouped.Where(item => item.Parent == infrastructure.Id).Select(item => item.Id));
         foreach (var item in items)
             Assert.Equal(item.Href, Assert.Single(grouped, resolved => resolved.Id == item.Id).Href);
-        Assert.Null(Assert.Single(grouped, item => item.Id == "dashboard").Parent);
+        Assert.Null(Assert.Single(grouped, item => item.Id == "build.chat").Parent);
     }
 
     [Fact]
@@ -40,7 +41,7 @@ public sealed class MenuAuthorizationTests
     }
 
     [Theory]
-    [InlineData("dashboard", Permission.ProjectsView)]
+    [InlineData("build.chat", Permission.ProjectsView)]
     [InlineData("jobs", Permission.JobsView)]
     [InlineData("chains", Permission.ChainsManage)]
     [InlineData("schedules", Permission.TriggersManage)]

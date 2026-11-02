@@ -148,6 +148,7 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<SearchOpenSearchSqlQuery, ProjectQueryResult>, SearchOpenSearchSqlHandler>();
         services.AddScoped<IQueryHandler<ListOpenSearchDashboardsQuery, IReadOnlyList<OpenSearchDashboardView>>, ListOpenSearchDashboardsHandler>();
         services.AddScoped<IQueryHandler<ListSavedQueriesQuery, IReadOnlyList<SavedQueryRecord>>, ListSavedQueriesHandler>();
+        services.AddScoped<IQueryHandler<GetProjectRunCountsQuery, IReadOnlyDictionary<string, int>>, GetProjectRunCountsHandler>();
         services.AddScoped<IQueryHandler<ListRecentRunReportsQuery, IReadOnlyList<RunReportView>>, ListRecentRunReportsHandler>();
         services.AddScoped<IQueryHandler<GetJobQuery, JobView?>, GetJobHandler>();
         services.AddScoped<IQueryHandler<ListTriggersQuery, IReadOnlyList<TriggerView>>, ListTriggersHandler>();

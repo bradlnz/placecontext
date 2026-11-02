@@ -1,0 +1,16 @@
+@page "/project/{ProjectId:guid}/build"
+@attribute [Authorize(Policy = Permission.ProjectsView)]
+@inject NavigationManager Navigation
+
+<PageTitle>PlaceContext — Dashboard</PageTitle>
+<p role="status">Opening Dashboard…</p>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+            Navigation.NavigateTo($"/project/{ProjectId}/dashboard{new Uri(Navigation.Uri).Query}", replace: true);
+    }
+}

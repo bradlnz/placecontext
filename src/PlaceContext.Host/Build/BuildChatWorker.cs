@@ -122,6 +122,14 @@ public sealed class BuildChatWorker(IServiceScopeFactory scopes, ILogger<BuildCh
             await db.SaveChangesAsync();
             var operation = operations?.ListForTenant(candidate.TenantId, candidate.UserId)
                 .FirstOrDefault(op => op.CorrelationKey == $"build:{candidate.Id}" && op.Status is PortalOperationStatus.Queued or PortalOperationStatus.Running);
+            if (operation is null && operations is not null)
+            {
+                var tenant = await db.Tenants.AsNoTracking().SingleOrDefaultAsync(x => x.Id == candidate.TenantId);
+                if (tenant is not null)
+                    operation = operations.Track(new(tenant.Id, tenant.Slug, tenant.Name, tenant.TimeZoneId),
+                        candidate.ProjectId, "Assistant", $"/project/{candidate.ProjectId}/dashboard?conversation={candidate.Id}",
+                        $"build:{candidate.Id}", userId: candidate.UserId);
+            }
             if (operation is not null) operations!.MarkFailed(operation.Id, error);
         }
         catch (DbUpdateConcurrencyException) { }

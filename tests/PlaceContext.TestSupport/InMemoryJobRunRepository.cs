@@ -26,7 +26,11 @@ public sealed class InMemoryJobRunRepository : IJobRunRepository
         => Task.FromResult<IReadOnlyList<JobRun>>(
             _store.Where(r => r.JobId == jobId).OrderByDescending(r => r.StartedAt).ToList());
 
-    public Task<IReadOnlyList<JobRun>> ListRecentAsync(int take, CancellationToken ct = default)
+    public Task<IReadOnlyList<JobRun>> ListRecentAsync(int take, CancellationToken ct = default, Guid? projectId = null)
         => Task.FromResult<IReadOnlyList<JobRun>>(
-            _store.OrderByDescending(r => r.StartedAt).Take(take).ToList());
+            _store.Where(r => projectId == null || r.ProjectId == projectId).OrderByDescending(r => r.StartedAt).Take(take).ToList());
+    public Task<IReadOnlyDictionary<string, int>> CountByStatusAsync(Guid projectId, DateTimeOffset since, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyDictionary<string, int>>(_store
+            .Where(r => r.ProjectId == projectId && (r.StartedAt >= since || r.Status.ToString() is "Running" or "Queued"))
+            .GroupBy(r => r.Status.ToString()).ToDictionary(g => g.Key, g => g.Count()));
 }

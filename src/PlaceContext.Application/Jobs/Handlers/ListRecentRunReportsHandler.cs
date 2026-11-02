@@ -19,7 +19,7 @@ public sealed class ListRecentRunReportsHandler : IQueryHandler<ListRecentRunRep
 
     public async Task<IReadOnlyList<RunReportView>> HandleAsync(ListRecentRunReportsQuery query, CancellationToken ct = default)
     {
-        var runs = await _runs.ListRecentAsync(query.Take, ct);
+        var runs = await _runs.ListRecentAsync(query.Take, ct, query.ProjectId);
 
         if (runs.Count == 0) return [];
         var names = await _jobs.GetNamesAsync(runs.Select(r => r.JobId).Distinct().ToArray(), ct);

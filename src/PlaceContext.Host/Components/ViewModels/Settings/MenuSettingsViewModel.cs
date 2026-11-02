@@ -20,7 +20,6 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
         string
     >(StringComparer.Ordinal)
     {
-        ["dashboard"] = "Dashboard",
         ["jobs"] = "Jobs",
         ["tests"] = "Tests",
         ["chains"] = "Workflows",

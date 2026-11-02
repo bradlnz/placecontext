@@ -85,7 +85,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     }
 
     public TenantBranding Brand { get; private set; } = new();
-    public string Theme { get; private set; } = ThemeNames.Dark;
+    public string Theme { get; private set; } = ThemeNames.Light;
     public bool SwitcherOpen { get; private set; }
     public bool NavOpen { get; private set; }
     public int RunningCount { get; private set; }
@@ -507,9 +507,9 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     }
 
     private static string NormalizeTheme(string? theme) =>
-        string.Equals(theme, ThemeNames.Light, StringComparison.OrdinalIgnoreCase)
-            ? ThemeNames.Light
-            : ThemeNames.Dark;
+        string.Equals(theme, ThemeNames.Dark, StringComparison.OrdinalIgnoreCase)
+            ? ThemeNames.Dark
+            : ThemeNames.Light;
 
     private async Task<TResult> InScopeAsync<TService, TResult>(
         Func<TService, Task<TResult>> operation

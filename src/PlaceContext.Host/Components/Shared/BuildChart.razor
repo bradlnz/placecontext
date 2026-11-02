@@ -1,0 +1,34 @@
+@using PlaceContext.Application.Features
+@implements IAsyncDisposable
+@inject IJSRuntime Js
+
+<figure class="build-chart">
+    <div class="chart-plot"><canvas id="@_id" role="img" aria-label="@(Spec.Title ?? "Generated chart")"></canvas></div>
+    <figcaption>@Source</figcaption>
+    @if (_error is not null) { <p role="status">@_error</p> }
+    <details><summary>View chart data</summary><div class="chart-table"><table>
+        <thead><tr><th scope="col">Label</th>@foreach (var series in Spec.Series) { <th scope="col">@series.Name</th> }</tr></thead>
+        <tbody>@for (var i = 0; i < Spec.Labels.Count; i++)
+        { <tr><th scope="row">@Spec.Labels[i]</th>@foreach (var series in Spec.Series) { <td>@series.Values[i].ToString("G", System.Globalization.CultureInfo.CurrentCulture)</td> }</tr> }</tbody>
+    </table></div></details>
+</figure>
+
+@code {
+    [Parameter, EditorRequired] public ChartSpec Spec { get; set; } = null!;
+    [Parameter, EditorRequired] public string Source { get; set; } = "";
+    private readonly string _id = "build-chart-" + Guid.NewGuid().ToString("N");
+    private string? _rendered, _error;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var json = Spec.ToJson();
+        if (json == _rendered) return;
+        _rendered = json;
+        try { await Js.InvokeVoidAsync("pcchart.render", _id, json); }
+        catch (JSException) { _error = "The chart could not be drawn. The values are available below."; StateHasChanged(); }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        try { await Js.InvokeVoidAsync("pcchart.destroy", _id); }
+        catch (JSDisconnectedException) { }
+    }
+}

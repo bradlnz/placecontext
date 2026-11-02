@@ -120,7 +120,50 @@ public sealed class LazyViewLoadingTests
     }
 
     [Fact]
-    public async Task Dashboard_operation_changes_only_refresh_history_for_its_own_tenant()
+    public async Task Build_overview_uses_project_totals_and_reports_refresh_failure_without_showing_zero_as_fact()
+    {
+        var projectId = Guid.NewGuid(); var dispatcher = new Dispatcher();
+        dispatcher.Delay = query => query is GetProjectRunCountsQuery
+            ? Task.FromResult<object>(new Dictionary<string, int> { ["Running"] = 205, ["Queued"] = 3, ["Failed"] = 7, ["Succeeded"] = 40 }) : null;
+        var ui = new PortalUiState(); ui.SetProject(Guid.NewGuid(), "Other selected project");
+        using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!,
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!));
+        vm.Initialize(projectId);
+        await vm.LoadAsync();
+        Assert.Equal(205, vm.Running); Assert.Equal(3, vm.Queued); Assert.Equal(7, vm.Failed24); Assert.Equal(40, vm.Succeeded24);
+        Assert.Empty(vm.Reports); Assert.Null(vm.LoadError); Assert.NotNull(vm.CapturedAt);
+        Assert.Equal(projectId, Assert.Single(dispatcher.Queries.OfType<ListRecentRunReportsQuery>()).ProjectId);
+        Assert.Equal(projectId, Assert.Single(dispatcher.Queries.OfType<GetProjectRunCountsQuery>()).ProjectId);
+        dispatcher.Delay = query => query is GetProjectRunCountsQuery
+            ? Task.FromException<object>(new InvalidOperationException("Offline")) : null;
+        await vm.RefreshActivityAsync();
+        Assert.NotNull(vm.LoadError); Assert.Null(vm.CapturedAt);
+    }
+
+    [Fact]
+    public async Task Dashboard_activity_visibility_uses_the_load_permission_check_and_rechecks_on_refresh()
+    {
+        var dispatcher = new Dispatcher();
+        var permissions = new Permissions { Allowed = true };
+        using var vm = new DashboardViewModel(Service(dispatcher), new PortalUiState(), new Navigation(), null!,
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!), permissions);
+        vm.Initialize(Guid.NewGuid());
+        Assert.False(vm.CanViewActivity);
+        await vm.LoadAsync();
+        Assert.True(vm.CanViewActivity);
+        Assert.Equal(1, permissions.ActivityChecks);
+        var queries = dispatcher.Queries.Count;
+        permissions.Allowed = false;
+        await vm.RefreshActivityAsync();
+        Assert.False(vm.CanViewActivity);
+        Assert.Equal(2, permissions.ActivityChecks);
+        Assert.Equal(queries, dispatcher.Queries.Count);
+        Assert.Empty(vm.Reports);
+        Assert.Null(vm.CapturedAt);
+    }
+
+    [Fact]
+    public async Task Dashboard_activity_refreshes_explicitly_without_operation_driven_reloads()
     {
         var dispatcher = new Dispatcher();
         var tenant = new FakeCurrentTenant(Guid.NewGuid());
@@ -134,7 +177,9 @@ public sealed class LazyViewLoadingTests
         operations.Track(new TenantInfo(Guid.NewGuid(), "other", "Other", "UTC"), null, "Other tenant", null);
         Assert.Equal(count, dispatcher.Queries.Count);
         operations.Track(new TenantInfo(tenant.TenantId, "own", "Own", "UTC"), null, "Own tenant", null);
-        Assert.IsType<ListRecentRunReportsQuery>(Assert.Single(dispatcher.Queries.Skip(count)));
+        Assert.Equal(count, dispatcher.Queries.Count);
+        await vm.RefreshActivityAsync();
+        Assert.Collection(dispatcher.Queries.Skip(count), query => Assert.IsType<ListRecentRunReportsQuery>(query), query => Assert.IsType<GetProjectRunCountsQuery>(query));
     }
 
     [Theory]
@@ -577,6 +622,7 @@ public sealed class LazyViewLoadingTests
                 ListJobsQuery => Array.Empty<JobView>(),
                 ListJobChainsQuery => Array.Empty<JobChainView>(),
                 ListRecentRunReportsQuery => Array.Empty<RunReportView>(),
+                GetProjectRunCountsQuery => new Dictionary<string, int>(),
                 ListRecentChainRunsQuery => Array.Empty<ChainRunReportView>(),
                 ListTriggersQuery => Array.Empty<TriggerView>(),
                 ListProjectSecretsQuery => Array.Empty<ProjectSecretView>(),
@@ -601,7 +647,13 @@ public sealed class LazyViewLoadingTests
 
     private sealed class Permissions : IPermissionService
     {
-        public Task<bool> HasAsync(string permission, CancellationToken ct = default) => Task.FromResult(false);
+        public bool Allowed;
+        public int ActivityChecks;
+        public Task<bool> HasAsync(string permission, CancellationToken ct = default)
+        {
+            if (permission == Permission.JobsView) ActivityChecks++;
+            return Task.FromResult(Allowed);
+        }
         public Task<IReadOnlySet<string>> GetEffectivePermissionsAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task<IReadOnlySet<string>> GetEffectivePermissionsForUserAsync(Guid userId, string roleName, CancellationToken ct = default) => throw new NotSupportedException();
     }

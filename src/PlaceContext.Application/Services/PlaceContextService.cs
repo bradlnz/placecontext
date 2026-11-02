@@ -395,8 +395,11 @@ public sealed class PlaceContextService
     public Task<IReadOnlyList<RecordLink>> RelatedRecordLinksForRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
         => _links.RelatedForRowAsync(projectId, tableName, values, ct: ct);
 
-    public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default)
-        => _dispatcher.Query(new ListRecentRunReportsQuery(take), ct);
+    public Task<IReadOnlyList<RunReportView>> ListRecentRunReportsAsync(int take = 24, CancellationToken ct = default, Guid? projectId = null)
+        => _dispatcher.Query(new ListRecentRunReportsQuery(take, projectId), ct);
+
+    public Task<IReadOnlyDictionary<string, int>> GetProjectRunCountsAsync(Guid projectId, CancellationToken ct = default)
+        => _dispatcher.Query(new GetProjectRunCountsQuery(projectId), ct);
 
     public Task<JobView?> GetJobAsync(Guid jobId, CancellationToken ct = default)
         => _dispatcher.Query(new GetJobQuery(jobId), ct);

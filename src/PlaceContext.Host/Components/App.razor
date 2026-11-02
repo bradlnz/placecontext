@@ -3,22 +3,21 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="dark light" />
+    <meta name="color-scheme" content="light dark" />
     <style>
-        html, body { margin:0; min-height:100%; background:#000; color-scheme:dark; }
-        html[data-pc-theme="light"], html[data-pc-theme="light"] body { background:#f5f8fa; color-scheme:light; }
+        html, body { margin:0; min-height:100%; background:#fff; color-scheme:light; }
+        html[data-pc-theme="dark"], html[data-pc-theme="dark"] body { background:#000; color-scheme:dark; }
     </style>
     <script>
         (() => {
-            let theme = 'dark';
-            try { theme = localStorage.getItem('placecontext-theme') === 'light' ? 'light' : 'dark'; } catch { }
+            let theme = 'light';
+            try { theme = localStorage.getItem('placecontext-theme') === 'dark' ? 'dark' : 'light'; } catch { }
             document.documentElement.dataset.pcTheme = theme;
         })();
     </script>
     <base href="/" />
     <title>PlaceContext — codebase visibility</title>
-    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
-    <link rel="alternate icon" type="image/x-icon" href="favicon.ico" />
+    <link rel="icon" type="image/png" href="images/corgi-outline.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"

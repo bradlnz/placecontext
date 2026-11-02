@@ -30,6 +30,25 @@ public class OperationCenterTests
         Assert.Equal(1, center.ActiveCount(Tenant.Id, user));
     }
 
+    [Fact]
+    public void Progress_only_wakes_the_matching_conversation_and_stops_after_disposal()
+    {
+        var center = Center();
+        var user = Guid.NewGuid(); var project = Guid.NewGuid(); var fired = 0;
+        var operation = center.Track(Tenant, project, "Assistant", null, "build:one", user);
+        var subscription = center.Subscribe(Tenant.Id, () => fired++, user, project, "build:one");
+        center.Track(Tenant, project, "Other conversation", null, "build:two", user);
+        center.Track(Tenant, project, "Other user", null, "build:one", Guid.NewGuid());
+        center.Track(Tenant, Guid.NewGuid(), "Other project", null, "build:one", user);
+        center.Track(Tenant with { Id = Guid.NewGuid() }, project, "Other tenant", null, "build:one", user);
+        Assert.Equal(0, fired);
+        center.ReportProgress(operation.Id);
+        Assert.Equal(1, fired);
+        subscription.Dispose();
+        center.ReportProgress(operation.Id);
+        Assert.Equal(1, fired);
+    }
+
     // ── Sync upsert ──────────────────────────────────────────────────────────────────────────────
 
     [Fact]

@@ -1,56 +1,52 @@
 .signup-layout { width: min(680px,100%); margin: auto; }
-.signup-brand { display:flex; align-items:center; gap:10px; font-size:15px; margin-bottom:26px; }
-.signup-brand img { width:34px; height:34px; border-radius:9px; }
-.signup-brand strong { letter-spacing:-.035em; }
-.signup-brand span { color:var(--text-4); font-size:11px; margin-left:auto; }
-.signup-card { padding:37px 41px; border:1px solid var(--border-2); border-radius:15px;
-    background:linear-gradient(160deg,#1c211e,#151816 80%); box-shadow:0 28px 75px rgba(0,0,0,.29); }
-.signup-eyebrow { font-size:10px; color:var(--brand); letter-spacing:.14em; font-weight:750;
+.signup-card { padding:37px 41px; border:1px solid var(--border); border-radius:12px;
+    background:#fff; box-shadow:0 6px 24px rgba(25,35,55,.035); }
+.signup-eyebrow { font-size:12px; color:#315bc4; letter-spacing:.06em; font-weight:500;
     margin:22px 0 10px; }
-.signup-card h1 { font-size:29px; font-weight:730; letter-spacing:-.045em; margin:0; line-height:1.18; }
-.signup-sub { color:var(--text-3); font-size:12.5px; line-height:1.65; margin:12px 0 0; max-width:525px; }
+.signup-card h1 { font-size:36px; font-weight:450; letter-spacing:-.035em; margin:0; line-height:1.18; }
+.signup-sub { color:var(--text-3); font-size:14px; line-height:1.65; margin:12px 0 0; max-width:525px; }
 .signup-step { display:flex; align-items:center; gap:11px; color:var(--text-4);
-    font-size:10.5px; letter-spacing:.01em; }
+    font-size:12px; letter-spacing:.01em; }
 .signup-step span:nth-child(odd) { width:24px; height:24px; display:grid; place-items:center;
-    border:1px solid var(--border-2); border-radius:50%; font-size:10px; }
+    border:1px solid var(--border-2); border-radius:50%; font-size:12px; }
 .signup-step .signup-step-active { color:var(--brand); font-weight:720; }
 .signup-form { margin-top:27px; display:grid; gap:20px; }
 .signup-fields { display:grid; gap:17px; }
 .signup-two { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
 .dcfield { display:grid; gap:8px; }
-.dcfield label { font-size:11.5px; font-weight:660; color:var(--text-2); }
-.dcfield label small { color:var(--text-4); font-size:10px; font-weight:500; float:right; }
-.dcfield > small { font-size:10px; color:var(--text-4); line-height:1.4; }
-.dcinput { width:100%; min-height:43px; padding:10px 12px; box-sizing:border-box;
-    border-radius:8px; background:#0d110e; border:1px solid var(--border-2); font-size:12px; }
-.dcinput:focus { outline:2px solid rgba(67,214,117,.4); outline-offset:1px; }
+.dcfield label { font-size:14px; font-weight:500; color:var(--text-2); }
+.dcfield label small { color:var(--text-4); font-size:12px; font-weight:500; float:right; }
+.dcfield > small { font-size:12px; color:var(--text-4); line-height:1.4; }
+.dcinput { width:100%; min-height:48px; padding:10px 12px; box-sizing:border-box;
+    border-radius:8px; background:#fff; border:1px solid var(--border-2); font-size:15px; }
+.dcinput:focus { outline:2px solid #315bc433; outline-offset:1px; border-color:#315bc4; box-shadow:none; }
 .signup-address { display:flex; align-items:center; position:relative; }
 .signup-address input { padding-right:140px; }
 .signup-address span { position:absolute; right:13px; color:var(--text-4); font-size:11px; }
 .signup-plan { display:grid; gap:10px; border:none; padding:0; margin:0; }
-.signup-plan legend { font-size:11.5px; color:var(--text-2); font-weight:660; margin-bottom:10px; }
+.signup-plan legend { font-size:14px; color:var(--text-2); font-weight:500; margin-bottom:10px; }
 .plan-option { display:flex; align-items:center; gap:14px; padding:13px 15px; cursor:pointer;
-    border:1px solid var(--border-2); border-radius:9px; background:rgba(255,255,255,.018); }
-.plan-option:hover, .plan-option:has(input:checked) { border-color:rgba(67,214,117,.55); background:rgba(67,214,117,.04); }
+    border:1px solid var(--border-2); border-radius:9px; background:#fff; }
+.plan-option:hover, .plan-option:has(input:checked) { border-color:#315bc4; background:#f4f7fe; }
 .plan-option input { accent-color:var(--brand); }
 .plan-option span { flex:1; display:grid; gap:4px; }
 .plan-option strong { font-size:12px; }
-.plan-option small { color:var(--text-4); font-size:10px; }
+.plan-option small { color:var(--text-4); font-size:12px; }
 .plan-option b { font-size:12px; white-space:nowrap; }
-.signup-note { font-size:10.5px; color:var(--text-4); margin:0; line-height:1.6; }
+.signup-note { font-size:12px; color:var(--text-4); margin:0; line-height:1.6; }
 .signup-button { min-height:47px; width:100%; display:flex; align-items:center; justify-content:center;
-    box-sizing:border-box; font-size:12.5px; font-weight:750; gap:12px; }
+    box-sizing:border-box; font-size:14px; font-weight:550; gap:12px; }
 .signup-button span { font-size:18px; }
-.signup-error { font-size:12px; line-height:1.6; color:#f4a9a9; padding:12px 14px;
-    border-radius:8px; background:rgba(245,86,86,.07); border:1px solid rgba(245,86,86,.35); margin-top:16px; }
-.signup-notice { margin:22px 0; padding:16px; border-radius:8px; border:1px solid rgba(67,214,117,.2);
-    background:rgba(67,214,117,.055); color:var(--text-2); font-size:12px; line-height:1.6; }
+.signup-error { font-size:12px; line-height:1.6; color:var(--bad); padding:12px 14px;
+    border-radius:8px; background:var(--bad-bg); border:1px solid #f0b7b1; margin-top:16px; }
+.signup-notice { margin:22px 0; padding:16px; border-radius:8px; border:1px solid var(--border);
+    background:var(--card-2); color:var(--text-2); font-size:12px; line-height:1.6; }
 .signup-footer { margin-top:22px; text-align:center; color:var(--text-4); font-size:12px; }
 .signup-footer a { color:var(--brand); font-weight:700; text-decoration:none; }
 .signup-footer a:hover { text-decoration:underline; }
 @media (max-width:650px) {
     .signup-card { padding:26px 21px; }
-    .signup-card h1 { font-size:25px; }
+    .signup-card h1 { font-size:30px; }
     .signup-two { grid-template-columns:1fr; gap:16px; }
     .signup-step { flex-wrap:wrap; gap:7px; font-size:9.5px; }
     .plan-option { padding:12px 9px; }

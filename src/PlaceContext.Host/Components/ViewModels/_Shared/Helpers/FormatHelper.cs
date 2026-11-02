@@ -42,7 +42,7 @@ public static class FormatHelper
     {
         try
         {
-            var doc = System.Text.Json.JsonDocument.Parse(raw);
+            using var doc = System.Text.Json.JsonDocument.Parse(raw);
             return System.Text.Json.JsonSerializer.Serialize(
                 doc.RootElement,
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true }

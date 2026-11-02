@@ -1,14 +1,53 @@
 using System.Text.Json.Nodes;
+using Markdig;
+using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
+using PlaceContext.Application;
 using PlaceContext.Application.Build;
+using PlaceContext.Application.Dtos;
 using PlaceContext.Host.Build;
+using PlaceContext.Application.Ports;
+using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections connections, BuildChatAgent agent,
-    PortalUiState ui, IJSRuntime js) : PageViewModel, IComponentViewModel
+public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConnections connections, BuildChatAgent agent,
+    PortalUiState ui, IJSRuntime js, PlaceContextService service, PlaceContext.Application.Ports.IPermissionService permissions, DashboardViewModel? dashboard = null,
+    OperationCenter? operations = null, ICurrentTenant? tenant = null, ICurrentUser? user = null) : PageViewModel, IComponentViewModel
 {
+    private static readonly MarkdownPipeline ChatMarkdown = new MarkdownPipelineBuilder().DisableHtml().UsePipeTables().Build();
+    public static string FormatReply(string text)
+    {
+        var document = Markdown.Parse(text, ChatMarkdown);
+        foreach (var link in document.Descendants<LinkInline>())
+        {
+            // Disabling raw HTML does not prevent executable Markdown link URLs.
+            if (link.Url is not { } url || url.Any(char.IsControl)
+                || !Uri.TryCreate(url, UriKind.RelativeOrAbsolute, out var uri)
+                || (uri.IsAbsoluteUri && !url.StartsWith('/') && uri.Scheme is not ("http" or "https" or "mailto")))
+                link.Url = "";
+        }
+        return Markdown.ToHtml(document, ChatMarkdown);
+    }
+
+    public DashboardViewModel? Dashboard => dashboard;
+    public bool ShowOverview { get; private set; }
+    private Task? _dashboardLoad;
+    private bool? _workspaceVisible;
+    public bool WorkspaceOpen => _workspaceVisible == true || PreviewItem is not null || ShowOverview || PreviewChart is not null;
+    public bool WorkspaceVisible => _workspaceVisible ?? (Conversation.Messages.Count > 0 || WorkspaceOpen);
+    public void OpenWorkspace() => _workspaceVisible = true;
+    public void OpenOverview(string filter = "all")
+    {
+        ClosePreview();
+        OpenWorkspace();
+        ShowOverview = true;
+        dashboard?.SetFilter(filter);
+    }
+    public void CloseWorkspace() { ClosePreview(); ShowOverview = false; _workspaceVisible = false; }
+
     public string ViewId { get; } = "build-" + Guid.NewGuid().ToString("N");
     public BuildConversation Conversation { get; private set; } = new();
     public IReadOnlyList<BuildConversationSummary> Conversations { get; private set; } = [];
@@ -19,6 +58,8 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
     public string Draft { get; set; } = "";
     public static IReadOnlyList<(string Title, string Description, string Icon, string Prompt)> QuickPicks { get; } =
     [
+        ("Chart project activity", "See job activity, outcomes, and trends.", "data.graph",
+            "Show a chart of this project’s current running and queued jobs and its succeeded and failed runs from the last 24 hours. Use project_activity and show_chart, label the time ranges clearly, and do not run or change any jobs."),
         ("Compare grocery prices", "Compare Coles and Woolworths for your postcode.", "vm",
             "Build a grocery price comparison workflow for Coles and Woolworths in Australia. Ask me for the product name and confirm the postcode (default 4101). Inspect existing jobs and workflows first and reuse what fits. Use QEMU Live preview frames and AI verification to verify prices, pack sizes and availability. Compare matching products by unit price, link the evidence, and mark any unverified price clearly."),
         ("Check a website", "Give a browser a task and verify what happened.", "check",
@@ -50,13 +91,71 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
     public bool Locked => Busy || NavigationLocked;
     public bool ShowMemory { get; set; }
     public bool ShowHistory { get; set; }
+    public bool ShowMcpMenu { get; set; }
+    public bool ShowAddMcp { get; private set; }
+    private bool _reopenMcpMenu;
+    public bool LoadingMcps { get; private set; }
+    public string? McpError { get; private set; }
+    public IReadOnlyList<McpConnectionView> AvailableMcps { get; private set; } = [];
+
+    public async Task OpenMcpMenuAsync()
+    {
+        ShowMcpMenu = true;
+        if (LoadingMcps) return;
+        var projectId = Conversation.ProjectId;
+        LoadingMcps = true; McpError = null; AvailableMcps = [];
+        try
+        {
+            var servers = await service.ListMcpConnectionsAsync(projectId);
+            if (Conversation.ProjectId == projectId)
+            {
+                AvailableMcps = servers.Where(x => x.ProjectId == projectId && x.Enabled)
+                    .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+                if (!servers.Any(x => x.ProjectId == projectId) && ShowMcpMenu) await OpenAddMcpAsync();
+            }
+        }
+        catch (Exception)
+        {
+            if (Conversation.ProjectId == projectId) McpError = "Could not load MCP servers. Please try again.";
+        }
+        finally
+        {
+            if (Conversation.ProjectId == projectId) LoadingMcps = false;
+        }
+    }
+    public async Task OpenAddMcpAsync()
+    {
+        if (_module is not null) await _module.InvokeVoidAsync("setComposerMenu", ViewId, false);
+        ShowAddMcp = true;
+    }
+    public void CloseAddMcp()
+    {
+        ShowAddMcp = false;
+        ShowMcpMenu = true;
+        _reopenMcpMenu = true;
+    }
+    public void McpAdded(McpConnectionView connection)
+    {
+        if (connection.ProjectId != Conversation.ProjectId) return;
+        AvailableMcps = AvailableMcps.Where(x => x.Id != connection.Id).Append(connection)
+            .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+        CloseAddMcp();
+    }
+    public async Task AfterRenderAsync()
+    {
+        if (!_reopenMcpMenu || _module is null) return;
+        _reopenMcpMenu = false;
+        await _module.InvokeVoidAsync("setComposerMenu", ViewId, true);
+    }
     public bool ConfirmDelete { get; set; }
     public bool SpeechSupported { get; private set; }
     public bool Listening { get; private set; }
     public bool CanSend => !Locked && !Listening && Conversation.ConnectionId != Guid.Empty
         && Models.Contains(Conversation.Model) && (Draft.Trim().Length > 0 || Images.Count > 0);
-    private CancellationTokenSource? _pollCancel;
-    private Task? _poll;
+    private IDisposable? _conversationSubscription;
+    private readonly SemaphoreSlim _updateGate = new(1, 1);
+    private int _updateVersion;
+    private bool _refreshPending, _disposed;
     private Guid? _requestedConversationId;
     private Task? _send;
     private IJSObjectReference? _module;
@@ -71,14 +170,18 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
             return;
         }
         _requestedConversationId = conversationId;
-        await StopPollingAsync();
+        StopUpdates();
+        if (_dashboardLoad is not null) await _dashboardLoad;
+        dashboard?.Dispose();
         if (_send is not null) await _send;
         await StopSpeechAsync();
         Loading = true; Error = Notice = null; Draft = ""; Images.Clear();
+        ShowMcpMenu = ShowAddMcp = LoadingMcps = _reopenMcpMenu = false; McpError = null; AvailableMcps = [];
+        ResetWorkspace();
         Conversation = new() { ProjectId = projectId };
         try
         {
-            ui.Set("Build", "");
+            ui.Set("Dashboard", "");
             Connections = (await connections.ListAsync()).Where(x => x.Enabled).ToArray();
             Conversations = await store.ListAsync(projectId);
             Memory = await store.GetMemoryAsync(projectId);
@@ -86,11 +189,18 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
             var active = Conversations.FirstOrDefault(x => x.Status is BuildRunStatus.Queued or BuildRunStatus.Running);
             if (conversationId is { } id) Conversation = await store.LoadAsync(projectId, id);
             else if (active is not null) Conversation = await store.LoadAsync(projectId, active.Id);
+            await AutoPreviewAsync();
         }
         catch (Exception ex) { Error = ex.Message; }
         finally { Loading = false; }
-        _pollCancel = new();
-        _poll = PollAsync(_pollCancel.Token);
+        if (dashboard is not null)
+        {
+            dashboard.Attach(() => { NotifyStateChanged(); return Task.CompletedTask; });
+            dashboard.Initialize(projectId);
+            _dashboardLoad = dashboard.LoadAsync();
+        }
+        SubscribeToConversation();
+        if (Busy) await RefreshConversationAsync();
     }
     private void SelectDefaultModel()
     {
@@ -108,20 +218,30 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
     public async Task NewAsync()
     {
         if (NavigationLocked) return;
+        StopUpdates();
         await StopSpeechAsync();
         Conversation = new() { ProjectId = Conversation.ProjectId, ConnectionId = Conversation.ConnectionId, Model = Conversation.Model };
-        Draft = ""; Images.Clear(); Error = Notice = null; ConfirmDelete = false; ShowHistory = false;
+        Draft = ""; Images.Clear(); Error = Notice = null; ConfirmDelete = false; ShowHistory = ShowMcpMenu = false;
+        ResetWorkspace();
     }
     public async Task OpenAsync(Guid id)
     {
         if (NavigationLocked) return;
+        StopUpdates();
+        Loading = true; ShowHistory = false; Error = Notice = null;
+        NotifyStateChanged();
         try
         {
             await StopSpeechAsync();
             Conversation = await store.LoadAsync(Conversation.ProjectId, id);
+            ResetWorkspace();
+            await AutoPreviewAsync();
             Draft = ""; Images.Clear(); Error = Notice = null; ConfirmDelete = false; ShowHistory = false;
         }
         catch (Exception ex) { Error = ex.Message; }
+        finally { Loading = false; NotifyStateChanged(); }
+        SubscribeToConversation();
+        if (Busy) await RefreshConversationAsync();
     }
     public async Task DeleteAsync()
     {
@@ -177,6 +297,7 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
     private async Task SendCoreAsync()
     {
         Submitting = true; Error = Notice = null;
+        SubscribeToConversation();
         var text = Draft; var images = Images.ToArray();
         try
         {
@@ -187,65 +308,91 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
         }
         catch (Exception ex) { Error = ex.Message; }
         finally { Submitting = false; NotifyStateChanged(); }
+        if (_refreshPending) await RefreshConversationAsync();
     }
     public async Task StopAsync()
     {
         try { await store.RequestStopAsync(Conversation.ProjectId, Conversation.Id); Notice = "Stop requested. Completed actions remain applied."; }
         catch (Exception ex) { Error = ex.Message; }
     }
-    private async Task PollAsync(CancellationToken ct)
+    public async Task ToggleHistoryAsync()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
-        var ticks = 0;
+        ShowHistory = !ShowHistory;
+        if (!ShowHistory) return;
+        try { Conversations = await store.ListAsync(Conversation.ProjectId); }
+        catch (Exception ex) { Error = ex.Message; }
+    }
+    private void SubscribeToConversation()
+    {
+        StopUpdates();
+        if (operations is null || tenant is not { IsResolved: true } || user is null) return;
+        // shortcut: progress notifications are replica-local; use shared pub/sub before separating workers from UI hosts.
+        _conversationSubscription = operations.Subscribe(tenant.TenantId,
+            () => _ = RefreshConversationAsync(), user.UserId, Conversation.ProjectId, $"build:{Conversation.Id}");
+    }
+    private void StopUpdates()
+    {
+        ++_updateVersion;
+        _conversationSubscription?.Dispose(); _conversationSubscription = null;
+        _refreshPending = false;
+    }
+    private async Task RefreshConversationAsync()
+    {
+        var version = _updateVersion;
+        await _updateGate.WaitAsync();
         try
         {
-            while (await timer.WaitForNextTickAsync(ct))
+            if (_disposed || version != _updateVersion) return;
+            if (Submitting || Loading) { _refreshPending = true; return; }
+            _refreshPending = false;
+            var current = Conversation;
+            var latest = await store.LoadAsync(current.ProjectId, current.Id);
+            if (_disposed || version != _updateVersion || Conversation != current) return;
+            if (latest.Status == current.Status && latest.Error == current.Error
+                && latest.StopRequested == current.StopRequested && JsonNode.DeepEquals(latest.Messages, current.Messages)) return;
+            Conversation = latest;
+            await AutoPreviewAsync();
+            if (_disposed || version != _updateVersion) return;
+            if (!Busy)
             {
-                if (Submitting || Loading) continue;
-                try
-                {
-                    var current = Conversation;
-                    var chats = await store.ListAsync(current.ProjectId, ct);
-                    if (Conversation != current) continue;
-                    Conversations = chats;
-                    var saved = chats.FirstOrDefault(x => x.Id == current.Id);
-                    if (saved is not null && (Busy || saved.Status != current.Status))
-                    {
-                        var latest = await store.LoadAsync(current.ProjectId, current.Id, ct);
-                        if (Conversation != current) continue;
-                        Conversation = latest;
-                        if (!Busy)
-                        {
-                            Notice = latest.Status == BuildRunStatus.Completed ? "Background run completed." : null;
-                            Error = latest.Error;
-                            Memory = await store.GetMemoryAsync(current.ProjectId, ct);
-                        }
-                    }
-                    if (++ticks % 15 == 0 && !Locked)
-                    {
-                        Connections = (await connections.ListAsync(ct)).Where(x => x.Enabled).ToArray();
-                        if (Conversation.ConnectionId == Guid.Empty) SelectDefaultModel();
-                        else if (string.IsNullOrEmpty(Conversation.Model)) Conversation.Model = Models.FirstOrDefault() ?? "";
-                    }
-                    NotifyStateChanged();
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; }
-                catch (Exception ex) { Error = ex.Message; NotifyStateChanged(); }
+                var memory = await store.GetMemoryAsync(current.ProjectId);
+                if (_disposed || version != _updateVersion) return;
+                Memory = memory;
+                Notice = latest.Status == BuildRunStatus.Completed ? "Background run completed." : null;
+                Error = latest.Error;
             }
+            NotifyStateChanged();
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
-    }
-    private async Task StopPollingAsync()
-    {
-        if (_pollCancel is null) return;
-        await _pollCancel.CancelAsync();
-        if (_poll is not null) await _poll;
-        _pollCancel.Dispose(); _pollCancel = null; _poll = null;
+        catch (Exception ex)
+        {
+            if (!_disposed && version == _updateVersion) { Error = ex.Message; NotifyStateChanged(); }
+        }
+        finally { _updateGate.Release(); }
     }
     public static string Role(JsonNode message) => message["role"]?.GetValue<string>() ?? "assistant";
     public static string Text(JsonNode message) => message["content"] is JsonArray parts
         ? string.Join("\n", parts.Where(x => x?["type"]?.GetValue<string>() == "text").Select(x => x!["text"]!.GetValue<string>()))
         : message["content"]?.GetValue<string>() ?? "";
+    public static string? JsonReply(JsonNode message)
+    {
+        if (Role(message) != "assistant") return null;
+        var text = Text(message).Trim();
+        if (text.StartsWith("```", StringComparison.Ordinal) && text.EndsWith("```", StringComparison.Ordinal))
+        {
+            var line = text.IndexOf('\n');
+            if (line < 0 || line > text.Length - 3) return null;
+            var fence = text[..line].Trim();
+            if (fence != "```" && !fence.Equals("```json", StringComparison.OrdinalIgnoreCase)) return null;
+            text = text[(line + 1)..^3].Trim();
+        }
+        if (!text.StartsWith('{') && !text.StartsWith('[')) return null;
+        try
+        {
+            var json = JsonNode.Parse(text);
+            return json?.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (System.Text.Json.JsonException) { return null; }
+    }
     public static IEnumerable<string> ImageUrls(JsonNode message) => (message["content"] as JsonArray ?? [])
         .Where(x => x?["type"]?.GetValue<string>() == "image_url").Select(x => x!["image_url"]!["url"]!.GetValue<string>());
     public static IEnumerable<JsonNode> Calls(JsonNode message) => (message["tool_calls"] as JsonArray ?? []).OfType<JsonNode>();
@@ -293,8 +440,11 @@ public sealed class BuildChatViewModel(IBuildChatStore store, IModelConnections 
     { Listening = false; if (error is not null) Error = error; NotifyStateChanged(); return Task.CompletedTask; }
     public async ValueTask DisposePageAsync()
     {
+        _disposed = true;
         Detach();
-        await StopPollingAsync();
+        StopUpdates();
+        if (_dashboardLoad is not null) await _dashboardLoad;
+        dashboard?.Dispose();
         if (_send is not null) await _send;
         try { if (_module is not null) { await _module.InvokeVoidAsync("unmountChat", ViewId); await _module.DisposeAsync(); } }
         catch (JSDisconnectedException) { }

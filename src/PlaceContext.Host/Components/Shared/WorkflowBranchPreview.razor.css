@@ -2,3 +2,4 @@
 .branch-job { display:flex; align-items:center; gap:6px; overflow-wrap:anywhere }
 .branch-condition, small { color:var(--text-3); font-size:10px; margin:4px 0 }
 .branch-condition code { overflow-wrap:anywhere }
+button.branch-job { border: 0; background: transparent; color: var(--brand); font: inherit; text-align: left; cursor: pointer; }

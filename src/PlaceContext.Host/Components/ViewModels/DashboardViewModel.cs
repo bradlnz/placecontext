@@ -10,7 +10,7 @@ using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class DashboardViewModel : PageViewModel, IDisposable
+public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDisposable
 {
     private const string AllFilter = "all";
     private const string RunningFilter = "running";
@@ -23,11 +23,10 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     private readonly OperationCenter _operations;
     private readonly BackgroundOperationRunner _ops;
     private readonly Dictionary<string, DateTimeOffset> _rendered = new();
-    private DateTimeOffset _lastRefresh = DateTimeOffset.MinValue;
-    private int _refreshScheduled;
     private Guid? _projectId;
+    private Guid? _projectOverride;
+    private readonly IPermissionService? _permissions;
     private int _loadVersion;
-    private IDisposable? _operationSubscription;
 
     public DashboardViewModel(
         PlaceContextService service,
@@ -35,7 +34,8 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         NavigationManager navigation,
         IJSRuntime js,
         ICurrentTenant tenant,
-        OperationCenter operations
+        OperationCenter operations,
+        IPermissionService? permissions = null
     )
     {
         _service = service;
@@ -44,10 +44,14 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         _js = js;
         _tenant = tenant;
         _operations = operations;
+        _permissions = permissions;
         _ops = new BackgroundOperationRunner(operations);
     }
 
+    public bool CanViewActivity { get; private set; }
     public bool Ready { get; private set; }
+    public string? LoadError { get; private set; }
+    public DateTimeOffset? CapturedAt { get; private set; }
     public bool ChainsReady { get; private set; }
     public IReadOnlyList<RunReportView> Reports { get; private set; } =
         Array.Empty<RunReportView>();
@@ -74,8 +78,8 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     public string? ChainMessage { get; private set; }
     public bool ChainError { get; private set; }
     public string WorkspaceProjectName => _ui.CurrentProjectName ?? "the workspace";
-    public Guid? CurrentProjectId => _ui.CurrentProjectId;
-    public IReadOnlyList<string> FilterOptions { get; } = ["all", "running", "failed"];
+    public Guid? CurrentProjectId => _projectOverride ?? _ui.CurrentProjectId;
+    public IReadOnlyList<string> FilterOptions { get; } = ["all", "running", "queued", "failed", "succeeded"];
 
     public bool IsFilter(string filter) => Filter == filter;
 
@@ -102,21 +106,23 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         IReadOnlyList<(string Label, string Count, int Frac)> Bars
     );
 
-    public void Initialize()
+    public void Initialize(Guid? projectId = null)
     {
+        _projectOverride = projectId;
+        _ui.OnChanged -= OnUiChanged;
         _projectId = CurrentProjectId;
         _ui.OnChanged += OnUiChanged;
-        _operationSubscription?.Dispose();
-        if (_tenant.IsResolved)
-            _operationSubscription = _operations.Subscribe(_tenant.TenantId, OnOperationsChanged);
-        _ui.Set("Dashboard", "jobs · runs · artifacts");
+        _ui.Set("Dashboard", "");
     }
 
     public async Task LoadAsync()
     {
         var version = ++_loadVersion;
-        Ready = false;
+        Ready = false; CanViewActivity = false;
         ChainsReady = false;
+        Reports = []; Charts = []; Chains = []; Entities = []; EntityTables = [];
+        EntityCharts.Clear(); ResetChartCache();
+        CapturedAt = null; LoadError = null;
         var reports = LoadReportsAsync(version);
         if (CurrentProjectId is { } projectId)
             await Task.WhenAll(reports, LoadChainsAsync(projectId, version),
@@ -129,13 +135,35 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     {
         try
         {
-            var reports = await _service.ListRecentRunReportsAsync(take: 50);
+            var allowed = _permissions is null || await _permissions.HasAsync(Permission.JobsView);
+            if (version != _loadVersion) return;
+            CanViewActivity = allowed;
+            if (!allowed)
+                throw new UnauthorizedAccessException("Job activity is not available with your permissions.");
+            var projectId = CurrentProjectId;
+            var reports = await _service.ListRecentRunReportsAsync(take: 50, projectId: projectId);
+            var counts = projectId is { } id ? await _service.GetProjectRunCountsAsync(id) : null;
             if (version != _loadVersion) return;
             Reports = reports;
+            LoadError = null;
+            CapturedAt = DateTimeOffset.UtcNow;
+            if (counts is not null)
+            {
+                Running = counts.GetValueOrDefault("Running");
+                Queued = counts.GetValueOrDefault("Queued");
+                Failed24 = counts.GetValueOrDefault("Failed");
+                Succeeded24 = counts.GetValueOrDefault("Succeeded");
+            }
+            else UpdateRunMetrics();
         }
-        catch { }
+        catch
+        {
+            if (version != _loadVersion) return;
+            Reports = []; CapturedAt = null;
+            Running = Queued = Failed24 = Succeeded24 = 0;
+            LoadError = "Could not load job activity. Please try again.";
+        }
         if (version != _loadVersion) return;
-        UpdateRunMetrics();
         Ready = true;
         NotifyStateChanged();
     }
@@ -144,6 +172,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     {
         try
         {
+            if (_permissions is not null && !await _permissions.HasAsync(Permission.ChainsManage)) { Chains = []; return; }
             var chains = await _service.ListJobChainsAsync(projectId);
             if (version != _loadVersion) return;
             Chains = chains;
@@ -167,6 +196,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     {
         try
         {
+            if (_permissions is not null && !await _permissions.HasAsync(Permission.DataRead)) { Charts = []; return; }
             var charts = await _service.ListProjectChartsAsync(projectId);
             if (version != _loadVersion) return;
             Charts = charts;
@@ -179,6 +209,7 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     {
         try
         {
+            if (_permissions is not null && !await _permissions.HasAsync(Permission.DataRead)) { Entities = []; return; }
             var entities = await _service.ListDataEntitiesAsync(projectId);
             if (version != _loadVersion) return;
             Entities = entities;
@@ -214,12 +245,16 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         Filter switch
         {
             RunningFilter => Reports.Where(report => report.Run.Status == "Running").ToList(),
-            FailedFilter => Reports.Where(report => report.Run.Status == "Failed").ToList(),
+            "queued" => Reports.Where(report => report.Run.Status == "Queued").ToList(),
+            "succeeded" => Reports.Where(report => report.Run.Status == "Succeeded" && report.Run.StartedAt >= DateTimeOffset.UtcNow.AddHours(-24)).ToList(),
+            FailedFilter => Reports.Where(report => report.Run.Status == "Failed" && report.Run.StartedAt >= DateTimeOffset.UtcNow.AddHours(-24)).ToList(),
             _ => Reports,
         };
 
+    public Task RefreshActivityAsync() => LoadReportsAsync(_loadVersion);
+
     public void SetFilter(string filter) =>
-        Filter = filter is RunningFilter or FailedFilter ? filter : AllFilter;
+        Filter = filter is RunningFilter or FailedFilter or "queued" or "succeeded" ? filter : AllFilter;
 
     public IReadOnlyList<ProjectChartView> SqlCharts() =>
         Charts
@@ -457,28 +492,6 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
         NotifyStateChanged();
     }
 
-    private void OnOperationsChanged() => _ = RefreshAfterOperationAsync();
-
-    private async Task RefreshAfterOperationAsync()
-    {
-        if (Interlocked.Exchange(ref _refreshScheduled, 1) != 0) return;
-        var version = _loadVersion;
-        try
-        {
-            var wait = _lastRefresh + TimeSpan.FromSeconds(5) - DateTimeOffset.UtcNow;
-            if (wait > TimeSpan.Zero)
-                await Task.Delay(wait);
-            if (version != _loadVersion) return;
-            _lastRefresh = DateTimeOffset.UtcNow;
-            await LoadReportsAsync(version);
-        }
-        catch { }
-        finally
-        {
-            Volatile.Write(ref _refreshScheduled, 0);
-        }
-    }
-
     public async Task RenderChartsAsync()
     {
         var entries = new List<object>();
@@ -510,7 +523,6 @@ public sealed class DashboardViewModel : PageViewModel, IDisposable
     public void Dispose()
     {
         _ui.OnChanged -= OnUiChanged;
-        _operationSubscription?.Dispose();
         ++_loadVersion;
         CancelQuickChainPrompt();
         Detach();

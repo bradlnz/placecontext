@@ -14,8 +14,8 @@ public sealed class BuildNotificationTests
         using var vm = new NotificationsViewModel(new OperationCenter(null!, null!), new FakeCurrentTenant(Guid.NewGuid()), navigation);
         var project = Guid.NewGuid(); var conversation = Guid.NewGuid();
         vm.Toggle();
-        vm.Open($"/project/{project}/build?conversation={conversation}");
-        Assert.Equal($"http://localhost/project/{project}/build?conversation={conversation}", navigation.Uri);
+        vm.Open($"/project/{project}/dashboard?conversation={conversation}");
+        Assert.Equal($"http://localhost/project/{project}/dashboard?conversation={conversation}", navigation.Uri);
         Assert.False(vm.IsOpen);
         vm.Open("/observability?run=123");
         Assert.Equal("http://localhost/observability?run=123", navigation.Uri);

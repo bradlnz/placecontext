@@ -1,11 +1,11 @@
-@page "/project/{ProjectId:guid}/build"
+@page "/project/{ProjectId:guid}/dashboard"
 @attribute [Authorize(Policy = Permission.ProjectsView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IAsyncDisposable
 @inject BuildChatViewModel Vm
 
-<PageTitle>PlaceContext — Build</PageTitle>
-<div id="@Vm.ViewId" class="build-chat @(Vm.ShowHistory ? "history-open" : "")">
+<PageTitle>PlaceContext — Dashboard</PageTitle>
+<div id="@Vm.ViewId" class="build-chat @(Vm.ShowHistory ? "history-open" : "") @(Vm.WorkspaceVisible ? "conversation-active" : "") @(Vm.WorkspaceOpen ? "workspace-preview-open" : "")">
     @if (Vm.ShowHistory)
     {
         <aside id="@(Vm.ViewId + "-build-history")" class="chat-history" aria-label="Conversations">
@@ -21,10 +21,10 @@
             <div class="history-foot"><AppIcon Kind="ledger" /><span>Private to you.<br />Connected to this project.</span></div>
         </aside>
     }
-    <section class="chat-main" aria-label="Build workspace">
+    <section class="chat-main" aria-label="Dashboard workspace">
         <header class="chat-header">
             <div class="chat-header-start">
-                <button class="chat-icon-button" aria-label="History" title="Conversation history" aria-expanded="@Vm.ShowHistory" aria-controls="@(Vm.ViewId + "-build-history")" @onclick="() => Vm.ShowHistory = !Vm.ShowHistory"><AppIcon Kind="history" /></button>
+                <button class="chat-icon-button" aria-label="History" title="Conversation history" aria-expanded="@Vm.ShowHistory" aria-controls="@(Vm.ViewId + "-build-history")" @onclick="Vm.ToggleHistoryAsync"><AppIcon Kind="history" /></button>
                 <button class="chat-icon-button" aria-label="New chat" title="New chat" disabled="@Vm.NavigationLocked" @onclick="Vm.NewAsync"><AppIcon Kind="edit" /></button>
                             <div class="model-picker">
                                 <label for="@(Vm.ViewId + "-chat-provider")" class="visually-hidden">Model connection</label><select id="@(Vm.ViewId + "-chat-provider")" value="@Vm.Conversation.ConnectionId" @onchange="e => Vm.SelectConnection(e.Value?.ToString())" disabled="@Vm.Locked"><option value="">Select provider</option>@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select>
@@ -32,13 +32,21 @@
                             </div>
             </div>
             <div class="chat-header-actions">
+                @if (Vm.Conversation.Messages.Count > 0 && !Vm.WorkspaceVisible)
+                { <button type="button" class="chat-toolbar-button" aria-label="Open workspace" @onclick="Vm.OpenWorkspace"><AppIcon Kind="chain" /><span>Workspace</span></button> }
+                <button class="chat-toolbar-button" disabled="@Vm.NavigationLocked" @onclick="() => Vm.OpenOverview()"><AppIcon Kind="dashboard" /><span>Overview</span></button>
                 <a class="chat-toolbar-button" href="@($"/project/{ProjectId}/workflows")"><AppIcon Kind="chain" /><span>Workflows</span></a>
                 <button class="chat-toolbar-button @(Vm.ShowMemory ? "selected" : "")" aria-label="Project memory" title="Project memory" aria-expanded="@Vm.ShowMemory" aria-controls="@(Vm.ViewId + "-build-memory")" @onclick="() => Vm.ShowMemory = !Vm.ShowMemory"><AppIcon Kind="ledger" /><span>Memory</span></button>
                 @if (Vm.Conversation.Messages.Count > 0)
                 { <button class="chat-icon-button delete-chat" aria-label="Delete conversation" title="Delete conversation" disabled="@Vm.Locked" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button> }
             </div>
         </header>
-        <div class="chat-content @(Vm.Conversation.Messages.Count == 0 ? "empty-chat" : "")">
+        <div class="build-body" aria-busy="@(Vm.Loading ? "true" : "false")">
+        @if (Vm.Loading)
+        {
+            <div class="conversation-loading" role="status"><div><p>Loading conversation…</p><Skeleton Kind="list" Rows="3" /></div></div>
+        }
+        <div id="@(Vm.ViewId + "-thread")" inert="@Vm.Loading" class="chat-content @(Vm.Conversation.Messages.Count == 0 ? "empty-chat" : "")">
             @if (Vm.ShowMemory)
             {
                 <section id="@(Vm.ViewId + "-build-memory")" class="chat-memory">
@@ -48,26 +56,43 @@
                     <div class="memory-footer"><small>Only you can see these notes.</small><button class="dcbtn" disabled="@Vm.Locked" @onclick="Vm.SaveMemoryAsync">Save memory</button></div>
                 </section>
             }
-            <div class="chat-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-busy="@Vm.Busy">
-                @if (Vm.Loading) { <Skeleton Kind="list" Rows="3" /> }
-                else if (Vm.Conversation.Messages.Count == 0)
+            <div class="chat-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-busy="@(Vm.Busy ? "true" : "false")">
+                @if (!Vm.Loading && Vm.Conversation.Messages.Count == 0)
                 {
                     <div class="chat-welcome">
                         <span class="welcome-icon"><AppIcon Kind="agent" /></span>
-                        <h1>What would you like to build?</h1>
-                        <p>Turn an outcome into a complete workflow for your industry.<br />Describe the outcome, or start with a quick pick below.</p>
+                        <h1>What do you need to do?</h1>
+                        <p>Check your project, explore the numbers, or build your next workflow.<br />Ask for a chart, describe an outcome, or choose a quick action.</p>
                     </div>
                 }
                 @foreach (var message in Vm.Conversation.Messages.OfType<System.Text.Json.Nodes.JsonNode>())
                 {
                     var role = BuildChatViewModel.Role(message);
                     if (role == "tool")
-                    { <details class="tool-result"><summary><AppIcon Kind="logs" /> Action result</summary><pre>@BuildChatViewModel.Text(message)</pre></details> }
+                    {
+                        <div class="result-items">
+                            @if (Vm.ResultChart(message) is { } chart)
+                            { <button type="button" class="result-item" @onclick="() => Vm.OpenChart(chart)"><AppIcon Kind="data.graph" /><span>@(chart.Spec.Title ?? "Chart")<small>Open chart</small></span><AppIcon Kind="arrow-right" /></button> }
+                            @foreach (var item in Vm.ResultItems(message))
+                            {
+                                <button type="button" class="result-item" @onclick="() => Vm.OpenPreviewAsync(item)"><AppIcon Kind="@(item.Kind == "workflow" ? "chain" : "code")" /><span>@item.Name<small>Open @(item.Kind == "workflow" ? "canvas" : "job")</small></span><AppIcon Kind="arrow-right" /></button>
+                            }
+                        </div>
+                        <details class="tool-result"><summary><AppIcon Kind="logs" /> Action result</summary><RunOutput Value="@(Vm.Presentation.Json(BuildChatViewModel.Text(message)))" Label="Action result JSON" /></details>
+                    }
                     else
                     {
                         <article class="chat-message @role">
-                            <div class="message-author"><span><AppIcon Kind="@(role == "user" ? "human" : "agent")" /></span><strong>@(role == "user" ? "You" : "Build")</strong></div>
-                            @if (BuildChatViewModel.Text(message).Length > 0) { <div class="message-text">@BuildChatViewModel.Text(message)</div> }
+                            <div class="message-author"><span><AppIcon Kind="@(role == "user" ? "human" : "agent")" /></span><strong>@(role == "user" ? "You" : "Assistant")</strong></div>
+                            @if (BuildChatViewModel.JsonReply(message) is { } json)
+                            { <RunOutput Value="@json" Label="Assistant JSON response" /> }
+                            else if (BuildChatViewModel.Text(message).Length > 0)
+                            {
+                                @if (role == "assistant")
+                                { <div class="message-text message-markdown">@((MarkupString)BuildChatViewModel.FormatReply(BuildChatViewModel.Text(message)))</div> }
+                                else
+                                { <div class="message-text">@BuildChatViewModel.Text(message)</div> }
+                            }
                             @if (BuildChatViewModel.SuggestedAnswers(message).Any())
                             {
                                 <div class="suggested-answers" role="group" aria-label="Suggested answers">
@@ -79,11 +104,11 @@
                                 <p class="answer-hint">Choose an answer to send, or type your own below.</p>
                             }
                             @foreach (var url in BuildChatViewModel.ImageUrls(message)) { <img class="message-image" src="@url" alt="Image attached to your message" /> }
-                            @foreach (var call in BuildChatViewModel.Calls(message)) { <details class="tool-call"><summary><AppIcon Kind="agent" /> @(call["function"]?["name"])</summary><pre>@(call["function"]?["arguments"])</pre></details> }
+                            @foreach (var call in BuildChatViewModel.Calls(message)) { <details class="tool-call"><summary><AppIcon Kind="agent" /> @(call["function"]?["name"])</summary><RunOutput Value="@(Vm.Presentation.Json(call["function"]?["arguments"]?.ToString() ?? ""))" Label="Tool arguments JSON" /></details> }
                         </article>
                     }
                 }
-                @if (Vm.Busy) { <div class="thinking" role="status"><span></span><span></span><span></span> @(Vm.Conversation.Status == PlaceContext.Application.Build.BuildRunStatus.Queued ? "Queued for background work" : "Build is working in the background")</div> }
+                @if (Vm.Busy) { <div class="thinking" role="status"><span></span><span></span><span></span> @(Vm.Conversation.Status == PlaceContext.Application.Build.BuildRunStatus.Queued ? "Queued for background work" : "The assistant is working in the background")</div> }
             </div>
             <div class="chat-bottom">
                 @if (Vm.Error is not null && Vm.Error != Vm.Conversation.Messages.LastOrDefault()?["content"]?.ToString())
@@ -95,12 +120,41 @@
                     {
                         <div class="attachments">@foreach (var image in Vm.Images) { <div><img src="@image.DataUrl" alt="@image.Name" /><button type="button" disabled="@Vm.Locked" aria-label="@($"Remove {image.Name}")" @onclick="() => Vm.Images.Remove(image)"><AppIcon Kind="close" /></button></div> }</div>
                     }
-                    <textarea @ref="_composer" class="chat-input" aria-label="Message Build" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Describe what you want to build or improve…" rows="2" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
+                    <textarea @ref="_composer" class="chat-input" aria-label="Message assistant" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Describe what you want to build or improve…" rows="2" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
                     <div class="composer-actions">
                         <div class="composer-tools">
-                            <label class="chat-icon-button attach-button" title="Attach images · up to four, 2 MB each"><AppIcon Kind="plus" /><InputFile OnChange="Vm.UploadAsync" accept="image/png,image/jpeg,image/webp" multiple disabled="@Vm.Locked" aria-label="Attach images" /></label>
-
-
+                            <button type="button" class="chat-icon-button" aria-label="Add to conversation" title="Add to conversation" popovertarget="@(Vm.ViewId + "-composer-menu")" disabled="@Vm.Locked" @onclick="() => Vm.ShowMcpMenu = false"><AppIcon Kind="plus" /></button>
+                            <div id="@(Vm.ViewId + "-composer-menu")" class="composer-menu" popover="auto" role="group" aria-label="@(Vm.ShowMcpMenu ? "Available MCP servers" : "Add to conversation")">
+                                @if (Vm.ShowMcpMenu)
+                                {
+                                    <button type="button" class="composer-menu-item" @onclick="() => Vm.ShowMcpMenu = false"><AppIcon Kind="arrow-left" /><span>MCP tools<small>Available in this project</small></span></button>
+                                    <div class="mcp-menu-list" aria-busy="@(Vm.LoadingMcps ? "true" : "false")" aria-live="polite">
+                                        @if (Vm.LoadingMcps) { <p class="mcp-menu-note" role="status">Loading MCP servers…</p> }
+                                        else if (Vm.McpError is not null)
+                                        {
+                                            <p class="mcp-menu-note" role="alert">@Vm.McpError</p>
+                                            <button type="button" class="composer-menu-item" @onclick="Vm.OpenMcpMenuAsync"><AppIcon Kind="refresh" /><span>Try again</span></button>
+                                        }
+                                        else if (Vm.AvailableMcps.Count == 0) { <p class="mcp-menu-note">No MCP servers are enabled for this project.</p> }
+                                        else
+                                        {
+                                            <ul aria-label="Available MCP servers">
+                                                @foreach (var server in Vm.AvailableMcps)
+                                                {
+                                                    <li class="mcp-menu-server"><AppIcon Kind="chain" /><span>@server.Name<small>@server.Transport</small></span></li>
+                                                }
+                                            </ul>
+                                        }
+                                    </div>
+                                    <button type="button" class="composer-menu-item" @onclick="Vm.OpenAddMcpAsync"><AppIcon Kind="plus" /><span>Add MCP<small>Connect another server</small></span></button>
+                                }
+                                else
+                                {
+                                <label class="composer-menu-item attach-button"><AppIcon Kind="plus" /><span>Attach images<small>Up to 4 images · 2 MB each</small></span><InputFile OnChange="Vm.UploadAsync" accept="image/png,image/jpeg,image/webp" multiple disabled="@Vm.Locked" aria-label="Attach images" /></label>
+                                <button type="button" class="composer-menu-item" popovertarget="@(Vm.ViewId + "-composer-menu")" popovertargetaction="hide" @onclick="() => Vm.ShowMemory = true"><AppIcon Kind="ledger" /><span>Project memory<small>Add context for your conversations</small></span></button>
+                                <button type="button" class="composer-menu-item" @onclick="Vm.OpenMcpMenuAsync"><AppIcon Kind="chain" /><span>MCP tools<small>Browse available servers</small></span><AppIcon Kind="chevron-right" /></button>
+                                }
+                            </div>
                         </div>
                         <div class="send-actions">
                             <button type="button" class="chat-icon-button mic-button @(Vm.Listening ? "listening" : "")" disabled="@(Vm.Locked || !Vm.SpeechSupported)" aria-label="@(Vm.Listening ? "Stop dictation" : "Dictate")" aria-pressed="@Vm.Listening" title="@(Vm.SpeechSupported ? "Dictate a message" : "Dictation requires a supported browser and HTTPS")" @onclick="Vm.ToggleSpeechAsync"><AppIcon Kind="mic" /></button>
@@ -113,7 +167,7 @@
                 { <div class="composer-note" role="status">@Vm.ModelSetupHint</div> }
                 else if (!Vm.Loading && !Vm.Connections.Any(x => x.Models.Count > 0))
                 { <div class="model-setup" role="status"><span><AppIcon Kind="agent" /> No models available. Sign in to Codex or Claude Code on this host, start a local model server, or add a connection.</span><a href="/settings/models">Model settings <AppIcon Kind="arrow-right" /></a></div> }
-                else { <div class="composer-note">@(Vm.Listening ? "Listening… Stop dictation to review and send." : "Build can make changes to this project. Review action results.")</div> }
+                else { <div class="composer-note">@(Vm.Listening ? "Listening… Stop dictation to review and send." : "The assistant can make changes to this project. Review action results.")</div> }
                 @if (!Vm.Loading && Vm.Conversation.Messages.Count == 0)
                 {
                     <section class="quick-picks" aria-labelledby="@(Vm.ViewId + "-quick-picks")">
@@ -135,8 +189,88 @@
                 }
             </div>
         </div>
+            <div class="build-divider" inert="@(Vm.Loading || !Vm.WorkspaceVisible)" role="separator" tabindex="0" aria-label="Resize chat and workspace" aria-orientation="vertical" aria-valuemin="30" aria-valuemax="70" aria-valuenow="42" aria-controls="@(Vm.ViewId + "-thread " + Vm.ViewId + "-workspace")" title="Drag to resize · arrow keys to adjust"></div>
+            <section id="@(Vm.ViewId + "-workspace")" class="build-workspace" aria-label="Dashboard workspace" inert="@(Vm.Loading || !Vm.WorkspaceVisible)">
+                <header class="preview-heading">
+                    <h2>@(Vm.ShowOverview ? "Overview" : Vm.PreviewChart?.Spec.Title ?? Vm.PreviewItem?.Name ?? "Workspace")</h2>
+                    @if (Vm.ShowOverview && Vm.Dashboard is { } activity)
+                    { <button type="button" class="chat-icon-button" aria-label="Refresh activity" @onclick="activity.RefreshActivityAsync"><AppIcon Kind="refresh" /></button> }
+                    @if (Vm.PreviewItem is not null)
+                    { <a href="@Vm.PreviewEditorUrl" target="_blank" rel="noopener" class="chat-icon-button" aria-label="Open editor in a new tab" title="Open editor in a new tab"><AppIcon Kind="external-link" /></a> }
+                    <button type="button" class="chat-icon-button" aria-label="Close workspace" title="Close workspace" @onclick="CloseWorkspace"><AppIcon Kind="close" /></button>
+                </header>
+                @if (Vm.ShowOverview && Vm.Dashboard is { } overview)
+                {
+                    <ProjectOverview Vm="overview" />
+                }
+                else if (Vm.PreviewChart is { } previewChart)
+                {
+                    <div class="preview-content"><BuildChart Spec="previewChart.Spec" Source="@previewChart.Source" /></div>
+                }
+                else if (Vm.PreviewItem is { } preview)
+                {
+                    <div class="preview-content">
+                        @if (Vm.PreviewLoading) { <Skeleton Kind="list" Rows="3" /> }
+                        else if (Vm.PreviewError is not null) { <p role="alert">@Vm.PreviewError</p><button class="dcbtn" @onclick="() => Vm.OpenPreviewAsync(preview)">Try again</button> }
+                        else if (Vm.PreviewWorkflow is { } workflow)
+                        {
+                            @if (!string.IsNullOrWhiteSpace(workflow.Description)) { <p class="preview-description">@workflow.Description</p> }
+                            <ChainCanvas @key="workflow.Id" Stages="workflow.Stages" ReadOnly="true" OnOpenJob="Vm.OpenJobPreviewAsync" />
+                        }
+                        else if (Vm.PreviewJob is { } job)
+                        {
+                            var stages = new[] { new JobChainStageView(new[] { new JobChainStepView(job.Id, job.Name) }) };
+                            <p class="preview-description">@job.Description</p>
+                            <ChainCanvas @key="job.Id" Stages="stages" ReadOnly="true" />
+                            <p class="preview-description">@(job.MapRuntimeId ?? job.MapImage) · @job.ReturnType</p>
+                            @foreach (var file in job.MapFiles)
+                            { <details class="job-source" open><summary>@file.Path</summary><pre>@file.Content</pre></details> }
+                            @if (job.MapFiles.Count == 0 && job.MapSource is not null)
+                            { <details class="job-source" open><summary>@(job.MapEntrypoint ?? "Source")</summary><pre>@job.MapSource</pre></details> }
+                            @foreach (var file in job.ReduceFiles)
+                            { <details class="job-source"><summary>Reduce · @file.Path</summary><pre>@file.Content</pre></details> }
+                        }
+                    </div>
+                }
+                else
+                {
+                <div class="workspace-content">
+                    @if (!Vm.Conversation.Messages.OfType<System.Text.Json.Nodes.JsonNode>().Any(message => BuildChatViewModel.Role(message) == "tool"))
+                    {
+                        <div class="workspace-empty">
+                            <AppIcon Kind="chain" />
+                            <h3>Your build will take shape here</h3>
+                            <p>Keep the conversation going on the left. Action results will appear here as the assistant works.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var message in Vm.Conversation.Messages.OfType<System.Text.Json.Nodes.JsonNode>().Where(message => BuildChatViewModel.Role(message) == "tool"))
+                        {
+                            <div class="result-items">
+                                @if (Vm.ResultChart(message) is { } chart)
+                            { <button type="button" class="result-item" @onclick="() => Vm.OpenChart(chart)"><AppIcon Kind="data.graph" /><span>@(chart.Spec.Title ?? "Chart")<small>Open chart</small></span><AppIcon Kind="arrow-right" /></button> }
+                            @foreach (var item in Vm.ResultItems(message))
+                                { <button type="button" class="result-item" @onclick="() => Vm.OpenPreviewAsync(item)"><AppIcon Kind="@(item.Kind == "workflow" ? "chain" : "code")" /><span>@item.Name<small>Open @(item.Kind == "workflow" ? "canvas" : "job")</small></span><AppIcon Kind="arrow-right" /></button> }
+                            </div>
+                            <details class="tool-result"><summary><AppIcon Kind="logs" /> Action result</summary><RunOutput Value="@(Vm.Presentation.Json(BuildChatViewModel.Text(message)))" Label="Action result JSON" /></details>
+                        }
+                    }
+                </div>
+                }
+            </section>
+        </div>
     </section>
 </div>
+@if (Vm.ShowAddMcp)
+{
+    <div class="dcmodal-overlay">
+        <section class="dcmodal mcp-add-modal" role="dialog" aria-modal="true" aria-labelledby="@(Vm.ViewId + "-add-mcp-title")">
+            <div class="dcmodal-head"><h3 id="@(Vm.ViewId + "-add-mcp-title")">Add MCP</h3></div>
+            <div class="dcmodal-body"><McpConnectionForm ProjectId="ProjectId" OnSaved="Vm.McpAdded" OnCancel="Vm.CloseAddMcp" /></div>
+        </section>
+    </div>
+}
 @if (Vm.ConfirmDelete)
 {
     <div class="dcmodal-overlay"><section class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="@(Vm.ViewId + "-delete-chat-title")"><div class="dcmodal-head"><h3 id="@(Vm.ViewId + "-delete-chat-title")">Delete conversation?</h3></div><div class="dcmodal-body">This removes the conversation and its images. Project memory and completed actions are kept.</div><div class="dcmodal-foot"><button class="dcbtn" @onclick="() => Vm.ConfirmDelete = false">Cancel</button><button class="dcbtn" @onclick="Vm.DeleteAsync">Delete</button></div></section></div>
@@ -145,12 +279,27 @@
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "conversation")] public Guid? ConversationId { get; set; }
     private ElementReference _composer;
+    private bool _focusComposer;
+    private void CloseWorkspace()
+    {
+        Vm.CloseWorkspace();
+        _focusComposer = true;
+    }
     private async Task UseQuickPickAsync(string prompt)
     {
         if (Vm.UseQuickPick(prompt)) await _composer.FocusAsync();
     }
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId, ConversationId);
-    protected override Task OnAfterRenderAsync(bool firstRender) => firstRender ? Vm.InitializeBrowserAsync() : Task.CompletedTask;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Vm.InitializeBrowserAsync();
+        await Vm.AfterRenderAsync();
+        if (_focusComposer)
+        {
+            _focusComposer = false;
+            await _composer.FocusAsync();
+        }
+    }
     public ValueTask DisposeAsync() => Vm.DisposePageAsync();
 }

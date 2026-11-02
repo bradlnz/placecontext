@@ -35,9 +35,9 @@ public sealed class OperationCenter
         _log = log;
     }
 
-    public IDisposable Subscribe(Guid tenantId, Action changed, Guid? userId = null, Guid? projectId = null)
+    public IDisposable Subscribe(Guid tenantId, Action changed, Guid? userId = null, Guid? projectId = null, string? correlationKey = null)
     {
-        var subscription = new Subscription(this, tenantId, changed, userId, projectId);
+        var subscription = new Subscription(this, tenantId, changed, userId, projectId, correlationKey);
         lock (_gate)
         {
             if (!_subscriptions.TryGetValue(tenantId, out var subscribers))
@@ -161,6 +161,13 @@ public sealed class OperationCenter
         Notify(op);
     }
 
+    public void ReportProgress(Guid opId)
+    {
+        PortalOperation? operation;
+        lock (_gate) operation = _ops.GetValueOrDefault(opId);
+        if (operation is not null) Notify(operation);
+    }
+
     public void MarkRunning(Guid opId) => Update(opId, o =>
     {
         if (o.Sealed || o.Status is PortalOperationStatus.NeedsInput or PortalOperationStatus.Succeeded or PortalOperationStatus.Failed) return false;
@@ -221,7 +228,8 @@ public sealed class OperationCenter
         lock (_gate)
             subscribers = _subscriptions.TryGetValue(operation.TenantId, out var list)
                 ? list.Where(s => (operation.UserId is null || operation.UserId == s.UserId)
-                    && (s.ProjectId is null || operation.ProjectId is null || operation.ProjectId == s.ProjectId)).ToArray()
+                    && (s.ProjectId is null || operation.ProjectId is null || operation.ProjectId == s.ProjectId)
+                    && (s.CorrelationKey is null || operation.CorrelationKey == s.CorrelationKey)).ToArray()
                 : [];
         foreach (var subscriber in subscribers)
         {
@@ -231,13 +239,14 @@ public sealed class OperationCenter
     }
 
     private sealed class Subscription(OperationCenter owner, Guid tenantId, Action changed,
-        Guid? userId, Guid? projectId) : IDisposable
+        Guid? userId, Guid? projectId, string? correlationKey) : IDisposable
     {
         // Callbacks must keep the subscribing circuit's identity, not the background publisher's.
         private readonly ExecutionContext? _context = ExecutionContext.Capture();
         private int _disposed;
         public Guid? UserId { get; } = userId;
         public Guid? ProjectId { get; } = projectId;
+        public string? CorrelationKey { get; } = correlationKey;
 
         public void Notify()
         {

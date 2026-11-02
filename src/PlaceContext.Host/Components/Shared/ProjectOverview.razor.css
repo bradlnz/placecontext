@@ -641,3 +641,9 @@
         justify-content: center;
     }
 }
+
+.stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.charts-grid { grid-template-columns: minmax(0, 1fr); }
+.page { padding: 16px; }
+.jobs-scroll { overflow-x: auto; }
+.jobs-grid-head,.jobs-row { min-width: 680px; }

@@ -37,7 +37,7 @@ public sealed class AgentWorkflowsViewModel(IAgentWorkflows workflows, PortalUiS
     public static string PriceUnit(AgentWorkflow workflow) => workflow.Paid ? "per 1,000 model tokens" : "no AI tokens required";
     public bool CanRun => !Busy && Selected is not null && (!Selected.Paid || Subscribed(Selected.Id));
     public bool CanManageSubscriptions => Workspace is { SimulationEnabled: true, CanManageSubscriptions: true };
-    public string BuildUrl => $"/project/{ProjectId}/build";
+    public string BuildUrl => $"/project/{ProjectId}/dashboard";
     private readonly CancellationTokenSource _stop = new();
     private Guid? _requestId;
     private string? _requestInput;

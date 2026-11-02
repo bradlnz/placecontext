@@ -1,0 +1,7 @@
+.build-chart { margin: 0; }
+.chart-plot { position: relative; height: 320px; min-width: 0; }
+figcaption { color: var(--text-3); font-size: 12px; line-height: 1.6; margin: 16px 0; overflow-wrap: anywhere; }
+summary { cursor: pointer; font-size: 12px; }
+.chart-table { overflow: auto; margin-top: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th,td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); }

@@ -36,8 +36,7 @@ public sealed class MenuConfigService : IMenuConfigService
     /// existing tenant overrides are dropped by MergeSide without deleting persisted user data.</summary>
     internal static readonly CatalogItem[] WorkspaceCatalog =
     {
-        new("dashboard", "Dashboard", "link", "/", Permission.ProjectsView, "grid", null, null),
-        new("build.chat", "Build", "link", "/project/{projectId}/build", Permission.ProjectsView, "agent", null, null),
+        new("build.chat", "Dashboard", "link", "/project/{projectId}/dashboard", Permission.ProjectsView, "agent", null, null),
         new("chains", "Workflows", "link", "/project/{projectId}/workflows", Permission.ChainsManage, "chain", null, null),
         new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", "Automation", null),
         new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", "Automation", null),
@@ -227,7 +226,7 @@ public sealed class MenuConfigService : IMenuConfigService
             .OrderBy(x => x.Order)
             .DistinctBy(x => x.Id, StringComparer.Ordinal)
             .Select(x => new MenuItemOverride(x.Id,
-                x.Id == "build.chat" && x.Label == "Chat" ? null : x.Label,
+                x.Id == "build.chat" && x.Label is "Chat" or "Build" ? null : x.Label,
                 x.Order, x.Visible, x.Id == "build.chat" && x.Section == "Build" ? null : x.Section))
             .ToList();
 

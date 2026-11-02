@@ -92,6 +92,36 @@ public sealed class BuildTools(Guid projectId, PlaceContextService service, IPer
         Action = stage.Action?.GetType().Name
     };
 
+    [Description("Read current project job counts and the latest 50 job runs. Running and queued include all active runs; failed and succeeded counts cover runs started in the last 24 hours. Use this for dashboard statistics and charts; recent runs are a sample, not the totals.")]
+    public async Task<object> project_activity(CancellationToken ct)
+    {
+        await RequireAsync(Permission.JobsView, ct);
+        var counts = await service.GetProjectRunCountsAsync(projectId, ct);
+        var recent = await service.ListRecentRunReportsAsync(50, ct, projectId);
+        return new { ProjectId = projectId, CapturedAt = DateTimeOffset.UtcNow,
+            Running = counts.GetValueOrDefault("Running"), Queued = counts.GetValueOrDefault("Queued"),
+            Failed24Hours = counts.GetValueOrDefault("Failed"), Succeeded24Hours = counts.GetValueOrDefault("Succeeded"),
+            RecentRuns = recent.Select(x => new { x.Run.Id, x.JobName, x.Run.Status, x.Run.StartedAt, x.Run.FinishedAt }).ToArray(),
+            RecentRunLimit = 50 };
+    }
+
+    [Description("Display a chart in the conversation's side panel. Use bar, line or pie; up to 24 labels and 4 series (one for pie), with one finite numeric value per label. Read real tool results first, or use numbers explicitly supplied by the user. Source must identify the data and time range, including sampling or limits. Never invent values. Charts are saved with this conversation; this does not modify project data.")]
+    public async Task<object> show_chart(ChartSpec chart, string source, CancellationToken ct)
+    {
+        await RequireAsync(Permission.ProjectsView, ct);
+        if (chart is null || chart.Labels is not { Count: > 0 and <= ChartSpec.MaxLabels }
+            || chart.Series is not { Count: > 0 and <= ChartSpec.MaxSeries }
+            || chart.Labels.Any(x => x is null || x.Length > 200)
+            || chart.Series.Any(x => x is null || x.Values is null || x.Values.Count != chart.Labels.Count
+                || x.Values.Any(v => !double.IsFinite(v)) || x.Name?.Length > 200)
+            || chart.Title?.Length > 200 || string.IsNullOrWhiteSpace(source) || source.Length > 1000)
+            throw new ArgumentException("Provide a chart with matching labels and finite values, and a source of up to 1000 characters.");
+        var validated = ChartSpec.TryParse(chart.ToJson()) ?? throw new ArgumentException("Use a bar, line or pie chart.");
+        if (validated.Type == "pie" && (chart.Series.Count != 1 || chart.Series[0].Values.Any(v => v < 0)))
+            throw new ArgumentException("Pie charts require one series of non-negative values.");
+        return new { chart = validated, source = source.Trim() };
+    }
+
     [Description("Read one complete workflow, including branch gates, nested branches, actions and shared jobs.")]
     public async Task<object> get_workflow(Guid workflowId, CancellationToken ct)
     {

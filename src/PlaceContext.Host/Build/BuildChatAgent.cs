@@ -55,7 +55,10 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                 deadline.Token.ThrowIfCancellationRequested();
                 var memory = await store.GetMemoryAsync(conversation.ProjectId, deadline.Token);
                 var messages = new JsonArray(new JsonObject { ["role"] = "system", ["content"] = $"""
-                    You are the PlaceContext Build assistant for project {conversation.ProjectId}.
+                    You are the PlaceContext project assistant for project {conversation.ProjectId}.
+                    This is the Dashboard workspace. Use project_activity for live project statistics.
+                    When asked for charts, inspect relevant tools first, then call show_chart with grounded values and an explicit source/time range.
+                    Bar, line and pie charts appear in the side panel and remain in conversation history. Do not fabricate metrics or treat a capped recent-run list as a complete total.
                     Help customers build complete industry workflows: clarify the outcome, connect inputs,
                     configure process steps, define acceptance criteria, test, activate when requested, and monitor results.
                     Reuse existing jobs, workflows, data connections, and schedules. Explain the process in business terms. In user-facing replies use AI verification, decision intelligence and human approval, not backend provider names.
@@ -116,6 +119,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                     throw new InvalidOperationException("The model must ask a question separately from other actions. Please retry.");
                 conversation.Messages.Add(reply);
                 await store.SaveAsync(conversation, lease, false, deadline.Token);
+                if (operation is not null) operations!.ReportProgress(operation.Id);
                 foreach (var call in calls)
                 {
                     deadline.Token.ThrowIfCancellationRequested();
@@ -137,6 +141,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                     { result = JsonSerializer.Serialize(new { error = ex.Message }); }
                     conversation.Messages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = call["id"]!.DeepClone(), ["content"] = result });
                     await store.SaveAsync(conversation, lease, false, deadline.Token);
+                    if (operation is not null) operations!.ReportProgress(operation.Id);
                     if (question is not null)
                     {
                         conversation.Messages.Add(new JsonObject { ["role"] = "assistant",
@@ -177,7 +182,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
             if (operation is not null)
             {
                 if (conversation.Error is { } error) operations!.MarkFailed(operation.Id, error);
-                else operations!.MarkDone(operation.Id, "Build completed.");
+                else operations!.MarkDone(operation.Id, "Assistant completed.");
             }
         }
 
@@ -205,7 +210,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
 
     private PortalOperation? Track(BuildConversation conversation) => user is null ? null : operations?.Track(
         new TenantInfo(tenant.TenantId, tenant.Slug, tenant.Slug, tenant.TimeZoneId), conversation.ProjectId,
-        $"Build — {conversation.Title}", $"/project/{conversation.ProjectId}/build?conversation={conversation.Id}",
+        $"Assistant — {conversation.Title}", $"/project/{conversation.ProjectId}/dashboard?conversation={conversation.Id}",
         $"build:{conversation.Id}", user.UserId);
 
     public static void RepairInterruptedCalls(JsonArray messages)

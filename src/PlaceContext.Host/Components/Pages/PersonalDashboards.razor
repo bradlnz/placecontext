@@ -3,11 +3,11 @@
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @inject NavigationManager Navigation
 
-<PageTitle>PlaceContext — Workflow overview</PageTitle>
+<PageTitle>PlaceContext — Dashboard</PageTitle>
 <section role="status" class="dccard" style="padding:24px">
-    <h1>Workflow overview</h1>
-    <p>The separate personal dashboard has been retired. Workflow status, activity and insights live in the main overview and Workflows.</p>
-    <a class="dcbtn primary" href="/">Open workflow overview <AppIcon Kind="arrow-right" /></a>
+    <h1>Dashboard</h1>
+    <p>Your assistant, project activity, and charts are together in Dashboard.</p>
+    <a class="dcbtn primary" href="@($"/project/{ProjectId}/dashboard")">Open Dashboard <AppIcon Kind="arrow-right" /></a>
 </section>
 
 @code {
@@ -16,6 +16,6 @@
     protected override void OnAfterRender(bool firstRender)
     {
         if (firstRender)
-            Navigation.NavigateTo("/", replace: true);
+            Navigation.NavigateTo($"/project/{ProjectId}/dashboard", replace: true);
     }
 }

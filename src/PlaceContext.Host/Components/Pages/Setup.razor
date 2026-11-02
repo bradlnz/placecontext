@@ -11,22 +11,17 @@
    as a plain HTML form to AuthController — not a Blazor event handler — because signing the cookie in
    requires a normal HTTP request/response, which an already-connected Blazor circuit doesn't have. *@
 
-<PageTitle>placecontext — set up this workspace</PageTitle>
+<PageTitle>PlaceContext — Set up your workspace</PageTitle>
 
 <main class="setup-frame">
-    <section class="dccard auth-card">
-        <div class="auth-brand">
-            <img src="/favicon.svg" alt="PlaceContext" class="auth-mark" />
-            <span class="auth-brand-name">placecontext</span>
-        </div>
-
+    <section class="dccard auth-card" aria-labelledby="setup-title">
         @if (Vm.Configured)
         {
             <div class="setup-state-icon success" aria-hidden="true">
                 <svg viewBox="0 0 24 24"><path d="M5 12l4 4L19 6"></path></svg>
             </div>
             <div class="setup-step">Setup complete</div>
-            <h2 class="auth-title">Your workspace is ready</h2>
+            <h1 class="auth-title" id="setup-title">Your workspace is ready</h1>
             <p class="auth-sub">An owner account already exists. Sign in to continue.</p>
             <a class="dcbtn primary auth-submit" href="@PageRoutes.Login">Continue to sign in</a>
         }
@@ -35,7 +30,7 @@
             <div class="setup-heading">
                 <div>
                     <div class="setup-step">Initial setup <span>1 of 1</span></div>
-                    <h2 class="auth-title">Create your owner account</h2>
+                    <h1 class="auth-title" id="setup-title">Create your owner account</h1>
                     <p class="auth-sub">Create the owner account. We’ll also prepare your default project so the workspace is ready when you enter.</p>
                 </div>
                 <div class="setup-state-icon" aria-hidden="true">

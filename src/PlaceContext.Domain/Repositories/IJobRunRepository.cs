@@ -11,5 +11,7 @@ public interface IJobRunRepository
     Task<IReadOnlyList<JobRun>> ListForJobAsync(Guid jobId, CancellationToken ct = default);
 
     /// <summary>The most recent runs across every job the tenant can see — feeds the reporting view.</summary>
-    Task<IReadOnlyList<JobRun>> ListRecentAsync(int take, CancellationToken ct = default);
+    Task<IReadOnlyList<JobRun>> ListRecentAsync(int take, CancellationToken ct = default, Guid? projectId = null);
+
+    Task<IReadOnlyDictionary<string, int>> CountByStatusAsync(Guid projectId, DateTimeOffset since, CancellationToken ct = default);
 }

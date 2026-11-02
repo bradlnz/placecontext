@@ -6,6 +6,10 @@
     min-width:0;
     box-shadow:0 8px 30px rgba(0,0,0,.04);
 }
+.preview-canvas .job-path:disabled { opacity: 1; cursor: default; }
+.preview-canvas .stage-head { cursor: default; }
+.job-preview-link { border: 0; background: transparent; color: var(--brand); font: inherit; text-align: left; cursor: pointer; }
+.job-preview-link:hover { text-decoration: underline; }
 .canvas-toolbar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 16px; border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--card-2) 55%, transparent) }
 .toolbar-title { display:flex; align-items:center; gap:10px; font-size:14px; font-weight:650; color:var(--text) }
 .step-count { padding:3px 7px; border:1px solid var(--border); border-radius:5px; color:var(--text-3); font-size:10px; font-weight:500 }

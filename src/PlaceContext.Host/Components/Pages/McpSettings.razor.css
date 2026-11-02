@@ -16,9 +16,7 @@
 .server-info .oauth-state.ready { color:var(--good); }
 .server-info .oauth-state.error { color:var(--bad); }
 .server-info small { width:100%; color:var(--text-3); font-size:9px; }
-.server-actions,.form-actions { display:flex; align-items:center; gap:7px; }
+.server-actions { display:flex; align-items:center; gap:7px; }
 .add-card { display:flex; flex-direction:column; gap:14px; margin-top:12px; padding:16px; }
 .form-title { color:var(--text); font-size:13px; font-weight:650; }
-.field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-.form-actions { justify-content:flex-end; }
-@media (max-width:700px) { .mcp-settings-page{padding:20px 12px 38px}.settings-head{align-items:flex-start;flex-direction:column}.field-grid{grid-template-columns:1fr}.server-row{align-items:flex-start;flex-direction:column}.server-actions{width:100%} }
+@media (max-width:700px) { .mcp-settings-page{padding:20px 12px 38px}.settings-head{align-items:flex-start;flex-direction:column}.server-row{align-items:flex-start;flex-direction:column}.server-actions{width:100%} }

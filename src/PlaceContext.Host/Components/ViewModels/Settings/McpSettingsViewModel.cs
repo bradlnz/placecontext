@@ -23,20 +23,6 @@ public sealed class McpSettingsViewModel(
     public bool Loading { get; private set; } = true;
     public bool ShowAdd { get; private set; }
     public string? Message { get; private set; }
-    public string Name { get; set; } = "";
-    public string Transport { get; set; } = McpTransport.Http;
-    public string Endpoint { get; set; } = "";
-    public string Command { get; set; } = "";
-    public string Args { get; set; } = "";
-    public string AuthType { get; set; } = McpAuthType.None;
-    public string AuthToken { get; set; } = "";
-    public string AuthHeader { get; set; } = "";
-    public string OAuthScopes { get; set; } = "";
-    public bool IsStdio => Transport == McpTransport.Stdio;
-    public bool HasTokenAuth => AuthType is McpAuthType.Bearer or McpAuthType.ApiKey;
-    public bool IsHeaderAuth => AuthType == McpAuthType.Header;
-    public bool IsOAuth => AuthType == McpAuthType.OAuth;
-
     public bool IsOAuthConnected(McpConnectionView connection) =>
         connection.LastStatus?.StartsWith("oauth:connected", StringComparison.Ordinal) == true;
 
@@ -63,9 +49,6 @@ public sealed class McpSettingsViewModel(
 
     public void ShowAddMcp()
     {
-        Name = Endpoint = Command = Args = AuthToken = AuthHeader = OAuthScopes = "";
-        Transport = McpTransport.Http;
-        AuthType = McpAuthType.None;
         ShowAdd = true;
         NotifyStateChanged();
     }
@@ -76,36 +59,11 @@ public sealed class McpSettingsViewModel(
         NotifyStateChanged();
     }
 
-    public async Task AddAsync()
+    public async Task AddedAsync(McpConnectionView connection)
     {
-        if (ProjectId is null)
-            return;
-        try
-        {
-            await service.CreateMcpConnectionAsync(
-                new(
-                    ProjectId.Value,
-                    Name,
-                    Transport,
-                    IsStdio ? null : Endpoint,
-                    IsStdio ? Command : null,
-                    IsStdio ? Args : null,
-                    AuthType,
-                    AuthToken,
-                    AuthHeader,
-                    null,
-                    OAuthScopes
-                )
-            );
-            ShowAdd = false;
-            Message = "MCP server added.";
-            await LoadConnectionsAsync();
-        }
-        catch (Exception ex)
-        {
-            Message = ex.Message;
-            NotifyStateChanged();
-        }
+        ShowAdd = false;
+        Message = $"{connection.Name} added.";
+        await LoadConnectionsAsync();
     }
 
     public async Task TestAsync(Guid id)

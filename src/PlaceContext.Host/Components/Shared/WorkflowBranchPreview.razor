@@ -28,7 +28,9 @@
             }
             @foreach (var job in stage.Jobs)
             {
-                <div class="branch-job"><AppIcon Kind="code" /> @job.JobName</div>
+                @if (OnOpenJob.HasDelegate)
+                { <button class="branch-job" @onclick="() => OnOpenJob.InvokeAsync(job.JobId)"><AppIcon Kind="code" /> @job.JobName</button> }
+                else { <div class="branch-job"><AppIcon Kind="code" /> @job.JobName</div> }
             }
             }
             @if (stage.IsParallel)
@@ -38,13 +40,14 @@
             @if ((stage.ElseBranch ?? (stage.Gate as ConditionGateView)?.ElseBranch) is { Count: > 0 } other)
             {
                 <div class="branch-condition">If false</div>
-                <WorkflowBranchPreview Stages="other" RunSteps="RunSteps" PathPrefix="@($"{path}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+                <WorkflowBranchPreview OnOpenJob="OnOpenJob" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{path}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
             }
         </li>
     }
 </ol>
 
 @code {
+    [Parameter] public EventCallback<Guid> OnOpenJob { get; set; }
     [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps { get; set; }
     [Parameter] public string PathPrefix { get; set; } = "";
     [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
