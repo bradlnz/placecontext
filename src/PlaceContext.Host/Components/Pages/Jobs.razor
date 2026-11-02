@@ -546,14 +546,11 @@ else
                     <div class="row-gap-10">
                         <div class="dcfield flex-1">
                             <label>Runtime <span class="req">*</span></label>
-                            <select class="dcinput" @bind="Vm.EdMapRuntimeId" @bind:after="Vm.OnSourceRuntimeChangedAsync">
-                                <option value="">— select —</option>
-                                <option value="node">node</option>
-                                <option value="python">python</option>
-                                <option value="go">go</option>
-                                <option value="rust">Rust</option>
-                                <option value="ruby">ruby</option>
-                                <option value="dotnet">.NET (C#)</option>
+                            <select class="dcinput" @bind:get="Vm.EdMapRuntimeId" @bind:set="Vm.OnSourceRuntimeChangedAsync">
+                                @foreach (var runtime in Vm.SourceRuntimes)
+                                {
+                                    <option value="@runtime">@JobsViewModel.RuntimeLabel(runtime)</option>
+                                }
                             </select>
                         </div>
                         <div class="dcfield flex-1">

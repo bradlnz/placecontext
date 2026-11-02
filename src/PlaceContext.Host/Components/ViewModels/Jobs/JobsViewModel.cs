@@ -240,6 +240,8 @@ public sealed partial class JobsViewModel : PageViewModel
 
     private void ResetPaneState()
     {
+        _appliedTemplate = null;
+        _templateDrafts.Clear();
         InvalidateRunRequests();
         ShowEditor = false;
         ShowTemplateModal = false;

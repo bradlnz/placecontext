@@ -96,15 +96,33 @@ public sealed partial class JobsViewModel
         }
     }
 
-    public async Task OnSourceRuntimeChangedAsync()
+    private JobTemplate? _appliedTemplate;
+    private readonly Dictionary<string, CodeFileDto> _templateDrafts = new();
+    public IEnumerable<string> SourceRuntimes => _appliedTemplate?.SourcesByRuntime.Keys
+        ?? ["node", "python", "go", "rust", "ruby", "dotnet"];
+
+    public async Task OnSourceRuntimeChangedAsync(string runtime)
     {
+        if (_appliedTemplate is not null && !_appliedTemplate.SourcesByRuntime.ContainsKey(runtime))
+            return;
+
+        await SyncSourceEditorAsync();
+        if (_appliedTemplate is not null)
+        {
+            _templateDrafts[EdMapRuntimeId] = new CodeFileDto(CurrentEntrypoint, EdMapSource);
+            var draft = _templateDrafts.GetValueOrDefault(runtime)
+                ?? new CodeFileDto(DefaultEntrypointFor(runtime), _appliedTemplate.SourcesByRuntime[runtime]);
+            EdMapSource = draft.Content;
+            EdMapEntrypoint = draft.Path;
+        }
+        else if (EdMapEntrypoint == DefaultEntrypointFor(EdMapRuntimeId))
+            EdMapEntrypoint = DefaultEntrypointFor(runtime);
+        EdMapRuntimeId = runtime;
+
         if (SourceMonaco && SourceMonacoReady)
         {
             try
             {
-                var current = await _js.InvokeAsync<string>("pcmonaco.getValue", SourceEditorId);
-                if (current is not null)
-                    EdMapSource = current;
                 await _js.InvokeVoidAsync(
                     "pcmonaco.setValue",
                     SourceEditorId,
@@ -298,6 +316,7 @@ public sealed partial class JobsViewModel
             return;
 
         NewJob();
+        _appliedTemplate = template;
         EdName = template.Name;
         EdDescription = template.Description;
         EdMapSourceKind = template.MapSourceKind;
