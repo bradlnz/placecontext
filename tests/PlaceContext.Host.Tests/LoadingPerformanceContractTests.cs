@@ -11,7 +11,8 @@ public sealed class LoadingPerformanceContractTests
 
         Assert.DoesNotContain("<script src=\"vendor/chart.umd.min.js\"", app, StringComparison.Ordinal);
         Assert.DoesNotContain("unpkg.com/leaflet@1.9.4/dist/leaflet.js", app, StringComparison.Ordinal);
-        Assert.Contains("function ensureChart()", charts, StringComparison.Ordinal);
+        Assert.DoesNotContain("chart.umd", app + charts, StringComparison.Ordinal);
+        Assert.Contains("createElementNS", charts, StringComparison.Ordinal);
         Assert.Contains("function ensureLeaflet()", maps, StringComparison.Ordinal);
     }
 
@@ -42,13 +43,13 @@ public sealed class LoadingPerformanceContractTests
     }
 
     [Fact]
-    public void Chart_renderer_recovers_when_blazor_replaces_a_canvas()
+    public void Chart_renderer_tracks_replaced_containers_and_resizing()
     {
         var charts = ReadHostSource("wwwroot/pcchart.js");
 
-        Assert.Contains("chartEl && chartEl !== el", charts, StringComparison.Ordinal);
-        Assert.Contains("observedEl && observedEl !== el", charts, StringComparison.Ordinal);
-        Assert.Contains("new MutationObserver(reconcileMounts)", charts, StringComparison.Ordinal);
+        Assert.Contains("state.element !== document.getElementById(id)", charts, StringComparison.Ordinal);
+        Assert.Contains("new ResizeObserver", charts, StringComparison.Ordinal);
+        Assert.Contains("new MutationObserver(schedule)", charts, StringComparison.Ordinal);
     }
 
     private static string ReadHostSource(string relativePath)

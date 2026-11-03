@@ -156,7 +156,7 @@
                                     else { <span class="job-name" title="@job.JobName">@job.JobName</span> }
                                     @if (!ReadOnly)
                                     {
-                                    <JobCodeLink Job="@Jobs.FirstOrDefault(candidate => candidate.Id == job.JobId)" />
+                                    <JobCodeLink Job="@Jobs.FirstOrDefault(candidate => candidate.Id == job.JobId)" OnEdit="OnEditCode" />
                                     <button class="path-remove" title="Remove path"
                                             @onclick="@(() => OnRemovePath.InvokeAsync((stageIndex, branchIndex)))"><AppIcon Kind="close" /></button>
                                     }
@@ -247,6 +247,7 @@
 @code {
     [Parameter] public bool ReadOnly { get; set; }
     [Parameter] public EventCallback<Guid> OnOpenJob { get; set; }
+    [Parameter] public EventCallback<JobView> OnEditCode { get; set; }
     [Parameter, EditorRequired] public IReadOnlyList<JobChainStageView> Stages { get; set; } = Array.Empty<JobChainStageView>();
     [Parameter] public IReadOnlyList<JobView> Jobs { get; set; } = Array.Empty<JobView>();
     [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps { get; set; }

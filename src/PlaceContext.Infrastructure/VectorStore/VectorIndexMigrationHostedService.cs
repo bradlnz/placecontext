@@ -104,7 +104,7 @@ public sealed class VectorIndexMigrationHostedService : IHostedService
             var vectorText = reader.GetString(6);
             var createdAt = reader.GetFieldValue<DateTimeOffset>(7);
 
-            var plain = enc.Unprotect(cipher, purpose);
+            var protectedText = enc.Protect(cipher, purpose);
             var vector = ParseVectorLiteral(vectorText);
 
             var point = new
@@ -117,7 +117,7 @@ public sealed class VectorIndexMigrationHostedService : IHostedService
                     job_run_id = jobRunId.ToString("N"),
                     job_id = jobId.ToString("N"),
                     project_id = projectId.ToString("N"),
-                    text = plain,
+                    text = protectedText,
                     created_at = createdAt.ToString("O"),
                 }
             };
@@ -157,7 +157,7 @@ public sealed class VectorIndexMigrationHostedService : IHostedService
             var vectorText = reader.GetString(6);
             var createdAt = reader.GetFieldValue<DateTimeOffset>(7);
 
-            var plain = enc.Unprotect(cipher, purpose);
+            var protectedText = enc.Protect(cipher, purpose);
             var vector = ParseVectorLiteral(vectorText);
 
             var point = new
@@ -169,8 +169,8 @@ public sealed class VectorIndexMigrationHostedService : IHostedService
                     tenant_id = tenantId.ToString("N"),
                     project_id = projectId.ToString("N"),
                     kind,
-                    source_key = sourceKey,
-                    text = plain,
+                    source_key = enc.Protect(sourceKey, purpose),
+                    text = protectedText,
                     created_at = createdAt.ToString("O"),
                 }
             };

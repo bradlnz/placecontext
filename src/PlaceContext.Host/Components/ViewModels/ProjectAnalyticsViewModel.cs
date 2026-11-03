@@ -64,8 +64,11 @@ public sealed class ProjectAnalyticsViewModel(
     {
         get; private set;
     }
-    private System.Threading.Timer? _poll;
-    private readonly Dictionary<string, DateTimeOffset> _rendered = new();
+    public bool LiveEnabled { get; set; } = true;
+    public bool Refreshing { get; private set; }
+    private int _loadVersion;
+    private CancellationTokenSource? _loadCancellation;
+    private readonly Dictionary<string, string> _rendered = new();
     private bool _sqlSchemaPushed;
 
     public async Task LoadAsync(Guid projectId)
@@ -73,32 +76,65 @@ public sealed class ProjectAnalyticsViewModel(
         if (ProjectId != projectId)
         {
             _sqlSchemaPushed = false;
+            ShowSqlEditor = false;
+            SqlMonacoReady = false;
+            SqlName = string.Empty;
+            SqlQuery = string.Empty;
+            SqlError = null;
         }
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+        _loadCancellation = new CancellationTokenSource();
+        ++_loadVersion;
+        Refreshing = false;
         ProjectId = projectId;
-        ui.Set("Analytics", "charts over the project's data");
+        Charts = [];
+        Tables = null;
+        ResetChartCache();
+        ui.Set("Analytics", "live charts over the project's data");
         await ReloadAsync();
-        _poll ??= new System.Threading.Timer(
-            _ => _ = PollAsync(),
-            null,
-            TimeSpan.FromSeconds(5),
-            TimeSpan.FromSeconds(5)
-        );
     }
 
     public async Task ReloadAsync()
     {
-        SweepPending = queue.IsPending(ProjectId);
+        if (Refreshing)
+        {
+            return;
+        }
+        Refreshing = true;
+        var version = _loadVersion;
+        var projectId = ProjectId;
+        var ct = _loadCancellation?.Token ?? CancellationToken.None;
+        SweepPending = queue.IsPending(projectId);
+        NotifyStateChanged();
         try
         {
-            Tables = await service.ListProjectDataTablesAsync(ProjectId);
-            Charts = await service.ListProjectChartsAsync(ProjectId);
+            var tables = await service.ListProjectDataTablesAsync(projectId, ct);
+            var charts = await service.ListProjectChartsAsync(projectId, ct, live: true);
+            if (version != _loadVersion)
+            {
+                return;
+            }
+            Tables = tables;
+            Charts = charts;
             Error = null;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            if (version == _loadVersion)
+            {
+                Error = ex.Message;
+            }
         }
-        NotifyStateChanged();
+        finally
+        {
+            if (version == _loadVersion)
+            {
+                Refreshing = false;
+                NotifyStateChanged();
+            }
+        }
     }
 
     public async Task RenderAsync()
@@ -127,11 +163,11 @@ public sealed class ProjectAnalyticsViewModel(
             }
         }
         var entries = new List<object>();
-        var rendered = new List<(string Id, DateTimeOffset At)>();
+        var rendered = new List<(string Id, string Html)>();
         foreach (var chart in Charts.Where(IsSpec))
         {
             var id = CanvasId(chart.TableName);
-            if (_rendered.TryGetValue(id, out var timestamp) && timestamp == chart.GeneratedAt)
+            if (_rendered.TryGetValue(id, out var html) && html == chart.Html)
             {
                 continue;
             }
@@ -140,7 +176,7 @@ public sealed class ProjectAnalyticsViewModel(
                 id,
                 spec = chart.Html
             });
-            rendered.Add((id, chart.GeneratedAt));
+            rendered.Add((id, chart.Html));
         }
         if (entries.Count > 0)
         {
@@ -192,10 +228,18 @@ public sealed class ProjectAnalyticsViewModel(
 
     public async Task SaveSqlAsync()
     {
+        if (SqlBusy)
+        {
+            return;
+        }
         SqlBusy = true;
         SqlError = null;
         try
         {
+            if (SqlMonaco && SqlMonacoReady)
+            {
+                SqlQuery = await js.InvokeAsync<string>("pcmonaco.getValue", SqlEditorId);
+            }
             await service.SaveSqlChartAsync(ProjectId, SqlName, SqlQuery, SqlType);
             await ReloadAsync();
             ShowSqlEditor = false;
@@ -229,19 +273,7 @@ public sealed class ProjectAnalyticsViewModel(
         }
     }
 
-    public async Task RefreshSqlAsync(ProjectChartView chart)
-    {
-        if (StoredSql(chart) is { } sql)
-        {
-            await service.SaveSqlChartAsync(
-                ProjectId,
-                chart.TableName["sql:".Length..],
-                sql,
-                StoredType(chart)
-            );
-            await ReloadAsync();
-        }
-    }
+    public Task RefreshSqlAsync(ProjectChartView chart) => ReloadAsync();
 
     public async Task DeleteSqlAsync(ProjectChartView chart)
     {
@@ -296,15 +328,13 @@ public sealed class ProjectAnalyticsViewModel(
 
     public void CancelRedraw() => RedrawFor = null;
 
-    private async Task PollAsync()
+    public void Dispose()
     {
-        var wasPending = SweepPending;
-        SweepPending = queue.IsPending(ProjectId);
-        if (SweepPending || wasPending)
-        {
-            await ReloadAsync();
-        }
+        ++_loadVersion;
+        _loadCancellation?.Cancel();
+        _loadCancellation?.Dispose();
+        _loadCancellation = null;
+        Refreshing = false;
+        Detach();
     }
-
-    public void Dispose() => _poll?.Dispose();
 }

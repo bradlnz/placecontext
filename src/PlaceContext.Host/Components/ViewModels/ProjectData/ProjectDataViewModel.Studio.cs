@@ -9,22 +9,13 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class ProjectDataViewModel
 {
-    private bool _loadingIndices;
-    private static readonly TimeSpan MaterializeIndexRefreshDelay = TimeSpan.FromMilliseconds(450);
-    private const int MaterializeIndexRefreshAttempts = 6;
-
     private void ResetStudioResources()
     {
         SidebarPane = SidebarPane.Tables;
-        Indices = Array.Empty<SearchIndexView>();
-        IndicesReady = false;
-        IndicesError = null;
-        OpenSearchSetupRequired = false;
         SavedQueries = Array.Empty<SavedQueryRecord>();
         SavedQueriesReady = false;
         SavedQueriesError = null;
         _sqlSchemaPushed = false;
-        _sqlSchemaIncludesIndexes = false;
     }
 
     // ── Sidebar panes ────────────────────────────────────────────────────────────────────────
@@ -38,76 +29,11 @@ public sealed partial class ProjectDataViewModel
         }
         SidebarPane = pane;
         NotifyStateChanged();
-        if (pane == SidebarPane.Indexes)
-        {
-            _ = LoadIndicesAsync();
-            return;
-        }
         if (pane == SidebarPane.Queries && !SavedQueriesReady)
         {
             _ = LoadSavedQueriesAsync();
         }
     }
-
-    // ── Indexes (OpenSearch) ─────────────────────────────────────────────────────────────────
-    public IReadOnlyList<SearchIndexView> Indices
-    {
-        get; private set;
-    } =
-        Array.Empty<SearchIndexView>();
-    public bool IndicesReady
-    {
-        get; private set;
-    }
-    public string? IndicesError
-    {
-        get; private set;
-    }
-    public bool OpenSearchSetupRequired
-    {
-        get; private set;
-    }
-    public string OpenSearchSetupUrl =>
-        $"{PageRoutes.ConnectionsSettings}?project={ProjectId}#search-index";
-
-    public async Task LoadIndicesAsync(bool force = false)
-    {
-        if (!force && IndicesReady)
-        {
-            return;
-        }
-        if (_loadingIndices)
-        {
-            return;
-        }
-        _loadingIndices = true;
-        IndicesReady = false;
-        NotifyStateChanged();
-        try
-        {
-            Indices = await _svc.ListOpenSearchIndicesAsync(ProjectId);
-            IndicesError = null;
-            OpenSearchSetupRequired = false;
-        }
-        catch (Exception ex)
-        {
-            IndicesError = Trim(ex.Message);
-            OpenSearchSetupRequired = IsOpenSearchConfigurationMissing(ex);
-        }
-        finally
-        {
-            _loadingIndices = false;
-            IndicesReady = true;
-            NotifyStateChanged();
-        }
-    }
-
-    public static bool IsOpenSearchConfigurationMissing(Exception exception) =>
-        exception is InvalidOperationException
-        && exception.Message.Contains(
-            "OpenSearch is not configured",
-            StringComparison.OrdinalIgnoreCase
-        );
 
     // ── Materialize table → OpenSearch index ────────────────────────────────────────────────
     public bool ShowMaterializeDialog
@@ -167,7 +93,6 @@ public sealed partial class ProjectDataViewModel
                 $"{result.SourceTable} → {result.IndexName}: {result.RowsIndexed:N0} row(s), {result.ColumnCount} column(s)"
                 + (result.Truncated ? " (capped — table has more rows)" : "") + ".";
             await RefreshTablesAsync();
-            await RefreshMaterializedIndexListingAsync(result.IndexName);
         }
         catch (Exception ex)
         {
@@ -177,24 +102,6 @@ public sealed partial class ProjectDataViewModel
         {
             Materializing = false;
             NotifyStateChanged();
-        }
-    }
-
-    private async Task RefreshMaterializedIndexListingAsync(string indexName)
-    {
-        await LoadIndicesAsync(force: true);
-        if (Indices.Any(index => string.Equals(index.Name, indexName, StringComparison.Ordinal)))
-        {
-            return;
-        }
-        for (var attempt = 0; attempt < MaterializeIndexRefreshAttempts; attempt++)
-        {
-            await Task.Delay(MaterializeIndexRefreshDelay);
-            await LoadIndicesAsync(force: true);
-            if (Indices.Any(index => string.Equals(index.Name, indexName, StringComparison.Ordinal)))
-            {
-                return;
-            }
         }
     }
 
@@ -314,17 +221,18 @@ public sealed partial class ProjectDataViewModel
     // Pushed once per project session: table names + columns feed the completion provider.
     private bool _sqlSchemaPushed;
 
-    private bool _sqlSchemaIncludesIndexes;
-
     public async Task PushSqlSchemaAsync()
     {
-        var includeIndexes = SidebarPane == SidebarPane.Indexes;
-        if (!SqlEditorMonaco || (_sqlSchemaPushed && (!includeIndexes || _sqlSchemaIncludesIndexes)))
+        if (!SqlEditorMonaco || _sqlSchemaPushed)
         {
             return;
         }
         _sqlSchemaPushed = true;
-        _sqlSchemaIncludesIndexes |= includeIndexes;
-        await SqlSchemaHelper.PushAsync(_svc, _js, ProjectId, includeIndexes);
+        if (ApplicationDatabase)
+        {
+            await PushApplicationSchemaAsync();
+            return;
+        }
+        await SqlSchemaHelper.PushAsync(_svc, _js, ProjectId, includeIndexes: false);
     }
 }

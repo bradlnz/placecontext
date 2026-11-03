@@ -59,6 +59,8 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IRunAllowance? _allowance;
     private readonly IManagedOAuthConnections? _managedOAuth;
     private readonly IExecutionCapacity? _capacity;
+    private readonly IJobDataTokenService? _dataTokens;
+    private string? _dataToken;
     private WorkerNetworkPolicy? _network;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
     private IReadOnlyDictionary<string, string> _mcpEnv = new Dictionary<string, string>();
@@ -88,12 +90,14 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IJobRunHeartbeat? heartbeat = null,
         IRunAllowance? allowance = null,
         IManagedOAuthConnections? managedOAuth = null,
-        IExecutionCapacity? capacity = null)
+        IExecutionCapacity? capacity = null,
+        IJobDataTokenService? dataTokens = null)
     {
         _heartbeat = heartbeat;
         _allowance = allowance;
         _managedOAuth = managedOAuth;
         _capacity = capacity;
+        _dataTokens = dataTokens;
         _secretRepo = secretRepo;
         _secretProtector = secretProtector;
         _postActions = postActions;
@@ -238,6 +242,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var finishedAt = startedAt;
         try
         {
+            _dataToken = null;
             if (_heartbeat is not null)
             {
                 using var establish = CancellationTokenSource.CreateLinkedTokenSource(execution.Token);
@@ -249,6 +254,18 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
                 heartbeat = MaintainPulseAsync();
             }
 
+            if (RequestsProjectData(effectiveMap.Env) || RequestsProjectData(effectiveReduce?.Env))
+            {
+                if (!allowEgress)
+                {
+                    throw new InvalidOperationException("Project data access requires outbound network access.");
+                }
+                if (_dataTokens is null)
+                {
+                    throw new InvalidOperationException("Job data credentials are unavailable.");
+                }
+                _dataToken = await _dataTokens.CreateAsync(run.Id, execution.Token);
+            }
             var shardResults = await RunMapShardsAsync(job, effectiveMap, concurrency, allowEgress, run.Id, execution.Token);
             execution.Token.ThrowIfCancellationRequested();
             ReduceResult? reduceResult = effectiveReduce is { } reduceSpec
@@ -294,6 +311,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         }
         finally
         {
+            _dataToken = null;
             await pulseStop.CancelAsync();
             await heartbeat;
         }
@@ -414,7 +432,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             // Source/env/egress come from the effective plan (job spec or a replayed snapshot); the
             // exit-code policy and timeout are job metadata not captured in the snapshot.
             var resolvedPayload = await ResolveFileInputsAsync(payload, job.ProjectId, job.TimeoutSeconds, ct);
-            var request = BuildRequest(map.Source, resolvedPayload, MergeMcpEnv(MergeSecrets(map.Env)),
+            var request = BuildRequest(map.Source, resolvedPayload, BuildEnvironment(job, runId, map.Env),
                 Array.Empty<(string, string)>(), correlationId, allowEgress, job.TimeoutSeconds);
 
             var result = await _runner.RunAsync(request with
@@ -553,7 +571,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             .ToList();
 
         var correlationId = $"{runId:N}-reduce";
-        var request = BuildRequest(reduceSpec.Source, "{}", MergeMcpEnv(MergeSecrets(reduceSpec.Env)),
+        var request = BuildRequest(reduceSpec.Source, "{}", BuildEnvironment(job, runId, reduceSpec.Env),
             artifactMounts, correlationId, allowEgress, job.TimeoutSeconds);
 
         var result = await _runner.RunAsync(request with
@@ -633,6 +651,26 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         }
         return plain;
     }
+
+    private IReadOnlyDictionary<string, string> BuildEnvironment(Job job, Guid runId, IReadOnlyDictionary<string, string> env)
+    {
+        var result = new Dictionary<string, string>(MergeMcpEnv(MergeSecrets(env)))
+        {
+            ["PC_PROJECT_ID"] = job.ProjectId.ToString(),
+            ["PC_JOB_ID"] = job.Id.ToString(),
+            ["PC_RUN_ID"] = runId.ToString()
+        };
+        result.Remove("PC_DATA_TOKEN");
+        if (RequestsProjectData(env) && _dataToken is not null)
+        {
+            result["PC_DATA_TOKEN"] = _dataToken;
+        }
+        return result;
+    }
+
+    private static bool RequestsProjectData(IReadOnlyDictionary<string, string>? env)
+        => env is not null && env.TryGetValue("PC_USE_PROJECT_DATA", out var value)
+            && string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
     // Vault secrets form the base env; the job's own env overrides on key collision.
     private IReadOnlyDictionary<string, string> MergeSecrets(IReadOnlyDictionary<string, string> env)

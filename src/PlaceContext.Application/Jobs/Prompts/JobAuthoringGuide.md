@@ -72,3 +72,17 @@ process.stdout.write(JSON.stringify(result));  // the artifact
 Upload with **upload_job_code**: `filesJson` = [{"path":"main.py","content":"…"}], `runtimeId`
 (defaults to "python"; also "node"|"go"|"ruby"|"dotnet"), and `entrypoint` when uploading
 multiple files.
+# Reading project data
+
+Jobs receive PC_PROJECT_ID, PC_JOB_ID and PC_RUN_ID for the actual execution. These identifiers
+are context, not credentials. When a job needs project data, use the read-only data API:
+GET /api/v1/projects/{PC_PROJECT_ID}/data/tables and
+POST /api/v1/projects/{PC_PROJECT_ID}/data/query with JSON {"sql":"SELECT …"}.
+An operator must configure PC_HOST (a portal URL reachable by the worker) and PC_TOKEN (a personal
+API token belonging to a user with data.read) in the project Vault. Do not invent credentials,
+request database administrator credentials, or print tokens or sensitive result rows. Network
+policy must permit access to that portal; the runtime does not automatically enable egress.
+Queries are read-only, bounded to 500 rows and a 10-second statement timeout. Prefer aggregates
+and explicitly selected columns; inspect the truncated flag before making a decision from rows.
+Token permissions are those of its user, not a per-run or per-table grant. PII authorization must
+be reviewed before providing such a token to a job.

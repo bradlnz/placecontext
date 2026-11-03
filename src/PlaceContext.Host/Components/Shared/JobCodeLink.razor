@@ -3,15 +3,27 @@
 @if (Job is { MapSourceKind: JobSourceCatalog.Code } job)
 {
     <AuthorizeView Policy="@Permission.JobsEdit">
+        @if (OnEdit.HasDelegate)
+        {
+            <button type="button" class="job-code-link" draggable="false"
+                    title="Edit code" aria-label="@($"Edit code for {job.Name}")"
+                    @onclick="() => OnEdit.InvokeAsync(job)" @onclick:stopPropagation="true" @ondragstart:stopPropagation="true">
+                <AppIcon Kind="edit" />
+            </button>
+        }
+        else
+        {
         <a class="job-code-link" href="@PageRoutes.ProjectJob(job.ProjectId, job.Id)"
            target="_blank" rel="noopener noreferrer" draggable="false"
            title="Edit code in a new tab" aria-label="@($"Edit code for {job.Name} (opens in a new tab)")"
            @onclick:stopPropagation="true" @ondragstart:stopPropagation="true">
-            <AppIcon Kind="edit" /> Edit code
+            <AppIcon Kind="edit" />
         </a>
+        }
     </AuthorizeView>
 }
 
 @code {
     [Parameter] public JobView? Job { get; set; }
+    [Parameter] public EventCallback<JobView> OnEdit { get; set; }
 }

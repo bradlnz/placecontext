@@ -14,6 +14,7 @@
 @inject ProjectDataViewModel Vm
 @inject PlaceContextService DataService
 @inject IJSRuntime _js
+@inject NavigationManager Navigation
 
 <PageTitle>PlaceContext — SQL Studio</PageTitle>
 
@@ -21,25 +22,42 @@
 
     <DataTabs ProjectId="ProjectId" Active="@DataSection.Tables" />
     <AuthorizeView Policy="@Policies.DatabaseInspection">
-        <a class="dcbtn" href="@PageRoutes.DatabaseSettings">PlaceContext database</a>
+        <label class="database-source">Database
+            <select class="dcinput" value="@(ApplicationDatabase ? "application" : "project")" @onchange="SwitchDatabase">
+                <option value="project">Project database</option>
+                <option value="application">PlaceContext database</option>
+            </select>
+        </label>
     </AuthorizeView>
+    @if (Vm.Error is { } databaseError)
+    {
+        <p class="studio-note" role="alert">@databaseError</p>
+    }
+    @if (ApplicationDatabase)
+    {
+        <p class="studio-note">PlaceContext database · Read-only workspace records. Sensitive fields are masked. Use SELECT, COUNT(*), WHERE, ORDER BY, LIMIT, and OFFSET.</p>
+    }
 
     <section class="sql-studio">
         <aside class="studio-sidebar">
             <div class="studio-sidebar-tabs">
                 <button class="studio-sidebar-tab @(Vm.SidebarPane == SidebarPane.Tables ? "active" : "")"
                         @onclick="() => Vm.ShowPane(SidebarPane.Tables)">Tables</button>
-                <button class="studio-sidebar-tab @(Vm.SidebarPane == SidebarPane.Indexes ? "active" : "")"
-                        @onclick="() => Vm.ShowPane(SidebarPane.Indexes)">Indexes</button>
+                @if (!ApplicationDatabase)
+                {
                 <button class="studio-sidebar-tab @(Vm.SidebarPane == SidebarPane.Queries ? "active" : "")"
                         @onclick="() => Vm.ShowPane(SidebarPane.Queries)">Queries</button>
+                }
             </div>
 
             @if (Vm.SidebarPane == SidebarPane.Tables)
             {
+                @if (!ApplicationDatabase)
+                {
                 <button class="studio-new-table" @onclick="() => Vm.StartNewTable()">
                     <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>New table
                 </button>
+                }
                 @if (Vm.MaterializeMessage is not null)
                 {
                     <div class="studio-note">@Vm.MaterializeMessage</div>
@@ -74,65 +92,13 @@
                                     <span>@TableTag(t)</span>
                                 </div>
                                 <span class="resource-tag">@TableEngineTag(t)</span>
+                                @if (!ApplicationDatabase)
+                                {
                                 <button class="studio-materialize" title="Copy this table into an OpenSearch index (for search)"
                                         @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenMaterializeDialog(t.Name))">
                                     <svg viewBox="0 0 24 24"><path d="M12 3v12M5 10l7 7 7-7" /><path d="M5 21h14" /></svg>
                                 </button>
-                            </article>
-                        }
-                    }
-                </div>
-            }
-            else if (Vm.SidebarPane == SidebarPane.Indexes)
-            {
-                <div class="studio-search">
-                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
-                    <input type="text" placeholder="Search indices" @bind="_tableFilter" @bind:event="oninput" />
-                </div>
-                <div class="studio-resource-list">
-                    @if (Vm.OpenSearchSetupRequired)
-                    {
-                        <div class="studio-index-setup">
-                            <strong>OpenSearch isn’t set up</strong>
-                            <span>Connect an OpenSearch or Elasticsearch endpoint to browse and query indexes here.</span>
-                            <a class="dcbtn primary" href="@Vm.OpenSearchSetupUrl">Set up OpenSearch</a>
-                        </div>
-                    }
-                    else if (Vm.IndicesError is not null)
-                    {
-                        <div class="studio-index-setup error">
-                            <strong>Couldn’t load indexes</strong>
-                            <span>@Vm.IndicesError</span>
-                            <button class="dcbtn" @onclick="@(() => Vm.LoadIndicesAsync(force: true))">Try again</button>
-                        </div>
-                    }
-                    else if (!Vm.IndicesReady)
-                    {
-                        <Skeleton Kind="list" Rows="6" />
-                    }
-                    else if (Vm.Indices.Count == 0)
-                    {
-                        <div class="empty-tables">No indexes are available yet.</div>
-                    }
-                    else if (FilteredIndices.Count == 0)
-                    {
-                        <div class="empty-tables">No indexes match.</div>
-                    }
-                    else
-                    {
-                        <div class="resource-group">Indices (@FilteredIndices.Count)</div>
-                        @foreach (var idx in FilteredIndices)
-                        {
-                            <article @key="idx.Name" class="resource-item @(_activeTableName == idx.Name ? "active" : "")"
-                                     @onclick="@(() => OpenIndexTabAsync(idx.Name))">
-                                <span class="resource-icon">
-                                    <svg viewBox="0 0 24 24"><path d="M4 5h16M4 5v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V5M4 9h16M4 13h16M4 17h16" /></svg>
-                                </span>
-                                <div class="resource-copy">
-                                    <strong>@idx.Name</strong>
-                                    <span>@idx.DocumentCount.ToString("N0") doc(s)</span>
-                                </div>
-                                <span class="resource-tag">@(idx.StoreSize ?? "—")</span>
+                                }
                             </article>
                         }
                     }
@@ -199,10 +165,13 @@
                         <svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z" /></svg>
                         @(ActiveTableTab?.Running == true ? "Running…" : "Run")
                     </button>
+                    @if (!ApplicationDatabase)
+                    {
                     <button class="studio-tool" title="Save this query" @onclick="SaveCurrentQuery">
                         <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8" /></svg>
                         Save
                     </button>
+                    }
                 </div>
 
                 <div class="studio-tabs">
@@ -220,6 +189,10 @@
 
                 @if (ActiveTableTab is { } activeTab)
                 {
+                    @if (ApplicationDatabase && Vm.ApplicationTables.FirstOrDefault(table => table.Name == activeTab.TableName) is { CanReadRows: false })
+                    {
+                        <p class="studio-note">Deployment-wide table: only its column schema is available in this workspace.</p>
+                    }
                     <div class="studio-editor-shell">
                         @if (Vm.SqlEditorMonaco)
                         {
@@ -258,7 +231,7 @@
                                     }
                                     else
                                     {
-                                        @:Read: @activeTab.Result.Rows.Count row(s)@(activeTab.Result.Truncated ? " (truncated at 500)" : "")
+                                        @:Read: @activeTab.Result.Rows.Count row(s)@(activeTab.Result.Truncated ? " (more rows available)" : "")
                                     }
                                 </span>
                             }
@@ -311,7 +284,7 @@
                                                     </td>
                                                 }
                                                 <td class="result-row-actions">
-                                                    @if (!activeTab.IsIndex)
+                                                    @if (!activeTab.IsIndex && !ApplicationDatabase)
                                                     {
                                                         var rowValues = activeTab.Result!.Columns
                                                             .Select((c, i) => (Column: c, Value: i < row.Row.Count ? row.Row[i] : null))
@@ -338,7 +311,7 @@
                             {
                                 <div class="studio-chart-title">@spec.Title</div>
                                 <div class="studio-chart-sub">@spec.Subtitle</div>
-                                <canvas id="pcdata-chart-canvas"></canvas>
+                                <div class="pc-chart" id="pcdata-chart-canvas"></div>
                             }
                             else
                             {
@@ -606,6 +579,12 @@
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    [SupplyParameterFromQuery(Name = "database")] public string? Database { get; set; }
+    private bool ApplicationDatabase => Database == "application";
+    private bool _loadedApplicationDatabase;
+
+    private void SwitchDatabase(ChangeEventArgs args) => Navigation.NavigateTo(
+        args.Value?.ToString() == "application" ? PageRoutes.ApplicationDatabase(ProjectId) : PageRoutes.ProjectData(ProjectId));
 
     private enum TableTabSource { Project, OpenSearch, SavedQuery }
 
@@ -654,13 +633,6 @@
             ? Vm.Tables.ToList()
             : Vm.Tables
                 .Where(t => t.Name.Contains(_tableFilter, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-    private List<SearchIndexView> FilteredIndices =>
-        string.IsNullOrWhiteSpace(_tableFilter)
-            ? Vm.Indices.ToList()
-            : Vm.Indices
-                .Where(i => i.Name.Contains(_tableFilter, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
     private List<SavedQueryRecord> FilteredSavedQueries =>
@@ -764,16 +736,17 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_loadedProjectId != ProjectId)
+        if (_loadedProjectId != ProjectId || _loadedApplicationDatabase != ApplicationDatabase)
         {
             _loadedProjectId = ProjectId;
+            _loadedApplicationDatabase = ApplicationDatabase;
             _openTabs.Clear();
             _activeTableName = null;
             _restoreTabsPending = true;
         }
 
         _pageDataReady = false;
-        Vm.Initialize(ProjectId);
+        Vm.Initialize(ProjectId, ApplicationDatabase);
         await Vm.LoadAsync();
         _pageDataReady = true;
         PruneOpenTabs();
@@ -793,6 +766,7 @@
     private string BuildRenderKey()
     {
         var sb = new StringBuilder();
+        sb.Append(ApplicationDatabase).Append(Vm.Error).Append('|');
         sb.Append(_activeTableName ?? "\0").Append('|');
         sb.Append(_tableFilter).Append('|');
         sb.Append(_resultFilter).Append('|');
@@ -801,11 +775,9 @@
         sb.Append(_jsonViewerTitle ?? "\0").Append('|').Append(_jsonViewerValue?.Length ?? 0).Append('|');
         sb.Append(Vm.GraphSidePaneTitle ?? "\0").Append('|').Append(Vm.GraphSidePaneGraph?.Nodes.Count ?? 0).Append('|');
         sb.Append((int)Vm.SidebarPane).Append('|');
-        sb.Append(Vm.TablesReady).Append('|').Append(Vm.IndicesReady).Append('|').Append(Vm.SavedQueriesReady).Append('|');
-        sb.Append(Vm.Tables.Count).Append('|').Append(Vm.Indices.Count).Append('|').Append(Vm.SavedQueries.Count).Append('|');
+        sb.Append(Vm.TablesReady).Append('|').Append(Vm.SavedQueriesReady).Append('|');
+        sb.Append(Vm.Tables.Count).Append('|').Append(Vm.SavedQueries.Count).Append('|');
         foreach (var t in Vm.Tables) sb.Append(t.Name).Append('\u0001');
-        foreach (var i in Vm.Indices) sb.Append(i.Name).Append('~').Append(i.DocumentCount).Append('~')
-            .Append(i.StoreSize).Append('\u0001');
         foreach (var q in Vm.SavedQueries) sb.Append(q.Name).Append('~').Append(q.Sql).Append('\u0001');
         sb.Append('|');
         foreach (var t in _openTabs)
@@ -823,7 +795,6 @@
         sb.Append(Vm.MaterializeMessage ?? "").Append('|');
         sb.Append(Vm.Materializing).Append('|');
         sb.Append(Vm.ShowSaveQueryDialog).Append('|');
-        sb.Append(Vm.IndicesError ?? "").Append('|');
         sb.Append(Vm.Creating).Append('|').Append(Vm.Importing).Append('|').Append(Vm.SavingQuery).Append('|');
         if (Vm.NewTable is { } nt)
         {
@@ -894,26 +865,13 @@
         _activeTableName = tableName;
         await Vm.ShowSqlTabAsync(tableName, tab.Sql);
         await PersistTabsAsync(captureActiveEditor: false);
-        await RunTableTabAsync(tab, captureEditorSql: false);
-    }
-
-    private async Task OpenIndexTabAsync(string indexName)
-    {
-        var existing = _openTabs.FirstOrDefault(t => t.IsIndex && StringComparer.Ordinal.Equals(t.TableName, indexName));
-        if (existing is not null)
+        if (ApplicationDatabase && Vm.ApplicationTables.FirstOrDefault(table => table.Name == tableName) is { CanReadRows: false } schema)
         {
-            _activeTableName = existing.TableName;
-            await Vm.ShowSqlTabAsync(existing.TableName, existing.Sql);
-            if (existing.Result is null && !existing.Running && existing.Error is null)
-                await RunTableTabAsync(existing);
+            tab.Result = new(["Column", "Type", "Nullable", "Visibility"], schema.Columns.Select(column =>
+                (IReadOnlyList<string?>)new string?[] { column.Name, column.Type, column.Nullable ? "Yes" : "No", column.Redacted ? "Masked" : "Visible" }).ToArray(), 0, false);
+            tab.Error = null;
             return;
         }
-
-        var tab = new TableTab(indexName, DefaultOpenSearchSqlFor(indexName), TableTabSource.OpenSearch);
-        _openTabs.Add(tab);
-        _activeTableName = indexName;
-        await Vm.ShowSqlTabAsync(indexName, tab.Sql);
-        await PersistTabsAsync(captureActiveEditor: false);
         await RunTableTabAsync(tab, captureEditorSql: false);
     }
 
@@ -1027,6 +985,11 @@
                 if (editorSql is not null)
                     tab.Sql = editorSql;
             }
+            if (ApplicationDatabase)
+            {
+                tab.Result = await Vm.QueryApplicationDatabaseAsync(tab.Sql);
+                return;
+            }
             tab.Result = tab.IsIndex
                 ? await DataService.SearchOpenSearchSqlAsync(ProjectId, tab.Sql)
                 : await DataService.ExecuteProjectDataAsync(ProjectId, tab.Sql);
@@ -1035,6 +998,13 @@
         {
             tab.Result = null;
             tab.Error = ex.Message;
+            if (ApplicationDatabase && ex is UnauthorizedAccessException)
+            {
+                foreach (var openTab in _openTabs)
+                {
+                    openTab.Result = null;
+                }
+            }
         }
         finally
         {
@@ -1095,14 +1065,14 @@
     {
         if (_openTabs.Count == 0) return;
         var tables = Vm.Tables.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
-        var indexes = Vm.Indices.Select(i => i.Name).ToHashSet(StringComparer.Ordinal);
         for (var i = _openTabs.Count - 1; i >= 0; i--)
         {
             var tab = _openTabs[i];
             var exists = tab.Source switch
             {
                 TableTabSource.Project => tables.Contains(tab.TableName),
-                TableTabSource.OpenSearch => indexes.Contains(tab.TableName),
+                // Preserve existing SQL drafts from the retired index browser.
+                TableTabSource.OpenSearch => true,
                 TableTabSource.SavedQuery => true,
                 _ => false,
             };
@@ -1115,7 +1085,7 @@
         _activeTableName = _openTabs.FirstOrDefault()?.TableName;
     }
 
-    private string SqlStudioStorageKey => $"pc-sql-studio-{ProjectId}";
+    private string SqlStudioStorageKey => $"pc-sql-studio-{ProjectId}" + (ApplicationDatabase ? "-application" : "");
 
     private async Task<bool> RestoreTabsAsync()
     {

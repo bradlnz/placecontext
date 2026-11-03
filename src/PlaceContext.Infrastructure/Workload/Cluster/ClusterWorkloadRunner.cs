@@ -36,7 +36,7 @@ namespace PlaceContext.Infrastructure.Workload;
 /// init step, skipping the install via the <c>.baked</c> marker. The cache is used only for jobs that
 /// already opted into public network egress. Any warm-path failure falls back to a cold run.</para>
 /// </summary>
-public sealed class ClusterWorkloadRunner : IWorkloadRunner
+public sealed partial class ClusterWorkloadRunner : IWorkloadRunner
 {
     private readonly WorkloadRunnerOptions _options;
     private readonly IObjectStore? _store;
@@ -200,7 +200,7 @@ public sealed class ClusterWorkloadRunner : IWorkloadRunner
                 Spec = new V1JobSpec
                 {
                     BackoffLimit = 0,
-                    ActiveDeadlineSeconds = Math.Min(timeoutSeconds, IJobRunHeartbeat.TimeoutSeconds),
+                    ActiveDeadlineSeconds = IJobRunHeartbeat.TimeoutSeconds,
                     TtlSecondsAfterFinished = 120,
                     Template = new V1PodTemplateSpec
                     {
@@ -283,8 +283,7 @@ public sealed class ClusterWorkloadRunner : IWorkloadRunner
                 },
             };
 
-            await client.BatchV1.CreateNamespacedJobAsync(job, ns, cancellationToken: ct);
-            return await AwaitResultAsync(client, ns, name, request.CorrelationId, timeoutSeconds, ct);
+            return await RunPreparedJobAsync(client, ns, job, request.CorrelationId, timeoutSeconds, ct);
         }
         finally
         {
@@ -293,54 +292,73 @@ public sealed class ClusterWorkloadRunner : IWorkloadRunner
         }
     }
 
-    // Poll the Job to completion (or the deadline), then read the pod's exit code + logs (the artifact).
-    private async Task<WorkloadRunResult> AwaitResultAsync(
-        Kubernetes client, string ns, string name, string correlationId, int timeoutSeconds, CancellationToken ct)
+    // Scheduling waits have their own deadline; the execution timeout starts with the run container.
+    private async Task<(WorkloadRunResult Result, bool Retryable)> AwaitResultAsync(
+        Kubernetes client, string ns, string name, string correlationId, int timeoutSeconds,
+        DateTimeOffset queueDeadline, CancellationToken ct)
     {
-        // Give the poller a small grace beyond the pod's own ActiveDeadlineSeconds so we observe the
-        // Job's Failed status (deadline-exceeded) rather than timing out the poll first.
-        // Poll adaptively: short jobs are the common case, so start fast (200ms) and back off toward
-        // 1.5s for long runs — a quick shard completes in sub-second wall-clock instead of paying a
-        // fixed 1.5s tick, without hammering the API server on runs that take minutes.
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(timeoutSeconds + 30);
         var delay = TimeSpan.FromMilliseconds(200);
         var nextLogRead = DateTimeOffset.MinValue;
         var nextPulse = DateTimeOffset.MinValue;
+        DateTimeOffset? executionStarted = null;
+        V1Pod? pod = null;
         string failure = "";
-        while (DateTimeOffset.UtcNow < deadline)
+        while (true)
         {
+            ct.ThrowIfCancellationRequested();
             var job = await client.BatchV1.ReadNamespacedJobStatusAsync(name, ns, cancellationToken: ct);
-            if ((job.Status?.Succeeded ?? 0) >= 1 || (job.Status?.Failed ?? 0) >= 1)
+            var pods = await client.CoreV1.ListNamespacedPodAsync(ns, labelSelector: "job-name=" + name, cancellationToken: ct);
+            pod = pods.Items.OrderByDescending(p => p.Metadata.CreationTimestamp).FirstOrDefault();
+            var runState = pod?.Status?.ContainerStatuses?.FirstOrDefault(c => c.Name == "run")?.State;
+            executionStarted ??= runState?.Running?.StartedAt ?? runState?.Terminated?.StartedAt;
+            if ((job.Status?.Succeeded ?? 0) >= 1 || (job.Status?.Failed ?? 0) >= 1 || pod?.Status?.Phase == "Failed")
             {
-                failure = string.Join("; ", job.Status?.Conditions?.Where(c => c.Type is "Failed" or "FailureTarget")
+                failure = string.Join("; ", job.Status?.Conditions?.Where(c => c.Status == "True" && c.Type is "Failed" or "FailureTarget")
                     .Select(c => c.Reason + ": " + c.Message) ?? []);
                 break;
             }
-            if (DateTimeOffset.UtcNow >= nextPulse)
+            var now = DateTimeOffset.UtcNow;
+            if (executionStarted is null && now >= queueDeadline)
             {
-                await PulseJobAsync(client, ns, job, timeoutSeconds, ct);
-                nextPulse = DateTimeOffset.UtcNow.AddSeconds(IJobRunHeartbeat.IntervalSeconds);
+                failure = "Timed out waiting for cluster capacity or container startup. " + DescribePodFailure(pod);
+                break;
             }
-            if (_output is not null && DateTimeOffset.UtcNow >= nextLogRead)
+            if (executionStarted is { } started && now >= started.AddSeconds(timeoutSeconds))
             {
-                await CaptureLivePodLogAsync(client, ns, name, correlationId, ct);
-                nextLogRead = DateTimeOffset.UtcNow.AddSeconds(1);
+                failure = "Execution timeout exceeded after the container started.";
+                break;
+            }
+            if (now >= nextPulse)
+            {
+                await PulseJobAsync(client, ns, job,
+                    SchedulingDeadlineSeconds(job.Status?.StartTime, executionStarted, queueDeadline, timeoutSeconds, now), ct);
+                nextPulse = now.AddSeconds(IJobRunHeartbeat.IntervalSeconds);
+            }
+            if (_output is not null && now >= nextLogRead)
+            {
+                if (executionStarted is null)
+                {
+                    _output.Set(correlationId, "[scheduler] Waiting for a worker. " + DescribePodFailure(pod));
+                }
+                if (executionStarted is not null)
+                {
+                    await CaptureLivePodLogAsync(client, ns, name, correlationId, ct);
+                }
+                nextLogRead = now.AddSeconds(1);
             }
             await Task.Delay(delay, ct);
-            if (delay < TimeSpan.FromMilliseconds(1500))
-            {
-                delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 1.5, 1500));
-            }
+            delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 1.5, 1500));
         }
-
-        var pods = await client.CoreV1.ListNamespacedPodAsync(ns, labelSelector: "job-name=" + name, cancellationToken: ct);
-        var pod = pods.Items.OrderByDescending(p => p.Metadata.CreationTimestamp).FirstOrDefault();
         if (pod is null)
         {
-            return new WorkloadRunResult(-1, null, "", "no pod was created for the job");
+            return (new WorkloadRunResult(-1, null, "", failure + " No pod was created for the job."), false);
         }
         var exit = pod.Status?.ContainerStatuses?.FirstOrDefault(c => c.Name == "run")?.State?.Terminated?.ExitCode ?? -1;
-
+        var diagnostic = DescribePodFailure(pod);
+        if (exit != 0 && !string.IsNullOrWhiteSpace(diagnostic))
+        {
+            failure = string.IsNullOrWhiteSpace(failure) ? diagnostic : failure + "\n" + diagnostic;
+        }
         var logs = "";
         try
         {
@@ -348,12 +366,12 @@ public sealed class ClusterWorkloadRunner : IWorkloadRunner
             using var sr = new StreamReader(stream);
             logs = await sr.ReadToEndAsync(ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch { /* logs best-effort */ }
-
-        // stdout is the artifact (the authoring contract); framed /out files ride behind the marker.
         var (stdout, files) = SplitFramedLogs(logs);
         _output?.Set(correlationId, stdout);
-        return new WorkloadRunResult(exit, string.IsNullOrEmpty(stdout) ? null : stdout, stdout, failure, files);
+        return (new WorkloadRunResult(exit, string.IsNullOrEmpty(stdout) ? null : stdout, stdout, failure, files),
+            exit != 0 && IsRetryableStartupFailure(pod));
     }
 
     private async Task CaptureLivePodLogAsync(
@@ -1011,7 +1029,11 @@ public sealed class ClusterWorkloadRunner : IWorkloadRunner
         {
             limits["cpu"] = new ResourceQuantity(cpus.ToString("0.0"));
         }
-        return new V1ResourceRequirements { Limits = limits.Count > 0 ? limits : null };
+        return new V1ResourceRequirements
+        {
+            Limits = limits.Count > 0 ? limits : null,
+            Requests = limits.Count > 0 ? new Dictionary<string, ResourceQuantity>(limits) : null
+        };
     }
 
     /// <summary>

@@ -16,7 +16,8 @@
         })();
     </script>
     <base href="/" />
-    <title>PlaceContext — codebase visibility</title>
+    <title>PlaceContext — Data workflow engine</title>
+    <meta name="description" content="PlaceContext is a data workflow engine. Ingest, transform, validate, and deliver data with workflows that run locally or in the cloud." />
     <link rel="icon" type="image/png" href="images/corgi-outline.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
@@ -35,7 +36,7 @@
 <body>
     <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
     <script defer src="@Assets["placecontext.js"]"></script>
-    <script defer src="@Assets["pcchart.js"]" data-chart-src="@Assets["vendor/chart.umd.min.js"]"></script>
+    <script defer src="@Assets["pcchart.js"]"></script>
     <script defer src="@Assets["pcmodules.js"]"
             data-pcgraph="@Assets["pcgraph.js"]"
             data-pcmonaco="@Assets["pcmonaco.js"]"

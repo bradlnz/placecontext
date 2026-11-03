@@ -18,6 +18,22 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class JobEditorExecutionTests
 {
+    [Fact]
+    public async Task Code_window_confirms_unsaved_edits_and_deploy_resets_dirty_state()
+    {
+        await using var harness = new Harness();
+        Assert.True(await harness.Vm.ConfirmCloseAsync());
+        await harness.Vm.AfterRenderAsync();
+        Assert.False(await harness.Vm.ConfirmCloseAsync());
+        Assert.Equal(1, harness.Confirmations);
+        await harness.Vm.DeployAsync();
+        Assert.True(await harness.Vm.ConfirmCloseAsync());
+        Assert.Equal(1, harness.Confirmations);
+        harness.Vm.SetEntry("other.py");
+        Assert.False(await harness.Vm.ConfirmCloseAsync());
+        Assert.Equal(2, harness.Confirmations);
+    }
+
     [Theory]
     [InlineData(0, "Succeeded")]
     [InlineData(1, "Failed")]
@@ -133,6 +149,7 @@ public sealed class JobEditorExecutionTests
         {
             get; private set;
         }
+        public int Confirmations { get; private set; }
         public int EditorInitializations
         {
             get; private set;
@@ -189,6 +206,10 @@ public sealed class JobEditorExecutionTests
         public Task CancelAsync(string correlationId, CancellationToken ct = default) => Task.CompletedTask;
         public ValueTask<T> InvokeAsync<T>(string identifier, object?[]? args)
         {
+            if (identifier == "confirm")
+            {
+                Confirmations++;
+            }
             if (identifier == "pcmonaco.init")
             {
                 EditorInitializations++;

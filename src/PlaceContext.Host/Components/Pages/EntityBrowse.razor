@@ -122,7 +122,7 @@
                                 <button aria-label="Remove" class="dcbtn btn-11-del" @onclick="@(() => Vm.DeleteChartAsync(chart))"><AppIcon Kind="close" /></button>
                             </div>
                             <div class="chart-canvas-box">
-                                <canvas id="@Vm.ChartCanvasIdentifier(chart.TableName)"></canvas>
+                                <div class="pc-chart" id="@Vm.ChartCanvasIdentifier(chart.TableName)"></div>
                             </div>
                         </div>
                     }

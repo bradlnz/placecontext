@@ -349,6 +349,7 @@ public sealed partial class JobChainsViewModel
         // Open the editor and switch to the runs tab so the user sees the run appear live.
         EditChainId = chain.Id;
         EditorTab = "runs";
+        EditorView = "runs";
         ShowEditor = true;
         OpenRun = null;
         StopPolling();
@@ -397,6 +398,7 @@ public sealed partial class JobChainsViewModel
     public async Task SwitchToRunsTabAsync()
     {
         EditorTab = "runs";
+        EditorView = "runs";
         StepRunDetail = null;
         if (EditChainId is { } chainId)
         {

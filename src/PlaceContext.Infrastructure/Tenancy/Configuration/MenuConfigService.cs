@@ -45,10 +45,10 @@ public sealed class MenuConfigService : IMenuConfigService
         new("queues", "Queues", "link", "/project/{projectId}/queues", Permission.ChainsManage, "queue", "Infrastructure", null),
         new("networking", "Networking", "link", "/project/{projectId}/networking", Permission.SettingsManage, "box", "Infrastructure", null),
         new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.TriggersManage, "clock", "Automation", null),
-        new("data", "Data", "link", "/project/{projectId}/data", Permission.DataRead, "data", "Data & storage", null),
+        new("data", "Data", "link", "/project/{projectId}/data", Permission.DataRead, "data", null, null),
         new("vault", "Vault", "link", "/project/{projectId}/secrets", Permission.SecretsManage, "key", "Infrastructure", null),
         new("project.events", "Events", "link", "/project/{projectId}/events", Permission.EventsManage, "pulse", "Automation", null),
-        new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", "Data & storage", null),
+        new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", null, null),
         new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null, null),
         new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", "Infrastructure", null),
         new("wiki", "Wiki", "link", "/wiki", null, "ledger", "Help", null),
@@ -171,7 +171,8 @@ public sealed class MenuConfigService : IMenuConfigService
                 .Replace("{projectId}", projectId?.ToString() ?? "", StringComparison.Ordinal);
             items.Add(new ResolvedMenuItem(
                 cat.Id, o.Label ?? cat.DefaultLabel, cat.Kind, href, cat.Icon,
-                cat.Id == "chains" && o.Section == "Automation"
+                (cat.Id == "chains" && o.Section == "Automation")
+                    || (cat.Id is "data" or "artifacts" && o.Section == "Data & storage")
                     ? null : NormalizeSection(o.Section) ?? NormalizeSection(cat.DefaultSection), o.Order, cat.Parent));
         }
         return GroupSections(items);

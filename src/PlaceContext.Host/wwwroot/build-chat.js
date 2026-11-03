@@ -1,3 +1,5 @@
+import { mountMcpComposer } from './mcp-composer.js';
+
 const recognitions = new Map();
 export function supportsSpeech() {
   return window.isSecureContext && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
@@ -49,6 +51,7 @@ export function startSpeech(receiver, viewId) {
 }
 
 const chats = new Map();
+const composers = new Map();
 export function setComposerMenu(viewId, open) {
   const root = document.getElementById(viewId);
   const menu = root?.querySelector('.composer-menu');
@@ -124,7 +127,26 @@ export function mountWorkspaceResize(root) {
   };
 }
 
-export function mountChat(viewId) {
+export function activeMcpMention(text, caret) {
+  const prefix = text.slice(0, caret);
+  const match = /(?:^|[\s(])(@(?:"[^"\r\n]*|[\p{L}\p{N}_-]*))$/u.exec(prefix);
+  if (!match) {
+    return { start: -1, end: -1 };
+  }
+  return { start: caret - match[1].length, end: caret };
+}
+
+export function focusComposer(viewId, caret) {
+  if (composers.get(viewId)?.focus) {
+    composers.get(viewId).focus(caret);
+    return;
+  }
+  const input = document.getElementById(viewId)?.querySelector('.chat-input');
+  input?.focus();
+  input?.setSelectionRange(caret, caret);
+}
+
+export function mountChat(viewId, receiver) {
   chats.get(viewId)?.();
   const root = viewId ? document.getElementById(viewId) : document;
   const messages = root?.querySelector('.chat-messages');
@@ -132,12 +154,59 @@ export function mountChat(viewId) {
   if (!messages || !input) {
     return;
   }
+  const composer = mountMcpComposer(root, input);
+  composers.set(viewId, composer);
   const unmountResize = mountWorkspaceResize(root);
+  let disposed = false;
+  let pendingMention;
+  let updatingMention = false;
+  const updateMention = async (event) => {
+    if (!receiver || event?.isComposing) {
+      return;
+    }
+    const range = activeMcpMention(input.value, input.selectionStart);
+    pendingMention = [input.value, range.start, range.end];
+    if (updatingMention) {
+      return;
+    }
+    updatingMention = true;
+    try {
+      while (pendingMention && !disposed) {
+        const current = pendingMention;
+        pendingMention = null;
+        await receiver.invokeMethodAsync('UpdateMcpMention', ...current);
+      }
+    } catch {
+      pendingMention = null;
+    } finally {
+      updatingMention = false;
+    }
+  };
   let following = true;
   const onScroll = () => {
     following = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;
   };
   const onKey = (event) => {
+    const menu = root?.querySelector('.composer-menu');
+    if (receiver && menu?.matches(':popover-open') && activeMcpMention(input.value, input.selectionStart).start >= 0) {
+      const options = [...menu.querySelectorAll('.mcp-option:not(:disabled)')];
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        menu.hidePopover();
+        receiver.invokeMethodAsync('UpdateMcpMention', input.value, -1, -1).catch(() => {});
+        return;
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        (event.key === 'ArrowDown' ? options[0] : options.at(-1))?.focus();
+        return;
+      }
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        options[0]?.click();
+        return;
+      }
+    }
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       if (input.form?.querySelector('button[type="submit"]:not(:disabled)')) {
@@ -159,12 +228,19 @@ export function mountChat(viewId) {
   });
   observer.observe(messages, { childList: true, subtree: true, characterData: true });
   messages.addEventListener('scroll', onScroll);
-  input.addEventListener('keydown', onKey);
+  composer.element.addEventListener('keydown', onKey);
+  input.addEventListener('input', updateMention);
+  input.addEventListener('click', updateMention);
   chats.set(viewId, () => {
+    disposed = true;
     unmountResize();
     observer.disconnect();
     messages.removeEventListener('scroll', onScroll);
-    input.removeEventListener('keydown', onKey);
+    composer.element.removeEventListener('keydown', onKey);
+    composer.dispose();
+    composers.delete(viewId);
+    input.removeEventListener('input', updateMention);
+    input.removeEventListener('click', updateMention);
   });
 }
 export function unmountChat(viewId) {

@@ -1,327 +1,280 @@
-// PlaceContext chart renderer — draws stored chart specs ({type,title,labels,series}) with the
-// bundled Chart.js, themed from the design tokens. Charts re-render when the portal theme flips.
-//
-// Palette: the 8-slot categorical set validated (CVD ΔE, lightness band, chroma, contrast) against
-// this portal's light (#ffffff) and dark (#111418) card surfaces — slot ORDER is the colorblind-
-// safety mechanism, so series take slots in order and never cycle.
-window.pcchart = (function () {
-  const chartSource = document.currentScript?.dataset.chartSrc || '/vendor/chart.umd.min.js';
+// Render the existing data-only chart contract as responsive, accessible SVG.
+window.pcchart = (() => {
+  const NS = 'http://www.w3.org/2000/svg';
   const LIGHT = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
   const DARK = ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'];
+  const charts = new Map();
+  const format = new Intl.NumberFormat(undefined, { maximumSignificantDigits: 4 });
+  let queued = false;
+  let theme;
 
-  const charts = {}; // canvas id → Chart instance
-  const specs = {}; // canvas id → spec (for theme re-render)
-  const observed = {}; // canvas id → canvas waiting for IntersectionObserver
-  let chartLoader = null;
-
-  function ensureChart() {
-    if (typeof window.Chart !== 'undefined') {
-      return Promise.resolve(window.Chart);
+  function node(tag, attributes = {}, text) {
+    const element = document.createElementNS(NS, tag);
+    for (const [name, value] of Object.entries(attributes)) {
+      element.setAttribute(name, value);
     }
-    if (chartLoader) {
-      return chartLoader;
+    if (text !== undefined) {
+      element.textContent = text;
     }
-    chartLoader = new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = chartSource;
-      script.onload = () => resolve(window.Chart);
-      script.onerror = () => reject(new Error('Chart.js failed to load.'));
-      document.head.appendChild(script);
-    }).catch((error) => {
-      chartLoader = null;
-      console.warn('pcchart:', error.message);
-      throw error;
-    });
-    return chartLoader;
+    return element;
   }
 
-  function tokens() {
-    const shell = document.getElementById('dcshell');
-    const css = shell ? getComputedStyle(shell) : null;
-    const v = (name, fallback) => (css && css.getPropertyValue(name).trim()) || fallback;
-    const dark = !shell || shell.getAttribute('data-theme') !== 'light';
-    return {
-      dark,
-      palette: dark ? DARK : LIGHT,
-      surface: v('--card', dark ? '#111418' : '#ffffff'),
-      ink: v('--text-2', dark ? '#98a2ad' : '#5a6571'), // labels/legend: text tokens, never series color
-      muted: v('--text-3', dark ? '#5e6873' : '#8b95a1'), // axis ticks
-      grid: v('--border', dark ? '#1d232b' : '#e5e9ed'), // recessive hairlines
-      tooltipBg: v('--card-2', dark ? '#161a1f' : '#f4f6f8'),
-      tooltipInk: v('--text', dark ? '#e8ebef' : '#101620'),
-    };
+  function label(svg, x, y, text, attributes = {}) {
+    const element = node('text', { x, y, fill: 'var(--text-2, #64748b)', ...attributes }, text);
+    svg.appendChild(element);
+    return element;
   }
 
-  function datasets(spec, t) {
-    if (spec.type === 'pie') {
-      return [
-        {
-          data: spec.series[0].values,
-          backgroundColor: spec.labels.map((_, i) => t.palette[i % t.palette.length]),
-          borderColor: t.surface, // the 2px surface gap between slices
-          borderWidth: 2,
-        },
-      ];
+  function number(value) {
+    if (value !== 0 && (Math.abs(value) < 0.001 || Math.abs(value) >= 1e9)) {
+      return value.toExponential(2);
     }
-    return spec.series.map((s, i) =>
-      spec.type === 'line'
-        ? {
-            label: s.name,
-            data: s.values,
-            borderColor: t.palette[i],
-            backgroundColor: t.palette[i],
-            borderWidth: 2,
-            pointRadius: s.values.length === 1 ? 3 : 0,
-            pointHoverRadius: 4,
-            pointHitRadius: 12,
-            tension: 0.25,
-          }
-        : {
-            label: s.name,
-            data: s.values,
-            backgroundColor: t.palette[i],
-            borderRadius: { topLeft: 4, topRight: 4 },
-            borderSkipped: 'bottom', // rounded data-end, flat baseline
-            maxBarThickness: 36,
-            barPercentage: 0.7,
-            categoryPercentage: 0.8,
-          },
-    );
+    return format.format(value);
   }
 
-  function config(spec, t) {
-    const font = { family: 'var(--font-sans)', size: 11 };
-    const many = spec.type === 'pie' || spec.series.length > 1; // one series needs no legend — the title names it
-    return {
-      type: spec.type === 'pie' ? 'doughnut' : spec.type,
-      data: { labels: spec.labels, datasets: datasets(spec, t) },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: { duration: 200 },
-        cutout: spec.type === 'pie' ? '55%' : undefined,
-        plugins: {
-          legend: {
-            display: many,
-            position: 'bottom',
-            labels: {
-              color: t.ink,
-              font,
-              usePointStyle: true,
-              pointStyle: 'circle',
-              boxWidth: 8,
-              boxHeight: 8,
-              padding: 14,
-            },
-          },
-          tooltip: {
-            backgroundColor: t.tooltipBg,
-            titleColor: t.tooltipInk,
-            bodyColor: t.ink,
-            borderColor: t.grid,
-            borderWidth: 1,
-            cornerRadius: 7,
-            padding: 10,
-            titleFont: font,
-            bodyFont: font,
-            displayColors: many,
-            boxWidth: 8,
-            boxHeight: 8,
-            usePointStyle: true,
-          },
-        },
-        scales:
-          spec.type === 'pie'
-            ? undefined
-            : {
-                x: {
-                  grid: { display: false },
-                  border: { color: t.grid },
-                  ticks: { color: t.muted, font, maxRotation: 45, autoSkip: true },
-                },
-                y: {
-                  beginAtZero: true,
-                  grid: { color: t.grid },
-                  border: { display: false },
-                  ticks: { color: t.muted, font, maxTicksLimit: 6 },
-                },
-              },
-      },
-    };
+  function shorten(text, length) {
+    return text.length > length ? text.slice(0, Math.max(1, length - 1)) + '…' : text;
   }
 
-  function draw(id) {
-    const el = document.getElementById(id);
-    const spec = specs[id];
-    if (!el || !spec || typeof Chart === 'undefined') {
-      return;
-    }
-    if (charts[id]) {
-      charts[id].destroy();
-      delete charts[id];
-    }
-    charts[id] = new Chart(el, config(spec, tokens()));
-  }
-
-  // Lazy mount: render() may fire before the canvas is committed to the DOM (Blazor applies its
-  // diff after the interop call) or before Chart.js finishes loading. Retry until the element
-  // exists, then defer the actual draw until it scrolls into view — a hidden or zero-size canvas
-  // would otherwise paint blank and never recover.
-  const pending = {}; // canvas id → retry timer
-  const io = window.IntersectionObserver
-    ? new IntersectionObserver(
-        (entries) => {
-          for (const e of entries) {
-            const id = e.target.id;
-            // A Blazor diff can replace the canvas between observe() and this callback. Observing
-            // the detached node forever leaves its visible replacement blank, so follow the id to
-            // the current element and mount that one instead.
-            if (document.getElementById(id) !== e.target) {
-              io.unobserve(e.target);
-              if (observed[id] === e.target) {
-                delete observed[id];
-              }
-              mount(id, 0);
-              continue;
-            }
-            if (!e.isIntersecting) {
-              continue;
-            }
-            io.unobserve(e.target);
-            delete observed[id];
-            draw(id);
-          }
-        },
-        { rootMargin: '200px' },
-      )
-    : null;
-
-  function mount(id, attempt) {
-    delete pending[id];
-    if (!specs[id]) {
-      return;
-    } // destroyed while waiting
-    const el = document.getElementById(id);
-    if (!el || typeof Chart === 'undefined') {
-      if (attempt < 40) // ~1s of fast polls, then 500ms — gives CDN-slow Chart.js ~16s
-      {
-        pending[id] = setTimeout(() => mount(id, attempt + 1), attempt < 10 ? 100 : 500);
-      }
-      return;
-    }
-    if (io) {
-      if (observed[id] && observed[id] !== el) {
-        io.unobserve(observed[id]);
-      }
-      observed[id] = el;
-      io.observe(el);
-      return;
-    }
-    draw(id);
-  }
-
-  // Once a chart has rendered, the .NET view models intentionally cache that fact to avoid an
-  // interop call after every unrelated component update. Blazor can still replace a canvas during
-  // one of those updates, or reuse it under a different id in an unkeyed list. Reconcile both so
-  // an old Chart instance cannot strand a fresh canvas or block reuse of an existing one.
-  let reconcileQueued = false;
-  function reconcileMounts() {
-    if (reconcileQueued) {
-      return;
-    }
-    reconcileQueued = true;
-    queueMicrotask(() => {
-      reconcileQueued = false;
-      for (const id of Object.keys(specs)) {
-        const el = document.getElementById(id);
-        const chartEl = charts[id]?.canvas;
-        const observedEl = observed[id];
-        if (chartEl && chartEl !== el) {
-          charts[id].destroy();
-          delete charts[id];
-          if (el) {
-            mount(id, 0);
-          }
-          continue;
-        }
-        if (observedEl && observedEl !== el) {
-          if (io) {
-            io.unobserve(observedEl);
-          }
-          delete observed[id];
-          if (el) {
-            mount(id, 0);
-          }
-          continue;
-        }
-        if (el && !chartEl && !observedEl && !pending[id]) {
-          mount(id, 0);
-        }
-      }
-    });
-  }
-
-  if (window.MutationObserver && document.documentElement) {
-    new MutationObserver(reconcileMounts).observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['id'],
-    });
-  }
-
-  // Theme flips re-render every live chart with the new tokens (dark is its own selected palette,
-  // not an automatic flip of the light one).
-  const shell = document.getElementById('dcshell');
-  if (shell && window.MutationObserver) {
-    new MutationObserver(() => Object.keys(charts).forEach(draw)).observe(shell, {
-      attributes: true,
-      attributeFilter: ['data-theme'],
-    });
-  }
-
-  function renderCore(id, specJson) {
+  function parse(raw) {
     try {
-      specs[id] = typeof specJson === 'string' ? JSON.parse(specJson) : specJson;
+      const spec = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (!spec || !['bar', 'line', 'pie'].includes(spec.type)
+        || !Array.isArray(spec.labels) || !Array.isArray(spec.series)) {
+        return null;
+      }
+      if (spec.series.some(series => !series || !Array.isArray(series.values)
+        || series.values.length !== spec.labels.length
+        || series.values.some(value => typeof value !== 'number' || !Number.isFinite(value)))) {
+        return null;
+      }
+      return {
+        type: spec.type, title: String(spec.title || 'Chart'),
+        labels: spec.labels.map(value => String(value ?? '')),
+        series: spec.series.map(series => ({ name: String(series.name || 'Value'), values: [...series.values] })),
+      };
     } catch {
+      return null;
+    }
+  }
+
+  function mark(svg, tag, attributes, description) {
+    const element = node(tag, { ...attributes, tabindex: 0, role: 'img', 'aria-label': description });
+    element.appendChild(node('title', {}, description));
+    svg.appendChild(element);
+  }
+
+  function legend(svg, names, palette, width, top) {
+    const columns = Math.max(1, Math.floor((width - 24) / 160));
+    const cellWidth = (width - 24) / columns;
+    names.forEach((name, index) => {
+      const x = 12 + (index % columns) * cellWidth;
+      const y = top + Math.floor(index / columns) * 20;
+      svg.appendChild(node('circle', { cx: x + 4, cy: y - 4, r: 4, fill: palette[index % palette.length] }));
+      const text = label(svg, x + 15, y, shorten(name, Math.floor((cellWidth - 20) / 6)));
+      text.appendChild(node('title', {}, name));
+    });
+  }
+
+  function cartesian(svg, spec, palette, width, bottom) {
+    const left = 64, right = width - 16, top = 16;
+    const values = spec.series.flatMap(series => series.values);
+    const magnitude = values.reduce((max, value) => Math.max(max, Math.abs(value)), 0) || 1;
+    const low = values.reduce((min, value) => Math.min(min, value / magnitude), 0);
+    const high = values.reduce((max, value) => Math.max(max, value / magnitude), 0) || (low === 0 ? 1 : 0);
+    const y = value => bottom - ((value / magnitude - low) / (high - low)) * (bottom - top);
+    const zero = y(0);
+    for (let tick = 0; tick <= 4; tick++) {
+      const fraction = tick / 4;
+      const value = (low * (1 - fraction) + high * fraction) * magnitude;
+      const position = bottom - fraction * (bottom - top);
+      svg.appendChild(node('line', { x1: left, x2: right, y1: position, y2: position, stroke: 'var(--border, #dbe2ea)' }));
+      label(svg, left - 8, position + 4, number(value), { 'text-anchor': 'end' });
+    }
+    svg.appendChild(node('line', { x1: left, x2: right, y1: zero, y2: zero, stroke: 'var(--text-3, #94a3b8)' }));
+    const slot = (right - left) / spec.labels.length;
+    const x = index => left + (index + 0.5) * slot;
+    const stride = Math.max(1, Math.ceil(spec.labels.length / Math.max(1, Math.floor((right - left) / 80))));
+    spec.labels.forEach((name, index) => {
+      if (index % stride !== 0) {
+        return;
+      }
+      const text = label(svg, x(index), bottom + 20, shorten(name, 12), { 'text-anchor': 'middle' });
+      text.appendChild(node('title', {}, name));
+    });
+    spec.series.forEach((series, seriesIndex) => {
+      const color = palette[seriesIndex % palette.length];
+      if (spec.type === 'line') {
+        svg.appendChild(node('polyline', {
+          points: series.values.map((value, index) => `${x(index)},${y(value)}`).join(' '),
+          fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linejoin': 'round',
+        }));
+        series.values.forEach((value, index) => mark(svg, 'circle',
+          { cx: x(index), cy: y(value), r: 3, fill: color }, `${series.name} · ${spec.labels[index]}: ${number(value)}`));
+        return;
+      }
+      const barWidth = Math.min(36, slot * 0.75 / spec.series.length);
+      series.values.forEach((value, index) => mark(svg, 'rect', {
+        x: x(index) - barWidth * spec.series.length / 2 + seriesIndex * barWidth,
+        y: Math.min(zero, y(value)), width: Math.max(0.1, barWidth - Math.min(2, barWidth / 10)),
+        height: Math.max(1, Math.abs(zero - y(value))), rx: 2, fill: color,
+      }, `${series.name} · ${spec.labels[index]}: ${number(value)}`));
+    });
+  }
+
+  function pie(svg, spec, palette, width, bottom) {
+    const values = spec.series[0].values;
+    if (values.some(value => value < 0)) {
+      label(svg, width / 2, bottom / 2, 'Pie charts require non-negative values.', { 'text-anchor': 'middle' });
       return;
     }
-    if (pending[id]) {
-      clearTimeout(pending[id]);
-      delete pending[id];
+    const maximum = values.reduce((max, value) => Math.max(max, value), 0);
+    const total = values.reduce((sum, value) => sum + (maximum ? value / maximum : 0), 0);
+    const radius = Math.max(20, Math.min(width / 2 - 20, bottom / 2 - 10));
+    const cx = width / 2, cy = bottom / 2;
+    const point = angle => [cx + radius * Math.cos(angle), cy + radius * Math.sin(angle)];
+    if (total === 0) {
+      svg.appendChild(node('circle', { cx, cy, r: radius, fill: 'none', stroke: 'var(--border, #dbe2ea)', 'stroke-width': 12 }));
+      label(svg, cx, cy + 4, 'No non-zero values', { 'text-anchor': 'middle' });
+      return;
     }
-    return ensureChart().then(() => mount(id, 0));
+    let start = -Math.PI / 2;
+    values.forEach((value, index) => {
+      if (value === 0) {
+        return;
+      }
+      const fraction = value / maximum / total;
+      const end = start + fraction * Math.PI * 2;
+      const description = `${spec.labels[index]}: ${number(value)} (${number(fraction * 100)}%)`;
+      const fill = palette[index % palette.length];
+      if (fraction >= 1) {
+        mark(svg, 'circle', { cx, cy, r: radius, fill }, description);
+        return;
+      }
+      mark(svg, 'path', {
+        d: `M ${cx} ${cy} L ${point(start).join(' ')} A ${radius} ${radius} 0 ${fraction > 0.5 ? 1 : 0} 1 ${point(end).join(' ')} Z`,
+        fill, stroke: 'var(--card, #fff)', 'stroke-width': 1,
+      }, description);
+      start = end;
+    });
+  }
+
+  function draw(state) {
+    const { element, spec } = state;
+    const width = Math.max(240, element.clientWidth || 640);
+    const names = spec?.type === 'pie' ? spec.labels : (spec?.series.length > 1 ? spec.series.map(series => series.name) : []);
+    const legendHeight = Math.ceil(names.length / Math.max(1, Math.floor((width - 24) / 160))) * 20;
+    const height = Math.max(180 + legendHeight, element.clientHeight || 280);
+    const svg = node('svg', { viewBox: `0 0 ${width} ${height}`, width: '100%', height, role: 'img',
+      'aria-label': spec?.title || 'Chart unavailable', style: 'display:block;font:11px var(--font-sans, sans-serif)' });
+    svg.appendChild(node('title', {}, spec?.title || 'Chart unavailable'));
+    if (!spec || !spec.labels.length || !spec.series.length) {
+      label(svg, width / 2, height / 2, spec ? 'No chart data' : 'Chart data is invalid or unsupported.', { 'text-anchor': 'middle' });
+    }
+    if (spec?.labels.length && spec.series.length) {
+      svg.appendChild(node('desc', {}, spec.series.map(series => `${series.name}: ${series.values.map((value, index) => `${spec.labels[index]} ${number(value)}`).join('; ')}`).join('. ')));
+      const palette = theme === 'dark' ? DARK : LIGHT;
+      const bottom = height - legendHeight - 32;
+      if (spec.type === 'pie') {
+        pie(svg, spec, palette, width, bottom);
+      }
+      if (spec.type !== 'pie') {
+        cartesian(svg, spec, palette, width, bottom);
+      }
+      legend(svg, names, palette, width, height - legendHeight + 12);
+    }
+    state.width = element.clientWidth;
+    state.height = element.clientHeight;
+    state.svg = svg;
+    element.replaceChildren(svg);
+  }
+
+  const resize = window.ResizeObserver ? new ResizeObserver(entries => {
+    for (const entry of entries) {
+      const state = charts.get(entry.target.id);
+      if (state?.element === entry.target && (state.width !== entry.target.clientWidth || state.height !== entry.target.clientHeight)) {
+        draw(state);
+      }
+    }
+  }) : null;
+
+  function detach(state) {
+    if (state.element) {
+      resize?.unobserve(state.element);
+      state.svg?.remove();
+      state.element = null;
+    }
+  }
+
+  function reconcileMounts() {
+    const currentTheme = document.getElementById('dcshell')?.getAttribute('data-theme')
+      || document.documentElement.dataset.pcTheme || 'light';
+    const changedTheme = currentTheme !== theme;
+    theme = currentTheme;
+    for (const [id, state] of charts) {
+      if (state.element && state.element !== document.getElementById(id)) {
+        detach(state);
+      }
+    }
+    for (const [id, state] of charts) {
+      const element = document.getElementById(id);
+      if (!element) {
+        continue;
+      }
+      if (state.element !== element) {
+        state.element = element;
+        resize?.observe(element);
+        draw(state);
+        continue;
+      }
+      if (changedTheme || state.dirty || state.svg?.parentElement !== element) {
+        state.dirty = false;
+        draw(state);
+      }
+    }
+  }
+
+  function schedule() {
+    if (queued) {
+      return;
+    }
+    queued = true;
+    queueMicrotask(() => {
+      queued = false;
+      reconcileMounts();
+    });
+  }
+
+  new MutationObserver(schedule).observe(document.documentElement, {
+    childList: true, subtree: true, attributes: true, attributeFilter: ['id', 'data-theme', 'data-pc-theme'],
+  });
+
+  function set(id, raw) {
+    const state = charts.get(id) || {};
+    state.spec = parse(raw);
+    state.dirty = true;
+    charts.set(id, state);
   }
 
   return {
-    render(id, specJson) {
-      return renderCore(id, specJson);
+    render(id, raw) {
+      set(id, raw);
+      reconcileMounts();
     },
-    // Batch entry point: one interop round-trip for many charts. entries = [{id, spec}].
     renderAll(entries) {
-      return ensureChart().then(() => {
-        for (let i = 0; i < entries.length; i++) {
-          const e = entries[i];
-          if (e) {
-            renderCore(e.id, e.spec);
-          }
+      for (const entry of entries) {
+        if (entry) {
+          set(entry.id, entry.spec);
         }
-      });
+      }
+      reconcileMounts();
     },
     destroy(id) {
-      if (pending[id]) {
-        clearTimeout(pending[id]);
-        delete pending[id];
+      const state = charts.get(id);
+      if (state) {
+        detach(state);
+        charts.delete(id);
       }
-      if (charts[id]) {
-        charts[id].destroy();
-        delete charts[id];
-      }
-      if (io && observed[id]) {
-        io.unobserve(observed[id]);
-      }
-      delete observed[id];
-      delete specs[id];
     },
   };
 })();

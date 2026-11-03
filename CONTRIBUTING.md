@@ -69,6 +69,23 @@ unit of work where needed. Queries return read models and do not own a write com
 Every command/query has one scoped handler; the dispatcher supplies the per-call scope and checks
 declared permissions. Keep authorization and tenant isolation intact when refactoring either path.
 
+Use EF Core queries for mapped application data in Infrastructure. Project directly to the required
+read model, use no-tracking reads where changes are not needed, and keep filtering and pagination in
+the database. Use parameterized SQL only when the operation requires it (such as user-authored SQL,
+dynamic project schemas, or database administration), or when a representative benchmark demonstrates
+a performance gain over an appropriate EF query. Document that evidence with the exception; do not
+assume raw SQL is faster. Keep all database access behind Application or Domain contracts.
+
+Treat project tables as the source of truth and search/vector indexes as derived representations.
+New ingestion paths must declare how PII is classified, encrypted, authorized for processing, and
+removed from derived data when the source changes or is deleted. Encryption at rest alone does not
+authorize plaintext in logs, prompts, embedding requests, or job output. Keep encryption keys out
+of jobs; decrypt only through an authorized application boundary. The assurance target is
+[SOC 2 Type II](SECURITY.md#soc-2-type-ii-readiness). Do not claim compliance from code changes or
+encryption tests: controls, evidence of operation over the examination period, and an independent
+examination are separate requirements. Existing paths must be assessed before being reused for
+sensitive data.
+
 HTTP, database, filesystem, and process implementations belong in Infrastructure behind inward-owned
 interfaces. Host API contracts describe the wire format; map them to application commands/read models
 instead of exposing persistence rows or returning tracked domain objects. Separate API DTOs are useful

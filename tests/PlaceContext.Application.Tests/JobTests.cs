@@ -99,6 +99,27 @@ public class JobTests
     // ── CreateJob ────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task Map_and_reduce_receive_actual_project_and_run_context_without_minting_credentials()
+    {
+        var (handler, jobs, _, runner) = BuildRunHandler();
+        var env = new Dictionary<string, string> { ["PC_PROJECT_ID"] = "wrong", ["USER_SETTING"] = "kept" };
+        var job = Job.Create(Guid.NewGuid(), "Data decision", null,
+            new MapSpec("worker", ["{}"], env), new ReduceSpec("worker", env), 1, ExitCodePolicy.Default, T0);
+        await jobs.AddAsync(job);
+        var run = await handler.HandleAsync(new RunJobCommand(job.Id));
+        Assert.Equal(2, runner.ReceivedRequests.Count);
+        Assert.All(runner.ReceivedRequests, request =>
+        {
+            Assert.Equal(job.ProjectId.ToString(), request.Env["PC_PROJECT_ID"]);
+            Assert.Equal(job.Id.ToString(), request.Env["PC_JOB_ID"]);
+            Assert.Equal(run.Id.ToString(), request.Env["PC_RUN_ID"]);
+            Assert.Equal("kept", request.Env["USER_SETTING"]);
+            Assert.False(request.Env.ContainsKey("PC_TOKEN"));
+        });
+        Assert.Equal("wrong", job.MapSpec.Env["PC_PROJECT_ID"]);
+    }
+
+    [Fact]
     public async Task CreateJob_persists_job_with_correct_shard_count()
     {
         var (handler, jobs) = BuildCreateHandler();

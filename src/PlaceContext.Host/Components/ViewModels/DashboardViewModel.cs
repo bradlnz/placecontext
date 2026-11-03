@@ -24,7 +24,7 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
     private readonly ICurrentTenant _tenant;
     private readonly OperationCenter _operations;
     private readonly BackgroundOperationRunner _ops;
-    private readonly Dictionary<string, DateTimeOffset> _rendered = new();
+    private readonly Dictionary<string, string> _rendered = new();
     private Guid? _projectId;
     private Guid? _projectOverride;
     private readonly IPermissionService? _permissions;
@@ -299,7 +299,7 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
                 Charts = [];
                 return;
             }
-            var charts = await _service.ListProjectChartsAsync(projectId);
+            var charts = await _service.ListProjectChartsAsync(projectId, live: true);
             if (version != _loadVersion)
             {
                 return;
@@ -645,14 +645,53 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
         NotifyStateChanged();
     }
 
+    public bool ChartsRefreshing { get; private set; }
+    public string? ChartsError { get; private set; }
+
+    public async Task RefreshChartsAsync(CancellationToken ct = default)
+    {
+        if (ChartsRefreshing || CurrentProjectId is not { } projectId)
+        {
+            return;
+        }
+        ChartsRefreshing = true;
+        var version = _loadVersion;
+        try
+        {
+            if (_permissions is not null && !await _permissions.HasAsync(Permission.DataRead, ct))
+            {
+                return;
+            }
+            var charts = await _service.ListProjectChartsAsync(projectId, ct, live: true);
+            if (version == _loadVersion && !ct.IsCancellationRequested)
+            {
+                Charts = charts;
+                ChartsError = null;
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            if (version == _loadVersion)
+            {
+                ChartsError = ex.Message;
+            }
+        }
+        finally
+        {
+            ChartsRefreshing = false;
+            NotifyStateChanged();
+        }
+    }
+
     public async Task RenderChartsAsync()
     {
         var entries = new List<object>();
-        var rendered = new List<(string Id, DateTimeOffset At)>();
+        var rendered = new List<(string Id, string Html)>();
         foreach (var chart in SqlCharts())
         {
             var id = CanvasId(chart.TableName);
-            if (_rendered.TryGetValue(id, out var timestamp) && timestamp == chart.GeneratedAt)
+            if (_rendered.TryGetValue(id, out var html) && html == chart.Html)
             {
                 continue;
             }
@@ -661,7 +700,7 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
                 id,
                 spec = chart.Html
             });
-            rendered.Add((id, chart.GeneratedAt));
+            rendered.Add((id, chart.Html));
         }
         if (entries.Count == 0)
         {

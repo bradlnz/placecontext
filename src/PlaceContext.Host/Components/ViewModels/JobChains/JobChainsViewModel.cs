@@ -121,6 +121,7 @@ public sealed partial class JobChainsViewModel : PageViewModel
                 return;
             }
             EditorTab = "runs";
+            EditorView = "runs";
             await OpenChainRunAsync(run);
         }
     }

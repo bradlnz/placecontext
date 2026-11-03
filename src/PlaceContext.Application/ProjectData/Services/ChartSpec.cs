@@ -5,7 +5,7 @@ namespace PlaceContext.Application.Features;
 
 /// <summary>
 /// A declarative chart: data + form, no drawing. The LLM (or the deterministic builder) produces
-/// this and the portal renders it with Chart.js — code draws, the model only picks and shapes data,
+/// this and the portal renders it as SVG — code draws, the model only picks and shapes data,
 /// which it can do reliably where hand-drawn SVG could not.
 /// </summary>
 public sealed record ChartSpec(

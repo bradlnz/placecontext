@@ -1,0 +1,72 @@
+@using PlaceContext.Application.Access
+@using PlaceContext.Host.Components.Pages
+@inject IJSRuntime JS
+@inject IAuthorizationService Authorization
+@inject AuthenticationStateProvider Authentication
+@implements IAsyncDisposable
+
+@if (_allowed)
+{
+    <section class="workflow-code-window" aria-label="Job code editor" @ref="_window">
+        <div class="code-window-head">
+            <button type="button" class="code-window-move" title="Drag to move; use arrow keys when focused" aria-label="Move code window" data-window-handle>
+                <AppIcon Kind="code" /> <span>@Job.Name</span>
+            </button>
+            <button type="button" class="dcbtn" aria-label="Close code editor" @onclick="CloseAsync"><AppIcon Kind="close" /></button>
+        </div>
+        <div class="code-window-body">
+            <JobEditor @key="Job.Id" @ref="_editor" ProjectId="Job.ProjectId" JobId="Job.Id" Embedded="true" />
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public JobView Job { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+    private ElementReference _window;
+    private JobEditor? _editor;
+    private IJSObjectReference? _module;
+    private bool _allowed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await Authentication.GetAuthenticationStateAsync();
+        _allowed = (await Authorization.AuthorizeAsync(state.User, Permission.JobsEdit)).Succeeded;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_allowed || _module is not null)
+        {
+            return;
+        }
+
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/WorkflowCodeWindow.razor.js");
+        await _module.InvokeVoidAsync("attach", _window);
+    }
+
+    public Task<bool> ConfirmCloseAsync() => _editor?.ConfirmCloseAsync() ?? Task.FromResult(true);
+
+    private async Task CloseAsync()
+    {
+        if (await ConfirmCloseAsync())
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _module.InvokeVoidAsync("detach", _window);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+}

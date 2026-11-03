@@ -9,7 +9,7 @@ using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
+public sealed class JobEditorViewModel : PageViewModel, IComponentViewModel, IAsyncDisposable
 {
     private const string CodeSourceKind = "code";
     private const string DefaultRuntime = JobTestRuntimeCatalog.Python;
@@ -37,6 +37,8 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
     private string? _message;
     private string _newFileName = string.Empty;
     private string _renameValue = string.Empty;
+    private string? _savedCode;
+    public bool Embedded { get; set; }
 
     public JobEditorViewModel(
         PlaceContextService service,
@@ -164,7 +166,11 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
                 }
 
                 _active = Math.Max(0, _files.FindIndex(file => file.Path == Entrypoint));
-                _ui.Set(_job.Name, "code editor");
+                _savedCode = CodeSnapshot();
+                if (!Embedded)
+                {
+                    _ui.Set(_job.Name, "code editor");
+                }
             }
         }
         catch (Exception exception)
@@ -546,6 +552,25 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
             )
         );
         Entrypoint = _job.MapEntrypoint ?? entrypoint;
+        _savedCode = CodeSnapshot();
+    }
+
+    private string CodeSnapshot() => System.Text.Json.JsonSerializer.Serialize(new { Entrypoint, Files = _files });
+
+    public async Task<bool> ConfirmCloseAsync()
+    {
+        if (Busy)
+        {
+            return false;
+        }
+
+        await SyncActiveAsync();
+        if (_savedCode is null || _savedCode == CodeSnapshot())
+        {
+            return true;
+        }
+
+        return await _js.InvokeAsync<bool>("confirm", "Discard unsaved code changes?");
     }
 
     private async Task SyncActiveAsync()

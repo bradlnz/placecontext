@@ -36,7 +36,7 @@ else
         <div class="dctabs tabs-strip">
             <button class="dctab @(Vm.IsRunsTab ? "active" : "")" @onclick="Vm.SelectRunsTab"><AppIcon Kind="box" /> Job history<span class="n">@(Vm.Reports?.Count ?? 0)</span></button>
             <button class="dctab @(Vm.IsLogsTab ? "active" : "")" @onclick="Vm.SelectLogsTabAsync"><AppIcon Kind="logs" /> Logs</button>
-            <button class="dctab @(Vm.IsChainsTab ? "active" : "")" @onclick="Vm.SelectChainsTab"><AppIcon Kind="chain" /> Workflows<span class="n">@(Vm.ChainReports?.Count ?? 0)</span></button>
+            <button class="dctab @(Vm.IsChainsTab ? "active" : "")" @onclick="Vm.SelectChainsTab"><AppIcon Kind="chain" /> Workflows<span class="n">@(Vm.ChainReports?.Count.ToString() ?? "—")</span></button>
             <button class="dctab @(Vm.IsTracesTab ? "active" : "")" @onclick="Vm.LoadTracesAsync"><AppIcon Kind="pulse" /> Live traces<span class="n">@(Vm.LiveTraces?.Count ?? 0)</span></button>
         </div>
 

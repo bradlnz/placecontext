@@ -63,6 +63,13 @@
     min-height: 0;
 }
 
+.page.embedded { height:100%; }
+.embedded .toolbar { flex-wrap:wrap; gap:8px; padding:8px 12px; }
+.embedded .file-tree { width:180px; }
+@media (max-width:950px) {
+    .embedded .file-tree { width:100%; max-height:110px; }
+}
+
 .file-tree {
     width: 240px;
     flex: none;

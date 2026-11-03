@@ -111,7 +111,7 @@
 
 .sql-chart-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
     gap: 14px;
     margin-bottom: 6px;
 }
@@ -122,6 +122,7 @@
 }
 
 .chart-card-head {
+    flex-wrap: wrap;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -204,7 +205,7 @@
 
 .table-chart-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
     gap: 14px;
     margin-top: 14px;
 }
@@ -271,3 +272,6 @@
     .redraw-row { flex-wrap: wrap; }
     .redraw-input { min-width: 0; }
 }
+
+.live-controls { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.live-controls label { display:flex; align-items:center; gap:6px; white-space:nowrap; color:var(--text-2); font-size:12px; }

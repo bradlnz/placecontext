@@ -126,6 +126,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, Auth.AuthService>();
         services.AddScoped<IMembershipService, Auth.MembershipService>();
         services.AddScoped<IUserApiTokenService, Auth.UserApiTokenService>();
+        services.AddScoped<IJobDataTokenService, Auth.JobDataTokenService>();
         services.AddScoped<IOAuthClientStore, EfOAuthClientStore>();
         services.AddScoped<IOAuthRefreshTokenStore, EfOAuthRefreshTokenStore>();
 
@@ -305,14 +306,14 @@ public static class DependencyInjection
                     var embeddings = sp.GetRequiredService<IEmbeddingGateway>();
                     var tenant = sp.GetRequiredService<ICurrentTenant>();
                     var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-                    return new VectorStore.VectorRunEmbeddingRepository(embeddings, tenant, httpFactory, qdrantUrl2);
+                    return new VectorStore.VectorRunEmbeddingRepository(embeddings, tenant, httpFactory, qdrantUrl2, sp.GetRequiredService<IDataEncryptor>());
                 });
                 services.AddScoped<IContentIndexer>(sp =>
                 {
                     var gateway = sp.GetRequiredService<IEmbeddingGateway>();
                     var tenant = sp.GetRequiredService<ICurrentTenant>();
                     var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-                    return new VectorStore.VectorContentIndexer(gateway, tenant, httpFactory, qdrantUrl2);
+                    return new VectorStore.VectorContentIndexer(gateway, tenant, httpFactory, qdrantUrl2, sp.GetRequiredService<IDataEncryptor>());
                 });
                 // One-shot migration from pgvector tables on first startup.
                 services.AddHostedService<VectorStore.VectorIndexMigrationHostedService>();
@@ -366,7 +367,9 @@ public static class DependencyInjection
         // Each project's own database (Postgres schema + role isolation; Monaco SQL in the portal).
         // A project's external database override resolves through the Vault (cluster DB is the default).
         services.AddScoped<IProjectDatabaseConnectionResolver, ProjectData.ProjectDatabaseConnectionResolver>();
-        services.AddScoped<IProjectDataStore, ProjectData.SqlProjectDataStore>();
+        services.AddScoped<ProjectData.SqlProjectDataStore>();
+        services.AddScoped<IProjectDataStore>(sp => sp.GetRequiredService<ProjectData.SqlProjectDataStore>());
+        services.AddScoped<IProjectDataReader>(sp => sp.GetRequiredService<ProjectData.SqlProjectDataStore>());
 
         // Cluster page: node inventory + fleet-master admin (promote / join codes over Tailscale).
         // Same in-cluster vs local detection as the workload runner above.

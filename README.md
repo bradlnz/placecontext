@@ -5,7 +5,7 @@
 <h1 align="center">PlaceContext</h1>
 
 <p align="center">
-  <strong>Turn code and containers into durable jobs that run anywhere you own.</strong>
+  <strong>A data workflow engine for ingesting, transforming, validating, and delivering data.</strong>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512bd4?style=flat-square">
 </p>
 
-PlaceContext is an open-source, self-hosted job engine with a web portal and an MCP endpoint. Run work on
+PlaceContext is an open-source data workflow engine with a web portal and an MCP endpoint. Run work on
 demand, on schedules, or from events; fan it out across your fleet; connect jobs into pipelines; and keep the
 resulting data, logs, traces, and artifacts under your control.
 
@@ -38,7 +38,7 @@ cluster is required. The installer pulls the versioned multi-architecture
 
 ## Workflow-first platform
 
-PlaceContext is a self-hosted workflow engine. **Build** creates and edits executable pipelines,
+PlaceContext is a data workflow engine that runs locally or in the cloud. **Build** creates and edits executable pipelines,
 **Workflows** is the canonical place to manage stages, conditions, human approvals,
 execution and monitoring. The built-in **Runs** tab shows live status, step progress, inputs
 requiring human review, failures and run history. **Observability** provides deeper logs,

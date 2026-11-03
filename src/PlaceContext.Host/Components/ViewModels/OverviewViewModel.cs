@@ -66,7 +66,7 @@ public sealed class OverviewViewModel : PageViewModel
                 stats.StaleContextCount > 0 ? "var(--warn)" : "var(--good)"
             ),
         ];
-        _ui.Set("Overview", "codebase visibility · projects register via MCP");
+        _ui.Set("Overview", "data workflow engine");
         NotifyStateChanged();
     }
 

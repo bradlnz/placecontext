@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text;
 using PlaceContext.Application.Search;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
 namespace PlaceContext.Infrastructure.VectorStore;
 
@@ -18,6 +19,7 @@ public sealed class VectorContentIndexer : IContentIndexer
     private readonly IEmbeddingGateway _gateway;
     private readonly ICurrentTenant _tenant;
     private readonly HttpClient _http;
+    private readonly IDataEncryptor _encryptor;
     private readonly string _baseUrl;
     private readonly string _collection;
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
@@ -26,10 +28,12 @@ public sealed class VectorContentIndexer : IContentIndexer
         IEmbeddingGateway gateway,
         ICurrentTenant tenant,
         IHttpClientFactory httpFactory,
-        string qdrantUrl)
+        string qdrantUrl,
+        IDataEncryptor encryptor)
     {
         _gateway = gateway;
         _tenant = tenant;
+        _encryptor = encryptor;
         _http = httpFactory.CreateClient();
         _baseUrl = qdrantUrl.TrimEnd('/');
         _collection = "content_embeddings";
@@ -98,8 +102,8 @@ public sealed class VectorContentIndexer : IContentIndexer
                             tenant_id = _tenant.TenantId.ToString("N"),
                             project_id = projectId.ToString("N"),
                             kind,
-                            source_key = slice[i].Key,
-                            text = slice[i].Text,
+                            source_key = _encryptor.Protect(slice[i].Key, IDataEncryptor.Purpose.EmbeddingText),
+                            text = _encryptor.Protect(slice[i].Text, IDataEncryptor.Purpose.EmbeddingText),
                             created_at = DateTimeOffset.UtcNow.ToString("O"),
                         }
                     });
@@ -181,8 +185,8 @@ public sealed class VectorContentIndexer : IContentIndexer
                     var createdAt = DateTimeOffset.Parse(p.GetProperty("created_at").GetString()!, CultureInfo.InvariantCulture);
                     hits.Add(new ContentSearchHit(
                         p.GetProperty("kind").GetString()!,
-                        p.GetProperty("source_key").GetString()!,
-                        p.GetProperty("text").GetString() ?? "",
+                        _encryptor.Unprotect(p.GetProperty("source_key").GetString(), IDataEncryptor.Purpose.EmbeddingText),
+                        _encryptor.Unprotect(p.GetProperty("text").GetString(), IDataEncryptor.Purpose.EmbeddingText),
                         point.TryGetProperty("score", out var s) ? s.GetDouble() : 0.0,
                         createdAt));
                 }

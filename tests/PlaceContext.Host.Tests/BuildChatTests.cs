@@ -1046,6 +1046,37 @@ public sealed class BuildChatTests
     }
 
     [Fact]
+    public async Task Typed_mcp_mentions_filter_servers_and_replace_only_the_partial_token()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var server = new McpConnectionView(Guid.NewGuid(), fixture.ProjectId, "Commerce MCP", "http",
+            null, null, null, null, true, null, null, DateTimeOffset.UtcNow);
+        var dispatcher = new ToolDispatcher(fixture.ProjectId)
+        {
+            Mcps = _ => [server, server with { Id = Guid.NewGuid(), Name = "Warehouse" }]
+        };
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new PortalUiState(),
+            new NoJs(), new PlaceContextService(dispatcher, null!, null!, null!), fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        await vm.UpdateMcpMention("Ask @Com for orders", 4, 8);
+        Assert.True(vm.ShowMcpMenu);
+        Assert.Equal(server.Id, Assert.Single(vm.MatchingMcps).Id);
+        Assert.True(await vm.SelectMcpAsync(server.Id));
+        Assert.Equal("Ask @\"Commerce MCP\" for orders", vm.Draft);
+        Assert.False(vm.ShowMcpMenu);
+        await vm.UpdateMcpMention("@missing", 0, 8);
+        Assert.Empty(vm.MatchingMcps);
+        await vm.UpdateMcpMention("No mention", -1, -1);
+        Assert.False(vm.ShowMcpMenu);
+        dispatcher.Mcps = _ => [];
+        await vm.UpdateMcpMention("@", 0, 1);
+        Assert.Empty(vm.MatchingMcps);
+        Assert.False(vm.ShowAddMcp);
+        Assert.True(vm.ShowMcpMenu);
+    }
+
+    [Fact]
     public async Task Mcp_menu_failure_can_retry_and_show_an_empty_list()
     {
         await using var fixture = new Fixture();
@@ -1152,7 +1183,9 @@ public sealed class BuildChatTests
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
             (await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.Dashboard>()).ToHtmlString());
         Assert.Contains("What do you need to do?", html);
-        Assert.Contains("Overview", html);
+        Assert.Contains("aria-label=\"Runs\"", html);
+        Assert.Contains("aria-label=\"Charts\"", html);
+        Assert.Contains("aria-label=\"Data\"", html);
         Assert.Equal(fixture.ProjectId, vm.Conversation.ProjectId);
         Assert.DoesNotContain("Workflow overview", html);
     }

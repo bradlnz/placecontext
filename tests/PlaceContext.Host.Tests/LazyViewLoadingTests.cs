@@ -203,11 +203,11 @@ public sealed class LazyViewLoadingTests
 
     [Theory]
     [InlineData("runs", typeof(ListRecentRunReportsQuery))]
-    [InlineData("workflows", typeof(ListRecentChainRunsQuery))]
-    [InlineData("chains", typeof(ListRecentChainRunsQuery))]
+    [InlineData("workflows", null)]
+    [InlineData("chains", null)]
     [InlineData("logs", typeof(ListRecentRunReportsQuery))]
     [InlineData("traces", null)]
-    public async Task Observability_loads_only_the_initial_tabs_data(string tab, Type? queryType)
+    public async Task Observability_loads_workflow_badge_and_only_the_initial_tabs_other_data(string tab, Type? queryType)
     {
         var dispatcher = new Dispatcher();
         using var telemetry = new JobTelemetryCollector();
@@ -215,14 +215,16 @@ public sealed class LazyViewLoadingTests
             new Navigation($"http://localhost/observability?tab={tab}"),
             new OperationCenter(null!, default), telemetry, null!, null!);
         await vm.InitializeAsync();
+        Assert.Equal(50, Assert.Single(dispatcher.Queries.OfType<ListRecentChainRunsQuery>()).Take);
+        var otherQueries = dispatcher.Queries.Where(query => query is not ListRecentChainRunsQuery).ToArray();
         void AssertQuery()
         {
             if (queryType is null)
             {
-                Assert.Empty(dispatcher.Queries);
+                Assert.Empty(otherQueries);
                 return;
             }
-            Assert.IsType(queryType, Assert.Single(dispatcher.Queries));
+            Assert.IsType(queryType, Assert.Single(otherQueries));
         }
         AssertQuery();
         if (tab == "logs")
@@ -235,7 +237,7 @@ public sealed class LazyViewLoadingTests
     }
 
     [Fact]
-    public async Task Opening_a_live_trace_loads_its_run_without_fetching_history()
+    public async Task Opening_a_live_trace_loads_its_run_without_fetching_job_history()
     {
         var dispatcher = new Dispatcher();
         var run = new JobRunDetailView(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Succeeded",
@@ -255,32 +257,45 @@ public sealed class LazyViewLoadingTests
         await vm.OpenLiveTrace(new(run.Id, run.JobId, "Job", run.ProjectId, run.Status, false,
             run.StartedAt, 100, []));
         Assert.Equal(run.Id, vm.Open?.Run.Id);
-        Assert.DoesNotContain(dispatcher.Queries, query => query is ListRecentRunReportsQuery or ListRecentChainRunsQuery);
+        Assert.DoesNotContain(dispatcher.Queries, query => query is ListRecentRunReportsQuery);
+        Assert.Single(dispatcher.Queries.OfType<ListRecentChainRunsQuery>());
     }
 
     [Fact]
-    public async Task Observability_shell_is_ready_before_history_and_other_tabs_load_on_demand()
+    public async Task Observability_workflow_badge_loads_before_slow_job_history_and_updates_on_refresh()
     {
         var dispatcher = new Dispatcher();
         var history = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
-        dispatcher.Delay = query => query is ListRecentRunReportsQuery ? history.Task : null;
+        var workflow = new ChainRunReportView(Guid.NewGuid(), "Project",
+            new(Guid.NewGuid(), Guid.NewGuid(), "Workflow", "Succeeded", [], null,
+                DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        ChainRunReportView[] workflows = [workflow];
+        dispatcher.Delay = query => query switch
+        {
+            ListRecentRunReportsQuery => history.Task,
+            ListRecentChainRunsQuery => Task.FromResult<object>(workflows),
+            _ => null
+        };
         using var vm = new ObservabilityViewModel(Service(dispatcher), new PortalUiState(), new Navigation(),
             new OperationCenter(null!, default), null!, null!, null!);
         var loading = vm.InitializeAsync();
         Assert.False(vm.Loading);
         Assert.False(loading.IsCompleted);
-        Assert.Null(vm.ChainReports);
+        Assert.True(vm.IsRunsTab);
+        Assert.Equal(workflow, Assert.Single(vm.ChainReports!));
         history.SetResult(Array.Empty<RunReportView>());
         await loading;
-        dispatcher.Delay = null;
-        await vm.RestoreTabAsync("workflows");
-        Assert.NotNull(vm.ChainReports);
-        Assert.Equal(2, dispatcher.Queries.Count);
+        workflows = [workflow, workflow with { Run = workflow.Run with { Id = Guid.NewGuid() } }];
         await vm.RefreshAsync();
+        Assert.True(vm.IsRunsTab);
+        Assert.Equal(2, vm.ChainReports!.Count);
+        var queryCount = dispatcher.Queries.Count;
+        await vm.RestoreTabAsync("workflows");
+        Assert.Equal(queryCount, dispatcher.Queries.Count);
         Assert.Equal(2, dispatcher.Queries.OfType<ListRecentChainRunsQuery>().Count());
-        Assert.Single(dispatcher.Queries.OfType<ListRecentRunReportsQuery>());
+        Assert.Equal(2, dispatcher.Queries.OfType<ListRecentRunReportsQuery>().Count());
         await vm.RestoreTabAsync("runs");
-        Assert.Equal(3, dispatcher.Queries.Count);
+        Assert.Equal(queryCount, dispatcher.Queries.Count);
     }
 
     [Fact]
@@ -444,8 +459,9 @@ public sealed class LazyViewLoadingTests
         await vm.AfterRenderAsync();
         Assert.IsType<ListProjectDataTablesQuery>(Assert.Single(dispatcher.Queries));
 
-        vm.ShowPane(SidebarPane.Indexes);
-        Assert.Contains(dispatcher.Queries, query => query is ListSearchIndicesQuery);
+        vm.ShowPane(SidebarPane.Queries);
+        vm.ShowPane(SidebarPane.Tables);
+        Assert.DoesNotContain(dispatcher.Queries, query => query is ListSearchIndicesQuery);
 
         dispatcher.Queries.Clear();
         var analytics = new ProjectAnalyticsViewModel(Service(dispatcher), new PortalUiState(), null!, null!);

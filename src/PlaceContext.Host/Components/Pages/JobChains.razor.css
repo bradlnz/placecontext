@@ -116,22 +116,10 @@
 .log-pre { font-size:10px; font-family:var(--font-mono); color:var(--text-3); white-space:pre-wrap; margin-top:3px; max-height:220px; overflow-y:auto }
 .editor-body { flex:1; display:flex; flex-direction:column; gap:14px; overflow-y:auto; overscroll-behavior:contain }
 .editor-body > * { flex-shrink:0 }
-.workflow-builder { display:grid; grid-template-columns:250px minmax(0, 1fr); gap:18px; align-items:start }
-.workflow-palette { padding:20px 16px; border:1px solid var(--border); border-radius:14px; background:var(--card) }
 .workflow-eyebrow { color:var(--brand-2); font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase }
-.workflow-palette h3 { margin:8px 0; font-size:17px; letter-spacing:-.02em }
-.workflow-palette p { margin:0 0 22px; color:var(--text-3); font-size:12px; line-height:1.6 }
-.palette-label { display:block; margin:20px 0 10px; color:var(--text-3); font-size:10px; font-weight:650; letter-spacing:.05em; text-transform:uppercase }
-.palette-step { display:flex; align-items:center; gap:10px; width:100%; margin:8px 0; padding:12px 10px; border:1px solid var(--border); border-radius:10px; background:var(--card); color:var(--text-2); text-align:left; font:inherit; cursor:pointer }
-.palette-step > span:nth-child(2) { flex:1; min-width:0 }
-.palette-step strong, .palette-step small { display:block }
-.palette-step strong { font-size:12px; font-weight:650 }
-.palette-step small { margin-top:5px; color:var(--text-3); font-size:11px; line-height:1.5 }
-.palette-step:hover { background:var(--card-2); border-color:var(--brand-2) }
 .palette-icon { display:grid; place-items:center; flex:none; width:30px; height:30px; border-radius:8px; background:var(--brand-bg); color:var(--brand-2); font-size:20px }
 .human-step .palette-icon { color:var(--warn); background:var(--warn-bg) }
 .agent-step .palette-icon { color:var(--brand-2); background:var(--brand-bg) }
-.palette-note { margin-top:24px; padding-top:16px; border-top:1px solid var(--border); color:var(--text-3); font-size:11px; line-height:1.7 }
 .workflow-input { padding:22px; border:1px solid color-mix(in srgb, var(--brand-2) 45%, var(--border)); border-radius:12px; background:var(--card) }
 .workflow-input h3 { margin:8px 0 14px; font-size:18px }
 .workflow-input .dcfield { margin:14px 0 }
@@ -148,24 +136,15 @@
 .loop-modal .dcmodal-body { display:flex; flex-direction:column; gap:20px }
 .loop-modal textarea { resize:vertical; min-height:120px }
 .loop-modal .dcmodal-foot { display:flex; justify-content:flex-end; gap:8px; padding:16px 20px; border-top:1px solid var(--border) }
-.palette-step:focus-visible, .node-picker-tile:focus-visible { outline:2px solid var(--brand-2); outline-offset:3px }
-@media (max-width: 1100px) {
-    .workflow-builder { grid-template-columns:minmax(0, 1fr) }
-    .workflow-palette { display:flex; flex-wrap:wrap; gap:10px; padding:14px }
-    .workflow-palette > .workflow-eyebrow, .workflow-palette > h3, .workflow-palette > p, .palette-label, .palette-note { display:none }
-    .palette-step { flex:1 1 190px; width:auto; margin:0 }
-}
+.node-picker-tile:focus-visible { outline:2px solid var(--brand-2); outline-offset:3px }
+
 .field-row { display:flex; gap:10px }
 .flex-14 { flex:1.4 }
-.empty-steps { padding:14px; border-radius:8px; background:var(--card-2); font-size:12px; color:var(--text-3); text-align:center }
 .gate-tag { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:5px; font-size:11px; font-family:var(--font-mono); cursor:pointer }
 .gate-tag-wait { background:var(--card); border:1px solid var(--border); color:var(--text-2) }
 .gate-tag-condition { background:#fef9e7; border:1px solid #f0d060; color:#7a5c00 }
 .gate-remove { font-size:11px; margin-left:2px }
 .gate-modal { width:440px }
-.editor-tabs.sub-tabs { display:flex; gap:0; padding:0; border-bottom:1px solid var(--border); margin-bottom:4px }
-.editor-tabs.sub-tabs .dctab { padding:6px 16px; font-size:12px; border-bottom:2px solid transparent }
-.editor-tabs.sub-tabs .dctab.active { border-bottom-color:var(--brand) }
 .tab-icon { font-size:11px; opacity:.8 }
 .condition-builder { display:grid; grid-template-columns:1.1fr 1fr; gap:10px }
 .condition-builder .dcfield:last-child:nth-child(3) { grid-column:1 / -1 }
@@ -207,8 +186,6 @@
     .suite-result { display:none; }
     .stage-group { flex-wrap:wrap; }
     .stage-jobs { width:100%; }
-    .stage-branch-row { width:100%; }
-    .stage-branch-row .branch-select { min-height:34px; }
     .dcslide-foot { flex-wrap:wrap; gap:10px; }
     .editor-err { width:100%; }
     .dcslide-foot .dcbtn { flex:1; min-height:40px; }
@@ -305,39 +282,6 @@
 .human-decision-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:16px; }
 .human-decision-actions .dcbtn { min-width:90px; min-height:40px; justify-content:center; }
 
-/* List editor and environment settings share the existing side-pane shell. */
-.workflow-list { min-width:0 }
-.workflow-list-heading { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px }
-.workflow-list-heading h3 { margin:0; font-size:15px }
-.workflow-list-heading h3 span { margin-left:6px; color:var(--text-3); font-size:12px; font-weight:400 }
-.workflow-list-heading p { margin:5px 0 0; color:var(--text-3); font-size:12px }
-.step-list { display:flex; flex-direction:column; gap:14px; list-style:none; margin:0; padding:0 }
-.stage-item { min-width:0; border:1px solid var(--border); border-radius:12px; background:var(--card); overflow:hidden }
-.list-stage-head { display:flex; align-items:center; gap:9px; padding:10px 14px; background:var(--card-2); border-bottom:1px solid var(--border) }
-.list-stage-head > strong { min-width:0; overflow-wrap:anywhere; font-size:12px }
-.step-num { display:grid; place-items:center; flex:none; width:25px; height:25px; border-radius:7px; background:var(--brand-bg); color:var(--brand-2); font-size:11px; font-weight:700 }
-.list-stage-count { color:var(--text-3); font-size:11px; white-space:nowrap }
-.list-stage-actions { display:flex; gap:5px; margin-left:auto; flex:none }
-.list-stage-actions .dcbtn, .stage-job-chip .dcbtn { display:grid; place-items:center; min-width:32px; min-height:32px; padding:5px }
-.list-stage-body { display:flex; flex-direction:column; gap:12px; padding:14px; min-width:0 }
-.stage-jobs { display:flex; flex-direction:column; gap:8px; min-width:0 }
-.stage-job-chip { display:flex; align-items:center; gap:10px; min-width:0; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text-2); font:inherit; font-size:12px; text-align:left }
-button.stage-job-chip { width:100%; cursor:pointer }
-button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--brand-bg) }
-.stage-job-chip > span { min-width:0; overflow-wrap:anywhere }
-.stage-job-chip strong, .stage-job-chip small { display:block }
-.stage-job-chip small { margin-top:4px; color:var(--text-3); font-size:11px; line-height:1.5 }
-.list-job-name { flex:1 }
-.list-configure { margin-left:auto; color:var(--brand-2); font-size:11px; flex:none }
-.list-stage-gate { display:flex; gap:6px; align-items:flex-start }
-.list-stage-gate > .dcbtn:first-child { min-width:0; text-align:left; white-space:normal; overflow-wrap:anywhere; color:var(--brand-2) }
-.list-false-path { display:flex; flex-direction:column; gap:10px; padding:12px; border-left:2px solid var(--brand-2); background:var(--bg); border-radius:0 8px 8px 0; min-width:0; overflow:auto }
-.list-false-path > strong { color:var(--text-3); font-size:11px }
-.list-false-path > .dcbtn { align-self:flex-start }
-.stage-branch-row { display:flex; align-items:center; gap:8px; min-width:0 }
-.branch-select { flex:1; min-width:0; max-width:420px }
-.list-stage-footer { display:flex; flex-wrap:wrap; gap:8px; padding-top:10px; border-top:1px solid var(--border) }
-.list-stage-footer .dcbtn { color:var(--text-3); font-size:11px }
 .qemu-modal { width:min(620px, 100vw) }
 .qemu-modal .dcmodal-head { gap:12px; padding:22px }
 .qemu-modal h3 { margin:5px 0 7px; font-size:20px }
@@ -363,12 +307,6 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .qemu-resource-grid label span { color:var(--text-3); font-weight:400; font-size:10px }
 .qemu-error { margin:0; padding:12px; border:1px solid var(--bad); border-radius:8px; color:var(--bad); font-size:12px }
 @media (max-width: 600px) {
-    .list-stage-head, .list-stage-body { padding:10px }
-    .list-stage-head { gap:6px; flex-wrap:wrap }
-    .list-stage-actions .dcbtn, .stage-job-chip .dcbtn { min-width:40px; min-height:40px }
-    .stage-branch-row { flex-wrap:wrap }
-    .branch-select { flex-basis:100%; max-width:none }
-    .list-stage-footer .dcbtn { min-height:40px }
     .qemu-modal .dcmodal-head, .qemu-modal .dcmodal-body { padding:18px }
     .qemu-heading-icon { display:none }
     .qemu-resource-grid { grid-template-columns:repeat(2, minmax(0, 1fr)) }
@@ -411,3 +349,79 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .workflow-readiness-findings li.warning { border-left:3px solid var(--warn); }
 .workflow-readiness-findings li.info { border-left:3px solid var(--brand-2); }
 .workflow-readiness-findings li span, .workflow-readiness-note { color:var(--text-3); font-size:10.5px; line-height:1.5; }
+
+/* The editor canvas fills the screen; step choices remain in its Add step menu. */
+.workflow-canvas-overlay { z-index:45; padding:0 }
+.workflow-canvas-dialog { width:100%; max-width:none; height:100dvh; border-radius:0 }
+.workflow-canvas-dialog .dcmodal-head { justify-content:space-between }
+.workflow-canvas-dialog .dcmodal-body { display:flex; min-height:0; overflow:hidden; padding:12px }
+.workflow-canvas-dialog .dcmodal-body:not(.workflow-list-body) ::deep .chain-canvas:not(.run-canvas) { display:flex; flex-direction:column; flex:1; min-height:0 }
+.workflow-canvas-dialog ::deep .canvas-toolbar, .workflow-canvas-dialog ::deep .canvas-legend { flex:none }
+.workflow-canvas-dialog .dcmodal-body:not(.workflow-list-body) ::deep .chain-canvas:not(.run-canvas) .canvas-viewport { flex:1; height:0; min-height:0 }
+.workflow-canvas-dialog .dcmodal-body:not(.workflow-list-body) ::deep .chain-canvas:not(.run-canvas) .canvas-pipeline { min-height:100% }
+
+.workflow-canvas-preview { position:relative; height:clamp(260px, 45dvh, 440px); border-radius:14px; overflow:hidden }
+.workflow-canvas-thumbnail { display:flex; height:100% }
+.workflow-canvas-thumbnail ::deep .chain-canvas { display:flex; flex-direction:column; flex:1; min-height:0 }
+.workflow-canvas-thumbnail ::deep .canvas-toolbar, .workflow-canvas-thumbnail ::deep .canvas-legend { flex:none }
+.workflow-canvas-thumbnail ::deep .canvas-viewport { flex:1; height:0; min-height:0; overflow:hidden }
+.workflow-canvas-thumbnail ::deep .canvas-pipeline { min-height:100% }
+.workflow-canvas-open { position:absolute; inset:0; display:grid; place-items:center; width:100%; border:0; border-radius:inherit; background:color-mix(in srgb, var(--panel) 55%, transparent); color:var(--text); font:inherit; cursor:pointer }
+.workflow-canvas-open > span { display:flex; align-items:center; gap:8px; padding:12px 18px; border:1px solid var(--border-2); border-radius:8px; background:var(--panel); box-shadow:var(--shadow); font-size:13px }
+.workflow-canvas-open:hover { background:color-mix(in srgb, var(--panel) 40%, transparent) }
+.workflow-canvas-open:focus-visible { outline:2px solid var(--brand); outline-offset:-3px }
+
+.workflow-canvas-actions { display:flex; align-items:center; gap:20px }
+.workflow-menu { position:relative; font-size:12px }
+.workflow-menu summary { padding:8px 12px; border:1px solid var(--border-2); border-radius:7px; cursor:pointer; background:var(--card-2) }
+.workflow-menu-items { position:absolute; right:0; top:calc(100% + 6px); z-index:2; width:210px; display:grid; gap:3px; padding:6px; border:1px solid var(--border-2); border-radius:8px; background:var(--panel); box-shadow:var(--shadow) }
+.workflow-menu-items button { display:flex; align-items:center; gap:9px; padding:10px; border:0; border-radius:5px; background:transparent; color:var(--text); text-align:left; font:inherit; cursor:pointer }
+.workflow-menu-items button:hover { background:var(--hover) }
+.workflow-menu-items button:disabled { opacity:.5; cursor:default }
+.workflow-menu summary:focus-visible, .workflow-menu-items button:focus-visible { outline:2px solid var(--brand); outline-offset:2px }
+.workflow-canvas-error { flex:none; margin:0; padding:10px 18px; color:var(--bad); border-bottom:1px solid var(--border) }
+
+.workflow-list { min-width:0 }
+.step-list { display:flex; flex-direction:column; gap:14px; list-style:none; margin:0; padding:0 }
+.stage-item { min-width:0; border:1px solid var(--border); border-radius:12px; background:var(--card); overflow:hidden }
+.list-stage-head { display:flex; align-items:center; gap:9px; padding:10px 14px; background:var(--card-2); border-bottom:1px solid var(--border) }
+.list-stage-head > strong { min-width:0; overflow-wrap:anywhere; font-size:12px }
+.step-num { display:grid; place-items:center; flex:none; width:25px; height:25px; border-radius:7px; background:var(--brand-bg); color:var(--brand-2); font-size:11px; font-weight:700 }
+.list-stage-count { color:var(--text-3); font-size:11px; white-space:nowrap }
+.list-stage-actions { display:flex; gap:5px; margin-left:auto; flex:none }
+.list-stage-actions .dcbtn, .stage-job-chip .dcbtn { display:grid; place-items:center; min-width:32px; min-height:32px; padding:5px }
+.list-stage-body { display:flex; flex-direction:column; gap:12px; padding:14px; min-width:0 }
+.stage-jobs { display:flex; flex-direction:column; gap:8px; min-width:0 }
+.stage-job-chip { display:flex; align-items:center; gap:10px; min-width:0; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text-2); font:inherit; font-size:12px; text-align:left }
+button.stage-job-chip { width:100%; cursor:pointer }
+button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--brand-bg) }
+.stage-job-chip > span { min-width:0; overflow-wrap:anywhere }
+.stage-job-chip strong, .stage-job-chip small { display:block }
+.stage-job-chip small { margin-top:4px; color:var(--text-3); font-size:11px; line-height:1.5 }
+.list-job-name { flex:1 }
+.list-configure { margin-left:auto; color:var(--brand-2); font-size:11px; flex:none }
+.list-stage-gate { display:flex; gap:6px; align-items:flex-start }
+.list-stage-gate > .dcbtn:first-child { min-width:0; text-align:left; white-space:normal; overflow-wrap:anywhere; color:var(--brand-2) }
+.list-false-path { display:flex; flex-direction:column; gap:10px; padding:12px; border-left:2px solid var(--brand-2); background:var(--bg); border-radius:0 8px 8px 0; min-width:0; overflow:auto }
+.list-false-path > strong { color:var(--text-3); font-size:11px }
+.list-false-path > .dcbtn { align-self:flex-start }
+.stage-branch-row { display:flex; align-items:center; gap:8px; min-width:0 }
+.branch-select { flex:1; min-width:0; max-width:420px }
+.list-stage-footer { display:flex; flex-wrap:wrap; gap:8px; padding-top:10px; border-top:1px solid var(--border) }
+.list-stage-footer .dcbtn { color:var(--text-3); font-size:11px }
+
+.workflow-canvas-dialog ::deep .canvas-toolbar { display:none }
+.workflow-canvas-thumbnail ::deep .canvas-hint { display:none }
+.workflow-canvas-dialog .workflow-list-body { display:block; overflow:auto; padding:18px }
+.workflow-canvas-dialog .workflow-list-body .runs-body { overflow:visible; overscroll-behavior:auto }
+.workflow-view-tabs { flex:none; margin:0; padding:0 18px }
+.workflow-step-count { margin-left:8px; color:var(--text-3); font-size:11px; font-weight:400; white-space:nowrap }
+.empty-steps { padding:20px; color:var(--text-3); text-align:center }
+@media (max-width:700px) {
+    .workflow-canvas-dialog .dcmodal-head { flex-wrap:wrap; gap:10px }
+    .workflow-canvas-actions { flex-wrap:wrap; gap:8px; width:100%; justify-content:flex-end }
+    .list-stage-head { gap:6px; flex-wrap:wrap }
+    .list-stage-actions .dcbtn, .stage-job-chip .dcbtn { min-width:40px; min-height:40px }
+    .stage-branch-row { flex-wrap:wrap }
+    .branch-select { flex-basis:100%; max-width:none }
+}

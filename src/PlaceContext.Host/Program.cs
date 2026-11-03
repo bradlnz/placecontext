@@ -351,7 +351,9 @@ builder.Services
         CoreApiAuthenticationHandler.SchemeName, _ => { })
     // Personal user API tokens (Settings → API tokens), used by the entity data API at /api/v1/data/*.
     .AddScheme<UserApiTokenAuthenticationOptions, UserApiTokenAuthenticationHandler>(
-        UserApiTokenAuthenticationHandler.SchemeName, _ => { });
+        UserApiTokenAuthenticationHandler.SchemeName, _ => { })
+    .AddScheme<AuthenticationSchemeOptions, JobDataAuthenticationHandler>(
+        JobDataAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(o =>
 {
     // Any authenticated member can read (Viewer+).  The Blazor SignalR hubs (/_blazor,
@@ -402,6 +404,7 @@ builder.Services.AddSingleton<PortalToken>();
 
 // Exposes the current request's ClaimsPrincipal to MCP tools (e.g. whoami reads the bearer's claims).
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<PlaceContext.Application.Jobs.IJobDataAccess, HttpJobDataAccess>();
 
 // Tenancy: per-request/circuit holder + a circuit handler that keeps interactive renders tenant-scoped.
 builder.Services.AddScoped<TenantHolder>();

@@ -289,18 +289,23 @@ public sealed partial class ObservabilityViewModel(
 
     public async Task RefreshAsync()
     {
-        if (IsLogsTab)
-        {
-            await QueryLogsAsync();
-            return;
-        }
         Message = null;
         var tab = Tab;
         try
         {
             CanCancelRuns = permissions is not null && await permissions.HasAsync(Permission.JobsRun);
+            async Task LoadWorkflowsAsync()
+            {
+                ChainReports = await service.ListRecentChainRunsAsync(take: 50);
+                NotifyStateChanged();
+            }
             async Task LoadTabAsync()
             {
+                if (tab == LogsTab)
+                {
+                    await QueryLogsAsync();
+                    return;
+                }
                 if (tab == RunsTab)
                 {
                     Reports = await service.ListRecentRunReportsAsync(take: 50);
@@ -313,7 +318,6 @@ public sealed partial class ObservabilityViewModel(
                 }
                 if (tab == ChainsTab)
                 {
-                    ChainReports = await service.ListRecentChainRunsAsync(take: 50);
                     if (OpenChain is { } openChain)
                     {
                         var version = _detailVersion;
@@ -331,7 +335,7 @@ public sealed partial class ObservabilityViewModel(
                     }
                 }
             }
-            await LoadTabAsync();
+            await Task.WhenAll(LoadTabAsync(), LoadWorkflowsAsync());
         }
         catch (Exception ex)
         {

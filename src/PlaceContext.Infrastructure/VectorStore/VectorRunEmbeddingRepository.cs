@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using PlaceContext.Application.Search;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
@@ -16,6 +17,7 @@ public sealed class VectorRunEmbeddingRepository : IRunEmbeddingRepository
     private readonly IEmbeddingGateway _embeddings;
     private readonly ICurrentTenant _tenant;
     private readonly HttpClient _http;
+    private readonly IDataEncryptor _encryptor;
     private readonly string _baseUrl;
     private readonly string _collection;
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
@@ -25,10 +27,12 @@ public sealed class VectorRunEmbeddingRepository : IRunEmbeddingRepository
         IEmbeddingGateway embeddings,
         ICurrentTenant tenant,
         IHttpClientFactory httpFactory,
-        string qdrantUrl)
+        string qdrantUrl,
+        IDataEncryptor encryptor)
     {
         _embeddings = embeddings;
         _tenant = tenant;
+        _encryptor = encryptor;
         _http = httpFactory.CreateClient();
         _baseUrl = qdrantUrl.TrimEnd('/');
         _collection = "run_embeddings";
@@ -54,14 +58,11 @@ public sealed class VectorRunEmbeddingRepository : IRunEmbeddingRepository
                 job_run_id = embedding.JobRunId.ToString("N"),
                 job_id = embedding.JobId.ToString("N"),
                 project_id = embedding.ProjectId.ToString("N"),
-                text = embedding.Text,
+                text = _encryptor.Protect(embedding.Text, IDataEncryptor.Purpose.EmbeddingText),
                 created_at = embedding.CreatedAt.ToString("O"),
             }
         };
-        await UpsertPointsAsync(new
-        {
-            points = new[] { point }
-        }, ct);
+        await UpsertPointsAsync(new[] { point }, ct);
     }
 
     public async Task<IReadOnlyList<RunEmbeddingMatch>> SearchAsync(
@@ -105,7 +106,7 @@ public sealed class VectorRunEmbeddingRepository : IRunEmbeddingRepository
                 var jobRunId = Guid.Parse(p.GetProperty("job_run_id").GetString()!);
                 var jobId = Guid.Parse(p.GetProperty("job_id").GetString()!);
                 var projectIdFromPayload = Guid.Parse(p.GetProperty("project_id").GetString()!);
-                var text = p.GetProperty("text").GetString() ?? "";
+                var text = _encryptor.Unprotect(p.GetProperty("text").GetString(), IDataEncryptor.Purpose.EmbeddingText);
                 var createdAt = DateTimeOffset.Parse(p.GetProperty("created_at").GetString()!, CultureInfo.InvariantCulture);
 
                 var embedding = RunEmbedding.Rehydrate(id, jobRunId, jobId, projectIdFromPayload, text, EmptyVector, createdAt);
@@ -174,7 +175,7 @@ public sealed class VectorRunEmbeddingRepository : IRunEmbeddingRepository
                     var jobRunId = Guid.Parse(p.GetProperty("job_run_id").GetString()!);
                     var jobId = Guid.Parse(p.GetProperty("job_id").GetString()!);
                     var projectIdFromPayload = Guid.Parse(p.GetProperty("project_id").GetString()!);
-                    var text = p.GetProperty("text").GetString() ?? "";
+                    var text = _encryptor.Unprotect(p.GetProperty("text").GetString(), IDataEncryptor.Purpose.EmbeddingText);
                     var createdAt = DateTimeOffset.Parse(p.GetProperty("created_at").GetString()!, CultureInfo.InvariantCulture);
                     var vector = point.GetProperty("vector").EnumerateArray().Select(v => (float)v.GetDouble()).ToArray();
 

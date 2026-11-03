@@ -15,6 +15,26 @@ Each project has an isolated SQL workspace. Open **Data → Tables** to:
 Project database roles keep one project's tables separate from another project's data and from
 PlaceContext's system tables.
 
+Tables are the source of truth for ingested and processed data. The Data sidebar exposes tables
+and saved queries; search and vector indexes are derived retrieval representations, not a separate
+data catalogue. Removing the index browser does not delete existing search data.
+
+## Live charts
+
+Open **Data → Analytics** and add a **SQL chart**. Return a label column and numeric values;
+aggregate and order the results in SQL before charting. Saving reads the current editor contents.
+The chart query runs in a read-only project transaction with a 10-second statement timeout and a
+500-row result limit; charts display up to 24 labels.
+
+Analytics and the dashboard's **Charts** view refresh queries every 10 seconds while open. This is
+polling, so changes appear on the next completed refresh. In Analytics, turn off **Live** to pause
+updates or select **Refresh now**. Refreshes do not rewrite saved chart definitions. Query failures
+show an error and the saved snapshot; other charts continue updating. Older snapshots without SQL
+must be edited and given a query before they can update live.
+
+**Table previews** use sampled rows and are not totals. Use a SQL aggregate chart for reporting over
+the whole dataset.
+
 ## Data map
 
 The **Data map** connects job or workflow output to a project table.
@@ -41,6 +61,45 @@ Use stable column names, store timestamps with timezones, keep one row per fact,
 large datasets in SQL rather than loading every row into the UI.
 
 ## Use project data from another tool
+
+Jobs can query any table or view in their project through the read-only data API, without registering
+it as an entity. Map and reduce processes receive `PC_PROJECT_ID`, `PC_JOB_ID`, and `PC_RUN_ID` for
+the actual execution; these values override job environment values with the same names.
+
+Configure `PC_HOST` with a worker-reachable portal URL and `PC_TOKEN` with a personal API token in
+the project's Vault. The token's user needs `data.read`. Permit access to that portal in the job's
+network policy; network-disabled jobs cannot call the API. Use HTTPS in production. No database
+credentials or PII encryption keys need to be given to the job.
+
+- `GET /api/v1/projects/{projectId}/data/tables` lists tables and views.
+- `POST /api/v1/projects/{projectId}/data/query` accepts `{"sql":"SELECT …"}` and returns
+  `columns`, `rows`, and `truncated`. It uses the same read-only transaction, timeout, and 500-row
+  limit as live charts. Writes and transaction-control statements are rejected.
+
+For example, a Python job can make a decision from an aggregate rather than copying customer rows:
+
+```python
+import json
+import os
+import urllib.request
+
+url = f"{os.environ['PC_HOST'].rstrip('/')}/api/v1/projects/{os.environ['PC_PROJECT_ID']}/data/query"
+request = urllib.request.Request(url, method="POST", headers={
+    "Authorization": f"Bearer {os.environ['PC_TOKEN']}",
+    "Content-Type": "application/json",
+}, data=json.dumps({"sql": "SELECT count(*) AS paid_orders FROM orders WHERE status = 'paid'"}).encode())
+with urllib.request.urlopen(request, timeout=15) as response:
+    result = json.load(response)
+if result["truncated"]:
+    raise RuntimeError("Refine the query before making a decision from incomplete data.")
+count = int(result["rows"][0][0])
+print(json.dumps({"action": "process_orders" if count > 0 else "wait", "paid_orders": count}))
+```
+
+Personal tokens inherit their user's workspace permissions; they are not restricted to a run or
+individual tables. Grant them deliberately to trusted job code. `data.read` currently permits
+decrypted results: this API does not yet enforce separate PII field grants or masking. Do not give
+an untrusted job a token expecting the project ID environment variable to enforce its permissions.
 
 A personal API token lets an approved script or integration read entity records and search the
 selected project. Create one under **Settings → API tokens**. The secret is shown once, so copy it

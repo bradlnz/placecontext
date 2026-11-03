@@ -20,7 +20,7 @@ namespace PlaceContext.Infrastructure.ProjectData;
 /// it cannot see another project's tables or the platform's (which live in <c>public</c>, where
 /// this role has no table grants). Provisioning is idempotent and happens lazily on first use.
 /// </summary>
-public sealed class SqlProjectDataStore : IProjectDataStore
+public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
 {
     private const int MaxRows = 500;
     private const long MaxReadRows = 100000;
@@ -171,6 +171,47 @@ public sealed class SqlProjectDataStore : IProjectDataStore
     }
 
     private static string QuoteIdent(string name) => "\"" + name.Replace("\"", "\"\"") + "\"";
+
+    public async Task<ProjectQueryResult> QueryAsync(Guid projectId, string sql, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            throw new ArgumentException("A SQL query is required.");
+        }
+        var resolved = await ResolveDatabaseAsync(projectId, ct);
+        await using var conn = await OpenConnectionAsync(resolved, ct);
+        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await SetupSessionAsync(conn, tx, projectId, resolved, ct);
+        await using (var mode = new NpgsqlCommand("SET TRANSACTION READ ONLY", conn, tx))
+        {
+            await mode.ExecuteNonQueryAsync(ct);
+        }
+        // A batch command is one statement: embedded transaction control cannot escape read-only mode.
+        await using var batch = new NpgsqlBatch(conn, tx);
+        batch.BatchCommands.Add(new NpgsqlBatchCommand(
+            $"SELECT * FROM (\n{sql.Trim().TrimEnd(';')}\n) AS chart_data LIMIT {MaxRows + 1}"));
+        var columns = new List<string>();
+        var rows = new List<IReadOnlyList<string?>>();
+        await using (var reader = await batch.ExecuteReaderAsync(ct))
+        {
+            for (var i = 0; i < reader.FieldCount; i++)
+            {
+                columns.Add(reader.GetName(i));
+            }
+            while (await reader.ReadAsync(ct))
+            {
+                var row = new string?[reader.FieldCount];
+                for (var i = 0; i < reader.FieldCount; i++)
+                {
+                    row[i] = await reader.IsDBNullAsync(i, ct) ? null : UnprotectCell(reader.GetValue(i).ToString());
+                }
+                rows.Add(row);
+            }
+        }
+        await tx.RollbackAsync(ct);
+        return new ProjectQueryResult(columns, rows.Take(MaxRows).ToList(), 0, rows.Count > MaxRows);
+    }
 
     public async Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
     {

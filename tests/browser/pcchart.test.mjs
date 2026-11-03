@@ -4,121 +4,177 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(new URL('../../src/PlaceContext.Host/wwwroot/pcchart.js', import.meta.url), 'utf8');
-const spec = { type: 'bar', labels: ['A', 'B'], series: [{ name: 'count', values: [3, 7] }] };
+const spec = { type: 'bar', title: 'Counts', labels: ['A', 'B'], series: [{ name: 'Count', values: [3, 7] }] };
 
-function setup({ lazy = false } = {}) {
-  const elements = new Map(), instances = new Map(), timers = new Map();
-  const observers = [], scripts = [], visible = new Set();
-  let intersect, nextTimer = 0;
-  class Chart {
-    constructor(canvas, config) {
-      if (instances.has(canvas)) throw new Error('Canvas is already in use');
-      this.canvas = canvas;
-      this.config = config;
-      instances.set(canvas, this);
+function setup() {
+  class Element {
+    constructor(tag) {
+      this.tag = tag;
+      this.attributes = {};
+      this.children = [];
+      this.clientWidth = 500;
+      this.clientHeight = 280;
     }
-    destroy() {
-      instances.delete(this.canvas);
-      this.canvas = null;
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    getAttribute(name) { return this.attributes[name]; }
+    appendChild(child) { child.parentElement = this; this.children.push(child); return child; }
+    replaceChildren(...children) {
+      for (const child of this.children) {
+        child.parentElement = null;
+      }
+      this.children = [];
+      for (const child of children) {
+        this.appendChild(child);
+      }
     }
+    remove() {
+      if (this.parentElement) {
+        this.parentElement.children = this.parentElement.children.filter(child => child !== this);
+        this.parentElement = null;
+      }
+    }
+    find(tag) { return this.children.flatMap(child => [...(child.tag === tag ? [child] : []), ...child.find(tag)]); }
   }
+  const elements = new Map();
+  const shell = new Element('div');
+  shell.setAttribute('data-theme', 'light');
+  elements.set('dcshell', shell);
+  let mutation, resize;
+  const observed = new Set();
   const context = {
-    console, queueMicrotask,
-    setTimeout(callback) { timers.set(++nextTimer, callback); return nextTimer; },
-    clearTimeout(id) { timers.delete(id); },
-    IntersectionObserver: class {
-      constructor(callback) { intersect = callback; }
-      observe(el) { visible.add(el); }
-      unobserve(el) { visible.delete(el); }
+    console, queueMicrotask, Intl,
+    document: {
+      documentElement: { dataset: {} },
+      getElementById: id => elements.get(id),
+      createElementNS: (_, tag) => new Element(tag),
     },
     MutationObserver: class {
-      constructor(callback) { this.callback = callback; }
-      observe(target, options) { observers.push({ callback: this.callback, options }); }
+      constructor(callback) { mutation = callback; }
+      observe() {}
     },
-    document: {
-      documentElement: {},
-      currentScript: { dataset: { chartSrc: 'chart.fingerprint.js' } },
-      getElementById: id => elements.get(id),
-      createElement: () => ({}),
-      head: { appendChild(script) { scripts.push(script); } },
+    ResizeObserver: class {
+      constructor(callback) { resize = callback; }
+      observe(element) { observed.add(element); }
+      unobserve(element) { observed.delete(element); }
     },
   };
   context.window = context;
-  if (!lazy) context.Chart = Chart;
   runInNewContext(source, context);
-  function mutate(type, attributeName) {
-    for (const { callback, options } of observers)
-      if (options[type] && (type !== 'attributes' || options.attributeFilter.includes(attributeName)))
-        queueMicrotask(callback);
-  }
   return {
-    api: context.pcchart, instances, scripts,
-    canvas(id) { const el = { id }; elements.set(id, el); mutate('childList'); return el; },
-    rename(el, id) {
-      elements.delete(el.id);
-      el.id = id;
-      elements.set(id, el);
-      mutate('attributes', 'id');
+    api: context.pcchart, observed,
+    host(id, width = 500) {
+      const element = new Element('div');
+      Object.assign(element, { id, clientWidth: width });
+      elements.set(id, element);
+      mutation();
+      return element;
     },
-    show() { intersect([...visible].map(target => ({ target, isIntersecting: true }))); },
-    load() { context.Chart = Chart; scripts.at(-1).onload(); },
+    rename(element, id) { elements.delete(element.id); element.id = id; elements.set(id, element); mutation(); },
+    resize(element, width) { element.clientWidth = width; resize([{ target: element }]); },
+    theme(value) { shell.setAttribute('data-theme', value); mutation(); },
   };
 }
 
-test('reused canvases release old charts before drawing new slots and the rest of the batch', async () => {
-  const h = setup();
-  const a = h.canvas('a'), b = h.canvas('b'), extra = h.canvas('extra');
-  await h.api.renderAll([{ id: 'a', spec }, { id: 'b', spec }]);
-  h.show();
-  const previous = [...h.instances.values()];
+const flush = () => new Promise(resolve => queueMicrotask(resolve));
 
-  h.rename(a, 'c');
-  h.rename(b, 'd');
-  const updated = { ...spec, labels: ['New A', 'New B'] };
-  await h.api.renderAll(['c', 'd', 'extra'].map(id => ({ id, spec: updated })));
-  h.show();
-
-  assert.ok(previous.every(chart => chart.canvas === null));
-  assert.equal(h.instances.size, 3);
-  for (const el of [a, b, extra])
-    assert.deepEqual(h.instances.get(el).config.data.labels, updated.labels);
+test('renders real SVG bars with labels and accessible values, without a chart library', () => {
+  const h = setup(), host = h.host('chart');
+  h.api.render('chart', JSON.stringify(spec));
+  assert.equal(host.find('svg').length, 1);
+  assert.equal(host.find('rect').length, 2);
+  assert.equal(host.find('rect')[1].getAttribute('aria-label'), 'Count · B: 7');
+  assert.ok(Number(host.find('rect')[1].getAttribute('height')) > Number(host.find('rect')[0].getAttribute('height')));
 });
 
-test('a replacement canvas renders without another interop call', async () => {
+test('late containers and replacements render without another interop call', async () => {
   const h = setup();
-  const old = h.canvas('chart');
-  await h.api.render('chart', JSON.stringify(spec));
-  h.show();
-  const replacement = h.canvas('chart');
-  await new Promise(resolve => queueMicrotask(resolve));
-  h.show();
-  assert.equal(h.instances.has(old), false);
-  assert.ok(h.instances.has(replacement));
+  h.api.render('chart', spec);
+  const old = h.host('chart');
+  await flush();
+  assert.equal(old.find('rect').length, 2);
+  const replacement = h.host('chart');
+  await flush();
+  assert.equal(old.find('svg').length, 0);
+  assert.equal(replacement.find('rect').length, 2);
+  assert.equal(h.observed.has(old), false);
 });
 
-test('a single-value line has a visible point', async () => {
-  const h = setup();
-  const single = h.canvas('single'), multiple = h.canvas('multiple');
-  await h.api.renderAll([
-    { id: 'single', spec: { type: 'line', labels: ['A'], series: [{ name: 'count', values: [7] }] } },
-    { id: 'multiple', spec: { ...spec, type: 'line' } },
-  ]);
-  h.show();
-  assert.ok(h.instances.get(single).config.data.datasets[0].pointRadius > 0);
-  assert.equal(h.instances.get(multiple).config.data.datasets[0].pointRadius, 0);
+test('reused hosts release the old chart before rendering the whole batch', async () => {
+  const h = setup(), first = h.host('a'), second = h.host('b');
+  h.api.renderAll(['a', 'b'].map(id => ({ id, spec })));
+  h.rename(first, 'c');
+  h.rename(second, 'd');
+  h.api.renderAll(['c', 'd'].map(id => ({ id, spec: { ...spec, type: 'line' } })));
+  await flush();
+  for (const host of [first, second]) {
+    assert.equal(host.find('svg').length, 1);
+    assert.equal(host.find('polyline').length, 1);
+  }
 });
 
-test('concurrent renders share the fingerprinted library load and destroy cancels a pending chart', async () => {
-  const h = setup({ lazy: true });
-  const kept = h.canvas('kept'), removed = h.canvas('removed');
-  const first = h.api.render('kept', spec);
-  const second = h.api.render('removed', spec);
-  h.api.destroy('removed');
-  assert.equal(h.scripts.length, 1);
-  assert.equal(h.scripts[0].src, 'chart.fingerprint.js');
-  h.load();
-  await Promise.all([first, second]);
-  h.show();
-  assert.ok(h.instances.has(kept));
-  assert.equal(h.instances.has(removed), false);
+test('hidden charts recover their dimensions on reveal and colors on theme changes', async () => {
+  const h = setup(), host = h.host('chart', 0);
+  h.api.render('chart', spec);
+  const before = host.find('svg')[0];
+  const color = host.find('rect')[0].getAttribute('fill');
+  h.resize(host, 360);
+  assert.match(host.find('svg')[0].getAttribute('viewBox'), /^0 0 360 /);
+  assert.notEqual(host.find('svg')[0], before);
+  h.theme('dark');
+  await flush();
+  assert.notEqual(host.find('rect')[0].getAttribute('fill'), color);
+});
+
+test('single-point lines, zero bars and negative values retain visible marks', () => {
+  const h = setup(), host = h.host('chart');
+  h.api.render('chart', { type: 'line', labels: ['A'], series: [{ name: 'Count', values: [7] }] });
+  assert.equal(host.find('circle').length, 1);
+  h.api.render('chart', { ...spec, labels: ['negative', 'zero', 'positive'], series: [{ name: 'Value', values: [-3, 0, 7] }] });
+  const bars = host.find('rect');
+  assert.equal(bars.length, 3);
+  assert.ok(Number(bars[0].getAttribute('y')) > Number(bars[2].getAttribute('y')));
+  assert.ok(Number(bars[1].getAttribute('height')) > 0);
+});
+
+test('pie charts support slices, a single full circle and empty values', () => {
+  const h = setup(), host = h.host('chart');
+  h.api.render('chart', { ...spec, type: 'pie' });
+  assert.equal(host.find('path').length, 2);
+  h.api.render('chart', { type: 'pie', labels: ['All'], series: [{ name: 'Total', values: [7] }] });
+  assert.equal(host.find('circle').filter(circle => circle.getAttribute('role') === 'img').length, 1);
+  h.api.render('chart', { ...spec, type: 'pie', series: [{ name: 'Total', values: [0, 0] }] });
+  assert.ok(host.find('text').some(text => text.textContent === 'No non-zero values'));
+});
+
+test('invalid data is visible and does not prevent later charts rendering', () => {
+  const h = setup(), invalid = h.host('invalid'), valid = h.host('valid');
+  h.api.renderAll([{ id: 'invalid', spec: '{' }, { id: 'valid', spec }]);
+  assert.ok(invalid.find('text').some(text => text.textContent.includes('invalid')));
+  assert.equal(valid.find('rect').length, 2);
+  h.api.render('invalid', { ...spec, series: [{ name: 'Bad', values: [1, Infinity] }] });
+  assert.equal(invalid.find('rect').length, 0);
+});
+
+test('untrusted labels are text and extreme finite values produce finite coordinates', () => {
+  const h = setup(), host = h.host('chart');
+  h.api.render('chart', { ...spec, labels: ['<script>alert(1)</script>', 'B'], series: [{ name: 'Large', values: [-1e308, 1e308] }] });
+  assert.equal(host.find('script').length, 0);
+  assert.match(host.find('desc')[0].textContent, /<script>/);
+  for (const bar of host.find('rect')) {
+    assert.ok(Number.isFinite(Number(bar.getAttribute('y'))));
+    assert.ok(Number.isFinite(Number(bar.getAttribute('height'))));
+  }
+});
+
+test('destroy clears the output, observer and pending render', async () => {
+  const h = setup(), host = h.host('chart');
+  h.api.render('chart', spec);
+  h.api.destroy('chart');
+  assert.equal(host.find('svg').length, 0);
+  assert.equal(h.observed.has(host), false);
+  h.api.render('pending', spec);
+  h.api.destroy('pending');
+  const pending = h.host('pending');
+  await flush();
+  assert.equal(pending.find('svg').length, 0);
 });

@@ -23,6 +23,23 @@ public sealed class WorkflowRunCountTests
     }
 
     [Fact]
+    public async Task Runs_open_full_screen_and_returning_to_canvas_preserves_the_draft()
+    {
+        var chain = Chain();
+        var vm = CreateVm(new Dispatcher(_ => Task.FromResult<IReadOnlyList<ChainRunView>>([Run(chain)])));
+        await vm.OpenChainEditorAsync(chain);
+        Assert.True(vm.IsCanvasView);
+        vm.EdName = "Unsaved workflow name";
+        await vm.ShowWorkflowRunsAsync();
+        Assert.True(vm.IsRunsView);
+        Assert.Single(vm.ChainRuns!);
+        vm.EditorView = "list";
+        Assert.True(vm.IsListView);
+        vm.EditorView = "canvas";
+        Assert.Equal("Unsaved workflow name", vm.EdName);
+    }
+
+    [Fact]
     public async Task Switching_workflows_clears_the_count_and_ignores_the_previous_response()
     {
         var first = Chain();

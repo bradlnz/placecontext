@@ -23,9 +23,11 @@ public sealed class DatabaseInspectorTests
         Assert.False(Assert.Single(users.Columns, column => column.Name == "DisplayName").Redacted);
         Assert.Contains(tables, table => !table.CanReadRows);
         var global = tables.First(table => !table.CanReadRows);
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => inspector.ReadTableAsync(global.Name, 0));
+        await Assert.ThrowsAsync<ArgumentException>(() => inspector.ReadTableAsync(global.Name, 0));
         await Assert.ThrowsAsync<ArgumentException>(() => inspector.ReadTableAsync("public.users; DROP TABLE users", 0));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => inspector.ReadTableAsync(users.Name, -1));
+        await Assert.ThrowsAsync<ArgumentException>(() => inspector.QueryAsync(DatabaseSelectParser.Parse("SELECT * FROM users WHERE \"PasswordHash\" = 'secret'")));
+        await Assert.ThrowsAsync<ArgumentException>(() => inspector.QueryAsync(DatabaseSelectParser.Parse("SELECT * FROM users ORDER BY \"PasswordHash\"")));
         var unresolved = new DatabaseInspector(db, new FakeCurrentTenant(Guid.Empty));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => unresolved.ListTablesAsync());
     }
@@ -85,6 +87,20 @@ public sealed class DatabaseInspectorTests
                 Assert.Equal(tenant.TenantId.ToString(), row[owners]);
                 Assert.DoesNotContain("private-password-hash", row);
             });
+            var filtered = await inspector.QueryAsync(DatabaseSelectParser.Parse(
+                "SELECT \"DisplayName\", \"PasswordHash\" FROM users WHERE \"DisplayName\" LIKE 'User %' ORDER BY \"DisplayName\" DESC LIMIT 2 OFFSET 1"));
+            Assert.Equal(new[] { "DisplayName", "PasswordHash" }, filtered.Columns);
+            Assert.Equal("User 50", filtered.Rows[0][0]);
+            Assert.Equal("[redacted]", filtered.Rows[0][1]);
+            Assert.True(filtered.Truncated);
+            var count = await inspector.QueryAsync(DatabaseSelectParser.Parse("SELECT COUNT(*) FROM users"));
+            Assert.Equal("52", Assert.Single(Assert.Single(count.Rows)));
+            var other = await inspector.QueryAsync(DatabaseSelectParser.Parse(
+                $"SELECT * FROM users WHERE \"TenantId\" = '{otherTenant.TenantId}'"));
+            Assert.Empty(other.Rows);
+            var literal = await inspector.QueryAsync(DatabaseSelectParser.Parse(
+                "SELECT * FROM users WHERE \"DisplayName\" = 'x'' OR true; DROP TABLE users; --'"));
+            Assert.Empty(literal.Rows);
             var tenants = await inspector.ReadTableAsync("public.tenants", 0);
             var ownTenant = Assert.Single(tenants.Rows);
             Assert.Contains("Current workspace", ownTenant);

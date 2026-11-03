@@ -31,6 +31,8 @@ public sealed class MenuAuthorizationTests
             Assert.Equal(item.Href, Assert.Single(grouped, resolved => resolved.Id == item.Id).Href);
         }
         Assert.Null(Assert.Single(grouped, item => item.Id == "build.chat").Parent);
+        Assert.Null(Assert.Single(grouped, item => item.Id == "data").Parent);
+        Assert.Null(Assert.Single(grouped, item => item.Id == "artifacts").Parent);
     }
 
     [Fact]

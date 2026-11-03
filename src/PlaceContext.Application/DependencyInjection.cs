@@ -26,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<DatabaseInspectionAccess>();
         services.AddScoped<IQueryHandler<ListDatabaseTablesQuery, IReadOnlyList<DatabaseTable>>, ListDatabaseTablesHandler>();
         services.AddScoped<IQueryHandler<ReadDatabaseTableQuery, DatabaseTablePage>, ReadDatabaseTableHandler>();
+        services.AddScoped<IQueryHandler<QueryDatabaseQuery, PlaceContext.Application.ProjectData.ProjectQueryResult>, QueryDatabaseHandler>();
         services.AddScoped<AgentWorkflows.IAgentWorkflows, AgentWorkflows.AgentWorkflowService>();
         services.AddScoped<Communications.CommunicationProviderService>();
         services.AddScoped<NetworkFlowService>();
@@ -188,6 +189,9 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<CompleteOcrCommand, bool>, CompleteOcrHandler>();
         services.AddScoped<ICommandHandler<ExecuteProjectDataCommand, PlaceContext.Application.ProjectData.ProjectQueryResult>, ExecuteProjectDataHandler>();
         services.AddScoped<IQueryHandler<ListProjectDataTablesQuery, IReadOnlyList<PlaceContext.Application.ProjectData.ProjectTableInfo>>, ListProjectDataTablesHandler>();
+        services.AddScoped<IQueryHandler<QueryProjectDataQuery, PlaceContext.Application.ProjectData.ProjectQueryResult>, QueryProjectDataHandler>();
+        services.AddScoped<IQueryHandler<QueryJobDataQuery, ProjectQueryResult>, QueryJobDataHandler>();
+        services.AddScoped<IQueryHandler<ListJobDataTablesQuery, IReadOnlyList<ProjectTableInfo>>, ListJobDataTablesHandler>();
         services.AddScoped<IQueryHandler<QueryProjectTablePageQuery, PlaceContext.Application.ProjectData.ProjectTablePageResult>, QueryProjectTablePageHandler>();
         services.AddScoped<ICommandHandler<CreateProjectTableCommand, bool>, CreateProjectTableHandler>();
         services.AddScoped<ICommandHandler<ImportCsvToProjectTableCommand, ImportCsvResult>, ImportCsvToProjectTableHandler>();

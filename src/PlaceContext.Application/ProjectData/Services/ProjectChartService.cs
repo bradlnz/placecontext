@@ -10,7 +10,7 @@ namespace PlaceContext.Application.Features;
 
 /// <summary>
 /// Draws one analytics chart per table in a project's database, deterministically from the data:
-/// sample rows → a <see cref="ChartSpec"/> (data only; Chart.js draws it in the portal). A table
+/// sample rows → a <see cref="ChartSpec"/> (data only; the chart renderer draws it in the portal). A table
 /// with nothing chartable stores a themed HTML table so the tab always renders something. The
 /// Host's background worker runs <see cref="RefreshProjectAsync"/> and the Analytics tab reads the
 /// stored results.

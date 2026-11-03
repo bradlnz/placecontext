@@ -1,105 +1,21 @@
 @page "/settings/database"
-@layout PlaceContext.Host.Components.Layout.SettingsLayout
 @attribute [Authorize(Policy = Policies.DatabaseInspection)]
-@inject DatabaseSettingsViewModel Vm
-@implements IDisposable
+@inject PortalUiState Ui
+@inject PlaceContextService Service
+@inject NavigationManager Navigation
 
 <PageTitle>PlaceContext — Database</PageTitle>
-<div class="page">
-    <div class="page-head">
-        <div>
-            <h1 class="page-title">PlaceContext database</h1>
-            <p class="page-sub">Browse application tables and records for this workspace. Read-only; sensitive fields are masked.</p>
-        </div>
-        <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.LoadAsync">Refresh tables</button>
-    </div>
-    @if (Vm.Error is { } error)
-    {
-        <p class="database-error" role="alert">@error</p>
-    }
-    <div class="database-browser" aria-busy="@Vm.Busy">
-        <aside class="dccard table-list" aria-label="Application tables">
-            <label for="database-filter">Search tables</label>
-            <input id="database-filter" class="dcinput" type="search" @bind="Vm.Filter" @bind:event="oninput" />
-            @foreach (var table in Vm.FilteredTables)
-            {
-                <button class="table-choice" aria-pressed="@(Vm.Selected == table)" disabled="@Vm.Busy"
-                        @onclick="() => Vm.SelectAsync(table)">@table.Name</button>
-            }
-            @if (!Vm.Busy && !Vm.FilteredTables.Any())
-            {
-                <p>No tables match.</p>
-            }
-        </aside>
-        <section class="database-detail" aria-label="Table details">
-            @if (Vm.Busy)
-            {
-                <Skeleton Kind="list" Rows="3" />
-            }
-            @if (Vm.Selected is { } selected)
-            {
-                <h2>@selected.Name</h2>
-                @if (!selected.CanReadRows)
-                {
-                    <p>This table contains deployment-wide data. Workspace owners can inspect its schema only.</p>
-                }
-                <details class="dccard schema-card" open>
-                    <summary>Columns</summary>
-                    <div class="table-scroll" tabindex="0" aria-label="Table columns">
-                        <table class="database-grid">
-                            <thead><tr><th scope="col">Column</th><th scope="col">Type</th><th scope="col">Nullable</th><th scope="col">Key</th><th scope="col">Visibility</th></tr></thead>
-                            <tbody>
-                                @foreach (var column in selected.Columns)
-                                {
-                                    <tr><th scope="row">@column.Name</th><td>@column.Type</td><td>@(column.Nullable ? "Yes" : "No")</td><td>@(column.PrimaryKey ? "Primary" : "")</td><td>@(column.Redacted ? "Masked" : "Visible")</td></tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </details>
-            }
-            @if (Vm.Page is { } page)
-            {
-                <div class="record-navigation">
-                    <p role="status">@Vm.RowSummary</p>
-                    <div>
-                        <button class="dcbtn" disabled="@(!Vm.CanPrevious)" @onclick="Vm.PreviousAsync">Previous</button>
-                        <button class="dcbtn" disabled="@(!Vm.CanNext)" @onclick="Vm.NextAsync">Next</button>
-                    </div>
-                </div>
-                <div class="dccard table-scroll" tabindex="0" aria-label="Workspace records">
-                    <table class="database-grid">
-                        <thead><tr>
-                            @foreach (var column in page.Table.Columns)
-                            {
-                                <th scope="col">@column.Name</th>
-                            }
-                        </tr></thead>
-                        <tbody>
-                            @foreach (var row in page.Rows)
-                            {
-                                <tr>
-                                    @foreach (var value in row)
-                                    {
-                                        <td>@(value ?? "NULL")</td>
-                                    }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-                <p class="page-sub">Up to 50 records per page. Long values are limited to 2,048 characters.</p>
-            }
-            @if (Vm.Selected is null && !Vm.Busy)
-            {
-                <p>Select a table to inspect its columns and available workspace records.</p>
-            }
-        </section>
-    </div>
-</div>
+<p>Opening the PlaceContext database in Data…</p>
 
 @code {
-    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
-    protected override Task OnInitializedAsync() => Vm.LoadAsync();
-    public void Dispose() => Vm.Detach();
+    protected override async Task OnInitializedAsync()
+    {
+        var projectId = Ui.CurrentProjectId ?? (await Service.GetProjectsAsync()).FirstOrDefault()?.Id;
+        if (projectId is { } id)
+        {
+            Navigation.NavigateTo(PageRoutes.ApplicationDatabase(id), replace: true);
+            return;
+        }
+        Navigation.NavigateTo("/", replace: true);
+    }
 }

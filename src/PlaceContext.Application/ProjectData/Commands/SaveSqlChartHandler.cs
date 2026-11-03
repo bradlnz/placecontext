@@ -12,12 +12,12 @@ public sealed class SaveSqlChartHandler : ICommandHandler<SaveSqlChartCommand, P
     /// <summary>Chart-slot prefix that marks a chart as SQL-defined (never a real table name).</summary>
     public const string Prefix = "sql:";
 
-    private readonly IProjectDataStore _store;
+    private readonly IProjectDataReader _store;
     private readonly IProjectChartRepository _charts;
     private readonly IUnitOfWork _uow;
     private readonly IClock _clock;
 
-    public SaveSqlChartHandler(IProjectDataStore store, IProjectChartRepository charts, IUnitOfWork uow, IClock clock)
+    public SaveSqlChartHandler(IProjectDataReader store, IProjectChartRepository charts, IUnitOfWork uow, IClock clock)
     {
         _store = store;
         _charts = charts;
@@ -36,28 +36,18 @@ public sealed class SaveSqlChartHandler : ICommandHandler<SaveSqlChartCommand, P
         {
             throw new ArgumentException("A SQL query is required.");
         }
-        // Isolated by construction: ExecuteAsync runs as the project role in the project schema.
-        var result = await _store.ExecuteAsync(command.ProjectId, command.Sql, ct);
-        var spec = ChartSpec.FromSample(name, result)
-            ?? throw new InvalidOperationException(
-                "The query result isn't chartable — return at least one label column and one numeric column.");
-
-        // Embed the query in the stored spec (extra JSON properties are ignored by the renderer)
-        // so the chart stays editable and refreshable, and honour the requested form — switching
-        // a chart from bar to pie is a re-save with the same SQL and a different type.
         var chartType = (command.ChartType ?? "bar").Trim().ToLowerInvariant();
         if (chartType is not ("bar" or "line" or "pie"))
         {
             throw new ArgumentException("Chart type must be bar, line, or pie.");
         }
-        var node = JsonNode.Parse(spec.ToJson())!;
-        node["type"] = chartType;
-        node["sql"] = command.Sql;
+        var result = await _store.QueryAsync(command.ProjectId, command.Sql, ct);
+        var html = SqlChartDefinition.Build(name, command.Sql, chartType, result);
 
         var slot = Prefix + name;
-        var chart = ProjectChart.Create(command.ProjectId, slot, node.ToJsonString(), _clock.UtcNow);
+        var chart = ProjectChart.Create(command.ProjectId, slot, html, _clock.UtcNow);
         await _charts.UpsertAsync(chart, ct);
         await _uow.SaveChangesAsync(ct);
-        return new ProjectChartView(slot, chart.Html, chart.GeneratedAt);
+        return new ProjectChartView(slot, chart.Html, chart.GeneratedAt, IsLive: true);
     }
 }

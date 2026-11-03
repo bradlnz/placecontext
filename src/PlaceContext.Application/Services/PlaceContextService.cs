@@ -305,6 +305,9 @@ public sealed class PlaceContextService
     public Task<PlaceContext.Application.ProjectData.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default)
         => _dispatcher.Send(new ExecuteProjectDataCommand(projectId, sql), ct);
 
+    public Task<PlaceContext.Application.ProjectData.ProjectQueryResult> QueryProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default)
+        => _dispatcher.Query(new QueryProjectDataQuery(projectId, sql), ct);
+
     public Task<IReadOnlyList<PlaceContext.Application.ProjectData.ProjectTableSchema>> ListProjectTableSchemasAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListProjectTableSchemasQuery(projectId), ct);
 
@@ -347,8 +350,8 @@ public sealed class PlaceContextService
     public Task<string> GenerateProjectChartAsync(Guid projectId, string tableName, string? instruction, CancellationToken ct = default)
         => _dispatcher.Send(new GenerateProjectChartCommand(projectId, tableName, instruction), ct);
 
-    public Task<IReadOnlyList<ProjectChartView>> ListProjectChartsAsync(Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new ListProjectChartsQuery(projectId), ct);
+    public Task<IReadOnlyList<ProjectChartView>> ListProjectChartsAsync(Guid projectId, CancellationToken ct = default, bool live = false)
+        => _dispatcher.Query(new ListProjectChartsQuery(projectId, live), ct);
 
     public Task<ProjectChartView> SaveSqlChartAsync(Guid projectId, string name, string sql, string chartType = "bar", CancellationToken ct = default)
         => _dispatcher.Send(new SaveSqlChartCommand(projectId, name, sql, chartType), ct);

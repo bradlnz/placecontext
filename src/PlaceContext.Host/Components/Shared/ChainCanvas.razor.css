@@ -34,7 +34,7 @@
 .stage-routes { display:grid; gap:22px; position:relative }
 .run-canvas .stage-head, .run-canvas .gate-node { cursor:default }
 .run-canvas .gate-node:hover { box-shadow:none }
-.run-canvas .canvas-viewport { height:min(360px, 50dvh) }
+.run-canvas .canvas-viewport { height:auto; overflow-y:hidden; overscroll-behavior-y:auto }
 .run-canvas .canvas-pipeline { min-height:360px }
 .conditional-routes { padding:0 24px; border-left:2px solid var(--brand-2); border-right:2px solid var(--brand-2); border-radius:16px }
 .conditional-routes .stage-route { position:relative }

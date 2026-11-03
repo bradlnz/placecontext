@@ -35,7 +35,7 @@ public sealed class ResponsiveShellContractTests
 
         Assert.Contains("class=\"settings-toggle\"", markup);
         Assert.Contains("aria-controls=\"settings-sections\"", markup);
-        Assert.Contains("aria-expanded=\"@Vm.NavigationOpen\"", markup);
+        Assert.Contains("aria-expanded=\"@(Vm.NavigationOpen ? \"true\" : \"false\")\"", markup);
         Assert.Contains("id=\"settings-sections\"", markup);
         Assert.Contains("aria-label=\"Settings sections\"", markup);
         Assert.Contains(".settings-nav.open", styles);

@@ -85,7 +85,25 @@ Use **Settings → Connections** for a project-specific database or OpenSearch e
 credentials are encrypted in that project's Vault. Use workspace environment settings only when all
 projects should share the same service.
 
+## Cluster job admission
+
+Cluster jobs wait for resource pressure to clear before admission. Confirmed resource failures before
+user code starts can retry after other jobs in the tenant namespace finish. Application errors and
+failures after execution starts are not automatically retried, to avoid repeating external effects.
+`PlaceContext:WorkloadRunner:ClusterQueueTimeoutSeconds` bounds admission/startup waiting (default
+1800 seconds); `ClusterStartupRetries` limits additional startup attempts (default 3). Execution
+timeouts start when the workload container starts, separately from the queue deadline. Scheduler
+messages appear in live output and retried startup failures are retained in the final diagnostics.
+
 ## Storage and backups
+
+The vector adapters encrypt stored source text (and content source keys) using the existing
+Data Protection key ring. SQL-to-vector migration preserves that protection. Existing remote
+plaintext records require reindexing or a separate migration; this change does not scan or rewrite
+an existing vector service. Vectors remain searchable and must still be treated as sensitive data.
+An embedding provider receives input text in order to compute vectors, so encrypting stored text
+does not prevent PII disclosure to that provider. PII classification, permitted processing locations,
+masking, and authorization to decrypt need explicit policies before ingesting sensitive sources.
 
 Production uses external HA PostgreSQL and off-cluster S3. A settings backup does not include run
 history, object-store files, database
@@ -116,7 +134,7 @@ verified recovery plan.
 - **Artifacts** controls the file categories shown on the Artifacts page.
 - **Communications** connects email and SMS delivery for workflow actions. Jobs and users see
   the generic Email or SMS channel rather than needing to choose a delivery provider.
-- **PlaceContext database** lets owners and super admins browse application table schemas and workspace records. It is read-only, masks sensitive fields, and shows only schemas for deployment-wide tables. The same browser is linked from SQL Studio.
+- **PlaceContext database** is available to owners and super admins from the database selector in **Data → Records**. It uses SQL Studio’s table list, editor, query tabs, and results grid. Application queries support single-table SELECT, COUNT(*), comparisons joined by AND, ORDER BY, LIMIT (up to 500), and OFFSET. Records remain workspace-scoped and sensitive fields are masked; deployment-wide tables expose their schema only. Writes, joins, and other SQL functions are unavailable for application tables.
 - **Connections** configures project-specific PostgreSQL and OpenSearch services.
 - **MCP servers** connects extra tools that jobs may use.
 - **Locality** sets the timezone used by schedules and displayed dates.

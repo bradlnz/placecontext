@@ -1851,39 +1851,6 @@
     padding-bottom: 12px;
 }
 
-.studio-index-setup {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    margin: 10px 12px;
-    padding: 12px;
-    border: 1px solid color-mix(in srgb, var(--brand-2) 42%, var(--ch-border));
-    border-radius: 5px;
-    background: color-mix(in srgb, var(--brand-bg) 45%, var(--ch-panel));
-}
-
-.studio-index-setup strong {
-    color: var(--ch-text);
-    font-size: 12px;
-}
-
-.studio-index-setup span {
-    color: var(--ch-text-3);
-    font-size: 11px;
-    line-height: 1.45;
-}
-
-.studio-index-setup .dcbtn {
-    margin-top: 2px;
-    text-decoration: none;
-}
-
-.studio-index-setup.error {
-    border-color: color-mix(in srgb, var(--bad) 38%, var(--ch-border));
-    background: color-mix(in srgb, var(--bad-bg) 38%, var(--ch-panel));
-}
-
 .resource-group {
     padding: 8px 14px;
     color: var(--ch-text-3);
@@ -2453,7 +2420,7 @@
     margin-bottom: 12px;
 }
 
-.studio-chart canvas {
+.studio-chart .pc-chart {
     flex: 1;
     min-height: 0;
     width: 100% !important;
@@ -2595,3 +2562,6 @@
         width: 100%;
     }
 }
+
+.database-source { display:flex; align-items:center; gap:10px; margin:0 0 12px; font-size:12px; color:var(--text-2) }
+.database-source select { width:auto; min-width:220px }

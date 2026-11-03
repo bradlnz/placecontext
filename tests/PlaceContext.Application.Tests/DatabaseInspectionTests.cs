@@ -1,11 +1,35 @@
 using PlaceContext.Application.Access;
 using PlaceContext.Application.DatabaseInspection;
 using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Cqrs;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace PlaceContext.Application.Tests;
 
 public sealed class DatabaseInspectionTests
 {
+    [Fact]
+    public async Task Registered_dispatcher_resolves_database_queries_and_enforces_access()
+    {
+        var identity = new Identity(true, true);
+        var administrators = new Administrators(true);
+        var inspector = new Inspector();
+        var services = new ServiceCollection().AddApplication();
+        services.AddSingleton<ICurrentTenant>(identity);
+        services.AddSingleton<ICurrentUser>(identity);
+        services.AddSingleton<IWorkspaceAdministratorReader>(administrators);
+        services.AddSingleton<IDatabaseInspector>(inspector);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+        await dispatcher.Query(new QueryDatabaseQuery("SELECT * FROM users"));
+        Assert.Equal(1, inspector.Calls);
+        administrators.Allowed = false;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            dispatcher.Query(new QueryDatabaseQuery("SELECT * FROM users")));
+        Assert.Equal(1, inspector.Calls);
+    }
+
     [Theory]
     [InlineData(false, true, true)]
     [InlineData(true, false, true)]
@@ -19,6 +43,8 @@ public sealed class DatabaseInspectionTests
             new ListDatabaseTablesHandler(access, inspector).HandleAsync(new()));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             new ReadDatabaseTableHandler(access, inspector).HandleAsync(new("public.users")));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            new QueryDatabaseHandler(access, inspector).HandleAsync(new("SELECT * FROM users")));
         Assert.Equal(0, inspector.Calls);
     }
 
@@ -73,6 +99,11 @@ public sealed class DatabaseInspectionTests
     private sealed class Inspector : IDatabaseInspector
     {
         public int Calls { get; private set; }
+        public Task<PlaceContext.Application.ProjectData.ProjectQueryResult> QueryAsync(DatabaseSelectStatement query, CancellationToken ct = default)
+        {
+            Calls++;
+            return Task.FromResult(new PlaceContext.Application.ProjectData.ProjectQueryResult([], [], 0, false));
+        }
         public Task<IReadOnlyList<DatabaseTable>> ListTablesAsync(CancellationToken ct = default)
         {
             Calls++;

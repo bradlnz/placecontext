@@ -1,3 +1,5 @@
+using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.DatabaseInspection;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -12,12 +14,16 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     private readonly PlaceContextService _svc;
     private readonly PortalUiState _ui;
     private readonly IJSRuntime _js;
+    private readonly IDispatcher? _dispatcher;
+    public bool ApplicationDatabase { get; private set; }
+    public IReadOnlyList<DatabaseTable> ApplicationTables { get; private set; } = [];
 
-    public ProjectDataViewModel(PlaceContextService svc, PortalUiState ui, IJSRuntime js)
+    public ProjectDataViewModel(PlaceContextService svc, PortalUiState ui, IJSRuntime js, IDispatcher? dispatcher = null)
     {
         _svc = svc;
         _ui = ui;
         _js = js;
+        _dispatcher = dispatcher;
     }
 
     // ── Parameters ────────────────────────────────────────────────────────────────────────────
@@ -31,12 +37,17 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
-    public void Initialize(Guid projectId)
+    public void Initialize(Guid projectId, bool applicationDatabase = false)
     {
-        _ui.Set("Data", "the project's own database");
-        if (ProjectId != projectId)
+        _ui.Set("Data", applicationDatabase ? "PlaceContext database" : "the project's own database");
+        if (ProjectId != projectId || ApplicationDatabase != applicationDatabase)
         {
             ProjectId = projectId;
+            ApplicationDatabase = applicationDatabase;
+            ApplicationTables = [];
+            Tables = [];
+            TablesReady = false;
+            Error = null;
             ViewMonacoReady = false;
             ResetStudioResources();
         }
@@ -203,6 +214,15 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     {
         try
         {
+            Error = null;
+            Tables = [];
+            ApplicationTables = [];
+            if (ApplicationDatabase)
+            {
+                ApplicationTables = await _dispatcher!.Query(new ListDatabaseTablesQuery());
+                Tables = ApplicationTables.Select(table => new ProjectTableInfo(table.Name, 0, ReadOnly: true)).ToArray();
+                return;
+            }
             Tables = await _svc.ListProjectDataTablesAsync(ProjectId);
         }
         catch (Exception ex)
@@ -274,6 +294,12 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     {
         try
         {
+            if (ApplicationDatabase)
+            {
+                var applicationTable = ApplicationTables.Single(item => item.Name == table);
+                var qualified = string.Join(".", applicationTable.Name.Split('.').Select(Quote));
+                return $"SELECT * FROM {qualified} LIMIT 50;";
+            }
             var columns = await _svc.ListProjectTableColumnsAsync(ProjectId, table);
             if (columns.Count == 0)
             {

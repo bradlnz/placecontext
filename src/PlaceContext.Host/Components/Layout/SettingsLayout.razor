@@ -6,7 +6,7 @@
 
 <div class="shell">
     <button type="button" class="settings-toggle"
-            aria-controls="settings-sections" aria-expanded="@Vm.NavigationOpen"
+            aria-controls="settings-sections" aria-expanded="@(Vm.NavigationOpen ? "true" : "false")"
             @onclick="Vm.ToggleNavigation">
         <span>Settings</span>
         <span class="settings-current">@Vm.ActiveLabel</span>
@@ -16,16 +16,18 @@
     <nav id="settings-sections" class="settings-nav @(Vm.NavigationOpen ? "open" : null)"
          aria-label="Settings sections">
         <div class="settings-nav-head">Settings</div>
-        @foreach (var (label, path) in Vm.VisibleItems)
+        @foreach (var group in Vm.VisibleGroups)
         {
-            var active = Vm.IsActive(path);
-            <a href="@(Vm.Href(path))" class="settings-link"
-               aria-current="@(active ? "page" : null)" @onclick="Vm.CloseNavigation"
-               style="color:@(active ? "var(--text)" : "var(--text-2)");
-                      background:@(active ? "var(--hover)" : "transparent");
-                      border-left:2px solid @(active ? "var(--brand)" : "transparent")">
-                @label
-            </a>
+            <section class="settings-group" aria-label="@group.Key">
+                <h2>@group.Key</h2>
+                @foreach (var item in group)
+                {
+                    <a href="@(Vm.Href(item.Path))" class="settings-link"
+                       aria-current="@(Vm.IsActive(item.Path) ? "page" : null)" @onclick="Vm.CloseNavigation">
+                        @item.Label
+                    </a>
+                }
+            </section>
         }
     </nav>
 

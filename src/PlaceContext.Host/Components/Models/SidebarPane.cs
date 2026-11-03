@@ -4,6 +4,5 @@ namespace PlaceContext.Host.Components.ViewModels;
 public enum SidebarPane
 {
     Tables,
-    Indexes,
-    Queries,
+    Queries = 2,
 }

@@ -5,7 +5,10 @@
 @inject JobEditorViewModel Vm
 @implements IAsyncDisposable
 
-<PageTitle>PlaceContext — @(Vm.Job?.Name ?? "Job editor")</PageTitle>
+@if (!Embedded)
+{
+    <PageTitle>PlaceContext — @(Vm.Job?.Name ?? "Job editor")</PageTitle>
+}
 
 @if (Vm.Loading)
 {
@@ -24,10 +27,13 @@ else if (!Vm.IsCodeMap)
 }
 else
 {
-    <div class="page">
+    <div class="page @(Embedded ? "embedded" : null)">
     @* ── Toolbar ─────────────────────────────────────────────────────────────────────────── *@
     <div class="toolbar">
-        <button aria-label="Go back" class="dcbtn toolbar-back" @onclick="Vm.NavigateBack"><AppIcon Kind="arrow-left" /></button>
+        @if (!Embedded)
+        {
+            <button aria-label="Go back" class="dcbtn toolbar-back" @onclick="Vm.NavigateBack"><AppIcon Kind="arrow-left" /></button>
+        }
         <span class="job-name">@Vm.Job.Name</span>
         <span class="runtime-badge">@Vm.RuntimeId</span>
         @if (Vm.MonacoLite)
@@ -205,15 +211,26 @@ else
 @code {
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public Guid JobId { get; set; }
+    [Parameter] public bool Embedded { get; set; }
+    private Guid? _loadedJobId;
 
     protected override void OnInitialized() =>
         Vm.Attach(() => InvokeAsync(StateHasChanged));
 
     protected override Task OnParametersSetAsync()
     {
+        if (_loadedJobId == JobId)
+        {
+            return Task.CompletedTask;
+        }
+
+        _loadedJobId = JobId;
+        Vm.Embedded = Embedded;
         Vm.Initialize(ProjectId, JobId);
         return Task.CompletedTask;
     }
+
+    public Task<bool> ConfirmCloseAsync() => Vm.ConfirmCloseAsync();
 
     protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync();
 

@@ -19,6 +19,6 @@ public sealed class AboutViewModel : PageViewModel
     public void Initialize()
     {
         CopyrightYear = _clock.GetUtcNow().Year;
-        _ui.Set("About", "PlaceContext — a full-scale data platform");
+        _ui.Set("About", "PlaceContext — data workflow engine");
     }
 }

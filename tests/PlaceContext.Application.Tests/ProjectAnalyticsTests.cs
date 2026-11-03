@@ -10,22 +10,29 @@ namespace PlaceContext.Application.Tests;
 
 /// <summary>
 /// Analytics charts: the background sweep samples each table and the deterministic builder shapes a
-/// chart SPEC from the data itself (data only — Chart.js draws it in the portal); a table with
+/// chart SPEC from the data itself (data only — the chart renderer draws it in the portal); a table with
 /// nothing chartable stores a themed HTML table instead. Charts of dropped tables are pruned.
 /// </summary>
 public class ProjectAnalyticsTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 7, 9, 10, 0, 0, TimeSpan.Zero);
 
-    private sealed class FakeStore : IProjectDataStore
+    private sealed class FakeStore : IProjectDataStore, IProjectDataReader
     {
+        public int QueryCalls;
+        public ProjectQueryResult? Result;
+        public Task<ProjectQueryResult> QueryAsync(Guid projectId, string sql, CancellationToken ct = default)
+        {
+            QueryCalls++;
+            return ExecuteAsync(projectId, sql, ct);
+        }
         public List<string> SawSql = new();
         public IReadOnlyList<ProjectTableInfo> Tables = new[] { new ProjectTableInfo("readings", 2) };
 
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
         {
             SawSql.Add(sql);
-            return Task.FromResult(new ProjectQueryResult(
+            return Task.FromResult(Result ?? new ProjectQueryResult(
                 new[] { "sensor", "value" },
                 new[] { new string?[] { "door", "21.5" }, new string?[] { "window", "19.0" } },
                 0, false));
@@ -165,7 +172,7 @@ public class ProjectAnalyticsTests
 
         var stored = await charts.ListForProjectAsync(project.Id.Value);
         Assert.Equal(new[] { "bookings", "readings" }, stored.Select(c => c.TableName));
-        Assert.All(stored, c => Assert.NotNull(ChartSpec.TryParse(c.Html))); // specs, drawn by Chart.js
+        Assert.All(stored, c => Assert.NotNull(ChartSpec.TryParse(c.Html))); // specs, drawn by the chart renderer
     }
 
     [Fact]
@@ -183,6 +190,56 @@ public class ProjectAnalyticsTests
 
         var stored = await charts.ListForProjectAsync(project.Id.Value);
         Assert.Equal(new[] { "good" }, stored.Select(c => c.TableName));
+    }
+
+    [Fact]
+    public async Task Live_charts_read_current_data_without_overwriting_saved_definitions()
+    {
+        var (projects, project) = await WorldAsync();
+        var store = new FakeStore();
+        var charts = new InMemoryChartRepository();
+        var save = new SaveSqlChartHandler(store, charts, new RecordingUnitOfWork(), new FakeClock(T0));
+        var saved = await save.HandleAsync(new(project.Id.Value, "Temperature", "SELECT sensor, value FROM readings", "line"));
+        var handler = new ListProjectChartsHandler(projects, charts, store, new FakeClock(T0.AddMinutes(1)));
+        store.Result = new ProjectQueryResult(["sensor", "value"], [new string?[] { "door", "42" }], 0, false);
+        var live = Assert.Single(await handler.HandleAsync(new(project.Id.Value, Live: true)));
+        Assert.True(live.IsLive);
+        Assert.Null(live.Error);
+        Assert.Equal(42, Assert.Single(Assert.Single(ChartSpec.TryParse(live.Html)!.Series).Values));
+        Assert.Equal("line", ChartSpec.TryParse(live.Html)!.Type);
+        Assert.Equal(2, store.QueryCalls);
+        Assert.Equal(saved.Html, Assert.Single(await charts.ListForProjectAsync(project.Id.Value)).Html);
+        var snapshot = Assert.Single(await handler.HandleAsync(new(project.Id.Value)));
+        Assert.Equal(saved.Html, snapshot.Html);
+        Assert.Equal(2, store.QueryCalls);
+    }
+
+    [Fact]
+    public async Task Snapshot_without_sql_is_explicit_and_empty_live_results_clear_old_data()
+    {
+        var (projects, project) = await WorldAsync();
+        var store = new FakeStore();
+        var charts = new InMemoryChartRepository();
+        await charts.UpsertAsync(ProjectChart.Create(project.Id.Value, "sql:Legacy", "{}", T0));
+        await new SaveSqlChartHandler(store, charts, new RecordingUnitOfWork(), new FakeClock(T0))
+            .HandleAsync(new(project.Id.Value, "Live", "SELECT sensor, value FROM readings"));
+        store.Result = new ProjectQueryResult(["sensor", "value"], [], 0, false);
+        var results = await new ListProjectChartsHandler(projects, charts, store, new FakeClock(T0))
+            .HandleAsync(new(project.Id.Value, Live: true));
+        Assert.Contains("Saved snapshot", results.Single(c => c.TableName == "sql:Legacy").Error);
+        var empty = results.Single(c => c.TableName == "sql:Live");
+        Assert.True(empty.IsLive);
+        Assert.Null(empty.Error);
+        Assert.Empty(System.Text.Json.Nodes.JsonNode.Parse(empty.Html)!["labels"]!.AsArray());
+    }
+
+    [Fact]
+    public async Task Invalid_chart_type_does_not_execute_sql()
+    {
+        var store = new FakeStore();
+        var save = new SaveSqlChartHandler(store, new InMemoryChartRepository(), new RecordingUnitOfWork(), new FakeClock(T0));
+        await Assert.ThrowsAsync<ArgumentException>(() => save.HandleAsync(new(Guid.NewGuid(), "Chart", "SELECT 1", "invalid")));
+        Assert.Empty(store.SawSql);
     }
 
     private sealed class FailOnFirstStore : IProjectDataStore

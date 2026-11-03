@@ -36,7 +36,10 @@
             <div class="chat-header-actions">
                 @if (Vm.Conversation.Messages.Count > 0 && !Vm.WorkspaceVisible)
                 { <button type="button" class="chat-toolbar-button" aria-label="Open workspace" @onclick="Vm.OpenWorkspace"><AppIcon Kind="chain" /><span>Workspace</span></button> }
-                <button class="chat-toolbar-button" disabled="@Vm.NavigationLocked" @onclick="() => Vm.OpenOverview()"><AppIcon Kind="dashboard" /><span>Overview</span></button>
+                @foreach (var section in Enum.GetValues<DashboardSection>())
+                {
+                    <button type="button" class="chat-toolbar-button @(Vm.ShowOverview && Vm.WorkspaceVisible && Vm.OverviewSection == section ? "selected" : "")" aria-label="@section" title="@section" aria-pressed="@(Vm.ShowOverview && Vm.WorkspaceVisible && Vm.OverviewSection == section)" disabled="@Vm.NavigationLocked" @onclick="() => Vm.OpenDashboardSection(section)"><AppIcon Kind="@(section switch { DashboardSection.Charts => "data.graph", DashboardSection.Data => "database", _ => "pulse" })" /><span>@section</span></button>
+                }
                 <a class="chat-toolbar-button" href="@($"/project/{ProjectId}/workflows")"><AppIcon Kind="chain" /><span>Workflows</span></a>
                 <button class="chat-toolbar-button @(Vm.ShowMemory ? "selected" : "")" aria-label="Project memory" title="Project memory" aria-expanded="@Vm.ShowMemory" aria-controls="@(Vm.ViewId + "-build-memory")" @onclick="() => Vm.ShowMemory = !Vm.ShowMemory"><AppIcon Kind="ledger" /><span>Memory</span></button>
                 @if (Vm.Conversation.Messages.Count > 0)
@@ -93,7 +96,7 @@
                                 @if (role == "assistant")
                                 { <div class="message-text message-markdown">@((MarkupString)BuildChatViewModel.FormatReply(BuildChatViewModel.Text(message)))</div> }
                                 else
-                                { <div class="message-text">@BuildChatViewModel.Text(message)</div> }
+                                { <div class="message-text"><McpMessageText Text="@BuildChatViewModel.Text(message)" /></div> }
                             }
                             @if (BuildChatViewModel.SuggestedAnswers(message).Any())
                             {
@@ -122,7 +125,8 @@
                     {
                         <div class="attachments">@foreach (var image in Vm.Images) { <div><img src="@image.DataUrl" alt="@image.Name" /><button type="button" disabled="@Vm.Locked" aria-label="@($"Remove {image.Name}")" @onclick="() => Vm.Images.Remove(image)"><AppIcon Kind="close" /></button></div> }</div>
                     }
-                    <textarea @ref="_composer" class="chat-input" aria-label="Message assistant" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Ask a question, or use @@MCPName to ask a connected server…" rows="2" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
+                    <textarea class="chat-input" hidden aria-hidden="true" tabindex="-1" data-draft="@Vm.Draft" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
+                    <div @ref="_composer" class="chat-editor" role="textbox" aria-label="Message assistant" aria-multiline="true" aria-disabled="@Vm.Locked" aria-describedby="@(Vm.ViewId + "-composer-keys")" data-placeholder="Ask a question, or use @@MCPName to ask a connected server…" contenteditable="@(!Vm.Locked ? "true" : "false")" spellcheck="true"></div>
                     <div class="composer-actions">
                         <div class="composer-tools">
                             <button type="button" class="chat-icon-button" aria-label="Add to conversation" title="Add to conversation" popovertarget="@(Vm.ViewId + "-composer-menu")" disabled="@Vm.Locked" @onclick="() => Vm.ShowMcpMenu = false"><AppIcon Kind="plus" /></button>
@@ -137,13 +141,13 @@
                                             <p class="mcp-menu-note" role="alert">@Vm.McpError</p>
                                             <button type="button" class="composer-menu-item" @onclick="Vm.OpenMcpMenuAsync"><AppIcon Kind="refresh" /><span>Try again</span></button>
                                         }
-                                        else if (Vm.AvailableMcps.Count == 0) { <p class="mcp-menu-note">No MCP servers are enabled for this project.</p> }
+                                        else if (Vm.MatchingMcps.Count == 0) { <p class="mcp-menu-note">@(Vm.AvailableMcps.Count == 0 ? "No MCP servers are enabled for this project." : "No matching MCP servers.")</p> }
                                         else
                                         {
                                             <ul aria-label="Available MCP servers">
-                                                @foreach (var server in Vm.AvailableMcps)
+                                                @foreach (var server in Vm.MatchingMcps)
                                                 {
-                                                    <li><button type="button" class="composer-menu-item" disabled="@(Vm.Locked || Vm.Listening)" @onclick="() => SelectMcpAsync(server.Id)"><AppIcon Kind="chain" /><span>@server.Name<small>@BuildMcpTools.Mention(server.Name)</small></span></button></li>
+                                                    <li><button type="button" class="composer-menu-item mcp-option" disabled="@(Vm.Locked || Vm.Listening)" @onclick="() => SelectMcpAsync(server.Id)"><AppIcon Kind="chain" /><span>@server.Name<small><strong>@($"@{server.Name}")</strong></small></span></button></li>
                                                 }
                                             </ul>
                                         }
@@ -194,16 +198,16 @@
             <div class="build-divider" inert="@(Vm.Loading || !Vm.WorkspaceVisible)" role="separator" tabindex="0" aria-label="Resize chat and workspace" aria-orientation="vertical" aria-valuemin="30" aria-valuemax="70" aria-valuenow="42" aria-controls="@(Vm.ViewId + "-thread " + Vm.ViewId + "-workspace")" title="Drag to resize · arrow keys to adjust"></div>
             <section id="@(Vm.ViewId + "-workspace")" class="build-workspace" aria-label="Dashboard workspace" inert="@(Vm.Loading || !Vm.WorkspaceVisible)">
                 <header class="preview-heading">
-                    <h2>@(Vm.ShowOverview ? "Overview" : Vm.PreviewChart?.Spec.Title ?? Vm.PreviewItem?.Name ?? "Workspace")</h2>
+                    <h2>@(Vm.ShowOverview ? Vm.OverviewSection.ToString() : Vm.PreviewChart?.Spec.Title ?? Vm.PreviewItem?.Name ?? "Workspace")</h2>
                     @if (Vm.ShowOverview && Vm.Dashboard is { } activity)
-                    { <button type="button" class="chat-icon-button" aria-label="Refresh activity" @onclick="activity.RefreshActivityAsync"><AppIcon Kind="refresh" /></button> }
+                    { <button type="button" class="chat-icon-button" aria-label="@($"Refresh {Vm.OverviewSection.ToString().ToLowerInvariant()}")" @onclick="@(Vm.OverviewSection == DashboardSection.Runs ? activity.RefreshActivityAsync : activity.LoadAsync)"><AppIcon Kind="refresh" /></button> }
                     @if (Vm.PreviewItem is not null)
                     { <a href="@Vm.PreviewEditorUrl" target="_blank" rel="noopener" class="chat-icon-button" aria-label="Open editor in a new tab" title="Open editor in a new tab"><AppIcon Kind="external-link" /></a> }
                     <button type="button" class="chat-icon-button" aria-label="Close workspace" title="Close workspace" @onclick="CloseWorkspace"><AppIcon Kind="close" /></button>
                 </header>
                 @if (Vm.ShowOverview && Vm.Dashboard is { } overview)
                 {
-                    <ProjectOverview Vm="overview" />
+                    <ProjectOverview Vm="overview" Section="Vm.OverviewSection" />
                 }
                 else if (Vm.PreviewChart is { } previewChart)
                 {
@@ -305,6 +309,7 @@
         {
             _focusComposer = false;
             await _composer.FocusAsync();
+            await Vm.RestoreComposerCaretAsync();
         }
     }
     public ValueTask DisposeAsync() => Vm.DisposePageAsync();

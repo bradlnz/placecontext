@@ -197,6 +197,19 @@ public sealed partial class JobChainsViewModel
         await RefreshRunsAsync(chain.Id);
     }
 
+    public void ShowWorkflowDetails()
+    {
+        EditorTab = "details";
+        EditorView = "details";
+        NotifyStateChanged();
+    }
+
+    public async Task ShowWorkflowRunsAsync()
+    {
+        EditorView = "runs";
+        await SwitchToRunsTabAsync();
+    }
+
     public void CloseEditor()
     {
         _pageVersion++;

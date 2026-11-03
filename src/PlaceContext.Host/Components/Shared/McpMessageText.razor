@@ -1,0 +1,31 @@
+@using System.Text.Json
+@using System.Text.RegularExpressions
+@{
+    var start = 0;
+}
+@foreach (Match match in Mentions.Matches(Text))
+{
+    @Text[start..match.Index]
+    var raw = match.Value[1..];
+    var name = raw.StartsWith('"') ? Decode(raw) : raw;
+    <strong>@($"@{name}")</strong>
+    start = match.Index + match.Length;
+}
+@Text[start..]
+
+@code {
+    [Parameter] public string Text { get; set; } = "";
+    private static readonly Regex Mentions = new("""(?<![\w@])@(?:"(?:[^"\\\r\n]|\\.)*"|[\p{L}\p{N}_-]+)""");
+
+    private static string Decode(string raw)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<string>(raw) ?? raw;
+        }
+        catch (JsonException)
+        {
+            return raw;
+        }
+    }
+}

@@ -22,6 +22,8 @@ public sealed class ApiTokensSettingsViewModel(IUserApiTokenService tokens, Port
     } =
         new[]
         {
+            new ApiEndpoint("GET", "/api/v1/projects/{projectId}/data/tables", "List project tables and views (requires data.read)."),
+            new ApiEndpoint("POST", "/api/v1/projects/{projectId}/data/query", "Run read-only SQL against project tables; body: {\"sql\":\"SELECT …\"}. Maximum 500 rows."),
             new ApiEndpoint("POST", "/api/v1/queues/{queueId}/messages", "Submit a JSON object to a workflow queue (requires permission to run jobs)."),
             new ApiEndpoint("GET", "/api/v1/queues/{queueId}/messages/{trackingId}", "Check a queued message and its chain run."),
             new ApiEndpoint(

@@ -20,11 +20,14 @@
     <div class="page-head">
         <div>
             <h2 class="page-title">Analytics</h2>
-            <span class="page-sub">SQL-defined charts plus one auto chart per table — every query runs isolated inside this project's own database</span>
+            <span class="page-sub">Charts query your project data automatically every 10 seconds. Pause updates to inspect a result.</span>
         </div>
-        <button class="dcbtn primary" disabled="@Vm.SweepPending" @onclick="Vm.GenerateAll">
-            <AppIcon Kind="refresh" /> @(Vm.SweepPending ? "Generating…" : "Generate all")
-        </button>
+        <div class="live-controls">
+            <label><input type="checkbox" @bind="Vm.LiveEnabled" /> Live · 10s</label>
+            <button class="dcbtn" disabled="@Vm.Refreshing" @onclick="Vm.ReloadAsync">
+                <AppIcon Kind="refresh" /> @(Vm.Refreshing ? "Updating…" : "Refresh now")
+            </button>
+        </div>
     </div>
     @if (Vm.Error is not null)
     {
@@ -77,32 +80,41 @@
         <div class="sql-chart-grid">
             @foreach (var chart in sqlCharts)
             {
-                <div class="dccard chart-card">
+                <div class="dccard chart-card" @key="chart.TableName">
                     <div class="chart-card-head">
                         <span class="chart-name">@chart.TableName["sql:".Length..]</span>
-                        <span class="sql-badge">SQL</span>
+                        <span class="sql-badge">@(chart.IsLive ? "Live" : "Snapshot")</span>
                         <span class="type-switch">
                             @foreach (var t in new[] { "bar", "line", "pie" })
                             {
                                 <button class="dcbtn btn-type" style="@(Vm.ChartTypeStyle(chart, t))"
-                                        title="Switch to @t" @onclick="@(() => Vm.SwitchTypeAsync(chart, t))">@t</button>
+                                        disabled="@(Vm.SqlBusy || ProjectAnalyticsViewModel.StoredSql(chart) is null)" title="Switch to @t" @onclick="@(() => Vm.SwitchTypeAsync(chart, t))">@t</button>
                             }
                         </span>
                         <span class="spacer"></span>
-                        <span class="chart-time">@Vm.Presentation.DateTime(chart.GeneratedAt)</span>
-                        <button class="dcbtn btn-sm" @onclick="@(() => Vm.RefreshSqlAsync(chart))"><AppIcon Kind="refresh" /> refresh</button>
+                        <span class="chart-time">Updated @Vm.Presentation.DateTime(chart.GeneratedAt)</span>
+                        <button class="dcbtn btn-sm" disabled="@Vm.Refreshing" @onclick="@(() => Vm.RefreshSqlAsync(chart))"><AppIcon Kind="refresh" /> refresh</button>
                         <button class="dcbtn btn-sm" @onclick="@(() => Vm.EditSql(chart))">edit</button>
                         <button aria-label="Remove" class="dcbtn btn-sm" @onclick="@(() => Vm.DeleteSqlAsync(chart))"><AppIcon Kind="close" /></button>
                     </div>
+                    @if (chart.Error is not null)
+                    {
+                        <p class="error-msg" role="status">@chart.Error Last saved result is shown below.</p>
+                    }
                     <div class="chart-canvas-box">
-                        <canvas id="@ProjectAnalyticsViewModel.CanvasId(chart.TableName)"></canvas>
+                        <div class="pc-chart" id="@ProjectAnalyticsViewModel.CanvasId(chart.TableName)"></div>
                     </div>
                 </div>
             }
         </div>
     }
 
-    <div class="subsection-title">Table charts</div>
+    <div class="section-head">
+        <div><span class="section-title">Table previews</span><p class="page-sub">Sampled rows, not totals. Use a SQL chart to aggregate the full dataset.</p></div>
+        <button class="dcbtn" disabled="@Vm.SweepPending" @onclick="Vm.GenerateAll">
+            @(Vm.SweepPending ? "Preparing…" : "Create table previews")
+        </button>
+    </div>
 
     @if (Vm.Tables is null)
     {
@@ -132,7 +144,7 @@
                     }
                     else if (chart is not null)
                     {
-                        <span class="chart-time">@Vm.Presentation.DateTime(chart.GeneratedAt)</span>
+                        <span class="chart-time">Updated @Vm.Presentation.DateTime(chart.GeneratedAt)</span>
                     }
                     <button class="dcbtn btn-sm" disabled="@pending"
                             @onclick="@(() => Vm.ToggleRedraw(table.Name))">
@@ -153,16 +165,20 @@
 
                 @if (chart is not null)
                 {
+                    @if (chart.Error is not null)
+                    {
+                        <p class="error-msg" role="status">@chart.Error</p>
+                    }
                     @if (ProjectAnalyticsViewModel.IsSpec(chart))
                     {
-                        @* Chart.js spec — rendered by pcchart.js with the validated palette + theme tokens. *@
+                        @* Chart spec — rendered by pcchart.js with the validated palette + theme tokens. *@
                         <div class="chart-canvas-box">
-                            <canvas id="@ProjectAnalyticsViewModel.CanvasId(table.Name)"></canvas>
+                            <div class="pc-chart" id="@ProjectAnalyticsViewModel.CanvasId(table.Name)"></div>
                         </div>
                     }
                     else
                     {
-                        @* Legacy LLM-drawn HTML chart (pre-Chart.js rows keep rendering until redrawn). *@
+                        @* Legacy LLM-drawn HTML chart (older rows keep rendering until redrawn). *@
                         <iframe srcdoc="@chart.Html" sandbox="" loading="lazy"
                                 class="chart-iframe"></iframe>
                     }
@@ -170,7 +186,7 @@
                 else
                 {
                     <div class="chart-empty">
-                        @(pending ? "the local LLM is drawing this chart — it appears here when done" : "no chart yet — hit draw")
+                        @(pending ? "Preparing a preview from the table data" : "no chart yet — hit draw")
                     </div>
                 }
             </div>
@@ -188,7 +204,40 @@
         await Vm.LoadAsync(ProjectId);
     }
 
-    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.RenderAsync();
+    private readonly CancellationTokenSource _refreshCancellation = new();
 
-    public void Dispose() => Vm.Dispose();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ = RefreshLoopAsync(_refreshCancellation.Token);
+        }
+        await Vm.RenderAsync();
+    }
+
+    private async Task RefreshLoopAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (Vm.LiveEnabled || Vm.SweepPending)
+                    {
+                        await Vm.ReloadAsync();
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    public void Dispose()
+    {
+        _refreshCancellation.Cancel();
+        _refreshCancellation.Dispose();
+        Vm.Dispose();
+    }
 }

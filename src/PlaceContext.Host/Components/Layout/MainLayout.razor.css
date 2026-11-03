@@ -458,6 +458,7 @@
 }
 
 .main {
+    background: var(--panel);
     flex: 1;
     min-width: 0;
     margin-left: var(--menu-width);

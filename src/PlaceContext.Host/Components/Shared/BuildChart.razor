@@ -3,7 +3,7 @@
 @inject IJSRuntime Js
 
 <figure class="build-chart">
-    <div class="chart-plot"><canvas id="@_id" role="img" aria-label="@(Spec.Title ?? "Generated chart")"></canvas></div>
+    <div class="chart-plot"><div class="pc-chart" id="@_id" role="img" aria-label="@(Spec.Title ?? "Generated chart")"></div></div>
     <figcaption>@Source</figcaption>
     @if (_error is not null) { <p role="status">@_error</p> }
     <details><summary>View chart data</summary><div class="chart-table"><table>

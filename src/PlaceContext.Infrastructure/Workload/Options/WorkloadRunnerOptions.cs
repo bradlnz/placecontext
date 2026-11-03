@@ -38,6 +38,12 @@ public sealed class WorkloadRunnerOptions
     /// <summary>Per-container timeout in seconds. Default: 1800 (30 minutes).</summary>
     public int DefaultTimeoutSeconds { get; set; } = 1800;
 
+    /// <summary>Maximum time to wait for cluster capacity before execution starts.</summary>
+    public int ClusterQueueTimeoutSeconds { get; set; } = 1800;
+
+    /// <summary>Retries for confirmed transient startup failures before user code has run.</summary>
+    public int ClusterStartupRetries { get; set; } = 3;
+
     // ── Sandbox defaults ─────────────────────────────────────────────────────────────────────────
     // Applied to every container run. Overridable via configuration. All off-by-default options
     // are documented so operators can tune them.

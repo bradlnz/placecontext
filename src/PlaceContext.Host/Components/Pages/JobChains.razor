@@ -187,6 +187,7 @@ else
                     <AppIcon Kind="play" /> @(Vm.IsRunningChain(runnable.Id) ? "running…" : "Run")
                 </button>
             }
+            <button class="dcbtn" aria-haspopup="dialog" @onclick='() => Vm.EditorView = "canvas"'><AppIcon Kind="data.graph" /> Canvas</button>
             <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseEditor()"><AppIcon Kind="close" /></button>
         </div>
 
@@ -219,285 +220,12 @@ else
         {
             <div class="dctabs editor-tabs">
                 <button class="dctab @(Vm.IsDetailsTab ? "active" : "")" @onclick="@(() => Vm.EditorTab = "details")">Details</button>
-                <button class="dctab @(Vm.IsRunsTab ? "active" : "")" @onclick="() => Vm.SwitchToRunsTabAsync()">Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
+                <button class="dctab @(Vm.IsRunsTab ? "active" : "")" @onclick="Vm.ShowWorkflowRunsAsync">Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
             </div>
         }
 
-        @if (Vm.IsRunsTab && Vm.EditChainId.HasValue)
-        {
-            <div class="dcslide-body runs-body">
-                @if (Vm.RunsAwaitingInput > 0 && Vm.ChainRuns?.FirstOrDefault(run => run.Status == "AwaitingInput") is { } blocked)
-                {
-                    <div class="workflow-input-banner" role="status">
-                        <AppIcon Kind="human" />
-                        <div>
-                            <strong>@Vm.RunsAwaitingInput run@(Vm.RunsAwaitingInput == 1 ? "" : "s") awaiting input</strong>
-                            <p>These workflows are paused. Review the required response to continue.</p>
-                        </div>
-                        <button class="dcbtn primary" @onclick="() => Vm.OpenChainRunAsync(blocked)">Review input</button>
-                    </div>
-                }
-                @if (Vm.ChainRuns is { Count: > 0 })
-                {
-                    <div class="run-health-strip" aria-label="Workflow execution status in recent runs">
-                        <span><strong>@Vm.RunsSucceeded</strong> succeeded</span>
-                        <span class="run-health-attention"><strong>@Vm.RunsAwaitingInput</strong> awaiting input</span>
-                        <span><strong>@Vm.RunsFailedOrPartial</strong> failed or partial</span>
-                    </div>
-                }
-                @if (Vm.OpenRun is null)
-                {
-                    @if (Vm.ChainRuns is null or { Count: 0 })
-                    {
-                        <div class="no-runs">No runs yet — click Run to start the pipeline.</div>
-                    }
-                    else
-                    {
-                        @foreach (var run in Vm.ChainRuns.OrderByDescending(run => run.Status == "AwaitingInput").ThenByDescending(run => run.StartedAt))
-                        {
-                            <div class="dccard run-card" @onclick="@(() => Vm.OpenChainRunAsync(run))">
-                                <div class="run-row">
-                                    <span class="status-chip" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
-                                    @if (run.Status == "AwaitingInput")
-                                    {
-                                        <span class="run-attention-label"><AppIcon Kind="human" /> Needs input</span>
-                                    }
-                                    <span class="run-time">
-                                        @Vm.Presentation.DateTime(run.StartedAt)
-                                    </span>
-                                    <span class="meta-11">
-                                        @Vm.SucceededSteps(run)/@run.Steps.Count steps
-                                    </span>
-                                    @if (run.FinishedAt.HasValue)
-                                    {
-                                        <span class="dur-meta">
-                                            @Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value)
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="running-note">running…</span>
-                                    }
-                                    @if (Vm.IsChainRunActive(run.Status))
-                                    {
-                                        <button class="dcbtn btn-2-8 text-bad" @onclick:stopPropagation="true"
-                                                @onclick="@(() => Vm.CancelChainRunAsync(run.Id))">Cancel</button>
-                                    }
-                                </div>
-                            </div>
-                        }
-                    }
-                }
-                else
-                {
-                    <button class="dcbtn btn-start" @onclick="@(() => Vm.CloseChainRun())"><AppIcon Kind="arrow-left" /> All runs</button>
-
-                    <div class="status-row">
-                        <span class="status-chip-lg" style="color:@Vm.Presentation.StatusColor(Vm.OpenRun.Status); background:@Vm.Presentation.StatusBackground(Vm.OpenRun.Status)">@Vm.OpenRun.Status</span>
-                        <span class="dur-meta">
-                            @Vm.Presentation.DateTime(Vm.OpenRun.StartedAt)
-                            @(Vm.OpenRun.FinishedAt.HasValue ? " · took " + Vm.Presentation.Duration(Vm.OpenRun.StartedAt, Vm.OpenRun.FinishedAt.Value) : " · live")
-                        </span>
-                        @if (Vm.IsChainRunActive(Vm.OpenRun.Status))
-                        {
-                            <button class="dcbtn btn-2-8 text-bad" @onclick="@(() => Vm.CancelChainRunAsync(Vm.OpenRun.Id))">Cancel run</button>
-                        }
-                    </div>
-
-                    @if (Vm.OpenRun.InputRequest is { } inputRequest)
-                    {
-                        <section class="workflow-input" aria-label="Required workflow inputs">
-                            <span class="workflow-eyebrow">Workflow paused</span>
-                            <h3>@(inputRequest.Kind == LoopChainAction.HumanType ? inputRequest.Instructions ?? "Your response is needed" : inputRequest.Kind == LoopChainAction.AgentType ? "Waiting for an agent response" : "Input required")</h3>
-                            @if (inputRequest.Instructions is not null)
-                            {
-                                @if (inputRequest.Kind != LoopChainAction.HumanType) { <p class="loop-instructions">@inputRequest.Instructions</p> }
-                                <p class="sub-note">Review the accumulated context below, then submit a response to continue.</p>
-                            }
-                            else
-                            {
-                                <p>Complete the required fields to continue from this stage.</p>
-                            }
-                            @if (inputRequest.ResponseType == LoopChainAction.YesNoResponse)
-                            {
-                                <p class="sub-note">Review the evidence and downstream steps before responding. A No answer follows the configured No branch; it does not automatically cancel execution.</p>
-                            }
-                            else
-                            {
-                            @foreach (var step in inputRequest.Steps)
-                            {
-                                <h4>@step.JobName</h4>
-                                @foreach (var field in step.Parameters)
-                                {
-                                    <div class="dcfield">
-                                        @if (inputRequest.Kind is LoopChainAction.HumanType or LoopChainAction.AgentType)
-                                        {
-                                            <label for="loop-response">Response <span class="req">*</span></label>
-                                            <textarea id="loop-response" class="dcinput" rows="5" required
-                                                      value="@Vm.GetResumeArg(step.Index, field.Name)"
-                                                      @oninput="@(e => Vm.SetResumeArg(step.Index, field.Name, e.Value?.ToString() ?? ""))"></textarea>
-                                            <span class="sub-note">Saved as <code>@field.Name</code> for the next steps.</span>
-                                        }
-                                        else
-                                        {
-                                        <label>@(field.Label ?? field.Name) @(field.Required ? "*" : "")</label>
-                                        <ParamInput Parameter="field" ProjectId="@ProjectId" Value="@Vm.GetResumeArg(step.Index, field.Name)"
-                                                    ValueChanged="@(value => Vm.SetResumeArg(step.Index, field.Name, value))" />
-                                        }
-                                    </div>
-                                }
-                            }
-                            }
-                            @if (Vm.ResumeError is not null) { <p role="alert">@Vm.ResumeError</p> }
-                            @if (inputRequest.ResponseType == LoopChainAction.YesNoResponse)
-                            {
-                                <div class="human-decision-actions" aria-label="Answer the question">
-                                    <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="() => Vm.RequestHumanAnswer(true)"><AppIcon Kind="check" /> Yes</button>
-                                    <button class="dcbtn" disabled="@Vm.Resuming" @onclick="() => Vm.RequestHumanAnswer(false)"><AppIcon Kind="close" /> No</button>
-                                    @if (Vm.Resuming) { <span role="status">Resuming…</span> }
-                                </div>
-                            }
-                            else
-                            {
-                                <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="Vm.ResumeWithInputsAsync">@(Vm.Resuming ? "Resuming…" : "Submit and continue")</button>
-                            }
-                        </section>
-                    }
-
-                    @if (Vm.OpenRun.Steps.Any(step => step.ActionType == VirtualMachineChainAction.ActionType))
-                    {
-                        <VirtualMachineReplay @key="Vm.OpenRun.Id" Run="Vm.OpenRun" />
-                    }
-
-                    <div class="running-steps-panel">
-                        <div class="running-steps-head">
-                            <span>Running steps</span>
-                            <span>@Vm.SucceededSteps(Vm.OpenRun)/@Vm.OpenRun.Steps.Count complete</span>
-                        </div>
-                    <ChainPipeline Run="Vm.OpenRun" OnStepClick="@Vm.OpenStepRunAsync"
-                                   OnStepCancel="@(step => Vm.CancelStepRunAsync(step.RunId!.Value))" />
-                    </div>
-
-                    <section class="workflow-job-logs" aria-label="Underlying job logs">
-                        <div class="job-log-selector">
-                            <div><span class="workflow-eyebrow">Execution details</span><h3>Underlying job logs</h3></div>
-                            <label for="chain-log-job">Job run</label>
-                            <select id="chain-log-job" class="dcinput" value="@Vm.SelectedStepRunId" @onchange="@(e => Vm.SelectLogStepAsync(e.Value?.ToString()))">
-                                <option value="">Select a job step…</option>
-                                @foreach (var step in Vm.OpenRun.Steps.Where(step => step.RunId.HasValue))
-                                {
-                                    <option value="@step.RunId">@(step.Index + 1). @step.JobName · @step.Status</option>
-                                }
-                            </select>
-                        </div>
-                        @if (Vm.StepOutputError is not null) { <p class="danger" role="alert">@Vm.StepOutputError</p> }
-                        @if (Vm.StepRunDetail is { } loggedRun)
-                        {
-                            <JobRunLogs Run="loggedRun" />
-                        }
-                        else
-                        {
-                            <p class="sub-note">@(Vm.SelectedStepRunId.HasValue ? "Loading logs…" : "Logs appear here when a job starts. Human and agent hand-offs do not launch a job.")</p>
-                        }
-                    </section>
-
-                    @if (Vm.ContextRows.Count > 0)
-                    {
-                        <div class="chain-context-panel">
-                            <div class="out-label">Accumulated workflow context</div>
-                            <div class="chain-context-scroll">
-                                <table class="chain-context-table">
-                                    <thead>
-                                        <tr>
-                                            <th class="chain-context-cell chain-context-path">Field</th>
-                                            <th class="chain-context-cell">Value</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var row in Vm.ContextRows)
-                                        {
-                                            var isJson = IsJsonLike(row.Value);
-                                            <tr>
-                                                <td class="chain-context-cell chain-context-path"><code>@row.Path</code></td>
-                                                <td class="chain-context-cell">
-                                                    @if (isJson)
-                                                    {
-                                                        <button class="dcbtn btn-2-8 json-view-button"
-                                                                @onclick="@(() => OpenChainContextJson(row.Path, row.Value))">
-                                                            View JSON
-                                                        </button>
-                                                        <span class="chain-context-preview">@GetJsonPreview(row.Value)</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <code class="chain-context-value">@row.Value</code>
-                                                    }
-                                                </td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    }
-
-                    @if (Vm.OpenRun.FinalOutput is { Length: > 0 })
-                    {
-                        <div>
-                            <div class="out-label">Pipeline output</div>
-                            <RunOutput Value="@(Vm.Presentation.Json(Vm.OpenRun.FinalOutput))" />
-                        </div>
-                    }
-
-                    @if (Vm.StepRunDetail is { } d)
-                    {
-                        <div class="stage-detail live-output-panel">
-                            <div class="stage-detail-head">
-                                <span class="live-output-title">
-                                    @if (Vm.IsRunningStep(d.Status))
-                                    {
-                                        <i class="output-live-dot"></i>
-                                    }
-                                    @Vm.StepOutputTitle(d.Status)
-                                    <b>@(Vm.OpenRun.Steps.FirstOrDefault(s => s.RunId == d.Id)?.JobName)</b>
-                                </span>
-                                <span class="status-chip-sm" style="color:@Vm.Presentation.StatusColor(d.Status); background:@Vm.Presentation.StatusBackground(d.Status)">@d.Status</span>
-                                <span class="flex-1"></span>
-                                @if (Vm.LiveOutputUpdatedAt is { } outputAt)
-                                {
-                                    <span class="output-updated">updated @Vm.Presentation.Format(outputAt, "HH:mm:ss")</span>
-                                }
-                                <button class="dcbtn btn-xs"
-                                        @onclick="Vm.NavigateToJobs">open in Jobs <AppIcon Kind="arrow-right" /></button>
-                            </div>
-                            @foreach (var shard in d.ShardResults)
-                            {
-                                <div class="mb-8">
-                                    <div class="shard-head">shard @shard.Index — @shard.Outcome (exit @shard.ExitCode)</div>
-                                    @if (shard.Artifact is not null)
-                                    {
-                                        <RunOutput Value="@(Vm.Presentation.Json(shard.Artifact))" />
-                                    }
-                                </div>
-                            }
-                            @if (d.ReduceResult is { } reduce)
-                            {
-                                <div class="mb-8">
-                                    <div class="shard-head">reduce — @Vm.ReduceStatusLabel(reduce.Succeeded) (exit @reduce.ExitCode)</div>
-                                    @if (!string.IsNullOrWhiteSpace(reduce.Artifact))
-                                    {
-                                        <RunOutput Value="@(Vm.Presentation.Json(reduce.Artifact))" />
-                                    }
-                                </div>
-                            }
-                        </div>
-                    }
-                }
-            </div>
-        }
-        else
-        {
-            var canvasStages = Vm.BuildCanvasStageViews();
+        @{
+            var previewStages = Vm.BuildCanvasStageViews();
         <div class="dcslide-body editor-body">
 
             <div class="field-row">
@@ -511,157 +239,449 @@ else
                 </div>
             </div>
 
-            @* ── Canvas / List toggle ────────────────────────────────────────────────────── *@
-            <div class="dctabs editor-tabs sub-tabs">
-                <button class="dctab @(Vm.IsCanvasView ? "active" : "")" @onclick="@(() => Vm.EditorView = "canvas")">
-                    <span class="tab-icon"><AppIcon Kind="data.graph" /></span> Canvas
-                </button>
-                <button class="dctab @(!Vm.IsCanvasView ? "active" : "")" @onclick="@(() => Vm.EditorView = "list")">
-                    <span class="tab-icon"><AppIcon Kind="logs" /></span> List
+            <div class="workflow-canvas-preview">
+                <div class="workflow-canvas-thumbnail" inert aria-hidden="true">
+                    <ChainCanvas Stages="previewStages"
+                                 Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())"
+                                 Gates="@Vm.BuildCanvasGates()"
+                                 ReadOnly="true" />
+                </div>
+                <button type="button" class="workflow-canvas-open" aria-haspopup="dialog"
+                        aria-label="@($"Open workflow canvas, {previewStages.Count} steps")"
+                        @onclick='() => Vm.EditorView = "canvas"'>
+                    <span><AppIcon Kind="data.graph" /> Open workflow canvas</span>
                 </button>
             </div>
 
-            @if (Vm.IsCanvasView)
-            {
-                @* ── Canvas view ──────────────────────────────────────────────────────────── *@
-                <div class="workflow-builder">
-                    <aside class="workflow-palette" aria-label="Workflow steps">
-                        <span class="workflow-eyebrow">Step library</span>
-                        <h3>Build your workflow</h3>
-                        <p>Add a step, then configure what happens.</p>
-                        <span class="palette-label">People &amp; agents</span>
-                        <button class="palette-step human-step" @onclick="@(() => Vm.OpenLoopActionAt(LoopChainAction.HumanType, Vm.EdStages.Count))">
-                            <span class="palette-icon" aria-hidden="true"><AppIcon Kind="human" /></span>
-                            <span><strong>Human in the loop</strong><small>Pause for review or input</small></span>
-                            <span aria-hidden="true"><AppIcon Kind="plus" /></span>
-                        </button>
-                        <button class="palette-step agent-step" @onclick="@(() => Vm.OpenLoopActionAt(LoopChainAction.AgentType, Vm.EdStages.Count))">
-                            <span class="palette-icon" aria-hidden="true"><AppIcon Kind="agent" /></span>
-                            <span><strong>Agent in the loop</strong><small>Use AI review or an external agent</small></span>
-                            <span aria-hidden="true"><AppIcon Kind="plus" /></span>
-                        </button>
-                        <span class="palette-label">Automate</span>
-                        <button class="palette-step" @onclick="@(() => Vm.OpenQemuActionAt(Vm.EdStages.Count))">
-                            <span class="palette-icon" aria-hidden="true"><AppIcon Kind="vm" /></span>
-                            <span><strong>QEMU environment</strong><small>Run a task in a fresh virtual machine</small></span>
-                            <span aria-hidden="true"><AppIcon Kind="plus" /></span>
-                        </button>
-                        <button class="palette-step" @onclick="@(() => Vm.OpenStageNodePicker(Vm.EdStages.Count))">
-                            <span class="palette-icon" aria-hidden="true"><AppIcon Kind="box" /></span>
-                            <span><strong>Jobs &amp; actions</strong><small>Run a job, send a message, or add a gate</small></span>
-                            <span aria-hidden="true"><AppIcon Kind="plus" /></span>
-                        </button>
-                        <div class="palette-note">Each step passes its output forward. Human and agent steps wait for a response before continuing.</div>
-                    </aside>
-            <ChainCanvas Stages="canvasStages"
-                         Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())"
-                         Gates="@Vm.BuildCanvasGates()"
-                         OnAddGate="@(stageIndex => Vm.OpenStageNodePicker(stageIndex))"
-                         OnEditGate="@(pair => Vm.OpenGateEditor(pair.StageIndex))"
-                         OnEditEmailAction="@(stageIndex => Vm.OpenEmailActionEditor(stageIndex))"
-                         OnEditSmsAction="@(stageIndex => Vm.OpenSmsActionEditor(stageIndex))"
-                         OnEditLoopAction="@(stageIndex => Vm.EditLoopAction(stageIndex))"
-                         OnEditQemuAction="Vm.EditQemuAction"
-                         OnAddPath="@(item => Vm.AddPath(item.StageIndex, item.JobId))"
-                         OnMoveStage="@(move => Vm.MoveStageTo(move.SourceIndex, move.TargetIndex))"
-                         OnMovePath="@(move => Vm.MovePath(move.SourceStage, move.SourceBranch, move.TargetStage))"
-                         OnRemovePath="@(item => Vm.RemoveBranch(item.StageIndex, item.BranchIndex))"
-                         OnRemoveStage="@(stageIndex => Vm.RemoveStage(stageIndex))" />
-                </div>
-            }
-
-            @if (!Vm.IsCanvasView)
-            {
-            <section class="workflow-list" aria-label="Workflow stages">
-                <div class="workflow-list-heading">
-                    <div><h3>Workflow steps <span>@Vm.EdStages.Count</span></h3><p>Steps run in order. Jobs within a parallel stage run together.</p></div>
-                    <button class="dcbtn" @onclick="@(() => Vm.OpenStageNodePicker(Vm.EdStages.Count))"><AppIcon Kind="plus" /> Add step</button>
-                </div>
-                @if (Vm.EdStages.Count == 0)
-                {
-                    <div class="empty-steps">Your workflow starts here. Add a job, an action, or a review step.</div>
-                }
-                else
-                {
-                    <ol class="step-list">
-                        @foreach (var (stage, i) in Vm.EdStages.Select((s, i) => (s, i)))
-                        {
-                            var stageIndex = i;
-                            var stageView = canvasStages[stageIndex];
-                            var stageGate = Vm.EdStageGates.GetValueOrDefault(stageIndex);
-                            <li class="stage-item">
-                                <div class="list-stage-head">
-                                    <span class="step-num">@(stageIndex + 1)</span>
-                                    <AppIcon Kind="@ChainCanvasViewModel.StageIcon(stageView)" />
-                                    <strong>@(stageView.Action?.DisplayName ?? (stage.Count > 1 ? "Parallel jobs" : "Job"))</strong>
-                                    @if (stage.Count > 1) { <span class="list-stage-count">@stage.Count jobs</span> }
-                                    <div class="list-stage-actions">
-                                        <button aria-label="@($"Move step {stageIndex + 1} up")" title="Move up" class="dcbtn" disabled="@(stageIndex == 0)" @onclick="@(() => Vm.MoveStage(stageIndex, -1))"><AppIcon Kind="arrow-up" /></button>
-                                        <button aria-label="@($"Move step {stageIndex + 1} down")" title="Move down" class="dcbtn" disabled="@(stageIndex == Vm.EdStages.Count - 1)" @onclick="@(() => Vm.MoveStage(stageIndex, +1))"><AppIcon Kind="arrow-down" /></button>
-                                        <button aria-label="@($"Remove step {stageIndex + 1}")" title="Remove step" class="dcbtn danger" @onclick="@(() => Vm.RemoveStage(stageIndex))"><AppIcon Kind="close" /></button>
-                                    </div>
-                                </div>
-                                <div class="list-stage-body">
-                                    @if (stageGate is not null)
-                                    {
-                                        <div class="list-stage-gate">
-                                            <button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">
-                                                <AppIcon Kind="@(stageGate is WaitGate ? "clock" : "split")" />
-                                                <span>@(stageGate is WaitGate wait ? $"Wait {wait.Duration.TotalSeconds:0.#} seconds" : stageGate is ConditionGate condition ? $"If {condition.Expression}" : "Edit gate")</span>
-                                            </button>
-                                            <button class="dcbtn danger" aria-label="@($"Remove gate from step {stageIndex + 1}")" title="Remove gate" @onclick="@(() => Vm.RemoveGate(stageIndex))"><AppIcon Kind="close" /></button>
-                                        </div>
-                                    }
-                                    <div class="stage-jobs">
-                                        @if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is SendEmailChainAction emailAction)
-                                        {
-                                            <button class="stage-job-chip" @onclick="@(() => Vm.OpenEmailActionEditor(stageIndex))"><AppIcon Kind="mail" /><span><strong>Send email</strong><small>@emailAction.Recipient</small></span><span class="list-configure">Edit</span></button>
-                                        }
-                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is SendSmsChainAction smsAction)
-                                        {
-                                            <button class="stage-job-chip" @onclick="@(() => Vm.OpenSmsActionEditor(stageIndex))"><AppIcon Kind="message" /><span><strong>Send SMS</strong><small>@smsAction.Recipient</small></span><span class="list-configure">Edit</span></button>
-                                        }
-                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is VirtualMachineChainAction vmAction)
-                                        {
-                                            <button class="stage-job-chip" @onclick="@(() => Vm.EditQemuAction(stageIndex))"><AppIcon Kind="vm" /><span><strong>@vmAction.ImageProfile</strong><small>@vmAction.MemoryMb MiB · @vmAction.Cpus CPU(s) · @vmAction.TimeoutSeconds s timeout</small></span><span class="list-configure">Configure</span></button>
-                                        }
-                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is LoopChainAction loopAction)
-                                        {
-                                            <button class="stage-job-chip" @onclick="@(() => Vm.EditLoopAction(stageIndex))"><AppIcon Kind="@(loopAction.Type == LoopChainAction.HumanType ? "human" : "agent")" /><span><strong>@loopAction.DisplayName</strong><small>Response saved to @loopAction.ResponseField</small></span><span class="list-configure">Edit</span></button>
-                                        }
-                                        @foreach (var (jobId, j) in stage.Select((id, j) => (id, j)))
-                                        {
-                                            var branchIndex = j;
-                                            <div class="stage-job-chip"><AppIcon Kind="code" /><span class="list-job-name">@Vm.JobName(jobId)</span><JobCodeLink Job="@Vm.Jobs?.FirstOrDefault(job => job.Id == jobId)" /><button class="dcbtn danger" aria-label="@($"Remove {Vm.JobName(jobId)} from step {stageIndex + 1}")" title="Remove job" @onclick="@(() => Vm.RemoveBranch(stageIndex, branchIndex))"><AppIcon Kind="close" /></button></div>
-                                        }
-                                    </div>
-                                    @if (stageGate is ConditionGate { ElseBranch: { Count: > 0 } other })
-                                    {
-                                        <div class="list-false-path"><strong>When false</strong><WorkflowBranchPreview Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())" Stages="@other.Select(Vm.BuildStageView).ToList()" /><button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">Edit false path</button></div>
-                                    }
-                                    @if (!Vm.HasStageAction(stageIndex))
-                                    {
-                                        <div class="stage-branch-row">
-                                            <select class="dcinput branch-select" aria-label="@($"Parallel job for step {stageIndex + 1}")" value="@Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")" @onchange="@((e) => Vm.SetBranchJobId(stageIndex, e))">
-                                                <option value="">Choose a parallel job…</option>
-                                                @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>()) { <option value="@job.Id">@job.Name</option> }
-                                            </select>
-                                            <button class="dcbtn" disabled="@(string.IsNullOrEmpty(Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")))" @onclick="@(() => Vm.AddBranch(stageIndex))"><AppIcon Kind="plus" /> Add parallel job</button>
-                                        </div>
-                                    }
-                                    <div class="list-stage-footer">
-                                        @if (stageGate is null) { <button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))"><AppIcon Kind="split" /> Add condition or delay</button> }
-                                        <button class="dcbtn" @onclick="@(() => Vm.OpenStageNodePicker(stageIndex))"><AppIcon Kind="plus" /> Insert step before</button>
-                                    </div>
-                                </div>
-                            </li>
-                        }
-                    </ol>
-                }
-            </section>
-            }
-
         </div>
+        }
+
+        @if (Vm.IsCanvasView || Vm.IsListView || Vm.IsRunsView)
+        {
+            <div class="dcmodal-overlay workflow-canvas-overlay">
+                <div class="dcmodal workflow-canvas-dialog" role="dialog" aria-modal="true" aria-label="Workflow canvas" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head">
+                        <div class="flex-min">
+                            <div class="title-14">@(string.IsNullOrWhiteSpace(Vm.EdName) ? "New workflow" : Vm.EdName) <span class="workflow-step-count">@Vm.EdStages.Count steps</span></div>
+                            <div class="sub-115">@(Vm.IsCanvasView ? "Drag stages to reorder. Select a step to configure it." : Vm.IsRunsView ? "Execution history, inputs, and job logs." : "Steps run in order. Jobs within a parallel stage run together.")</div>
+                        </div>
+                        <div class="workflow-canvas-actions">
+                            @if (Vm.EditChainId.HasValue && Vm.Chains?.FirstOrDefault(chain => chain.Id == Vm.EditChainId) is { } canvasWorkflow)
+                            {
+                                <button type="button" class="dcbtn primary workflow-run" title="Run the saved workflow" disabled="@Vm.IsRunningChain(canvasWorkflow.Id)" @onclick="() => Vm.RunChainAsync(canvasWorkflow)"><AppIcon Kind="play" /> @(Vm.IsRunningChain(canvasWorkflow.Id) ? "Running…" : "Run")</button>
+                            }
+                            <button type="button" class="dcbtn" @onclick="() => Vm.OpenStageNodePicker(Vm.EdStages.Count)"><AppIcon Kind="plus" /> Add step</button>
+                            <details class="workflow-menu">
+                                <summary>Workflow actions</summary>
+                                <div class="workflow-menu-items">
+                                    <button type="button" @onclick="ShowWorkflowDetailsAsync"><AppIcon Kind="edit" /> Details</button>
+                                    @if (Vm.EditChainId.HasValue)
+                                    {
+                                        <button type="button" @onclick="Vm.ShowWorkflowRunsAsync"><AppIcon Kind="logs" /> Runs</button>
+                                    }
+                                    <button type="button" disabled="@Vm.Saving" @onclick="SaveWorkflowAsync"><AppIcon Kind="save" /> @(Vm.Saving ? "Saving…" : "Save workflow")</button>
+
+                                </div>
+                            </details>
+                            <button class="dcslide-x" aria-label="Close canvas" @onclick="CloseWorkflowAsync"><AppIcon Kind="close" /></button>
+                        </div>
+                    </div>
+                    <nav class="dctabs workflow-view-tabs" aria-label="Workflow view">
+                        <button type="button" class="dctab @(Vm.IsCanvasView ? "active" : null)" aria-pressed="@Vm.IsCanvasView" @onclick='() => Vm.EditorView = "canvas"'>Canvas</button>
+                        <button type="button" class="dctab @(Vm.IsListView ? "active" : null)" aria-pressed="@Vm.IsListView" @onclick='() => Vm.EditorView = "list"'>List</button>
+                        @if (Vm.EditChainId.HasValue)
+                        {
+                            <button type="button" class="dctab @(Vm.IsRunsView ? "active" : null)" aria-pressed="@Vm.IsRunsView" @onclick="Vm.ShowWorkflowRunsAsync">Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
+                        }
+                    </nav>
+                    @if (Vm.EditorError is { } canvasError)
+                    {
+                        <p class="workflow-canvas-error" role="alert">@canvasError</p>
+                    }
+                    <div class="dcmodal-body @(Vm.IsListView || Vm.IsRunsView ? "workflow-list-body" : null)">
+                        @if (Vm.IsRunsView)
+                        {
+                            <div class="dcslide-body runs-body">
+                                @if (Vm.RunsAwaitingInput > 0 && Vm.ChainRuns?.FirstOrDefault(run => run.Status == "AwaitingInput") is { } blocked)
+                                {
+                                    <div class="workflow-input-banner" role="status">
+                                        <AppIcon Kind="human" />
+                                        <div>
+                                            <strong>@Vm.RunsAwaitingInput run@(Vm.RunsAwaitingInput == 1 ? "" : "s") awaiting input</strong>
+                                            <p>These workflows are paused. Review the required response to continue.</p>
+                                        </div>
+                                        <button class="dcbtn primary" @onclick="() => Vm.OpenChainRunAsync(blocked)">Review input</button>
+                                    </div>
+                                }
+                                @if (Vm.ChainRuns is { Count: > 0 })
+                                {
+                                    <div class="run-health-strip" aria-label="Workflow execution status in recent runs">
+                                        <span><strong>@Vm.RunsSucceeded</strong> succeeded</span>
+                                        <span class="run-health-attention"><strong>@Vm.RunsAwaitingInput</strong> awaiting input</span>
+                                        <span><strong>@Vm.RunsFailedOrPartial</strong> failed or partial</span>
+                                    </div>
+                                }
+                                @if (Vm.OpenRun is null)
+                                {
+                                    @if (Vm.ChainRuns is null or { Count: 0 })
+                                    {
+                                        <div class="no-runs">No runs yet — click Run to start the pipeline.</div>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var run in Vm.ChainRuns.OrderByDescending(run => run.Status == "AwaitingInput").ThenByDescending(run => run.StartedAt))
+                                        {
+                                            <div class="dccard run-card" @onclick="@(() => Vm.OpenChainRunAsync(run))">
+                                                <div class="run-row">
+                                                    <span class="status-chip" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
+                                                    @if (run.Status == "AwaitingInput")
+                                                    {
+                                                        <span class="run-attention-label"><AppIcon Kind="human" /> Needs input</span>
+                                                    }
+                                                    <span class="run-time">
+                                                        @Vm.Presentation.DateTime(run.StartedAt)
+                                                    </span>
+                                                    <span class="meta-11">
+                                                        @Vm.SucceededSteps(run)/@run.Steps.Count steps
+                                                    </span>
+                                                    @if (run.FinishedAt.HasValue)
+                                                    {
+                                                        <span class="dur-meta">
+                                                            @Vm.Presentation.Duration(run.StartedAt, run.FinishedAt.Value)
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="running-note">running…</span>
+                                                    }
+                                                    @if (Vm.IsChainRunActive(run.Status))
+                                                    {
+                                                        <button class="dcbtn btn-2-8 text-bad" @onclick:stopPropagation="true"
+                                                                @onclick="@(() => Vm.CancelChainRunAsync(run.Id))">Cancel</button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    <button class="dcbtn btn-start" @onclick="@(() => Vm.CloseChainRun())"><AppIcon Kind="arrow-left" /> All runs</button>
+
+                                    <div class="status-row">
+                                        <span class="status-chip-lg" style="color:@Vm.Presentation.StatusColor(Vm.OpenRun.Status); background:@Vm.Presentation.StatusBackground(Vm.OpenRun.Status)">@Vm.OpenRun.Status</span>
+                                        <span class="dur-meta">
+                                            @Vm.Presentation.DateTime(Vm.OpenRun.StartedAt)
+                                            @(Vm.OpenRun.FinishedAt.HasValue ? " · took " + Vm.Presentation.Duration(Vm.OpenRun.StartedAt, Vm.OpenRun.FinishedAt.Value) : " · live")
+                                        </span>
+                                        @if (Vm.IsChainRunActive(Vm.OpenRun.Status))
+                                        {
+                                            <button class="dcbtn btn-2-8 text-bad" @onclick="@(() => Vm.CancelChainRunAsync(Vm.OpenRun.Id))">Cancel run</button>
+                                        }
+                                    </div>
+
+                                    @if (Vm.OpenRun.InputRequest is { } inputRequest)
+                                    {
+                                        <section class="workflow-input" aria-label="Required workflow inputs">
+                                            <span class="workflow-eyebrow">Workflow paused</span>
+                                            <h3>@(inputRequest.Kind == LoopChainAction.HumanType ? inputRequest.Instructions ?? "Your response is needed" : inputRequest.Kind == LoopChainAction.AgentType ? "Waiting for an agent response" : "Input required")</h3>
+                                            @if (inputRequest.Instructions is not null)
+                                            {
+                                                @if (inputRequest.Kind != LoopChainAction.HumanType) { <p class="loop-instructions">@inputRequest.Instructions</p> }
+                                                <p class="sub-note">Review the accumulated context below, then submit a response to continue.</p>
+                                            }
+                                            else
+                                            {
+                                                <p>Complete the required fields to continue from this stage.</p>
+                                            }
+                                            @if (inputRequest.ResponseType == LoopChainAction.YesNoResponse)
+                                            {
+                                                <p class="sub-note">Review the evidence and downstream steps before responding. A No answer follows the configured No branch; it does not automatically cancel execution.</p>
+                                            }
+                                            else
+                                            {
+                                            @foreach (var step in inputRequest.Steps)
+                                            {
+                                                <h4>@step.JobName</h4>
+                                                @foreach (var field in step.Parameters)
+                                                {
+                                                    <div class="dcfield">
+                                                        @if (inputRequest.Kind is LoopChainAction.HumanType or LoopChainAction.AgentType)
+                                                        {
+                                                            <label for="loop-response">Response <span class="req">*</span></label>
+                                                            <textarea id="loop-response" class="dcinput" rows="5" required
+                                                                      value="@Vm.GetResumeArg(step.Index, field.Name)"
+                                                                      @oninput="@(e => Vm.SetResumeArg(step.Index, field.Name, e.Value?.ToString() ?? ""))"></textarea>
+                                                            <span class="sub-note">Saved as <code>@field.Name</code> for the next steps.</span>
+                                                        }
+                                                        else
+                                                        {
+                                                        <label>@(field.Label ?? field.Name) @(field.Required ? "*" : "")</label>
+                                                        <ParamInput Parameter="field" ProjectId="@ProjectId" Value="@Vm.GetResumeArg(step.Index, field.Name)"
+                                                                    ValueChanged="@(value => Vm.SetResumeArg(step.Index, field.Name, value))" />
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                            }
+                                            @if (Vm.ResumeError is not null) { <p role="alert">@Vm.ResumeError</p> }
+                                            @if (inputRequest.ResponseType == LoopChainAction.YesNoResponse)
+                                            {
+                                                <div class="human-decision-actions" aria-label="Answer the question">
+                                                    <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="() => Vm.RequestHumanAnswer(true)"><AppIcon Kind="check" /> Yes</button>
+                                                    <button class="dcbtn" disabled="@Vm.Resuming" @onclick="() => Vm.RequestHumanAnswer(false)"><AppIcon Kind="close" /> No</button>
+                                                    @if (Vm.Resuming) { <span role="status">Resuming…</span> }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="Vm.ResumeWithInputsAsync">@(Vm.Resuming ? "Resuming…" : "Submit and continue")</button>
+                                            }
+                                        </section>
+                                    }
+
+                                    @if (Vm.OpenRun.Steps.Any(step => step.ActionType == VirtualMachineChainAction.ActionType))
+                                    {
+                                        <VirtualMachineReplay @key="Vm.OpenRun.Id" Run="Vm.OpenRun" />
+                                    }
+
+                                    <div class="running-steps-panel">
+                                        <div class="running-steps-head">
+                                            <span>Running steps</span>
+                                            <span>@Vm.SucceededSteps(Vm.OpenRun)/@Vm.OpenRun.Steps.Count complete</span>
+                                        </div>
+                                    <ChainPipeline Run="Vm.OpenRun" OnStepClick="@Vm.OpenStepRunAsync"
+                                                   OnStepCancel="@(step => Vm.CancelStepRunAsync(step.RunId!.Value))" />
+                                    </div>
+
+                                    <section class="workflow-job-logs" aria-label="Underlying job logs">
+                                        <div class="job-log-selector">
+                                            <div><span class="workflow-eyebrow">Execution details</span><h3>Underlying job logs</h3></div>
+                                            <label for="chain-log-job">Job run</label>
+                                            <select id="chain-log-job" class="dcinput" value="@Vm.SelectedStepRunId" @onchange="@(e => Vm.SelectLogStepAsync(e.Value?.ToString()))">
+                                                <option value="">Select a job step…</option>
+                                                @foreach (var step in Vm.OpenRun.Steps.Where(step => step.RunId.HasValue))
+                                                {
+                                                    <option value="@step.RunId">@(step.Index + 1). @step.JobName · @step.Status</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        @if (Vm.StepOutputError is not null) { <p class="danger" role="alert">@Vm.StepOutputError</p> }
+                                        @if (Vm.StepRunDetail is { } loggedRun)
+                                        {
+                                            <JobRunLogs Run="loggedRun" />
+                                        }
+                                        else
+                                        {
+                                            <p class="sub-note">@(Vm.SelectedStepRunId.HasValue ? "Loading logs…" : "Logs appear here when a job starts. Human and agent hand-offs do not launch a job.")</p>
+                                        }
+                                    </section>
+
+                                    @if (Vm.ContextRows.Count > 0)
+                                    {
+                                        <div class="chain-context-panel">
+                                            <div class="out-label">Accumulated workflow context</div>
+                                            <div class="chain-context-scroll">
+                                                <table class="chain-context-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th class="chain-context-cell chain-context-path">Field</th>
+                                                            <th class="chain-context-cell">Value</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var row in Vm.ContextRows)
+                                                        {
+                                                            var isJson = IsJsonLike(row.Value);
+                                                            <tr>
+                                                                <td class="chain-context-cell chain-context-path"><code>@row.Path</code></td>
+                                                                <td class="chain-context-cell">
+                                                                    @if (isJson)
+                                                                    {
+                                                                        <button class="dcbtn btn-2-8 json-view-button"
+                                                                                @onclick="@(() => OpenChainContextJson(row.Path, row.Value))">
+                                                                            View JSON
+                                                                        </button>
+                                                                        <span class="chain-context-preview">@GetJsonPreview(row.Value)</span>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <code class="chain-context-value">@row.Value</code>
+                                                                    }
+                                                                </td>
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    @if (Vm.OpenRun.FinalOutput is { Length: > 0 })
+                                    {
+                                        <div>
+                                            <div class="out-label">Pipeline output</div>
+                                            <RunOutput Value="@(Vm.Presentation.Json(Vm.OpenRun.FinalOutput))" />
+                                        </div>
+                                    }
+
+                                    @if (Vm.StepRunDetail is { } d)
+                                    {
+                                        <div class="stage-detail live-output-panel">
+                                            <div class="stage-detail-head">
+                                                <span class="live-output-title">
+                                                    @if (Vm.IsRunningStep(d.Status))
+                                                    {
+                                                        <i class="output-live-dot"></i>
+                                                    }
+                                                    @Vm.StepOutputTitle(d.Status)
+                                                    <b>@(Vm.OpenRun.Steps.FirstOrDefault(s => s.RunId == d.Id)?.JobName)</b>
+                                                </span>
+                                                <span class="status-chip-sm" style="color:@Vm.Presentation.StatusColor(d.Status); background:@Vm.Presentation.StatusBackground(d.Status)">@d.Status</span>
+                                                <span class="flex-1"></span>
+                                                @if (Vm.LiveOutputUpdatedAt is { } outputAt)
+                                                {
+                                                    <span class="output-updated">updated @Vm.Presentation.Format(outputAt, "HH:mm:ss")</span>
+                                                }
+                                                <button class="dcbtn btn-xs"
+                                                        @onclick="Vm.NavigateToJobs">open in Jobs <AppIcon Kind="arrow-right" /></button>
+                                            </div>
+                                            @foreach (var shard in d.ShardResults)
+                                            {
+                                                <div class="mb-8">
+                                                    <div class="shard-head">shard @shard.Index — @shard.Outcome (exit @shard.ExitCode)</div>
+                                                    @if (shard.Artifact is not null)
+                                                    {
+                                                        <RunOutput Value="@(Vm.Presentation.Json(shard.Artifact))" />
+                                                    }
+                                                </div>
+                                            }
+                                            @if (d.ReduceResult is { } reduce)
+                                            {
+                                                <div class="mb-8">
+                                                    <div class="shard-head">reduce — @Vm.ReduceStatusLabel(reduce.Succeeded) (exit @reduce.ExitCode)</div>
+                                                    @if (!string.IsNullOrWhiteSpace(reduce.Artifact))
+                                                    {
+                                                        <RunOutput Value="@(Vm.Presentation.Json(reduce.Artifact))" />
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                        @if (Vm.IsCanvasView)
+                        {
+                        <ChainCanvas OnEditCode="OpenCodeAsync" Stages="Vm.BuildCanvasStageViews()"
+                                     Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())"
+                                     Gates="@Vm.BuildCanvasGates()"
+                                     OnAddGate="@(stageIndex => Vm.OpenStageNodePicker(stageIndex))"
+                                     OnEditGate="@(pair => Vm.OpenGateEditor(pair.StageIndex))"
+                                     OnEditEmailAction="@(stageIndex => Vm.OpenEmailActionEditor(stageIndex))"
+                                     OnEditSmsAction="@(stageIndex => Vm.OpenSmsActionEditor(stageIndex))"
+                                     OnEditLoopAction="@(stageIndex => Vm.EditLoopAction(stageIndex))"
+                                     OnEditQemuAction="Vm.EditQemuAction"
+                                     OnAddPath="@(item => Vm.AddPath(item.StageIndex, item.JobId))"
+                                     OnMoveStage="@(move => Vm.MoveStageTo(move.SourceIndex, move.TargetIndex))"
+                                     OnMovePath="@(move => Vm.MovePath(move.SourceStage, move.SourceBranch, move.TargetStage))"
+                                     OnRemovePath="@(item => Vm.RemoveBranch(item.StageIndex, item.BranchIndex))"
+                                     OnRemoveStage="@(stageIndex => Vm.RemoveStage(stageIndex))" />
+                        }
+                        @if (Vm.IsListView)
+                        {
+                            var canvasStages = Vm.BuildCanvasStageViews();
+                            <section class="workflow-list" aria-label="Workflow stages">
+                                @if (Vm.EdStages.Count == 0)
+                                {
+                                    <div class="empty-steps">Your workflow starts here. Add a job, an action, or a review step.</div>
+                                }
+                                else
+                                {
+                                    <ol class="step-list">
+                                        @foreach (var (stage, i) in Vm.EdStages.Select((s, i) => (s, i)))
+                                        {
+                                            var stageIndex = i;
+                                            var stageView = canvasStages[stageIndex];
+                                            var stageGate = Vm.EdStageGates.GetValueOrDefault(stageIndex);
+                                            <li class="stage-item">
+                                                <div class="list-stage-head">
+                                                    <span class="step-num">@(stageIndex + 1)</span>
+                                                    <AppIcon Kind="@ChainCanvasViewModel.StageIcon(stageView)" />
+                                                    <strong>@(stageView.Action?.DisplayName ?? (stage.Count > 1 ? "Parallel jobs" : "Job"))</strong>
+                                                    @if (stage.Count > 1) { <span class="list-stage-count">@stage.Count jobs</span> }
+                                                    <div class="list-stage-actions">
+                                                        <button aria-label="@($"Move step {stageIndex + 1} up")" title="Move up" class="dcbtn" disabled="@(stageIndex == 0)" @onclick="@(() => Vm.MoveStage(stageIndex, -1))"><AppIcon Kind="arrow-up" /></button>
+                                                        <button aria-label="@($"Move step {stageIndex + 1} down")" title="Move down" class="dcbtn" disabled="@(stageIndex == Vm.EdStages.Count - 1)" @onclick="@(() => Vm.MoveStage(stageIndex, +1))"><AppIcon Kind="arrow-down" /></button>
+                                                        <button aria-label="@($"Remove step {stageIndex + 1}")" title="Remove step" class="dcbtn danger" @onclick="@(() => Vm.RemoveStage(stageIndex))"><AppIcon Kind="close" /></button>
+                                                    </div>
+                                                </div>
+                                                <div class="list-stage-body">
+                                                    @if (stageGate is not null)
+                                                    {
+                                                        <div class="list-stage-gate">
+                                                            <button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">
+                                                                <AppIcon Kind="@(stageGate is WaitGate ? "clock" : "split")" />
+                                                                <span>@(stageGate is WaitGate wait ? $"Wait {wait.Duration.TotalSeconds:0.#} seconds" : stageGate is ConditionGate condition ? $"If {condition.Expression}" : "Edit gate")</span>
+                                                            </button>
+                                                            <button class="dcbtn danger" aria-label="@($"Remove gate from step {stageIndex + 1}")" title="Remove gate" @onclick="@(() => Vm.RemoveGate(stageIndex))"><AppIcon Kind="close" /></button>
+                                                        </div>
+                                                    }
+                                                    <div class="stage-jobs">
+                                                        @if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is SendEmailChainAction emailAction)
+                                                        {
+                                                            <button class="stage-job-chip" @onclick="@(() => Vm.OpenEmailActionEditor(stageIndex))"><AppIcon Kind="mail" /><span><strong>Send email</strong><small>@emailAction.Recipient</small></span><span class="list-configure">Edit</span></button>
+                                                        }
+                                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is SendSmsChainAction smsAction)
+                                                        {
+                                                            <button class="stage-job-chip" @onclick="@(() => Vm.OpenSmsActionEditor(stageIndex))"><AppIcon Kind="message" /><span><strong>Send SMS</strong><small>@smsAction.Recipient</small></span><span class="list-configure">Edit</span></button>
+                                                        }
+                                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is VirtualMachineChainAction vmAction)
+                                                        {
+                                                            <button class="stage-job-chip" @onclick="@(() => Vm.EditQemuAction(stageIndex))"><AppIcon Kind="vm" /><span><strong>@vmAction.ImageProfile</strong><small>@vmAction.MemoryMb MiB · @vmAction.Cpus CPU(s) · @vmAction.TimeoutSeconds s timeout</small></span><span class="list-configure">Configure</span></button>
+                                                        }
+                                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is LoopChainAction loopAction)
+                                                        {
+                                                            <button class="stage-job-chip" @onclick="@(() => Vm.EditLoopAction(stageIndex))"><AppIcon Kind="@(loopAction.Type == LoopChainAction.HumanType ? "human" : "agent")" /><span><strong>@loopAction.DisplayName</strong><small>Response saved to @loopAction.ResponseField</small></span><span class="list-configure">Edit</span></button>
+                                                        }
+                                                        @foreach (var (jobId, j) in stage.Select((id, j) => (id, j)))
+                                                        {
+                                                            var branchIndex = j;
+                                                            <div class="stage-job-chip"><AppIcon Kind="code" /><span class="list-job-name">@Vm.JobName(jobId)</span><JobCodeLink Job="@Vm.Jobs?.FirstOrDefault(job => job.Id == jobId)" OnEdit="OpenCodeAsync" /><button class="dcbtn danger" aria-label="@($"Remove {Vm.JobName(jobId)} from step {stageIndex + 1}")" title="Remove job" @onclick="@(() => Vm.RemoveBranch(stageIndex, branchIndex))"><AppIcon Kind="close" /></button></div>
+                                                        }
+                                                    </div>
+                                                    @if (stageGate is ConditionGate { ElseBranch: { Count: > 0 } other })
+                                                    {
+                                                        <div class="list-false-path"><strong>When false</strong><WorkflowBranchPreview Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())" Stages="@other.Select(Vm.BuildStageView).ToList()" /><button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">Edit false path</button></div>
+                                                    }
+                                                    @if (!Vm.HasStageAction(stageIndex))
+                                                    {
+                                                        <div class="stage-branch-row">
+                                                            <select class="dcinput branch-select" aria-label="@($"Parallel job for step {stageIndex + 1}")" value="@Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")" @onchange="@((e) => Vm.SetBranchJobId(stageIndex, e))">
+                                                                <option value="">Choose a parallel job…</option>
+                                                                @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>()) { <option value="@job.Id">@job.Name</option> }
+                                                            </select>
+                                                            <button class="dcbtn" disabled="@(string.IsNullOrEmpty(Vm.EdBranchJobIds.GetValueOrDefault(stageIndex, "")))" @onclick="@(() => Vm.AddBranch(stageIndex))"><AppIcon Kind="plus" /> Add parallel job</button>
+                                                        </div>
+                                                    }
+                                                    <div class="list-stage-footer">
+                                                        @if (stageGate is null) { <button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))"><AppIcon Kind="split" /> Add condition or delay</button> }
+                                                        <button class="dcbtn" @onclick="@(() => Vm.OpenStageNodePicker(stageIndex))"><AppIcon Kind="plus" /> Insert step before</button>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        }
+                                    </ol>
+                                }
+                            </section>
+                        }
+                    </div>
+                    @if (_codeJob is { } codeJob)
+                    {
+                        <WorkflowCodeWindow @ref="_codeWindow" Job="codeJob" OnClose="() => _codeJob = null" />
+                    }
+                </div>
+            </div>
         }
 
         @* ── Unified connector step picker ─────────────────────────────────────────────── *@
@@ -1235,6 +1255,52 @@ else
     [SupplyParameterFromQuery(Name = "workflow")] public Guid? WorkflowId { get; set; }
     [SupplyParameterFromQuery(Name = "chain")] public Guid? ChainId { get; set; }
     [SupplyParameterFromQuery(Name = "run")] public Guid? RunId { get; set; }
+
+    private JobView? _codeJob;
+    private WorkflowCodeWindow? _codeWindow;
+
+    private async Task<bool> CloseCodeAsync()
+    {
+        if (_codeJob is not null && _codeWindow is not null && !await _codeWindow.ConfirmCloseAsync())
+        {
+            return false;
+        }
+        _codeJob = null;
+        return true;
+    }
+
+    private async Task OpenCodeAsync(JobView job)
+    {
+        if (_codeJob?.Id == job.Id || !await CloseCodeAsync())
+        {
+            return;
+        }
+        _codeJob = job;
+    }
+
+    private async Task CloseWorkflowAsync()
+    {
+        if (await CloseCodeAsync())
+        {
+            Vm.CloseEditor();
+        }
+    }
+
+    private async Task ShowWorkflowDetailsAsync()
+    {
+        if (await CloseCodeAsync())
+        {
+            Vm.ShowWorkflowDetails();
+        }
+    }
+
+    private async Task SaveWorkflowAsync()
+    {
+        if (await CloseCodeAsync())
+        {
+            await Vm.SaveChainAsync();
+        }
+    }
 
     private string? _chainContextJson;
     private string? _chainContextJsonPath;

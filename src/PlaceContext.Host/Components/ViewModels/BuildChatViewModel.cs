@@ -10,6 +10,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Operations;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application;
+using PlaceContext.Host.Components.Models;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -44,11 +45,19 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
     public bool WorkspaceOpen => _workspaceVisible == true || PreviewItem is not null || ShowOverview || PreviewChart is not null;
     public bool WorkspaceVisible => _workspaceVisible ?? (Conversation.Messages.Count > 0 || WorkspaceOpen);
     public void OpenWorkspace() => _workspaceVisible = true;
+    public DashboardSection OverviewSection { get; private set; } = DashboardSection.Runs;
+    public void OpenDashboardSection(DashboardSection section)
+    {
+        OpenOverview();
+        OverviewSection = section;
+    }
+
     public void OpenOverview(string filter = "all")
     {
         ClosePreview();
         OpenWorkspace();
         ShowOverview = true;
+        OverviewSection = DashboardSection.Runs;
         dashboard?.SetFilter(filter);
     }
     public void CloseWorkspace()
@@ -155,7 +164,24 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             return false;
         }
         var mention = BuildMcpTools.Mention(server.Name);
-        if (!BuildMcpTools.MentionNames(Draft).Contains(server.Name, StringComparer.OrdinalIgnoreCase))
+        if (_mentionStart >= 0 && _mentionDraft != Draft)
+        {
+            return false;
+        }
+        if (_mentionStart >= 0 && _mentionDraft == Draft)
+        {
+            var suffix = Draft[_mentionEnd..];
+            var insertion = mention + (suffix.Length == 0 || !char.IsWhiteSpace(suffix[0]) ? " " : "");
+            var draft = Draft[.._mentionStart] + insertion + suffix;
+            if (draft.Length > 16000)
+            {
+                Error = "Shorten your message before adding an MCP.";
+                return false;
+            }
+            Draft = draft;
+            _composerCaret = _mentionStart + insertion.Length;
+        }
+        if (_mentionStart < 0 && !BuildMcpTools.MentionNames(Draft).Contains(server.Name, StringComparer.OrdinalIgnoreCase))
         {
             var draft = mention + " " + Draft;
             if (draft.Length > 16000)
@@ -165,6 +191,8 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             }
             Draft = draft;
         }
+        _composerCaret ??= Draft.Length;
+        ResetMcpMention();
         ShowMcpMenu = false;
         if (_module is not null)
         {
@@ -173,7 +201,13 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         return true;
     }
 
-    public async Task OpenMcpMenuAsync()
+    public Task OpenMcpMenuAsync()
+    {
+        ResetMcpMention();
+        return LoadMcpMenuAsync(true);
+    }
+
+    private async Task LoadMcpMenuAsync(bool addWhenEmpty)
     {
         ShowMcpMenu = true;
         if (LoadingMcps)
@@ -191,7 +225,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             {
                 AvailableMcps = servers.Where(x => x.ProjectId == projectId && x.Enabled)
                     .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToArray();
-                if (!servers.Any(x => x.ProjectId == projectId) && ShowMcpMenu)
+                if (addWhenEmpty && !servers.Any(x => x.ProjectId == projectId) && ShowMcpMenu)
                 {
                     await OpenAddMcpAsync();
                 }
@@ -296,6 +330,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         Draft = "";
         Images.Clear();
         ShowMcpMenu = ShowAddMcp = LoadingMcps = _reopenMcpMenu = false;
+        ResetMcpMention();
         McpError = null;
         AvailableMcps = [];
         ResetWorkspace();
@@ -710,7 +745,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             _module ??= await js.InvokeAsync<IJSObjectReference>("import", "./build-chat.js");
             _reference ??= DotNetObjectReference.Create(this);
             SpeechSupported = await _module.InvokeAsync<bool>("supportsSpeech");
-            await _module.InvokeVoidAsync("mountChat", ViewId);
+            await _module.InvokeVoidAsync("mountChat", ViewId, _reference);
             NotifyStateChanged();
         }
         catch (JSException)

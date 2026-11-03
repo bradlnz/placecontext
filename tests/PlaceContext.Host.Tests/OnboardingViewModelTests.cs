@@ -82,6 +82,16 @@ public sealed class OnboardingViewModelTests
         Assert.False(vm.IsActive("billing"));
     }
 
+    [Fact]
+    public void Settings_groups_do_not_expose_admin_links_before_authorization()
+    {
+        var vm = new SettingsLayoutViewModel(new Navigation("/settings/api-tokens"), null!, null!);
+        var group = Assert.Single(vm.VisibleGroups);
+        Assert.Equal("Access", group.Key);
+        Assert.Equal(SettingsLayoutViewModel.ApiTokensPath, Assert.Single(group).Path);
+        Assert.Equal("API tokens", vm.ActiveLabel);
+    }
+
     private static OnboardingViewModel Create(ClusterQueries queries, Navigation navigation) =>
         new(new PlaceContextService(queries, null!, null!, null!),
             Options.Create(new RunBillingDeploymentOptions { ManagedHosting = true }),

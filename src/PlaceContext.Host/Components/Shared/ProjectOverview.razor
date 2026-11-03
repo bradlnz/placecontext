@@ -1,20 +1,17 @@
+@implements IDisposable
 @using PlaceContext.Host.Components.ViewModels.Helpers
 
 
 
 <div class="page">
 
-    <div class="page-head">
-        <div>
-            <h1 class="page-title">Project overview</h1>
-            <p class="page-sub">
-                Live job counts and recent activity for this project.
-            </p>
-        </div>
-    </div>
-
     @if (Vm.LoadError is not null)
     { <p role="alert">@Vm.LoadError</p><button class="dcbtn" @onclick="Vm.RefreshActivityAsync">Try again</button> }
+    @if (Section == DashboardSection.Runs)
+    {
+    <section class="overview-section" aria-label="Run activity">
+        <h2 class="section-title">Run activity</h2>
+        <p class="section-description">Running and queued jobs, recent outcomes, and execution history.</p>
     @* ── Stat cards ─────────────────────────────────────────────────────────────────────── *@
     <div class="stat-grid">
         <div class="dccard stat-card">
@@ -47,8 +44,61 @@
         </div>
     </div>
 
-    @if (Vm.IsFilter("all"))
-    {
+    @* ── Recent jobs table ──────────────────────────────────────────────────────────────── *@
+    <div class="dccard jobs-card">
+        <div class="jobs-head">
+            <span class="jobs-title">Recent jobs · latest 50</span>
+            <div class="jobs-filters">
+                @foreach (var f in Vm.FilterOptions)
+                {
+                    <button type="button" @onclick="@(() => Vm.SetFilter(f))"
+                          class="jobs-filter"
+                          style="background:@(Vm.IsFilter(f) ? "var(--card-2)" : "transparent");
+                                 border:1px solid @(Vm.IsFilter(f) ? "var(--border-2)" : "transparent");
+                                 color:@(Vm.IsFilter(f) ? "var(--text)" : "var(--text-3)")">@f</button>
+                }
+            </div>
+        </div>
+        <div class="jobs-scroll">
+            <div class="jobs-grid-head">
+                <span>STATUS</span><span>JOB</span><span>PROJECT</span><span>SHARDS</span><span>DURATION</span><span>STARTED</span><span>RETURN</span>
+            </div>
+            @if (!Vm.Ready)
+            {
+                <div class="jobs-loading"><Skeleton Kind="text" Rows="6" /></div>
+            }
+            else if (Vm.Filtered() is { Count: 0 })
+            {
+                <div class="jobs-empty">
+                    No matching runs in the latest 50 runs for this project.
+                </div>
+            }
+            else
+            {
+                @foreach (var rep in Vm.Filtered())
+                {
+                    var run = rep.Run;
+                    <div @onclick="@(() => Vm.OpenRun(run.Id))"
+                         class="dcdash-row jobs-row"
+                         @key="run.Id">
+                        <span class="job-status" style="color:@Vm.StatusTextColor(run.Status)">
+                            <span class="job-status-dot" style="background:@Vm.StatusTextColor(run.Status); animation:@(Vm.IsRunningStatus(run.Status) ? "dcpulse 1.6s ease-in-out infinite" : "none")"></span>@Vm.StatusLabel(run.Status)
+                        </span>
+                        <span class="job-name">@rep.JobName</span>
+                        <span class="job-project">@rep.ProjectName</span>
+                        <span class="job-cell">
+                            @Vm.ShardSummary(run)
+                        </span>
+                        <span class="job-cell">@DashboardViewModel.Duration(run)</span>
+                        <span class="job-started">@Vm.StartedLabel(run.StartedAt)</span>
+                        <span class="job-return">@(run.Snapshot.MapSourceKind)</span>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+    </section>
+
     @* ── Chain quick actions: contextual execution without a dashboard submission CTA ─────── *@
     <section class="dccard dashboard-quick-chains" aria-labelledby="quick-chain-title">
         <div class="quick-chain-head">
@@ -107,11 +157,53 @@
         }
     </section>
 
-    @* ── Pinned entities: one-click access to the business views of tagged data ────────── *@
-    @if (Vm.Entities.Count > 0)
+    }
+    @if (Section == DashboardSection.Charts)
     {
+    <section class="overview-section" aria-label="Charts">
+    <p class="section-description">Live data · refreshes every 10 seconds while this panel is open.</p>
+    @if (Vm.ChartsError is not null)
+    {
+        <p role="status">Refresh failed: @Vm.ChartsError</p>
+    }
+    @{ var sqlCharts = Vm.SqlCharts(); }
         <div class="charts-head">
-            <span class="section-title">Entities</span>
+            <h2 class="section-title">Charts</h2>
+            @if (Vm.CurrentProjectId is { } chartsPid)
+            {
+                <a href="@($"/project/{chartsPid}/analytics")" class="charts-edit-link">edit in Analytics <AppIcon Kind="arrow-right" /></a>
+            }
+        </div>
+        <div class="charts-grid">
+            @foreach (var chart in sqlCharts)
+            {
+                <div class="dccard chart-card" @key="chart.TableName">
+                    <div class="chart-card-head">
+                        <span class="chart-title">@chart.TableName["sql:".Length..]</span>
+                        <span class="spacer"></span>
+                        <span class="chart-time">@Vm.ChartDate(chart.GeneratedAt)</span>
+                    </div>
+                    @if (chart.Error is not null)
+                    {
+                        <p role="status">@chart.Error</p>
+                    }
+                    <div class="chart-canvas-wrap">
+                        <div class="pc-chart" id="@DashboardViewModel.CanvasId(chart.TableName)"></div>
+                    </div>
+                </div>
+            }
+        </div>
+    @if (sqlCharts.Count == 0)
+    { <p class="section-empty">No saved charts yet. Create a chart in Analytics to display it here.</p> }
+    </section>
+
+    }
+    @if (Section == DashboardSection.Data)
+    {
+    <section class="overview-section" aria-label="Data">
+    @* ── Pinned entities: one-click access to the business views of tagged data ────────── *@
+        <div class="charts-head">
+            <h2 class="section-title">Data</h2>
             <button class="dcbtn btn-sm" disabled="@Vm.EntityChartsLoading" @onclick="Vm.LoadEntityChartsAsync">
                 @(Vm.EntityChartsLoading ? "Loading summaries…" : "Load summaries")
             </button>
@@ -153,90 +245,11 @@
                 </a>
             }
         </div>
-    }
-
-    @* ── Charts (read-only copies from the current project's Analytics) ───────────── *@
-    @if (Vm.SqlCharts() is { Count: > 0 } sqlCharts)
-    {
-        <div class="charts-head">
-            <span class="section-title">Charts</span>
-            @if (Vm.CurrentProjectId is { } chartsPid)
-            {
-                <a href="@($"/project/{chartsPid}/analytics")" class="charts-edit-link">edit in Analytics <AppIcon Kind="arrow-right" /></a>
-            }
-        </div>
-        <div class="charts-grid">
-            @foreach (var chart in sqlCharts)
-            {
-                <div class="dccard chart-card" @key="chart.TableName">
-                    <div class="chart-card-head">
-                        <span class="chart-title">@chart.TableName["sql:".Length..]</span>
-                        <span class="spacer"></span>
-                        <span class="chart-time">@Vm.ChartDate(chart.GeneratedAt)</span>
-                    </div>
-                    <div class="chart-canvas-wrap">
-                        <canvas id="@DashboardViewModel.CanvasId(chart.TableName)"></canvas>
-                    </div>
-                </div>
-            }
-        </div>
-    }
+    @if (Vm.Entities.Count == 0)
+    { <p class="section-empty">No data entities are configured for this project.</p> }
+    </section>
 
     }
-
-    @* ── Recent jobs table ──────────────────────────────────────────────────────────────── *@
-    <div class="dccard jobs-card">
-        <div class="jobs-head">
-            <span class="jobs-title">Recent jobs · latest 50</span>
-            <div class="jobs-filters">
-                @foreach (var f in Vm.FilterOptions)
-                {
-                    <button type="button" @onclick="@(() => Vm.SetFilter(f))"
-                          class="jobs-filter"
-                          style="background:@(Vm.IsFilter(f) ? "var(--card-2)" : "transparent");
-                                 border:1px solid @(Vm.IsFilter(f) ? "var(--border-2)" : "transparent");
-                                 color:@(Vm.IsFilter(f) ? "var(--text)" : "var(--text-3)")">@f</button>
-                }
-            </div>
-        </div>
-        <div class="jobs-scroll">
-            <div class="jobs-grid-head">
-                <span>STATUS</span><span>JOB</span><span>PROJECT</span><span>SHARDS</span><span>DURATION</span><span>STARTED</span><span>RETURN</span>
-            </div>
-            @if (!Vm.Ready)
-            {
-                <div class="jobs-loading"><Skeleton Kind="text" Rows="6" /></div>
-            }
-            else if (Vm.Filtered() is { Count: 0 })
-            {
-                <div class="jobs-empty">
-                    No matching runs in the latest 50 runs for this project.
-                </div>
-            }
-            else
-            {
-                @foreach (var rep in Vm.Filtered())
-                {
-                    var run = rep.Run;
-                    <div @onclick="@(() => Vm.OpenRun(run.Id))"
-                         class="dcdash-row jobs-row"
-                         @key="run.Id">
-                        <span class="job-status" style="color:@Vm.StatusTextColor(run.Status)">
-                            <span class="job-status-dot" style="background:@Vm.StatusTextColor(run.Status); animation:@(Vm.IsRunningStatus(run.Status) ? "dcpulse 1.6s ease-in-out infinite" : "none")"></span>@Vm.StatusLabel(run.Status)
-                        </span>
-                        <span class="job-name">@rep.JobName</span>
-                        <span class="job-project">@rep.ProjectName</span>
-                        <span class="job-cell">
-                            @Vm.ShardSummary(run)
-                        </span>
-                        <span class="job-cell">@DashboardViewModel.Duration(run)</span>
-                        <span class="job-started">@Vm.StartedLabel(run.StartedAt)</span>
-                        <span class="job-return">@(run.Snapshot.MapSourceKind)</span>
-                    </div>
-                }
-            }
-        </div>
-    </div>
 </div>
 
 @if (Vm.RunPromptChain is not null)
@@ -312,7 +325,41 @@
 <style>.dcdash-row:hover { background:var(--hover); }</style>
 
 @code {
+    [Parameter] public DashboardSection Section { get; set; } = DashboardSection.Runs;
     [Parameter, EditorRequired] public DashboardViewModel Vm { get; set; } = null!;
     protected override void OnInitialized() => Vm.ResetChartCache();
-    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.RenderChartsAsync();
+    private readonly CancellationTokenSource _chartCancellation = new();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ = RefreshChartsAsync(_chartCancellation.Token);
+        }
+        if (Section == DashboardSection.Charts)
+        {
+            await Vm.RenderChartsAsync();
+        }
+    }
+
+    private async Task RefreshChartsAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                if (Section == DashboardSection.Charts)
+                {
+                    await InvokeAsync(() => Vm.RefreshChartsAsync(ct));
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
+    public void Dispose()
+    {
+        _chartCancellation.Cancel();
+        _chartCancellation.Dispose();
+    }
 }
