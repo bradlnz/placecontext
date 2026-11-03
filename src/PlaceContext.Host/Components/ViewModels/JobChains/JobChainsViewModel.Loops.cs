@@ -4,13 +4,19 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class JobChainsViewModel
 {
-    public bool ShowLoopEditor { get; private set; }
+    public bool ShowLoopEditor
+    {
+        get; private set;
+    }
     public string LoopKind { get; private set; } = LoopChainAction.HumanType;
     public string LoopInstructions { get; set; } = "";
     public string LoopResponseType { get; set; } = LoopChainAction.TextResponse;
     public string LoopResponseField { get; set; } = "response";
     public string LoopAgentProvider { get; set; } = LoopChainAction.ExternalAgent;
-    public string? LoopError { get; private set; }
+    public string? LoopError
+    {
+        get; private set;
+    }
     private int _loopStageIndex;
     private bool _editingLoop;
 
@@ -30,7 +36,10 @@ public sealed partial class JobChainsViewModel
 
     public void EditLoopAction(int stageIndex)
     {
-        if (EdStageActions.GetValueOrDefault(stageIndex) is not LoopChainAction loop) return;
+        if (EdStageActions.GetValueOrDefault(stageIndex) is not LoopChainAction loop)
+        {
+            return;
+        }
         OpenLoopActionAt(loop.Type, stageIndex);
         _editingLoop = true;
         LoopInstructions = loop.Instructions;
@@ -54,7 +63,10 @@ public sealed partial class JobChainsViewModel
             EdStageActions[_loopStageIndex] = action;
             ShowLoopEditor = false;
         }
-        catch (ArgumentException ex) { LoopError = ex.Message; }
+        catch (ArgumentException ex)
+        {
+            LoopError = ex.Message;
+        }
         NotifyStateChanged();
     }
 

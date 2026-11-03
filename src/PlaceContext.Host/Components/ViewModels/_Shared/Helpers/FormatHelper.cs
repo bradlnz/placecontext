@@ -18,7 +18,9 @@ public static class FormatHelper
     {
         var span = end - start;
         if (span.TotalSeconds < 60)
+        {
             return $"{(int)span.TotalSeconds}s";
+        }
         return $"{(int)span.TotalMinutes}m {span.Seconds}s";
     }
 

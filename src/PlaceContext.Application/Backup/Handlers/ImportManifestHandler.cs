@@ -1,6 +1,11 @@
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Networking;
+using PlaceContext.Application.Organization;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Triggers;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -56,20 +61,29 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
     public async Task<ImportResultView> HandleAsync(ImportManifestCommand command, CancellationToken ct = default)
     {
         if (command.Mode != ImportMode.Merge)
+        {
             throw new NotSupportedException($"Import mode '{command.Mode}' is not supported.");
-
+        }
         var m = command.Manifest;
         if (m.WorkerNetworks.Count > 0 || m.NetworkAssignments.Count > 0)
         {
             if (_networks is null || _permissions is null || !await _permissions.HasAsync(Permission.SettingsManage, ct))
+            {
                 throw new UnauthorizedAccessException("Restoring worker networks requires network administration permission.");
+            }
             foreach (var network in m.WorkerNetworks)
+            {
                 WorkerNetworkPolicy.ValidateNetwork(network.Name, network.Cidr, network.Groups);
+            }
             foreach (var assignment in m.NetworkAssignments)
+            {
                 if (!m.WorkerNetworks.Any(network => network.Id == assignment.NetworkId
-                    && network.Groups.Any(group => group.Id == assignment.GroupId)
-                    && m.Jobs.Any(job => job.JobId == assignment.JobId && job.ProjectId == network.ProjectId)))
+                                && network.Groups.Any(group => group.Id == assignment.GroupId)
+                                && m.Jobs.Any(job => job.JobId == assignment.JobId && job.ProjectId == network.ProjectId)))
+                {
                     throw new ArgumentException("The backup contains an invalid job network assignment.");
+                }
+            }
         }
         var now = _clock.UtcNow;
         var warnings = new List<string>();
@@ -78,7 +92,10 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
 
         var (jobMap, jobsCreated, jobsUpdated, jobsSkipped) =
             await ImportJobsAsync(m.Jobs.Select(job => m.NetworkAssignments.Any(assignment => assignment.JobId == job.JobId)
-                ? job with { AllowNetworkEgress = false } : job).ToArray(), projectMap, now, warnings, ct);
+                ? job with
+                {
+                    AllowNetworkEgress = false
+                } : job).ToArray(), projectMap, now, warnings, ct);
 
         var (chainMap, chainsCreated, chainsUpdated, chainsSkipped) =
             await ImportChainsAsync(m.JobChains, projectMap, jobMap, now, warnings, ct);
@@ -101,14 +118,26 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
             // Imported jobs stay deny-egress if restoration stops before their VPC assignment is saved.
             foreach (var network in m.WorkerNetworks)
             {
-                if (!projectMap.TryGetValue(network.ProjectId, out var projectId)) continue;
+                if (!projectMap.TryGetValue(network.ProjectId, out var projectId))
+                {
+                    continue;
+                }
                 var current = (await _networks.LoadAsync(projectId, ct)).Networks.FirstOrDefault(item => item.Name == network.Name && item.Cidr == network.Cidr);
-                var restored = network with { Id = current?.Id ?? Guid.NewGuid(), ProjectId = projectId, Version = current?.Version ?? 0,
-                    Groups = network.Groups.Concat(current?.Groups.Where(group => network.Groups.All(imported => imported.Id != group.Id)) ?? []).ToArray() };
+                var restored = network with
+                {
+                    Id = current?.Id ?? Guid.NewGuid(),
+                    ProjectId = projectId,
+                    Version = current?.Version ?? 0,
+                    Groups = network.Groups.Concat(current?.Groups.Where(group => network.Groups.All(imported => imported.Id != group.Id)) ?? []).ToArray()
+                };
                 await _networks.SaveAsync(restored, ct);
                 foreach (var assignment in m.NetworkAssignments.Where(item => item.NetworkId == network.Id))
+                {
                     if (jobMap.TryGetValue(assignment.JobId, out var job))
+                    {
                         await _networks.AssignAsync(projectId, job.Id, restored.Id, assignment.GroupId, ct);
+                    }
+                }
             }
         }
 
@@ -142,17 +171,15 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
                 await _projects.AddAsync(project, ct);
                 map[pm.ProjectId] = project.Id.Value;
                 created++;
+                continue;
             }
-            else
+            if (existing.Name.Value != pm.Name.Trim())
             {
-                if (existing.Name.Value != pm.Name.Trim())
-                {
-                    existing.Rename(ProjectName.From(pm.Name));
-                    await _projects.UpdateAsync(existing, ct);
-                    updated++;
-                }
-                map[pm.ProjectId] = existing.Id.Value;
+                existing.Rename(ProjectName.From(pm.Name));
+                await _projects.UpdateAsync(existing, ct);
+                updated++;
             }
+            map[pm.ProjectId] = existing.Id.Value;
         }
 
         return (map, created, updated);
@@ -195,8 +222,9 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
             var reduceSource = WorkloadSourceResolver.Resolve(
                 jm.ReduceImage, jm.ReduceRuntimeId, source: null, jm.ReduceEntrypoint, jm.ReduceFiles, parameterContext: "Reduce");
             if (reduceSource is not null)
+            {
                 reduceSpec = new ReduceSpec(reduceSource, jm.ReduceEnv ?? new Dictionary<string, string>());
-
+            }
             var policy = new ExitCodePolicy(jm.SuccessExitCodes, jm.PartialExitCodes);
             var parameters = JobParameterMapper.ToDomain(jm.Parameters);
 
@@ -216,8 +244,8 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
                 await _jobs.UpdateAsync(match, ct);
                 jobMap[jm.JobId] = match;
                 updated++;
+                continue;
             }
-            else
             {
                 var job = Job.Create(newProjectId, jm.Name, jm.Description, mapSpec, reduceSpec, jm.ConcurrencyLimit, policy, now,
                     allowNetworkEgress: jm.AllowNetworkEgress, parameters: parameters, timeoutSeconds: jm.TimeoutSeconds,
@@ -253,31 +281,46 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
 
             var stages = new List<ChainStage>();
             var dangling = false;
-            if (cm.Stages is { Count: > 0 })
+            void RestoreChainStages()
             {
-                foreach (var stageManifest in cm.Stages)
+                if (cm.Stages is { Count: > 0 })
                 {
-                    var jobs = new List<Guid>(stageManifest.JobIds.Count);
-                    foreach (var oldJobId in stageManifest.JobIds)
+                    foreach (var stageManifest in cm.Stages)
                     {
-                        if (jobMap.TryGetValue(oldJobId, out var job)) jobs.Add(job.Id);
-                        else { dangling = true; break; }
+                        var jobs = new List<Guid>(stageManifest.JobIds.Count);
+                        foreach (var oldJobId in stageManifest.JobIds)
+                        {
+                            if (jobMap.TryGetValue(oldJobId, out var job))
+                            {
+                                jobs.Add(job.Id);
+                                continue;
+                            }
+                            dangling = true;
+                            break;
+                        }
+                        if (dangling)
+                        {
+                            break;
+                        }
+                        stages.Add(new ChainStage(
+                                                jobs,
+                                                ToGate(stageManifest.Gate),
+                                                action: ToAction(stageManifest.Action)));
                     }
-                    if (dangling) break;
-                    stages.Add(new ChainStage(
-                        jobs,
-                        ToGate(stageManifest.Gate),
-                        action: ToAction(stageManifest.Action)));
+                    return;
                 }
-            }
-            else
-            {
                 foreach (var oldJobId in cm.StepJobIds)
                 {
-                    if (jobMap.TryGetValue(oldJobId, out var job)) stages.Add(ChainStage.Of(job.Id));
-                    else { dangling = true; break; }
+                    if (jobMap.TryGetValue(oldJobId, out var job))
+                    {
+                        stages.Add(ChainStage.Of(job.Id));
+                        continue;
+                    }
+                    dangling = true;
+                    break;
                 }
             }
+            RestoreChainStages();
             if (dangling)
             {
                 warnings.Add($"Chain '{cm.Name}': a step references a job that couldn't be imported — skipped.");
@@ -293,8 +336,8 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
                 await _chains.UpdateAsync(match, ct);
                 chainMap[cm.ChainId] = match.Id;
                 updated++;
+                continue;
             }
-            else
             {
                 var chain = JobChain.Create(newProjectId, cm.Name, cm.Description, stages, now);
                 await _chains.AddAsync(chain, ct);
@@ -315,7 +358,7 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
 
     private static ChainAction? ToAction(ChainActionManifest? action) => action?.Type switch
     {
-        QemuChainAction.ActionType => new QemuChainAction(action.ImageProfile ?? "", action.Command ?? "",
+        VirtualMachineChainAction.ActionType => new VirtualMachineChainAction(action.ImageProfile ?? "", action.Command ?? "",
             action.OutputField ?? "qemu_result", action.MemoryMb, action.Cpus, action.TimeoutSeconds, action.AllowNetwork, action.PauseForLogin),
         LoopChainAction.HumanType or LoopChainAction.AgentType => new LoopChainAction(
             action.Type, action.Instructions ?? "", action.ResponseField ?? "", action.ResponseType ?? LoopChainAction.TextResponse,
@@ -377,38 +420,54 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
                     var next = _cron.IsValid(tm.CronExpression) ? _cron.Next(tm.CronExpression, now, _tenant.TimeZoneId) : null;
                     match.Reschedule(tm.CronExpression, next, now);
                 }
-                if (tm.Enabled && !match.Enabled) match.Enable(match.NextRunAt, now);
-                else if (!tm.Enabled && match.Enabled) match.Disable(now);
-
+                void RestoreEnabledState()
+                {
+                    if (tm.Enabled && !match.Enabled)
+                    {
+                        match.Enable(match.NextRunAt, now);
+                        return;
+                    }
+                    if (!tm.Enabled && match.Enabled)
+                    {
+                        match.Disable(now);
+                    }
+                }
+                RestoreEnabledState();
                 await _triggers.UpdateAsync(match, ct);
                 updated++;
+                continue;
             }
-            else
             {
-                JobTrigger trigger;
-                if (kind == TriggerKind.Schedule)
+                var trigger = CreateImportedTrigger();
+                if (trigger is null)
                 {
-                    if (string.IsNullOrWhiteSpace(tm.CronExpression) || !_cron.IsValid(tm.CronExpression))
-                    {
-                        warnings.Add($"Trigger '{tm.Name}': missing or invalid cron expression — skipped.");
-                        skipped++;
-                        continue;
-                    }
-                    var next = _cron.Next(tm.CronExpression, now, _tenant.TimeZoneId);
-                    trigger = JobTrigger.CreateSchedule(job.ProjectId, job.Id, tm.Name, tm.CronExpression, next, now);
+                    skipped++;
+                    continue;
                 }
-                else
+                JobTrigger? CreateImportedTrigger()
                 {
+                    if (kind == TriggerKind.Schedule)
+                    {
+                        if (string.IsNullOrWhiteSpace(tm.CronExpression) || !_cron.IsValid(tm.CronExpression))
+                        {
+                            warnings.Add($"Trigger '{tm.Name}': missing or invalid cron expression — skipped.");
+                            return null;
+                        }
+                        var next = _cron.Next(tm.CronExpression, now, _tenant.TimeZoneId);
+                        return JobTrigger.CreateSchedule(job.ProjectId, job.Id, tm.Name, tm.CronExpression, next, now);
+                    }
                     if (string.IsNullOrWhiteSpace(tm.EventName))
                     {
                         warnings.Add($"Trigger '{tm.Name}': missing event name — skipped.");
-                        skipped++;
-                        continue;
+                        return null;
                     }
-                    trigger = JobTrigger.CreateEvent(job.ProjectId, job.Id, tm.Name, tm.EventName, now);
+                    return JobTrigger.CreateEvent(job.ProjectId, job.Id, tm.Name, tm.EventName, now);
                 }
 
-                if (!tm.Enabled) trigger.Disable(now);
+                if (!tm.Enabled)
+                {
+                    trigger.Disable(now);
+                }
                 await _triggers.AddAsync(trigger, ct);
                 created++;
             }
@@ -469,25 +528,29 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
                 continue;
             }
 
-            Guid sourceId;
-            if (dm.SourceKind == "chain")
+            var source = ResolveSourceId();
+            if (source is not { } sourceId)
             {
-                if (!chainMap.TryGetValue(dm.JobId, out sourceId))
-                {
-                    warnings.Add($"Data mapping '{dm.TargetTable}': references a chain that couldn't be imported — skipped.");
-                    skipped++;
-                    continue;
-                }
+                skipped++;
+                continue;
             }
-            else
+            Guid? ResolveSourceId()
             {
-                if (!jobMap.TryGetValue(dm.JobId, out var job))
+                if (dm.SourceKind == "chain")
                 {
-                    warnings.Add($"Data mapping '{dm.TargetTable}': references a job that couldn't be imported — skipped.");
-                    skipped++;
-                    continue;
+                    if (chainMap.TryGetValue(dm.JobId, out var chainId))
+                    {
+                        return chainId;
+                    }
+                    warnings.Add($"Data mapping '{dm.TargetTable}': references a chain that couldn't be imported — skipped.");
+                    return null;
                 }
-                sourceId = job.Id;
+                if (jobMap.TryGetValue(dm.JobId, out var job))
+                {
+                    return job.Id;
+                }
+                warnings.Add($"Data mapping '{dm.TargetTable}': references a job that couldn't be imported — skipped.");
+                return null;
             }
 
             IReadOnlyList<DataFieldMapping> fields;
@@ -512,8 +575,8 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
                 match.Update(dm.TargetTable, dm.RowsPath, fields, dm.Enabled, now);
                 await _mappings.UpdateAsync(match, ct);
                 updated++;
+                continue;
             }
-            else
             {
                 var mapping = DataMapping.Create(newProjectId, sourceId, dm.TargetTable, dm.RowsPath, fields, now, dm.Enabled, dm.SourceKind);
                 await _mappings.AddAsync(mapping, ct);

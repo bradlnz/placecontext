@@ -1,5 +1,5 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -18,7 +18,10 @@ public sealed class DeleteJobChainHandler : ICommandHandler<DeleteJobChainComman
     public async Task<bool> HandleAsync(DeleteJobChainCommand command, CancellationToken ct = default)
     {
         var existing = await _chains.GetByIdAsync(command.ChainId, ct);
-        if (existing is null) return false;
+        if (existing is null)
+        {
+            return false;
+        }
         await _chains.RemoveAsync(command.ChainId, ct);
         await _uow.SaveChangesAsync(ct);
         return true;

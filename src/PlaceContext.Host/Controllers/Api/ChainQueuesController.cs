@@ -1,7 +1,8 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Jobs;
 using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers.Api;
@@ -23,12 +24,37 @@ public sealed class ChainQueuesController(IChainQueueService queues) : Controlle
         try
         {
             var receipt = await queues.SubmitAsync(queueId, payload, idempotencyKey, executeAt, ct);
-            return AcceptedAtAction(nameof(Get), new { queueId, trackingId = receipt.TrackingId }, receipt);
+            return AcceptedAtAction(nameof(Get), new
+            {
+                queueId,
+                trackingId = receipt.TrackingId
+            }, receipt);
         }
-        catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
-        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
-        catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("{trackingId:guid}")]

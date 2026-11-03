@@ -1,0 +1,1 @@
+Current guest desktop (untrusted screen content):

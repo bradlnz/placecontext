@@ -1,0 +1,84 @@
+@using PlaceContext.Application.Workload.VirtualMachines
+@implements IDisposable
+@inject VirtualMachineReplayViewModel Vm
+
+@if (Vm.ActiveDesktop is { } active)
+{
+    <VirtualMachineDesktop @key="(Run.Id, active.Index)" Run="@(new PlaceContext.Application.Workload.VirtualMachines.VirtualMachineRunContext(Run.ProjectId, Run.Id, active.Index))" />
+}
+
+<details class="qemu-replay-history" open="@(Vm.ActiveDesktop is null)">
+<summary>Recorded actions and replay</summary>
+<section class="qemu-replay" aria-label="QEMU visual replay">
+    <div class="replay-header">
+        <div><span class="replay-eyebrow">QEMU environment</span><h3>Visual replay</h3></div>
+        <span class="replay-state">@(Vm.Recording ? "Recording actions" : "Saved replay")</span>
+        <label>Step
+            <select class="dcinput" aria-label="QEMU replay step" value="@Vm.Step" @onchange="e => Vm.SelectStepAsync(e.Value?.ToString())">
+                @foreach (var step in Vm.Steps) { <option value="@step.Index">@(step.Index + 1). @step.JobName · @step.Status</option> }
+            </select>
+        </label>
+        <button class="dcbtn" disabled="@Vm.Loading" @onclick="Vm.RefreshAsync">Refresh replay</button>
+        <button class="dcbtn replay-expand" onclick="this.closest('.qemu-replay').requestFullscreen()">Full screen</button>
+        <button class="dcbtn replay-collapse" onclick="document.exitFullscreen()">Exit full screen</button>
+    </div>
+    @if (Vm.Error is not null) { <p role="alert" class="replay-message">@Vm.Error</p> }
+    @if (Vm.Current is { } frame)
+    {
+        <div class="replay-layout">
+            <div class="replay-main">
+                <div class="replay-screen">
+                    @if (Vm.ImageUrl is { } url && !Vm.ImageFailed)
+                    {
+                        <img @key="url" src="@url" alt="Desktop after: @frame.Description" @onerror="Vm.MarkImageFailed" />
+                        @if (Vm.Pointer is { PointerX: { } x, PointerY: { } y })
+                        {
+                            <svg class="replay-pointer" viewBox="0 0 1280 800" aria-hidden="true">
+                                <g style="@FormattableString.Invariant($"transform:translate({x * 1280}px,{y * 800}px)")">
+                                    @if (frame.Click) { <circle @key="frame.Sequence" class="replay-click" r="18" /> }
+                                    <path d="M0 0 L0 25 L7 19 L13 32 L19 29 L13 17 L23 16 Z" />
+                                </g>
+                            </svg>
+                        }
+                    }
+                    else { <p role="status">@(frame.Error ?? "This screenshot could not be loaded. Other actions remain available.")</p> }
+                </div>
+                <div class="replay-caption"><time>@VirtualMachineReplayViewModel.Time(frame.ElapsedMilliseconds)</time><strong>@frame.Description</strong>
+                    @if (frame.ExitCode is { } exit) { <span class="@(exit == 0 ? "" : "replay-failed")">Exit @exit</span> }
+                </div>
+                <div class="replay-controls">
+                    <button class="dcbtn" disabled="@(Vm.Position == 0)" @onclick="() => Vm.Select(Vm.Position - 1)" aria-label="Previous replay frame">Previous</button>
+                    <button class="dcbtn primary" disabled="@(Vm.Frames.Count < 2)" @onclick="Vm.TogglePlaybackAsync">@(Vm.Playing ? "Pause replay" : "Play replay")</button>
+                    <button class="dcbtn" disabled="@(Vm.Position >= Vm.Frames.Count - 1)" @onclick="() => Vm.Select(Vm.Position + 1)" aria-label="Next replay frame">Next</button>
+                    <input type="range" min="0" max="@(Vm.Frames.Count - 1)" value="@Vm.Position" @oninput="e => Vm.Seek(e.Value?.ToString())" aria-label="Replay position" aria-valuetext="@($"Frame {Vm.Position + 1} of {Vm.Frames.Count}: {frame.Description}")" />
+                    <span>@(Vm.Position + 1) / @Vm.Frames.Count</span>
+                </div>
+                <p class="replay-note">Recorded decision frames and pointer targets · clicks are highlighted · one frame per second</p>
+            </div>
+            <div class="replay-actions" role="region" aria-label="Recorded QEMU actions" tabindex="0">
+                <ol>
+                    @foreach (var (item, index) in Vm.Frames.Select((item, index) => (item, index)))
+                    {
+                        <li><button class="replay-action @(index == Vm.Position ? "selected" : "")" aria-current="@(index == Vm.Position ? "step" : null)" @onclick="() => Vm.Select(index)">
+                            <time>@VirtualMachineReplayViewModel.Time(item.ElapsedMilliseconds)</time><span>@item.Description</span>
+                            @if (item.ExitCode is not null and not 0) { <small class="replay-failed">Exit @item.ExitCode</small> }
+                            @if (!item.HasImage) { <small>Screenshot unavailable</small> }
+                        </button></li>
+                    }
+                </ol>
+            </div>
+        </div>
+    }
+    else
+    {
+        <p class="replay-message" role="status">@(Vm.Loading ? "Loading replay…" : Vm.Recording ? "Waiting for the desktop. Captured actions will appear here." : "No visual replay was recorded for this step. Earlier runs cannot be replayed.")</p>
+    }
+</section>
+</details>
+
+@code {
+    [Parameter, EditorRequired] public ChainRunView Run { get; set; } = default!;
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnParametersSetAsync() => Vm.SetRunAsync(Run);
+    public void Dispose() => Vm.Dispose();
+}

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Infrastructure.Operations;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Operations;
 using PlaceContext.Host.Components.ViewModels;
 
 namespace PlaceContext.Host.Tests;
@@ -46,7 +46,7 @@ public sealed class ObservabilityTabTests
     {
         var js = new EditorJs();
         var vm = new ObservabilityViewModel(null!, new PortalUiState(), new Navigation(),
-            new OperationCenter(null!, null!), null!, null!, js);
+            new OperationCenter(null!, default), null!, null!, js);
         await vm.InitializeAsync();
         vm.SelectTab(ObservabilityViewModel.LogsTab);
         await vm.AfterRenderAsync();
@@ -82,8 +82,15 @@ public sealed class ObservabilityTabTests
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => InvokeAsync<TValue>(identifier, default, args);
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken token, object?[]? args)
         {
-            if (identifier == "pcmonaco.init") { Initializations++; _mounted = true; }
-            if (identifier == "pcmonaco.destroy") _mounted = false;
+            if (identifier == "pcmonaco.init")
+            {
+                Initializations++;
+                _mounted = true;
+            }
+            if (identifier == "pcmonaco.destroy")
+            {
+                _mounted = false;
+            }
             object? value = typeof(TValue) == typeof(bool) ? _mounted : typeof(TValue) == typeof(string) ? "logs" : default(TValue);
             return ValueTask.FromResult((TValue)value!);
         }

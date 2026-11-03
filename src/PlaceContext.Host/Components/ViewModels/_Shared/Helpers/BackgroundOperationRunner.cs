@@ -1,5 +1,5 @@
-using PlaceContext.Infrastructure.Operations;
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application.Tenancy;
 
 namespace PlaceContext.Host.Components.ViewModels.Helpers;
 
@@ -27,8 +27,9 @@ public sealed class BackgroundOperationRunner
     {
         var tenant = CurrentTenant.Current;
         if (tenant is null)
+        {
             return "No tenant resolved — sign in again.";
-
+        }
         _opCenter.Run(tenant, projectId, title, href, work, correlationKey: correlationKey);
         return null;
     }

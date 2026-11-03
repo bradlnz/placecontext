@@ -1,8 +1,8 @@
-using System.Net;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Workload;
 using PlaceContext.Infrastructure.Workload;
 
 namespace PlaceContext.Infrastructure.Tests;
@@ -19,7 +19,13 @@ public class PersistentWorkloadRunnerTests
     {
         var handler = new Handler();
         var fallback = new Fallback();
-        var request = Request() with { Image = null, RuntimeId = "rust", Entrypoint = "rust_jobs/src/main.rs", CodeFiles = [("rust_jobs/src/main.rs", "fn main() {}") ] };
+        var request = Request() with
+        {
+            Image = null,
+            RuntimeId = "rust",
+            Entrypoint = "rust_jobs/src/main.rs",
+            CodeFiles = [("rust_jobs/src/main.rs", "fn main() {}")]
+        };
         var runner = Create(handler, fallback);
         await runner.RunAsync(request);
         var payload = JsonDocument.Parse(Assert.Single(handler.Payloads));
@@ -67,7 +73,8 @@ public class PersistentWorkloadRunnerTests
     private static PersistentWorkloadRunner Create(Handler handler, Fallback fallback) => new(
         Options.Create(new WorkloadRunnerOptions
         {
-            PersistentRunnerImages = [Image], PersistentRunnerUrls = ["http://runner-0:8080", "http://runner-1:8080"],
+            PersistentRunnerImages = [Image],
+            PersistentRunnerUrls = ["http://runner-0:8080", "http://runner-1:8080"],
             PersistentRunnerToken = "test-runner-token-longer-than-32-characters"
         }), new Factory(handler), fallback);
 
@@ -78,23 +85,42 @@ public class PersistentWorkloadRunnerTests
     private sealed class Handler : HttpMessageHandler
     {
         public List<string> Payloads { get; } = [];
-        public string? Authorization { get; private set; }
+        public string? Authorization
+        {
+            get; private set;
+        }
         public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
-        public bool BusyOnce { get; set; }
+        public bool BusyOnce
+        {
+            get; set;
+        }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Authorization = request.Headers.Authorization?.Scheme;
             Payloads.Add(await request.Content!.ReadAsStringAsync(ct));
-            if (BusyOnce) { BusyOnce = false; return new(HttpStatusCode.TooManyRequests); }
-            return new(Status) { Content = JsonContent.Create(new WorkloadRunResult(0, "{}", "{}", "",
-                [new WorkloadArtifact("report.pdf", "JVBERg==", true)])) };
+            if (BusyOnce)
+            {
+                BusyOnce = false;
+                return new(HttpStatusCode.TooManyRequests);
+            }
+            return new(Status)
+            {
+                Content = JsonContent.Create(new WorkloadRunResult(0, "{}", "{}", "",
+                [new WorkloadArtifact("report.pdf", "JVBERg==", true)]))
+            };
         }
     }
     private sealed class Fallback : IWorkloadRunner
     {
-        public int Runs { get; private set; }
+        public int Runs
+        {
+            get; private set;
+        }
         public Task<WorkloadRunResult> RunAsync(WorkloadRunRequest request, CancellationToken ct = default)
-        { Runs++; return Task.FromResult(new WorkloadRunResult(0, "{}", "{}", "")); }
+        {
+            Runs++;
+            return Task.FromResult(new WorkloadRunResult(0, "{}", "{}", ""));
+        }
         public Task CancelAsync(string correlationId, CancellationToken ct = default) => Task.CompletedTask;
     }
 }

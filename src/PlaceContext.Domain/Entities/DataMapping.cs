@@ -35,33 +35,63 @@ public sealed class DataMapping
         UpdatedAt = updatedAt;
     }
 
-    public Guid Id { get; }
-    public Guid ProjectId { get; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
 
     /// <summary>The source job OR chain whose results feed this mapping (see <see cref="SourceKind"/>).</summary>
-    public Guid JobId { get; }
+    public Guid JobId
+    {
+        get;
+    }
 
     /// <summary>"job" (per-run primary artifact) or "chain" (the pipeline's final output).</summary>
-    public string SourceKind { get; }
+    public string SourceKind
+    {
+        get;
+    }
 
     /// <summary>The project-database table rows are appended to (created on first ingest).</summary>
-    public string TargetTable { get; private set; }
+    public string TargetTable
+    {
+        get; private set;
+    }
 
     /// <summary>
     /// Optional dot-path into the run's primary artifact locating the array of records to ingest
     /// (e.g. "rows" or "data.items"). Null = the artifact root (an array ingests per element; an
     /// object ingests as a single row).
     /// </summary>
-    public string? RowsPath { get; private set; }
+    public string? RowsPath
+    {
+        get; private set;
+    }
 
     /// <summary>The field mappings: where each column's value comes from in a record.</summary>
-    public IReadOnlyList<DataFieldMapping> Fields { get; private set; }
+    public IReadOnlyList<DataFieldMapping> Fields
+    {
+        get; private set;
+    }
 
     /// <summary>Disabled mappings are kept on the canvas but skipped at ingest time.</summary>
-    public bool Enabled { get; private set; }
+    public bool Enabled
+    {
+        get; private set;
+    }
 
-    public DateTimeOffset CreatedAt { get; }
-    public DateTimeOffset UpdatedAt { get; private set; }
+    public DateTimeOffset CreatedAt
+    {
+        get;
+    }
+    public DateTimeOffset UpdatedAt
+    {
+        get; private set;
+    }
 
     /// <summary>Factory: declares a new mapping from a job onto a project table.</summary>
     public static DataMapping Create(
@@ -75,11 +105,17 @@ public sealed class DataMapping
         string sourceKind = "job")
     {
         if (sourceKind is not ("job" or "chain"))
+        {
             throw new ArgumentException("SourceKind must be 'job' or 'chain'.", nameof(sourceKind));
+        }
         if (projectId == Guid.Empty)
+        {
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
+        }
         if (jobId == Guid.Empty)
+        {
             throw new ArgumentException("JobId must not be empty.", nameof(jobId));
+        }
         Validate(targetTable, fields);
         return new DataMapping(Guid.NewGuid(), projectId, jobId, sourceKind, targetTable.Trim(),
             Normalize(rowsPath), fields, enabled, createdAt, createdAt);
@@ -114,13 +150,19 @@ public sealed class DataMapping
     private static void Validate(string targetTable, IReadOnlyList<DataFieldMapping> fields)
     {
         if (string.IsNullOrWhiteSpace(targetTable))
+        {
             throw new ArgumentException("Target table must not be empty.", nameof(targetTable));
+        }
         ArgumentNullException.ThrowIfNull(fields);
         if (fields.Count == 0)
+        {
             throw new ArgumentException("A mapping needs at least one field.", nameof(fields));
+        }
         var dup = fields.GroupBy(f => f.Column, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
         if (dup is not null)
+        {
             throw new ArgumentException($"Column '{dup.Key}' is mapped more than once.", nameof(fields));
+        }
     }
 
     private static string? Normalize(string? rowsPath)

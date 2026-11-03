@@ -3,8 +3,10 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Auth;
 using PlaceContext.Application.Billing;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
@@ -19,11 +21,16 @@ public sealed class ManagedWorkspaceSignupPostgresTests
     {
         var schema = "signup_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(
-            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES")) { SearchPath = schema }.ConnectionString;
+            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES"))
+        {
+            SearchPath = schema
+        }.ConnectionString;
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await using (var cmd = new NpgsqlCommand($"CREATE SCHEMA \"{schema}\"", conn))
+        {
             await cmd.ExecuteNonQueryAsync();
+        }
         try
         {
             CurrentTenant.Clear();
@@ -85,7 +92,10 @@ public sealed class ManagedWorkspaceSignupPostgresTests
                 await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
                     service.RedeemAsync(activation.ExchangeCode, tenant.Id));
             }
-            finally { CurrentTenant.Clear(); }
+            finally
+            {
+                CurrentTenant.Clear();
+            }
 
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 service.StartAsync(input, new Uri("https://placecontext.io")));
@@ -104,11 +114,23 @@ public sealed class ManagedWorkspaceSignupPostgresTests
     {
         foreach (var invalid in new[] { "api", "default", "www", "A-Company", "a", "a--b",
                      "a.b", "something.", "-abcd", "signup" })
-            Assert.NotNull(ManagedWorkspaceSignup.ValidateSlug(invalid));
-        Assert.Null(ManagedWorkspaceSignup.ValidateSlug("acme-ops"));
-        Assert.NotNull(ManagedWorkspaceSignup.ValidateSignup(ValidInput() with { Plan = "free" }));
-        Assert.NotNull(ManagedWorkspaceSignup.ValidateSignup(ValidInput() with { Password = "abc", ConfirmPassword = "abc" }));
-        Assert.NotNull(ManagedWorkspaceSignup.ValidateSignup(ValidInput() with { Email = "not-an-email" }));
+        {
+            Assert.NotNull(WorkspaceSignupValidation.ValidateSlug(invalid));
+        }
+        Assert.Null(WorkspaceSignupValidation.ValidateSlug("acme-ops"));
+        Assert.NotNull(WorkspaceSignupValidation.ValidateSignup(ValidInput() with
+        {
+            Plan = "free"
+        }));
+        Assert.NotNull(WorkspaceSignupValidation.ValidateSignup(ValidInput() with
+        {
+            Password = "abc",
+            ConfirmPassword = "abc"
+        }));
+        Assert.NotNull(WorkspaceSignupValidation.ValidateSignup(ValidInput() with
+        {
+            Email = "not-an-email"
+        }));
     }
 
     [AgentPostgresFact]
@@ -116,11 +138,16 @@ public sealed class ManagedWorkspaceSignupPostgresTests
     {
         var schema = "signup_lock_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(
-            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES")) { SearchPath = schema }.ConnectionString;
+            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES"))
+        {
+            SearchPath = schema
+        }.ConnectionString;
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await using (var cmd = new NpgsqlCommand($"CREATE SCHEMA \"{schema}\"", conn))
+        {
             await cmd.ExecuteNonQueryAsync();
+        }
         try
         {
             CurrentTenant.Clear();
@@ -156,10 +183,12 @@ public sealed class ManagedWorkspaceSignupPostgresTests
         string environment, bool signupEnabled = true, bool skipDevelopmentVerification = false) =>
         new(db, Options.Create(new RunBillingDeploymentOptions
         {
-            ManagedHosting = true, RequireExplicitTenantProvisioning = true
+            ManagedHosting = true,
+            RequireExplicitTenantProvisioning = true
         }), Options.Create(new WorkspaceSignupOptions
         {
-            Enabled = signupEnabled, AllowUnverifiedDevelopmentSignup = skipDevelopmentVerification
+            Enabled = signupEnabled,
+            AllowUnverifiedDevelopmentSignup = skipDevelopmentVerification
         }), new FakeHostEnvironment { EnvironmentName = environment }, mailer);
 
     private sealed class FakeMailer : IWorkspaceSignupEmailSender

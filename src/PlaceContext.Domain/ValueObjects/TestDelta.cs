@@ -8,8 +8,9 @@ public readonly record struct TestDelta(int Added, int Removed, int Changed)
     public static TestDelta From(int added, int removed, int changed)
     {
         if (added < 0 || removed < 0 || changed < 0)
+        {
             throw new ArgumentException("TestDelta counts must be non-negative.");
-
+        }
         return new TestDelta(added, removed, changed);
     }
 

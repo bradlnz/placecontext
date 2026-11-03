@@ -1,5 +1,7 @@
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;

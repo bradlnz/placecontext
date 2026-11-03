@@ -1,3 +1,5 @@
+using PlaceContext.Application.Cluster;
+using PlaceContext.Infrastructure.Cluster;
 using PlaceContext.ClusterHost;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,9 +10,10 @@ builder.Services.AddHttpClient();
 
 builder.Services.Configure<ClusterProxyOptions>(builder.Configuration.GetSection("PlaceContext:ClusterChat"));
 
-builder.Services.AddSingleton<ClusterProxyService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ClusterProxyService>());
-builder.Services.AddScoped<ClusterPipeline>();
+builder.Services.AddSingleton<ClusterHealthBackgroundService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ClusterHealthBackgroundService>());
+builder.Services.AddScoped<IClusterInference, ClusterPipeline>();
+builder.Services.AddSingleton<IClusterHealth>(sp => sp.GetRequiredService<ClusterHealthBackgroundService>());
 
 var app = builder.Build();
 

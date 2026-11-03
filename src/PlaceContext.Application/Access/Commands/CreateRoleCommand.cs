@@ -1,3 +1,4 @@
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 
@@ -11,5 +12,5 @@ namespace PlaceContext.Application.Features;
 public sealed record CreateRoleCommand(string Name, IReadOnlyList<string> Permissions)
     : ICommand<RoleView>, IRequiresPermission
 {
-    string IRequiresPermission.RequiredPermission => PlaceContext.Application.Ports.Permission.MembersManage;
+    string IRequiresPermission.RequiredPermission => PlaceContext.Application.Access.Permission.MembersManage;
 }

@@ -1,5 +1,6 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application.Tenancy;
 namespace PlaceContext.Infrastructure.Operations;
 
 /// <summary>
@@ -21,8 +22,10 @@ public sealed class OperationCenterRunStatusNotifier : IRunStatusNotifier
 
     public void Sync(RunStatusUpdate update)
     {
-        if (!_tenant.IsResolved) return;
-
+        if (!_tenant.IsResolved)
+        {
+            return;
+        }
         var status = update.Outcome switch
         {
             RunOutcome.Running => PortalOperationStatus.Running,

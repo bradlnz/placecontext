@@ -1,5 +1,4 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Artifacts;
 namespace PlaceContext.Application.Tests;
 
 public sealed class ArtifactViewConfigTests

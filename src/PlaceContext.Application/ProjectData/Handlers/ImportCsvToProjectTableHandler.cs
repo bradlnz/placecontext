@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -34,7 +34,10 @@ public sealed class ImportCsvToProjectTableHandler : ICommandHandler<ImportCsvTo
     // would match itself); warn-only — a failed check never blocks the import.
     private async Task<IReadOnlyList<string>> FindDuplicatesAsync(ImportCsvToProjectTableCommand c, CancellationToken ct)
     {
-        if (_links is null || c.Rows.Count == 0) return Array.Empty<string>();
+        if (_links is null || c.Rows.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
         try
         {
             var rows = c.Rows

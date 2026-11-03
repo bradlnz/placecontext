@@ -1,6 +1,4 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Application.Observability;
 
 public sealed class ListRecentChainRunTelemetryHandler

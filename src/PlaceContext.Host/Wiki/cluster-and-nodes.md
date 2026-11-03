@@ -8,7 +8,7 @@ across server and worker nodes.
 
 ## Cluster page
 
-Open **Cluster** to see:
+Open **Settings → Cluster** (the existing **Cluster** shortcut also works) to see:
 
 - total and healthy node counts;
 - control-plane, standard-worker, and AI-shard nodes;
@@ -66,3 +66,44 @@ the role shown on this page.
 
 Jobs run wherever the cluster scheduler has suitable capacity. A single-node installation works
 without any workers.
+
+## Cloud workers
+
+For managed hosting, use the execution cluster supplied with your workspace and select a plan in
+**Settings → Billing & usage**. For your own cloud infrastructure, deploy the control plane using
+your production deployment configuration, open **Cluster → Add node**, and run the join command on
+each cloud worker. Check the nodes are ready before submitting a test job.
+
+## Job placement
+
+The setup guide chooses instructions; it does not change scheduling or move existing workloads.
+The portal's hosting location does not determine where jobs execute. Configure placement on each
+execution host through the deployment's `PlaceContext:WorkloadRunner` settings.
+
+For container jobs in a mixed cluster, label the intended workers and configure an exact selector:
+
+```bash
+kubectl label node YOUR_WORKER placecontext.io/execution-location=local --overwrite
+```
+
+```json
+{
+  "PlaceContext": {
+    "WorkloadRunner": {
+      "RequireWorkerNodes": true,
+      "JobNodeSelector": {
+        "placecontext.io/execution-location": "local"
+      }
+    }
+  }
+}
+```
+
+Use `cloud` for both the label and selector when jobs should run on cloud workers. Apply the settings
+through your deployment and restart execution hosts to pick them up. A required worker selector
+leaves jobs pending when no matching worker is available; it does not fall back to the portal's node.
+For a single-node local cluster, leave `RequireWorkerNodes` false so its control-plane node can run jobs.
+
+Persistent native runners and desktop/VM execution use their own configured hosts; the container
+node selector does not relocate them. Verify those hosts separately if those execution modes are enabled.
+Always verify placement with a test job. Ready nodes alone do not prove a workload can execute.

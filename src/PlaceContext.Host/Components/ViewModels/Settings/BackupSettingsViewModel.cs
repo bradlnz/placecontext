@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Components.Forms;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -10,12 +10,30 @@ public sealed class BackupSettingsViewModel(PlaceContextService service, PortalU
     : PageViewModel
 {
     public const long MaxManifestBytes = 20 * 1024 * 1024;
-    public BackupManifest? Pending { get; private set; }
-    public string? FileName { get; private set; }
-    public bool Confirming { get; set; }
-    public bool Busy { get; private set; }
-    public string? Message { get; private set; }
-    public ImportResultView? Result { get; private set; }
+    public BackupManifest? Pending
+    {
+        get; private set;
+    }
+    public string? FileName
+    {
+        get; private set;
+    }
+    public bool Confirming
+    {
+        get; set;
+    }
+    public bool Busy
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
+    public ImportResultView? Result
+    {
+        get; private set;
+    }
 
     public void Load() =>
         ui.Set("Backup", "export/import this workspace's settings and job definitions");
@@ -51,7 +69,9 @@ public sealed class BackupSettingsViewModel(PlaceContextService service, PortalU
     public async Task ImportAsync()
     {
         if (Pending is null)
+        {
             return;
+        }
         Busy = true;
         Message = null;
         NotifyStateChanged();

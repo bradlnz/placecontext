@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using PlaceContext.Application.Ports;
 using Microsoft.Extensions.Options;
+using PlaceContext.Application.Projects;
 
 namespace PlaceContext.Infrastructure.Git;
 
@@ -19,18 +19,21 @@ public sealed class CodeWorkspace : ICodeWorkspace
     {
         var dir = Path.Combine(_root, Sanitize(tenantSlug), Sanitize(repoName));
         if (Directory.Exists(Path.Combine(dir, ".git")))
+        {
             return dir; // already imported
-
+        }
         Directory.CreateDirectory(Path.GetDirectoryName(dir)!);
 
         var url = cloneUrl;
         if (!string.IsNullOrEmpty(accessToken) && cloneUrl.StartsWith("https://", StringComparison.Ordinal))
+        {
             url = "https://x-access-token:" + accessToken + "@" + cloneUrl["https://".Length..];
-
+        }
         var (exit, stderr) = await RunAsync(_root, ct, "clone", "--depth", "1", url, dir);
         if (exit != 0)
+        {
             throw new InvalidOperationException($"git clone failed for {repoName}: {stderr}");
-
+        }
         return dir;
     }
 
@@ -47,8 +50,10 @@ public sealed class CodeWorkspace : ICodeWorkspace
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
+        foreach (var a in args)
+        {
+            psi.ArgumentList.Add(a);
+        }
         using var proc = Process.Start(psi)!;
         var stderr = await proc.StandardError.ReadToEndAsync(ct);
         await proc.WaitForExitAsync(ct);

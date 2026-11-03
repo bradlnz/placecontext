@@ -16,13 +16,25 @@ public sealed class WorkflowRunMonitoringTests
             ResponseType: LoopChainAction.YesNoResponse);
         var run = new ChainRunView(Guid.NewGuid(), Guid.NewGuid(), "Lead onboarding",
             "AwaitingInput", [], null, DateTimeOffset.UtcNow, null)
-            { InputRequest = request, ProjectId = Guid.NewGuid() };
+        {
+            InputRequest = request,
+            ProjectId = Guid.NewGuid()
+        };
         Assert.True(JobChainsViewModel.NeedsHumanInput(run));
-        Assert.False(JobChainsViewModel.NeedsHumanInput(run with { Status = "Waiting" }));
         Assert.False(JobChainsViewModel.NeedsHumanInput(run with
         {
-            InputRequest = request with { Kind = LoopChainAction.AgentType }
+            Status = "Waiting"
         }));
-        Assert.False(JobChainsViewModel.NeedsHumanInput(run with { InputRequest = null }));
+        Assert.False(JobChainsViewModel.NeedsHumanInput(run with
+        {
+            InputRequest = request with
+            {
+                Kind = LoopChainAction.AgentType
+            }
+        }));
+        Assert.False(JobChainsViewModel.NeedsHumanInput(run with
+        {
+            InputRequest = null
+        }));
     }
 }

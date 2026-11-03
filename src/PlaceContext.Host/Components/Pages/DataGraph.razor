@@ -1,3 +1,4 @@
+@using PlaceContext.Application.Access
 @page "/project/{ProjectId:guid}/data-graph"
 @attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout

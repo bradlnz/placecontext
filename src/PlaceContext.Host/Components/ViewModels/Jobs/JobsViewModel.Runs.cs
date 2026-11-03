@@ -1,32 +1,54 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Components.Forms;
 using System.Text.Json;
-using PlaceContext.Application;
+using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class JobsViewModel
 {
     // ── Run-input prompt state ────────────────────────────────────────────────────────────────
-    public JobView? RunPromptJob { get; private set; }
+    public JobView? RunPromptJob
+    {
+        get; private set;
+    }
     public Dictionary<string, string> RunArgs => _runPrompt.Args;
     public string? RunPromptError => _runPrompt.Error;
-    public bool RunFileMode { get; private set; }
-    public bool RunFileLoading { get; private set; }
-    public string? RunFileName { get; private set; }
+    public bool RunFileMode
+    {
+        get; private set;
+    }
+    public bool RunFileLoading
+    {
+        get; private set;
+    }
+    public string? RunFileName
+    {
+        get; private set;
+    }
     private string? _runFilePayload;
 
-    public void UseRunFields() { RunFileMode = false; _runPrompt.SetError(null); }
-    public void UseRunFile() { RunFileMode = true; _runPrompt.SetError(null); }
+    public void UseRunFields()
+    {
+        RunFileMode = false;
+        _runPrompt.SetError(null);
+    }
+    public void UseRunFile()
+    {
+        RunFileMode = true;
+        _runPrompt.SetError(null);
+    }
 
     public async Task ReadRunFileAsync(InputFileChangeEventArgs args)
     {
-        if (RunPromptJob is not { } job || RunFileLoading) return;
+        if (RunPromptJob is not { } job || RunFileLoading)
+        {
+            return;
+        }
         RunFileLoading = true;
         _runFilePayload = null;
         RunFileName = null;
@@ -36,24 +58,46 @@ public sealed partial class JobsViewModel
             await using var stream = args.File.OpenReadStream(1_048_576);
             using var reader = new StreamReader(stream);
             var payload = ValidateRunFile(await reader.ReadToEndAsync(), job.Parameters);
-            if (RunPromptJob?.Id != job.Id) return;
+            if (RunPromptJob?.Id != job.Id)
+            {
+                return;
+            }
             _runFilePayload = payload;
             RunFileName = args.File.Name;
         }
-        catch (Exception ex) { if (RunPromptJob?.Id == job.Id) _runPrompt.SetError(ex.Message); }
-        finally { RunFileLoading = false; NotifyStateChanged(); }
+        catch (Exception ex)
+        {
+            if (RunPromptJob?.Id == job.Id)
+            {
+                _runPrompt.SetError(ex.Message);
+            }
+        }
+        finally
+        {
+            RunFileLoading = false;
+            NotifyStateChanged();
+        }
     }
 
     public static string ValidateRunFile(string json, IReadOnlyList<JobParameterDto> parameters)
     {
-        if (System.Text.Encoding.UTF8.GetByteCount(json) > 1_048_576) throw new ArgumentException("Choose a JSON file no larger than 1 MiB.");
+        if (System.Text.Encoding.UTF8.GetByteCount(json) > 1_048_576)
+        {
+            throw new ArgumentException("Choose a JSON file no larger than 1 MiB.");
+        }
         using var document = JsonDocument.Parse(json);
-        if (document.RootElement.ValueKind != JsonValueKind.Object) throw new ArgumentException("The file must contain a JSON object.");
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new ArgumentException("The file must contain a JSON object.");
+        }
         var missing = parameters.Where(parameter => parameter.Required &&
-            (!document.RootElement.TryGetProperty(parameter.Name, out var value) || value.ValueKind == JsonValueKind.Null
-                || value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString())))
-            .Select(parameter => parameter.Label ?? parameter.Name).ToArray();
-        if (missing.Length > 0) throw new ArgumentException("Required: " + string.Join(", ", missing));
+                    (!document.RootElement.TryGetProperty(parameter.Name, out var value) || value.ValueKind == JsonValueKind.Null
+                        || value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString())))
+                    .Select(parameter => parameter.Label ?? parameter.Name).ToArray();
+        if (missing.Length > 0)
+        {
+            throw new ArgumentException("Required: " + string.Join(", ", missing));
+        }
         return document.RootElement.GetRawText();
     }
 
@@ -65,22 +109,30 @@ public sealed partial class JobsViewModel
     private async Task RefreshRunsAsync()
     {
         if (_refreshingRuns || SelectedJobId is not { } jobId)
+        {
             return;
+        }
         _refreshingRuns = true;
         var version = _paneVersion;
         try
         {
             var runs = await _svc.ListJobRunsAsync(jobId);
-            if (version != _paneVersion || SelectedJobId != jobId) return;
+            if (version != _paneVersion || SelectedJobId != jobId)
+            {
+                return;
+            }
             if (
-                RunDetail is { } open
-                && runs.FirstOrDefault(r => r.Id == open.Id) is { } summary
-                && summary.Status != open.Status
-            )
+                            RunDetail is { } open
+                            && runs.FirstOrDefault(r => r.Id == open.Id) is { } summary
+                            && summary.Status != open.Status
+                        )
             {
                 var detail = await _svc.GetJobRunAsync(open.Id);
                 var artifacts = await _svc.ListRunArtifactsAsync(open.Id);
-                if (version != _paneVersion || RunDetail?.Id != open.Id) return;
+                if (version != _paneVersion || RunDetail?.Id != open.Id)
+                {
+                    return;
+                }
                 RunDetail = detail;
                 RunArtifacts = artifacts;
             }
@@ -159,8 +211,16 @@ public sealed partial class JobsViewModel
         _runPrompt.Clear();
         RunningJobId = null;
         // Open the editor/runs view so the user sees the run appear live.
-        if (Jobs?.FirstOrDefault(job => job.Id == jobId) is { } selected) EditJob(selected);
-        else InvalidateRunRequests();
+        void SelectJob()
+        {
+            if (Jobs?.FirstOrDefault(job => job.Id == jobId) is { } selected)
+            {
+                EditJob(selected);
+                return;
+            }
+            InvalidateRunRequests();
+        }
+        SelectJob();
         PendingRunId = runId;
         PendingRunJobId = jobId;
         var version = _paneVersion;
@@ -177,7 +237,10 @@ public sealed partial class JobsViewModel
 
         Message =
             $"Run of {jobName} started in the background — follow it in the notifications bell.";
-        if (version == _paneVersion && ShowEditor) StartRunPolling(jobId, runId);
+        if (version == _paneVersion && ShowEditor)
+        {
+            StartRunPolling(jobId, runId);
+        }
     }
 
     private void StartRunPolling(Guid jobId, Guid runId)
@@ -194,8 +257,9 @@ public sealed partial class JobsViewModel
                 {
                     await Task.Delay(2000, ct).ConfigureAwait(false);
                     if (ct.IsCancellationRequested)
+                    {
                         break;
-
+                    }
                     // Stop polling after a generous timeout even if the run never appeared.
                     if (DateTimeOffset.UtcNow - started > TimeSpan.FromMinutes(2))
                     {
@@ -209,14 +273,18 @@ public sealed partial class JobsViewModel
                     {
                         var runs = await _svc.ListJobRunsAsync(jobId);
                         if (ct.IsCancellationRequested)
+                        {
                             break;
-
+                        }
                         var found = runs.FirstOrDefault(r => r.Id == runId);
                         if (found is not null)
                         {
                             var detail = await _svc.GetJobRunAsync(runId);
                             var artifacts = await _svc.ListRunArtifactsAsync(runId);
-                            if (ct.IsCancellationRequested || version != _paneVersion || SelectedJobId != jobId) break;
+                            if (ct.IsCancellationRequested || version != _paneVersion || SelectedJobId != jobId)
+                            {
+                                break;
+                            }
                             Runs = runs;
                             RunDetail = detail;
                             RunArtifacts = artifacts;
@@ -258,11 +326,21 @@ public sealed partial class JobsViewModel
     public async Task SubmitRunPromptAsync()
     {
         if (RunPromptJob is null)
+        {
             return;
-        if (RunFileLoading) return;
+        }
+        if (RunFileLoading)
+        {
+            return;
+        }
         if (RunFileMode)
         {
-            if (_runFilePayload is null) { _runPrompt.SetError("Choose a valid JSON input file before running."); NotifyStateChanged(); return; }
+            if (_runFilePayload is null)
+            {
+                _runPrompt.SetError("Choose a valid JSON input file before running.");
+                NotifyStateChanged();
+                return;
+            }
             await RunJobCoreAsync(RunPromptJob.Id, _runFilePayload);
             return;
         }
@@ -293,7 +371,10 @@ public sealed partial class JobsViewModel
             {
                 var version = _paneVersion;
                 var detail = await _svc.GetJobRunAsync(runId);
-                if (version == _paneVersion && RunDetail?.Id == runId) RunDetail = detail;
+                if (version == _paneVersion && RunDetail?.Id == runId)
+                {
+                    RunDetail = detail;
+                }
             }
             StopRunDetailPolling();
         }
@@ -312,12 +393,17 @@ public sealed partial class JobsViewModel
         {
             var detail = await _svc.GetJobRunAsync(runId);
             var artifacts = await _svc.ListRunArtifactsAsync(runId);
-            if (version != _paneVersion) return;
+            if (version != _paneVersion)
+            {
+                return;
+            }
             RunDetail = detail;
             RunArtifacts = artifacts;
 
             if (RunDetail?.Status is "Queued" or "Running")
+            {
                 StartRunDetailPolling(runId);
+            }
         }
         catch (Exception ex)
         {

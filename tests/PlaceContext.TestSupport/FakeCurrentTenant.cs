@@ -1,5 +1,4 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Tenancy;
 namespace PlaceContext.TestSupport;
 
 /// <summary>A fixed tenant for tests.</summary>
@@ -12,8 +11,17 @@ public sealed class FakeCurrentTenant : ICurrentTenant
         TimeZoneId = timeZoneId;
     }
 
-    public Guid TenantId { get; }
-    public string Slug { get; }
-    public string TimeZoneId { get; }
+    public Guid TenantId
+    {
+        get;
+    }
+    public string Slug
+    {
+        get;
+    }
+    public string TimeZoneId
+    {
+        get;
+    }
     public bool IsResolved => true;
 }

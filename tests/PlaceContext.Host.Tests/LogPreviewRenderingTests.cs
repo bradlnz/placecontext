@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Dtos;
@@ -43,7 +43,10 @@ public sealed class LogPreviewRenderingTests
             jobVm.Search = containerVm.Search = "tail-marker";
             var match = Assert.Single(container ? containerVm.Filtered : jobVm.Filtered);
             Assert.EndsWith("tail-marker", match.Message);
-            if (!container) Assert.EndsWith(text, jobVm.FullLog);
+            if (!container)
+            {
+                Assert.EndsWith(text, jobVm.FullLog);
+            }
         });
     }
 

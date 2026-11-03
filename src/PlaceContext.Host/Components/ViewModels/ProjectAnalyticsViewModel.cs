@@ -1,12 +1,11 @@
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.Models;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Scheduling;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -14,27 +13,57 @@ public sealed class ProjectAnalyticsViewModel(
     PlaceContextService service,
     PortalUiState ui,
     IJSRuntime js,
-    AnalyticsRefreshQueue queue
+    IAnalyticsRefreshQueue queue
 ) : PageViewModel, IDisposable
 {
     public static DataSection ActiveSection => DataSection.Analytics;
-    public Guid ProjectId { get; private set; }
-    public IReadOnlyList<ProjectTableInfo>? Tables { get; private set; }
-    public IReadOnlyList<ProjectChartView> Charts { get; private set; } =
+    public Guid ProjectId
+    {
+        get; private set;
+    }
+    public IReadOnlyList<ProjectTableInfo>? Tables
+    {
+        get; private set;
+    }
+    public IReadOnlyList<ProjectChartView> Charts
+    {
+        get; private set;
+    } =
         Array.Empty<ProjectChartView>();
-    public string? Error { get; private set; }
-    public string? RedrawFor { get; private set; }
+    public string? Error
+    {
+        get; private set;
+    }
+    public string? RedrawFor
+    {
+        get; private set;
+    }
     public string Instruction { get; set; } = string.Empty;
-    public bool SweepPending { get; private set; }
-    public bool ShowSqlEditor { get; private set; }
-    public bool SqlBusy { get; private set; }
+    public bool SweepPending
+    {
+        get; private set;
+    }
+    public bool ShowSqlEditor
+    {
+        get; private set;
+    }
+    public bool SqlBusy
+    {
+        get; private set;
+    }
     public bool SqlMonaco { get; private set; } = true;
-    public bool SqlMonacoReady { get; private set; }
+    public bool SqlMonacoReady
+    {
+        get; private set;
+    }
     public const string SqlEditorId = "pcmonaco-sqlchart";
     public string SqlName { get; set; } = string.Empty;
     public string SqlQuery { get; set; } = string.Empty;
     public string SqlType { get; set; } = "bar";
-    public string? SqlError { get; private set; }
+    public string? SqlError
+    {
+        get; private set;
+    }
     private System.Threading.Timer? _poll;
     private readonly Dictionary<string, DateTimeOffset> _rendered = new();
     private bool _sqlSchemaPushed;
@@ -42,7 +71,9 @@ public sealed class ProjectAnalyticsViewModel(
     public async Task LoadAsync(Guid projectId)
     {
         if (ProjectId != projectId)
+        {
             _sqlSchemaPushed = false;
+        }
         ProjectId = projectId;
         ui.Set("Analytics", "charts over the project's data");
         await ReloadAsync();
@@ -101,8 +132,14 @@ public sealed class ProjectAnalyticsViewModel(
         {
             var id = CanvasId(chart.TableName);
             if (_rendered.TryGetValue(id, out var timestamp) && timestamp == chart.GeneratedAt)
+            {
                 continue;
-            entries.Add(new { id, spec = chart.Html });
+            }
+            entries.Add(new
+            {
+                id,
+                spec = chart.Html
+            });
             rendered.Add((id, chart.GeneratedAt));
         }
         if (entries.Count > 0)
@@ -111,7 +148,9 @@ public sealed class ProjectAnalyticsViewModel(
             {
                 await js.InvokeVoidAsync("pcchart.renderAll", entries);
                 foreach (var (id, at) in rendered)
+                {
                     _rendered[id] = at;
+                }
             }
             catch (JSException) { }
         }
@@ -246,15 +285,13 @@ public sealed class ProjectAnalyticsViewModel(
 
     private void Enqueue(string? table = null)
     {
-        if (PlaceContext.Infrastructure.Tenancy.CurrentTenant.Current is { } tenant)
+        if (PlaceContext.Application.Tenancy.CurrentTenant.Current is { } tenant)
         {
             queue.TryEnqueue(tenant, ProjectId, tableName: table, instruction: Instruction);
             SweepPending = true;
+            return;
         }
-        else
-        {
-            Error = "No tenant resolved — sign in again.";
-        }
+        Error = "No tenant resolved — sign in again.";
     }
 
     public void CancelRedraw() => RedrawFor = null;
@@ -264,7 +301,9 @@ public sealed class ProjectAnalyticsViewModel(
         var wasPending = SweepPending;
         SweepPending = queue.IsPending(ProjectId);
         if (SweepPending || wasPending)
+        {
             await ReloadAsync();
+        }
     }
 
     public void Dispose() => _poll?.Dispose();

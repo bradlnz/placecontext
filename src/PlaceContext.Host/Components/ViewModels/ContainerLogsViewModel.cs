@@ -12,7 +12,10 @@ public sealed class ContainerLogsViewModel : PageViewModel, IComponentViewModel
 
     public void SetText(string text)
     {
-        if (_text == text) return;
+        if (_text == text)
+        {
+            return;
+        }
         _text = text;
         Events = Parse(text);
     }
@@ -23,13 +26,30 @@ public sealed class ContainerLogsViewModel : PageViewModel, IComponentViewModel
         var stream = "stdout";
         foreach (var line in text.Split('\n'))
         {
-            if (line == "── stdout ──") { stream = "stdout"; continue; }
-            if (line == "── stderr ──") { stream = "stderr"; continue; }
-            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (line == "── stdout ──")
+            {
+                stream = "stdout";
+                continue;
+            }
+            if (line == "── stderr ──")
+            {
+                stream = "stderr";
+                continue;
+            }
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
             var entry = JobRunLogsViewModel.Parse(events.Count + 1, stream, line.TrimEnd('\r'));
             var space = line.IndexOf(' ');
             if (space > 0 && DateTimeOffset.TryParse(line[..space], System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.AssumeUniversal, out _)) entry = entry with { Message = line[(space + 1)..].TrimEnd('\r') };
+                System.Globalization.DateTimeStyles.AssumeUniversal, out _))
+            {
+                entry = entry with
+                {
+                    Message = line[(space + 1)..].TrimEnd('\r')
+                };
+            }
             events.Add(entry);
         }
         return events;

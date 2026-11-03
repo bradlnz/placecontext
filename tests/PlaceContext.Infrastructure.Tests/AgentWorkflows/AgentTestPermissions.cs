@@ -1,5 +1,4 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Access;
 namespace PlaceContext.Infrastructure.Tests.AgentWorkflows;
 
 internal sealed class AgentTestPermissions : IPermissionService

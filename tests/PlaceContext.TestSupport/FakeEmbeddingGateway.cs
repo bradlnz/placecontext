@@ -1,5 +1,4 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Search;
 namespace PlaceContext.TestSupport;
 
 /// <summary>
@@ -17,8 +16,14 @@ public sealed class FakeEmbeddingGateway : IEmbeddingGateway
         _map = new Dictionary<string, float[]>();
     }
 
-    public bool IsEnabled { get; }
-    public int Dimensions { get; }
+    public bool IsEnabled
+    {
+        get;
+    }
+    public int Dimensions
+    {
+        get;
+    }
 
     public void Set(string text, float[] vector) => _map[text] = vector;
 

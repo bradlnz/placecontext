@@ -27,6 +27,9 @@ public sealed record JobTemplate(
 
     /// <summary>Starter source code per runtime id ("node", "python"). Runtimes without an
     /// entry fall back to a generic stdin/stdout skeleton in the editor.</summary>
-    public IReadOnlyDictionary<string, string> SourcesByRuntime { get; init; } =
+    public IReadOnlyDictionary<string, string> SourcesByRuntime
+    {
+        get; init;
+    } =
         new Dictionary<string, string>();
 }

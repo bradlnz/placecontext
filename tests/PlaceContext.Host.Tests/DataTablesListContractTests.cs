@@ -154,7 +154,9 @@ public sealed class DataTablesListContractTests
         while (directory is not null)
         {
             if (Directory.Exists(Path.Combine(directory.FullName, "src", "PlaceContext.Host")))
+            {
                 return directory.FullName;
+            }
             directory = directory.Parent;
         }
         throw new DirectoryNotFoundException("Repository root not found.");

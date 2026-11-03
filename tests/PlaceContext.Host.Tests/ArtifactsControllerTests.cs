@@ -1,7 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -123,7 +123,7 @@ public class ArtifactsControllerTests
     )
     {
         http = new DefaultHttpContext();
-        return new ArtifactsController(new StubLinks(link), new StubStore(link, storedContentType))
+        return new ArtifactsController(new PlaceContext.Application.Jobs.ArtifactReader(new StubLinks(link), new StubStore(link, storedContentType)))
         {
             ControllerContext = new ControllerContext { HttpContext = http },
         };

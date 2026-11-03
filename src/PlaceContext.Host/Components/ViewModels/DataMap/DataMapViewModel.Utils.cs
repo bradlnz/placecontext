@@ -1,9 +1,9 @@
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Application.Shared;
+using PlaceContext.Application;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -57,9 +57,13 @@ public sealed partial class DataMapViewModel
             name.Trim().ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray()
         ).Trim('_');
         if (s.Length == 0)
+        {
             s = "col";
+        }
         if (char.IsDigit(s[0]))
+        {
             s = "_" + s;
+        }
         return s.Length > 63 ? s[..63] : s;
     }
 }

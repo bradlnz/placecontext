@@ -1,5 +1,6 @@
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
@@ -34,7 +35,13 @@ public class JobRunDataRecorderTests
 
         public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
-        { SawProject = projectId; Table = tableName; Columns = columns; Rows = rows; return Task.CompletedTask; }
+        {
+            SawProject = projectId;
+            Table = tableName;
+            Columns = columns;
+            Rows = rows;
+            return Task.CompletedTask;
+        }
         public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
             => Task.FromResult(rows.Count);

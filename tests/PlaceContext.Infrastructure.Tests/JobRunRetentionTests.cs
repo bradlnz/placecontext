@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Caching;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
@@ -27,8 +28,9 @@ public sealed class JobRunRetentionTests
         await using var db = new AppDbContext(options, new Tenant(tenantId));
         var start = DateTimeOffset.Parse("2026-08-02T00:00:00Z");
         for (var i = 0; i < 105; i++)
+        {
             db.JobRuns.Add(Row(tenantId, start.AddMinutes(i), "Succeeded"));
-
+        }
         var active = Row(tenantId, start.AddMinutes(-1), "Running");
         var otherTenant = Row(otherTenantId, start.AddMinutes(-2), "Succeeded");
         db.JobRuns.Add(active);
@@ -83,27 +85,49 @@ public sealed class JobRunRetentionTests
         var tenant = new Tenant(Guid.NewGuid());
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options, tenant);
-        var project = Guid.NewGuid(); var otherProject = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
+        var project = Guid.NewGuid();
+        var otherProject = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
         void Add(Guid projectId, string status, DateTimeOffset at)
-        { var row = Row(tenant.TenantId, at, status); row.ProjectId = projectId; db.JobRuns.Add(row); }
-        for (var i = 0; i < 205; i++) Add(project, "Running", now.AddDays(-2));
-        Add(project, "Queued", now.AddDays(-2)); Add(project, "Succeeded", now.AddHours(-1));
-        Add(project, "Failed", now.AddDays(-2)); Add(project, "Failed", now.AddHours(-2));
-        for (var i = 0; i < 60; i++) Add(otherProject, "Running", now);
+        {
+            var row = Row(tenant.TenantId, at, status);
+            row.ProjectId = projectId;
+            db.JobRuns.Add(row);
+        }
+        for (var i = 0; i < 205; i++)
+        {
+            Add(project, "Running", now.AddDays(-2));
+        }
+        Add(project, "Queued", now.AddDays(-2));
+        Add(project, "Succeeded", now.AddHours(-1));
+        Add(project, "Failed", now.AddDays(-2));
+        Add(project, "Failed", now.AddHours(-2));
+        for (var i = 0; i < 60; i++)
+        {
+            Add(otherProject, "Running", now);
+        }
         await db.SaveChangesAsync();
         var otherTenant = new Tenant(Guid.NewGuid());
         await using (var otherDb = new AppDbContext(options, otherTenant))
-        { var row = Row(otherTenant.TenantId, now, "Running"); row.ProjectId = project; otherDb.JobRuns.Add(row); await otherDb.SaveChangesAsync(); }
+        {
+            var row = Row(otherTenant.TenantId, now, "Running");
+            row.ProjectId = project;
+            otherDb.JobRuns.Add(row);
+            await otherDb.SaveChangesAsync();
+        }
         var repository = new EfJobRunRepository(db, new DataProtectionEncryptor(new EphemeralDataProtectionProvider()), new NullJobRunCache());
         var permissions = new Permissions();
         await using var provider = new ServiceCollection().AddApplication()
             .AddSingleton<IJobRunRepository>(repository).AddSingleton<IPermissionService>(permissions).BuildServiceProvider();
         var dispatcher = provider.GetRequiredService<IDispatcher>();
         var counts = await dispatcher.Query(new GetProjectRunCountsQuery(project));
-        Assert.Equal(205, counts["Running"]); Assert.Equal(1, counts["Queued"]);
-        Assert.Equal(1, counts["Succeeded"]); Assert.Equal(1, counts["Failed"]);
+        Assert.Equal(205, counts["Running"]);
+        Assert.Equal(1, counts["Queued"]);
+        Assert.Equal(1, counts["Succeeded"]);
+        Assert.Equal(1, counts["Failed"]);
         var recent = await repository.ListRecentAsync(50, projectId: project);
-        Assert.Equal(50, recent.Count); Assert.All(recent, run => Assert.Equal(project, run.ProjectId));
+        Assert.Equal(50, recent.Count);
+        Assert.All(recent, run => Assert.Equal(project, run.ProjectId));
         permissions.Allowed = false;
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => dispatcher.Query(new GetProjectRunCountsQuery(project)));
     }

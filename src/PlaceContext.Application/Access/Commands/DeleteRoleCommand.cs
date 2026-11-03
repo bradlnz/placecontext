@@ -1,3 +1,4 @@
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Cqrs;
 
 namespace PlaceContext.Application.Features;
@@ -8,5 +9,5 @@ namespace PlaceContext.Application.Features;
 /// </summary>
 public sealed record DeleteRoleCommand(Guid RoleId) : ICommand<bool>, IRequiresPermission
 {
-    string IRequiresPermission.RequiredPermission => PlaceContext.Application.Ports.Permission.MembersManage;
+    string IRequiresPermission.RequiredPermission => PlaceContext.Application.Access.Permission.MembersManage;
 }

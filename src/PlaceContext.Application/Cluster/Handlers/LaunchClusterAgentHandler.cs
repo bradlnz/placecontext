@@ -1,5 +1,6 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Networking;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Cluster;
@@ -15,11 +16,11 @@ public sealed class LaunchClusterAgentHandler : ICommandHandler<LaunchClusterAge
 
     private readonly IProjectSecretRepository _secrets;
     private readonly ISecretProtector _protector;
-    private readonly ITailscaleKeyMinter _minter;
+    private readonly IPrivateNetworkKeyMinter _minter;
     private readonly IClusterAdminPort _admin;
 
     public LaunchClusterAgentHandler(
-        IProjectSecretRepository secrets, ISecretProtector protector, ITailscaleKeyMinter minter, IClusterAdminPort admin)
+        IProjectSecretRepository secrets, ISecretProtector protector, IPrivateNetworkKeyMinter minter, IClusterAdminPort admin)
         => (_secrets, _protector, _minter, _admin) = (secrets, protector, minter, admin);
 
     public async Task<LaunchAgentResult> HandleAsync(LaunchClusterAgentCommand command, CancellationToken ct = default)
@@ -41,8 +42,10 @@ public sealed class LaunchClusterAgentHandler : ICommandHandler<LaunchClusterAge
         var clientId = _protector.Unprotect(clientIdCipher);
         var clientSecret = _protector.Unprotect(clientSecretCipher);
         var tags = ciphers.TryGetValue(TagSecretName, out var tagCipher) ? _protector.Unprotect(tagCipher) : DefaultTag;
-        if (string.IsNullOrWhiteSpace(tags)) tags = DefaultTag;
-
+        if (string.IsNullOrWhiteSpace(tags))
+        {
+            tags = DefaultTag;
+        }
         var tsKey = await _minter.MintEphemeralAgentKeyAsync(clientId, clientSecret, tags, ct);
         if (string.IsNullOrWhiteSpace(tsKey))
         {

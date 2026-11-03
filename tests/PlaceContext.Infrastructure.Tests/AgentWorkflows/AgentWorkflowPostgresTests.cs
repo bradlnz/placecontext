@@ -12,15 +12,26 @@ public sealed class AgentWorkflowPostgresTests
     {
         var schema = "agent_test_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES"))
-            { SearchPath = schema }.ConnectionString;
-        await using var connection = new NpgsqlConnection(cs); await connection.OpenAsync();
-        await using (var create = new NpgsqlCommand($"CREATE SCHEMA \"{schema}\"", connection)) await create.ExecuteNonQueryAsync();
+        {
+            SearchPath = schema
+        }.ConnectionString;
+        await using var connection = new NpgsqlConnection(cs);
+        await connection.OpenAsync();
+        await using (var create = new NpgsqlCommand($"CREATE SCHEMA \"{schema}\"", connection))
+        {
+            await create.ExecuteNonQueryAsync();
+        }
         try
         {
             await using var fixture = new AgentWorkflowFixture(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs).Options);
-            await using (var db = fixture.Db()) await db.Database.MigrateAsync();
+            await using (var db = fixture.Db())
+            {
+                await db.Database.MigrateAsync();
+            }
             await using (var legacy = new NpgsqlCommand("SELECT to_regclass('agent_definitions') IS NOT NULL", connection))
+            {
                 Assert.True((bool)(await legacy.ExecuteScalarAsync())!);
+            }
             await fixture.SeedAsync();
             var service = fixture.Service();
             await service.SetSubscriptionAsync(fixture.ProjectId, "services", true);

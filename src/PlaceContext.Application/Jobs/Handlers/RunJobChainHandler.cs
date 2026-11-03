@@ -1,14 +1,19 @@
 using System.Diagnostics;
 using System.Net.Mail;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Text;
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Billing;
+using PlaceContext.Application.Build;
+using PlaceContext.Application.Communications;
+using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Observability;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Workload.VirtualMachines;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -57,10 +62,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IPermissionService? _permissions;
     private readonly IChainContextStore? _contextStore;
     private readonly ILogger<RunJobChainHandler>? _log;
-    private readonly IQemuEnvironmentRunner? _qemu;
-    private readonly IQemuReplayStore? _qemuReplay;
+    private readonly IVirtualMachineEnvironmentRunner? _qemu;
+    private readonly IVirtualMachineReplayStore? _qemuReplay;
     private readonly IChainQuestionGenerator? _questions;
-    private readonly IJevReviewer? _jev;
+    private readonly IOutcomeReviewer? _jev;
     private readonly IRunAllowance? _allowance;
     private readonly IExecutionCapacity? _capacity;
 
@@ -72,8 +77,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         IPermissionService? permissions = null,
         IChainContextStore? contextStore = null,
         ILogger<RunJobChainHandler>? log = null,
-        IQemuEnvironmentRunner? qemu = null, IQemuReplayStore? qemuReplay = null,
-        IChainQuestionGenerator? questions = null, IJevReviewer? jev = null,
+        IVirtualMachineEnvironmentRunner? qemu = null, IVirtualMachineReplayStore? qemuReplay = null,
+        IChainQuestionGenerator? questions = null, IOutcomeReviewer? jev = null,
         IRunAllowance? allowance = null,
         IExecutionCapacity? capacity = null)
     {
@@ -133,35 +138,46 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         var startStageIndex = command.ResumeFromStageIndex ?? 0;
         var executionId = command.ChainRunId ?? Guid.NewGuid();
         if (command.ResumeFromStageIndex is null && _allowance is not null)
+        {
             await _allowance.ReserveAsync(chain.ProjectId, executionId, "workflow", ct);
-
+        }
         // A paused workflow releases its capacity slot. Continuations reacquire a
         // slot under the same run id without consuming another billable start.
         await using var capacityLease = _capacity is null ? null
             : await _capacity.AcquireAsync(executionId, "workflow", ct);
         using var linkedCapacity = capacityLease is null ? null
             : CancellationTokenSource.CreateLinkedTokenSource(ct, capacityLease.LostToken);
-        if (linkedCapacity is not null) ct = linkedCapacity.Token;
-
-        if (command.ResumeFromStageIndex is { } resumeStage)
+        if (linkedCapacity is not null)
         {
-            if (command.ChainRunId is not { } existingRunId)
-                throw new InvalidOperationException("A chain run id is required to resume a chain.");
-            chainRun = await _runs.GetByIdAsync(existingRunId, ct)
-                ?? throw new InvalidOperationException($"Chain run {existingRunId} not found.");
-            if (chainRun.ChainId != chain.Id || chainRun.ResumeStageIndex != resumeStage)
-                throw new InvalidOperationException("The scheduled chain continuation is no longer valid.");
-            chainRun.Resume();
-            await SaveProgressAsync(chainRun, ct);
+            ct = linkedCapacity.Token;
         }
-        else
+        async Task<ChainRun> CreateRunAsync()
         {
+            ChainRun resolvedChainRun;
+            if (command.ResumeFromStageIndex is { } resumeStage)
+            {
+                if (command.ChainRunId is not { } existingRunId)
+                {
+                    throw new InvalidOperationException("A chain run id is required to resume a chain.");
+                }
+                resolvedChainRun = await _runs.GetByIdAsync(existingRunId, ct)
+                                ?? throw new InvalidOperationException($"Chain run {existingRunId} not found.");
+                if (resolvedChainRun.ChainId != chain.Id || resolvedChainRun.ResumeStageIndex != resumeStage)
+                {
+                    throw new InvalidOperationException("The scheduled chain continuation is no longer valid.");
+                }
+                resolvedChainRun.Resume();
+                await SaveProgressAsync(resolvedChainRun, ct);
+                return resolvedChainRun;
+            }
             // Reserve before side effects and before creating any durable chain-run row.
             // A replay is a new billable execution; a continuation does not reserve again.
-            chainRun = ChainRun.Start(chain, names, chainStartedAt, executionId);
-            await _runs.AddAsync(chainRun, ct);
+            resolvedChainRun = ChainRun.Start(chain, names, chainStartedAt, executionId);
+            await _runs.AddAsync(resolvedChainRun, ct);
             await _uow.SaveChangesAsync(ct);
+            return resolvedChainRun;
         }
+        chainRun = await CreateRunAsync();
         chainSpan?.SetTag("chain.run.id", chainRun.Id);
 
         // Serializes every write onto chainRun/_runs/_uow — dispatching itself (_dispatcher.Send) is
@@ -182,15 +198,16 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         {
             var stage = chain.Stages[stageIndex];
 
-        // ── Evaluate gate before the stage ────────────────────────────────────────────────
+            // ── Evaluate gate before the stage ────────────────────────────────────────────────
             // The continuation is scheduled only after this gate has already evaluated. Skipping
             // it once on resume prevents a wait gate from scheduling itself forever.
             if (stage.Gate is { } gate
                 && !(command.ResumeFromStageIndex == stageIndex && stageIndex == startStageIndex))
             {
                 if (stage.Gate is ConditionGate && string.IsNullOrWhiteSpace(payload))
+                {
                     payload = await ResolvePreviousRunPayloadAsync(chain.Id, command.ResumeFromStageIndex, ct);
-
+                }
                 var gateResult = gate.Evaluate(payload);
                 if (gateResult.WaitDuration is { } wait)
                 {
@@ -221,9 +238,13 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                         payload = branchResult.Payload;
                         status = branchResult.Status;
                         if (status == ChainRunStatus.Waiting)
+                        {
                             return ChainRunMapper.ToView(chainRun);
+                        }
                         if (status is ChainRunStatus.Failed or ChainRunStatus.Cancelled)
+                        {
                             break;
+                        }
                         continue;
                     }
 
@@ -267,10 +288,15 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 {
                     question = _questions is null ? loop.Instructions : await _questions.GenerateAsync(loop, payload, ct);
                     if (loop.AgentProvider == LoopChainAction.JevAgent)
+                    {
                         verification = await (_jev ?? throw new InvalidOperationException("AI verification is not configured."))
-                            .EvaluateAsync(question, payload, ct, chain.ProjectId);
+                                                .EvaluateAsync(question, payload, ct, chain.ProjectId);
+                    }
                 }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Failed, _clock.UtcNow,
@@ -303,13 +329,18 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             {
                 var index = flatIndex + branch;
                 var job = stepJobs[index];
-                if (job is null || job.Parameters.Count == 0) continue;
+                if (job is null || job.Parameters.Count == 0)
+                {
+                    continue;
+                }
                 var input = ChainInputPayload.Object(command.StepPayloadOverrides is { } supplied
-                    && supplied.TryGetValue(index, out var args) ? MergePayload(payload, args) : payload);
+                                    && supplied.TryGetValue(index, out var args) ? MergePayload(payload, args) : payload);
                 if (job.Parameters.Any(field => field.Required && ChainInputPayload.Missing(ChainInputPayload.Get(input, field.Name))))
+                {
                     requiredSteps.Add(new ChainInputStep(index, job.Name, job.Parameters.Select(field =>
-                        new JobParameterDto(field.Name, field.Label, field.Required, field.Type, field.Options)).ToList(),
-                        job.Parameters.ToDictionary(field => field.Name, field => ChainInputPayload.Get(input, field.Name)?.DeepClone())));
+                                        new JobParameterDto(field.Name, field.Label, field.Required, field.Type, field.Options)).ToList(),
+                                        job.Parameters.ToDictionary(field => field.Name, field => ChainInputPayload.Get(input, field.Name)?.DeepClone())));
+                }
             }
             if (requiredSteps.Count > 0)
             {
@@ -320,11 +351,15 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 return ChainRunMapper.ToView(chainRun);
             }
 
-            if (stage.Action is QemuChainAction vm)
+            if (stage.Action is VirtualMachineChainAction vm)
             {
                 var outcome = await ExecuteQemuAsync(vm, chainRun, flatIndex++, payload, ct);
                 payload = outcome.Payload;
-                if (outcome.Status is ChainRunStatus.Failed or ChainRunStatus.Cancelled) { status = outcome.Status; break; }
+                if (outcome.Status is ChainRunStatus.Failed or ChainRunStatus.Cancelled)
+                {
+                    status = outcome.Status;
+                    break;
+                }
                 continue;
             }
 
@@ -338,8 +373,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     if (_communications is null
                         || _permissions is null
                         || !await _permissions.HasAsync(Permission.EmailSend, ct))
+                    {
                         throw new UnauthorizedAccessException(
-                            $"The '{Permission.EmailSend}' permission is required to send chain email.");
+                                                $"The '{Permission.EmailSend}' permission is required to send chain email.");
+                    }
                     EnsureEmailReleaseAllowed(payload);
                     var recipient = RenderTemplate(email.Recipient, payload);
                     var recipientName = RenderTemplate(email.RecipientName, payload);
@@ -348,9 +385,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     var attachments = ResolveEmailAttachments(email.AttachmentPath, payload);
                     _ = new MailAddress(recipient);
                     if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body))
+                    {
                         throw new InvalidOperationException(
-                            "Email subject and body must not be empty after payload substitution.");
-
+                                                "Email subject and body must not be empty after payload substitution.");
+                    }
                     var delivery = await _communications.SendEmailAsync(
                         recipient, recipientName, subject, body, ct, attachments);
                     chainRun.MarkStepFinished(actionIndex, runId: null,
@@ -384,19 +422,24 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     if (_communications is null
                         || _permissions is null
                         || !await _permissions.HasAsync(Permission.SmsSend, ct))
+                    {
                         throw new UnauthorizedAccessException(
-                            $"The '{Permission.SmsSend}' permission is required to send chain SMS.");
+                                                $"The '{Permission.SmsSend}' permission is required to send chain SMS.");
+                    }
                     EnsureReleaseAllowed(payload, "sms");
                     var recipient = RenderTemplate(sms.Recipient, payload);
                     var body = RenderTemplate(sms.Body, payload);
                     var digits = new string(recipient.Where(char.IsDigit).ToArray());
                     if (!recipient.StartsWith('+') || digits.Length is < 8 or > 15)
+                    {
                         throw new InvalidOperationException(
-                            "SMS recipient must be an international number such as +61412345678.");
+                                                "SMS recipient must be an international number such as +61412345678.");
+                    }
                     if (string.IsNullOrWhiteSpace(body))
+                    {
                         throw new InvalidOperationException(
-                            "SMS body must not be empty after payload substitution.");
-
+                                                "SMS body must not be empty after payload substitution.");
+                    }
                     var delivery = await _communications.SendSmsAsync(recipient, body, ct);
                     chainRun.MarkStepFinished(actionIndex, runId: null,
                         ChainStepStatus.Succeeded, _clock.UtcNow,
@@ -455,10 +498,13 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
                 var normalizedInput = ChainInputPayload.Object(stepPayload);
                 foreach (var field in job.Parameters.Where(field => field.Name.Contains('.')))
+                {
                     ChainInputPayload.Set(normalizedInput, field.Name, ChainInputPayload.Get(normalizedInput, field.Name));
+                }
                 if (job.Parameters.Any(field => field.Name.Contains('.')))
+                {
                     stepPayload = normalizedInput.ToJsonString();
-
+                }
                 JobRunDetailView run;
                 await dispatchGate.WaitAsync(ct);
                 try
@@ -499,8 +545,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 break;
             }
             if (Array.IndexOf(branchStatuses, ChainStepStatus.Partial) >= 0)
+            {
                 status = ChainRunStatus.Partial;
-
+            }
             payload = MergeContext(payload,
                 stage.JobIds.Count == 1 ? branchOutputs[0] : CombineOutputs(branchOutputs));
             chainRun.SetCurrentPayload(payload);
@@ -522,7 +569,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         // Best-effort — ingestion must never fail the chain.
         if (_dataMappings is not null)
         {
-            try { await _dataMappings.IngestChainOutputAsync(chain.Id, chainRun.Id, chain.ProjectId, payload, ct); }
+            try
+            {
+                await _dataMappings.IngestChainOutputAsync(chain.Id, chainRun.Id, chain.ProjectId, payload, ct);
+            }
             catch { /* isolated inside the service too */ }
         }
 
@@ -543,7 +593,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             payload = result.Payload;
             status = result.Status;
             if (status is ChainRunStatus.Waiting or ChainRunStatus.Failed or ChainRunStatus.Cancelled)
+            {
                 break;
+            }
         }
 
         return (payload, status);
@@ -556,8 +608,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         if (stage.Gate is { } gate)
         {
             if (gate is ConditionGate && string.IsNullOrWhiteSpace(payload))
+            {
                 payload = await ResolvePreviousRunPayloadAsync(chainRun.ChainId, null, ct);
-
+            }
             var gateResult = gate.Evaluate(payload);
             if (gateResult.WaitDuration is { } wait)
             {
@@ -572,15 +625,17 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             if (!gateResult.Proceed)
             {
                 if (gate is ConditionGate { ElseBranch: { Count: > 0 } elseBranch })
+                {
                     return await ExecuteConditionalBranchAsync(elseBranch, chainRun, payload, ct, progressLock, dispatchGate);
-
+                }
                 return (payload, ChainRunStatus.Succeeded);
             }
         }
 
-        if (stage.Action is QemuChainAction vm)
+        if (stage.Action is VirtualMachineChainAction vm)
+        {
             return await ExecuteQemuAsync(vm, chainRun, chainRun.AppendStep(vm.Type, stageIndex), payload, ct);
-
+        }
         if (stage.Action is SendEmailChainAction email)
         {
             var actionIndex = chainRun.AppendStep("send-email", stageIndex);
@@ -592,9 +647,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 if (_communications is null
                     || _permissions is null
                     || !await _permissions.HasAsync(Permission.EmailSend, ct))
+                {
                     throw new UnauthorizedAccessException(
-                        $"The '{Permission.EmailSend}' permission is required to send chain email.");
-
+                                        $"The '{Permission.EmailSend}' permission is required to send chain email.");
+                }
                 EnsureEmailReleaseAllowed(payload);
                 var recipient = RenderTemplate(email.Recipient, payload);
                 var recipientName = RenderTemplate(email.RecipientName, payload);
@@ -603,9 +659,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 var attachments = ResolveEmailAttachments(email.AttachmentPath, payload);
                 _ = new MailAddress(recipient);
                 if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(body))
+                {
                     throw new InvalidOperationException(
-                        "Email subject and body must not be empty after payload substitution.");
-
+                                        "Email subject and body must not be empty after payload substitution.");
+                }
                 var delivery = await _communications.SendEmailAsync(
                     recipient, recipientName, subject, body, ct, attachments);
                 chainRun.MarkStepFinished(actionIndex, runId: null,
@@ -639,19 +696,24 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 if (_communications is null
                     || _permissions is null
                     || !await _permissions.HasAsync(Permission.SmsSend, ct))
+                {
                     throw new UnauthorizedAccessException(
-                        $"The '{Permission.SmsSend}' permission is required to send chain SMS.");
+                                        $"The '{Permission.SmsSend}' permission is required to send chain SMS.");
+                }
                 EnsureReleaseAllowed(payload, "sms");
                 var recipient = RenderTemplate(sms.Recipient, payload);
                 var body = RenderTemplate(sms.Body, payload);
                 var digits = new string(recipient.Where(char.IsDigit).ToArray());
                 if (!recipient.StartsWith('+') || digits.Length is < 8 or > 15)
+                {
                     throw new InvalidOperationException(
-                        "SMS recipient must be an international number such as +61412345678.");
+                                        "SMS recipient must be an international number such as +61412345678.");
+                }
                 if (string.IsNullOrWhiteSpace(body))
+                {
                     throw new InvalidOperationException(
-                        "SMS body must not be empty after payload substitution.");
-
+                                        "SMS body must not be empty after payload substitution.");
+                }
                 var delivery = await _communications.SendSmsAsync(recipient, body, ct);
                 chainRun.MarkStepFinished(actionIndex, runId: null,
                     ChainStepStatus.Succeeded, _clock.UtcNow,
@@ -679,7 +741,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         var branchStatuses = new ChainStepStatus[stage.JobIds.Count];
         var resolvedJobs = new List<Job?>(stage.JobIds.Count);
         foreach (var jobId in stage.JobIds)
+        {
             resolvedJobs.Add(await _jobs.GetByIdAsync(jobId, ct));
+        }
         var status = ChainRunStatus.Succeeded;
 
         var branchTasks = Enumerable.Range(0, stage.JobIds.Count).Select(async branchIndex =>
@@ -740,11 +804,16 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         {
             return (payload, ChainRunStatus.Cancelled);
         }
-        if (Array.IndexOf(branchStatuses, ChainStepStatus.Partial) >= 0)
-            status = ChainRunStatus.Partial;
-        else
+        void CompleteBranch()
+        {
+            if (Array.IndexOf(branchStatuses, ChainStepStatus.Partial) >= 0)
+            {
+                status = ChainRunStatus.Partial;
+                return;
+            }
             status = ChainRunStatus.Succeeded;
-
+        }
+        CompleteBranch();
         payload = MergeContext(payload,
             stage.JobIds.Count == 1 ? branchOutputs[0] : CombineOutputs(branchOutputs));
         chainRun.SetCurrentPayload(payload);
@@ -756,12 +825,17 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private async Task<string?> ResolvePreviousRunPayloadAsync(
         Guid chainId, int? resumeFromStageIndex, CancellationToken ct)
     {
-        if (resumeFromStageIndex is not null) return null;
+        if (resumeFromStageIndex is not null)
+        {
+            return null;
+        }
         var previousRuns = await _runs.ListForChainAsync(chainId, 20, ct);
         foreach (var previous in previousRuns)
         {
             if (previous.Status is not (ChainRunStatus.Succeeded or ChainRunStatus.Partial))
+            {
                 continue;
+            }
             return previous.FinalOutput;
         }
 
@@ -771,22 +845,33 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private static async Task WithProgressLockAsync(SemaphoreSlim gate, Func<Task> action)
     {
         await gate.WaitAsync();
-        try { await action(); }
-        finally { gate.Release(); }
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     // Fold collected step parameters over the chained input: two JSON objects merge shallowly
     // (parameter values win); anything else keeps the chained input under "previous" beside them.
     private async Task<(string? Payload, ChainRunStatus Status)> ExecuteQemuAsync(
-        QemuChainAction action, ChainRun run, int index, string? payload, CancellationToken ct)
+        VirtualMachineChainAction action, ChainRun run, int index, string? payload, CancellationToken ct)
     {
         run.MarkStepRunning(index, null, _clock.UtcNow);
         await SaveProgressAsync(run, ct);
         try
         {
             if (_permissions is null || !await _permissions.HasAsync(Permission.JobsRun, ct))
+            {
                 throw new UnauthorizedAccessException($"The '{Permission.JobsRun}' permission is required to run a QEMU step.");
-            if (_qemu is null) throw new InvalidOperationException("QEMU execution is not configured on this host.");
+            }
+            if (_qemu is null)
+            {
+                throw new InvalidOperationException("QEMU execution is not configured on this host.");
+            }
             var result = await RunQemuUntilCancelledAsync(action, run.ProjectId, run.Id, index, payload, ct);
             if (result is null)
             {
@@ -795,8 +880,15 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             }
             payload = MergeContext(payload, JsonSerializer.Serialize(new Dictionary<string, object>
             {
-                [action.OutputField] = new { exitCode = result.ExitCode, stdout = result.Stdout, stderr = result.Stderr, outputTruncated = result.OutputTruncated,
-                    agentSteps = result.AgentSteps, activity = result.Activity },
+                [action.OutputField] = new
+                {
+                    exitCode = result.ExitCode,
+                    stdout = result.Stdout,
+                    stderr = result.Stderr,
+                    outputTruncated = result.OutputTruncated,
+                    agentSteps = result.AgentSteps,
+                    activity = result.Activity
+                },
             }));
             run.SetCurrentPayload(payload);
             var success = result.ExitCode == 0;
@@ -806,7 +898,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             await SaveContextAsync(run, payload, ct);
             return (payload, success ? ChainRunStatus.Succeeded : ChainRunStatus.Failed);
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             run.MarkStepFinished(index, null, ChainStepStatus.Failed, _clock.UtcNow, "QEMU", error: ShortError(ex.Message));
@@ -815,7 +910,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         }
     }
 
-    private async Task<QemuEnvironmentResult?> RunQemuUntilCancelledAsync(QemuChainAction action, Guid projectId, Guid runId, int step, string? payload, CancellationToken ct)
+    private async Task<VirtualMachineEnvironmentResult?> RunQemuUntilCancelledAsync(VirtualMachineChainAction action, Guid projectId, Guid runId, int step, string? payload, CancellationToken ct)
     {
         using var execution = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var task = _qemu!.RunAsync(action, payload, execution.Token,
@@ -827,21 +922,33 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 await Task.WhenAny(task, Task.Delay(1000, ct));
                 ct.ThrowIfCancellationRequested();
                 if ((await _runs.GetByIdAsync(runId, ct))?.Status == ChainRunStatus.Cancelled)
+                {
                     return null;
+                }
             }
-            if ((await _runs.GetByIdAsync(runId, ct))?.Status == ChainRunStatus.Cancelled) return null;
+            if ((await _runs.GetByIdAsync(runId, ct))?.Status == ChainRunStatus.Cancelled)
+            {
+                return null;
+            }
             return await task;
         }
         finally
         {
             await execution.CancelAsync();
-            try { await task; } catch { /* Preserve the result or exception from the execution above. */ }
+            try
+            {
+                await task;
+            }
+            catch { /* Preserve the result or exception from the execution above. */ }
         }
     }
 
     private static string MergePayload(string? chained, string args)
     {
-        if (string.IsNullOrWhiteSpace(chained)) return args;
+        if (string.IsNullOrWhiteSpace(chained))
+        {
+            return args;
+        }
         try
         {
             var argsNode = System.Text.Json.Nodes.JsonNode.Parse(args) as System.Text.Json.Nodes.JsonObject
@@ -868,17 +975,31 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
     private async Task SaveContextAsync(ChainRun run, string? payload, CancellationToken ct)
     {
-        if (_contextStore is null) return;
-        try { await _contextStore.SetAsync(run.Id, payload, ct); }
-        catch (Exception ex) { _log?.LogWarning(ex, "Could not write chain context {ChainRunId} to Redis; DB checkpoint remains authoritative.", run.Id); }
+        if (_contextStore is null)
+        {
+            return;
+        }
+        try
+        {
+            await _contextStore.SetAsync(run.Id, payload, ct);
+        }
+        catch (Exception ex)
+        {
+            _log?.LogWarning(ex, "Could not write chain context {ChainRunId} to Redis; DB checkpoint remains authoritative.", run.Id);
+        }
     }
 
     private static string? MergeContext(string? context, string? output)
     {
-        if (string.IsNullOrWhiteSpace(output)) return context;
-        // The first stage has no accumulated state. Forward its artifact
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return context;
+        }        // The first stage has no accumulated state. Forward its artifact
         // unchanged; in particular, never synthesize a "previous": null field.
-        if (string.IsNullOrWhiteSpace(context)) return output;
+        if (string.IsNullOrWhiteSpace(context))
+        {
+            return output;
+        }
         try
         {
             var next = System.Text.Json.Nodes.JsonNode.Parse(output);
@@ -900,7 +1021,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             }
             return next?.ToJsonString();
         }
-        catch (JsonException) { return output; }
+        catch (JsonException)
+        {
+            return output;
+        }
     }
 
     private static void DeepMerge(System.Text.Json.Nodes.JsonObject target, System.Text.Json.Nodes.JsonObject source)
@@ -909,9 +1033,11 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         {
             if (value is System.Text.Json.Nodes.JsonObject sourceObject
                 && target[key] is System.Text.Json.Nodes.JsonObject targetObject)
+            {
                 DeepMerge(targetObject, sourceObject);
-            else
-                target[key] = value?.DeepClone();
+                continue;
+            }
+            target[key] = value?.DeepClone();
         }
     }
 
@@ -930,24 +1056,33 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     /// used as a fallback so downstream chain stages still receive the run's data.</summary>
     internal static string? PrimaryOutput(JobRunDetailView run)
     {
-        if (run.ReduceResult?.Artifact is { Length: > 0 } reduce) return reduce;
-
+        if (run.ReduceResult?.Artifact is { Length: > 0 } reduce)
+        {
+            return reduce;
+        }
         var artifacts = run.ShardResults
             .OrderBy(s => s.Index)
             .Where(s => !string.IsNullOrWhiteSpace(s.Artifact))
             .Select(s => s.Artifact!)
             .ToList();
         if (artifacts.Count > 0)
+        {
             return artifacts.Count == 1 ? artifacts[0] : CombineJsonValues(artifacts);
-
+        }
         var namedContents = run.ShardResults
             .OrderBy(s => s.Index)
             .SelectMany(s => s.Artifacts)
             .Where(a => !a.IsBinary && !string.IsNullOrWhiteSpace(a.Content))
             .Select(a => a.Content)
             .ToList();
-        if (namedContents.Count == 0) return null;
-        if (namedContents.Count == 1) return namedContents[0];
+        if (namedContents.Count == 0)
+        {
+            return null;
+        }
+        if (namedContents.Count == 1)
+        {
+            return namedContents[0];
+        }
         return CombineJsonValues(namedContents);
     }
 
@@ -958,8 +1093,14 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     /// contributes a JSON <c>null</c>.</summary>
     internal static string? CombineOutputs(IReadOnlyList<string?> branchOutputs)
     {
-        if (branchOutputs.Count == 0) return null;
-        if (branchOutputs.Count == 1) return branchOutputs[0];
+        if (branchOutputs.Count == 0)
+        {
+            return null;
+        }
+        if (branchOutputs.Count == 1)
+        {
+            return branchOutputs[0];
+        }
         return CombineJsonValues(branchOutputs.Select(o => o ?? "null"));
     }
 
@@ -985,18 +1126,25 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
     internal static string RenderTemplate(string template, string? payload)
     {
-        if (string.IsNullOrEmpty(template) || !TemplatePath.IsMatch(template)) return template;
+        if (string.IsNullOrEmpty(template) || !TemplatePath.IsMatch(template))
+        {
+            return template;
+        }
         if (string.IsNullOrWhiteSpace(payload))
+        {
             throw new InvalidOperationException("Message template needs a previous-stage payload.");
+        }
         using var document = JsonDocument.Parse(payload);
         return TemplatePath.Replace(template, match =>
         {
             if (!TryResolvePath(document.RootElement, match.Groups[1].Value, out var value))
+            {
                 throw new InvalidOperationException(
-                    $"Message template path '{match.Groups[1].Value}' was not found in the previous-stage payload.");
+                                $"Message template path '{match.Groups[1].Value}' was not found in the previous-stage payload.");
+            }
             return value.ValueKind == JsonValueKind.String
-                ? value.GetString() ?? ""
-                : value.ToString();
+                            ? value.GetString() ?? ""
+                            : value.ToString();
         });
     }
 
@@ -1011,68 +1159,101 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         string attachmentPath,
         string? payload)
     {
-        if (string.IsNullOrWhiteSpace(attachmentPath)) return Array.Empty<ClientEmailAttachment>();
+        if (string.IsNullOrWhiteSpace(attachmentPath))
+        {
+            return Array.Empty<ClientEmailAttachment>();
+        }
         if (string.IsNullOrWhiteSpace(payload))
+        {
             throw new InvalidOperationException("Email attachments need a previous-stage JSON payload.");
-
+        }
         var path = attachmentPath.Trim();
         var templateMatch = TemplatePath.Match(path);
-        if (templateMatch.Success && templateMatch.Length == path.Length)
-            path = templateMatch.Groups[1].Value;
-        else if (TemplatePath.IsMatch(path))
-            throw new InvalidOperationException("Attachment mapping must contain one JSON path only.");
-
+        void ResolveArtifact()
+        {
+            if (templateMatch.Success && templateMatch.Length == path.Length)
+            {
+                path = templateMatch.Groups[1].Value;
+                return;
+            }
+            if (TemplatePath.IsMatch(path))
+            {
+                throw new InvalidOperationException("Attachment mapping must contain one JSON path only.");
+            }
+        }
+        ResolveArtifact();
         using var document = JsonDocument.Parse(payload);
         if (!TryResolvePath(document.RootElement, path, out var value))
+        {
             throw new InvalidOperationException(
-                $"Email attachment path '{path}' was not found in the previous-stage payload.");
-
+                        $"Email attachment path '{path}' was not found in the previous-stage payload.");
+        }
         var values = value.ValueKind == JsonValueKind.Array
             ? value.EnumerateArray().Select(item => item.Clone()).ToList()
             : new List<JsonElement> { value.Clone() };
-        if (values.Count == 0) return Array.Empty<ClientEmailAttachment>();
+        if (values.Count == 0)
+        {
+            return Array.Empty<ClientEmailAttachment>();
+        }
         if (values.Count > 20)
+        {
             throw new InvalidOperationException("An email action can attach at most 20 files.");
-
+        }
         var result = new List<ClientEmailAttachment>(values.Count);
         long totalBytes = 0;
         foreach (var (item, index) in values.Select((item, index) => (item, index)))
         {
             if (item.ValueKind != JsonValueKind.Object)
+            {
                 throw new InvalidOperationException(
-                    $"Email attachment {index + 1} must be a JSON object with name and content fields.");
-
+                                $"Email attachment {index + 1} must be a JSON object with name and content fields.");
+            }
             var name = JsonString(item, "name", "fileName", "filename");
             if (string.IsNullOrWhiteSpace(name))
+            {
                 throw new InvalidOperationException($"Email attachment {index + 1} is missing its file name.");
+            }
             name = Path.GetFileName(name.Trim());
             if (name.Length == 0 || name.Length > 255)
+            {
                 throw new InvalidOperationException($"Email attachment {index + 1} has an invalid file name.");
-
+            }
             var explicitBase64 = TryJsonString(item, out var content, "contentBase64", "base64");
             if (!explicitBase64 && !TryJsonString(item, out content, "content", "data"))
+            {
                 throw new InvalidOperationException($"Email attachment '{name}' is missing its content.");
+            }
             var binary = explicitBase64 || JsonBool(item, "isBinary", "isBase64");
             byte[] bytes;
-            if (binary)
+            byte[] AppendArtifact()
             {
-                try { bytes = Convert.FromBase64String(content!); }
-                catch (FormatException)
+                byte[] resolvedBytes;
+                if (binary)
                 {
-                    throw new InvalidOperationException($"Email attachment '{name}' is not valid base64.");
+                    try
+                    {
+                        resolvedBytes = Convert.FromBase64String(content!);
+                    }
+                    catch (FormatException)
+                    {
+                        throw new InvalidOperationException($"Email attachment '{name}' is not valid base64.");
+                    }
+                    return resolvedBytes;
                 }
+                resolvedBytes = Encoding.UTF8.GetBytes(content!);
+                return resolvedBytes;
             }
-            else
-            {
-                bytes = Encoding.UTF8.GetBytes(content!);
-            }
-
+            bytes = AppendArtifact();
             totalBytes += bytes.LongLength;
             if (totalBytes > 10 * 1024 * 1024)
+            {
                 throw new InvalidOperationException("Email attachments exceed the 10 MB total limit.");
+            }
             var contentType = JsonString(item, "contentType", "mimeType");
             if (string.IsNullOrWhiteSpace(contentType))
+            {
                 contentType = binary ? "application/octet-stream" : "text/plain; charset=utf-8";
+            }
             result.Add(new ClientEmailAttachment(name, contentType, Convert.ToBase64String(bytes)));
         }
         return result;
@@ -1085,8 +1266,14 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     {
         foreach (var property in item.EnumerateObject())
         {
-            if (!names.Any(name => property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
-            if (property.Value.ValueKind != JsonValueKind.String) break;
+            if (!names.Any(name => property.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+            if (property.Value.ValueKind != JsonValueKind.String)
+            {
+                break;
+            }
             value = property.Value.GetString();
             return value is not null;
         }
@@ -1098,7 +1285,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     {
         foreach (var property in item.EnumerateObject())
         {
-            if (!names.Any(name => property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
+            if (!names.Any(name => property.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
             return property.Value.ValueKind == JsonValueKind.True;
         }
         return false;
@@ -1109,17 +1299,28 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
     private static void EnsureReleaseAllowed(string? payload, string channel)
     {
-        if (string.IsNullOrWhiteSpace(payload)) return;
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return;
+        }
         JsonDocument document;
-        try { document = JsonDocument.Parse(payload); }
-        catch (JsonException) { return; }
+        try
+        {
+            document = JsonDocument.Parse(payload);
+        }
+        catch (JsonException)
+        {
+            return;
+        }
         using (document)
         {
             var flags = new List<bool>();
             CollectReleaseFlags(document.RootElement, flags, channel);
             if (flags.Count > 0 && flags.Any(flag => !flag))
+            {
                 throw new InvalidOperationException(
-                    $"Client {channel} delivery is blocked because the previous-stage release object does not permit {channel}/client release.");
+                                $"Client {channel} delivery is blocked because the previous-stage release object does not permit {channel}/client release.");
+            }
         }
     }
 
@@ -1138,14 +1339,20 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     || normalized == "release" + channel)
                 {
                     if (property.Value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                    {
                         flags.Add(property.Value.GetBoolean());
+                    }
                 }
                 CollectReleaseFlags(property.Value, flags, channel);
             }
+            return;
         }
-        else if (element.ValueKind == JsonValueKind.Array)
+        if (element.ValueKind == JsonValueKind.Array)
         {
-            foreach (var item in element.EnumerateArray()) CollectReleaseFlags(item, flags, channel);
+            foreach (var item in element.EnumerateArray())
+            {
+                CollectReleaseFlags(item, flags, channel);
+            }
         }
     }
 
@@ -1153,7 +1360,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     {
         value = root;
         var path = rawPath.Trim().TrimStart('$').TrimStart('.');
-        if (path.Length == 0) return true;
+        if (path.Length == 0)
+        {
+            return true;
+        }
         foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
         {
             if (value.ValueKind == JsonValueKind.Object
@@ -1183,7 +1393,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     /// activity from here without reaching into <c>RunJobHandler</c> (out of scope for this change),
     /// so the chain — which already owns this structure via <see cref="ChainRun"/> — publishes it
     /// itself; the Infrastructure collector parses this tag back into
-    /// <see cref="Ports.ChainRunStepTelemetry"/> when it captures the stopped <c>job.chain</c> activity.
+    /// <see cref="PlaceContext.Application.Observability.ChainRunStepTelemetry"/> when it captures the stopped <c>job.chain</c> activity.
     /// </summary>
     private static string BuildStepsTelemetryJson(ChainRun chainRun)
         => JsonSerializer.Serialize(chainRun.Steps.Select(s => new

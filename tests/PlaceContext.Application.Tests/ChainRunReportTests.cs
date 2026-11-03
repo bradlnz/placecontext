@@ -42,8 +42,9 @@ public class ChainRunReportTests
         var runs = new InMemoryChainRunRepository();
         var chain = MakeChain("kept-chain", Guid.NewGuid());
         for (var i = 0; i < 5; i++)
+        {
             await runs.AddAsync(ChainRun.Start(chain, new[] { "step" }, T0.AddMinutes(i)));
-
+        }
         var handler = new ListRecentChainRunsHandler(runs, new InMemoryProjectRepository());
         var reports = await handler.HandleAsync(new ListRecentChainRunsQuery(Take: 3));
 

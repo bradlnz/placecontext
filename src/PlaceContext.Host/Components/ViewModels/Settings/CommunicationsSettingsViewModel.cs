@@ -1,27 +1,13 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application;
+using PlaceContext.Application.Communications;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application;
 using PlaceContext.Host;
-using PlaceContext.Infrastructure.Comms;
 
 namespace PlaceContext.Host.Components.ViewModels;
-
-public enum CommunicationChannel
-{
-    Email,
-    Sms,
-}
-
-public enum CommunicationProviderKind
-{
-    Postmark,
-    SendGrid,
-    Twilio,
-}
 
 public sealed class CommunicationsSettingsViewModel(
     IServiceScopeFactory ScopeFactory,
@@ -138,23 +124,31 @@ public sealed class CommunicationsSettingsViewModel(
     {
         Channel = args.Value?.ToString() ?? EmailChannel;
         if (!KindsForChannel(Channel).Contains(Kind))
+        {
             Kind = KindsForChannel(Channel)[0];
+        }
         if (AuthType == "header")
+        {
             AuthHeaderName = DefaultHeaderName(Kind);
+        }
     }
 
     public void KindChanged(ChangeEventArgs args)
     {
         Kind = args.Value?.ToString() ?? PostmarkKind;
         if (AuthType == "header")
+        {
             AuthHeaderName = DefaultHeaderName(Kind);
+        }
     }
 
     public void AuthTypeChanged(ChangeEventArgs args)
     {
         AuthType = args.Value?.ToString() ?? NoneAuth;
         if (AuthType == "header" && string.IsNullOrWhiteSpace(AuthHeaderName))
+        {
             AuthHeaderName = DefaultHeaderName(Kind);
+        }
     }
 
     public async Task ProjectChanged(ChangeEventArgs args)
@@ -227,22 +221,31 @@ public sealed class CommunicationsSettingsViewModel(
     public string BuildSettingsJson()
     {
         var settings = new JsonObject();
-        if (Kind is "postmark" or "sendgrid")
+        void ApplyProviderSettings()
         {
-            settings["fromEmail"] = FromEmail.Trim();
-            settings["fromName"] = FromName.Trim();
-            if (Kind == "postmark")
-                settings["messageStream"] = string.IsNullOrWhiteSpace(MessageStream)
-                    ? DefaultMessageStream
-                    : MessageStream.Trim();
+            if (Kind is "postmark" or "sendgrid")
+            {
+                settings["fromEmail"] = FromEmail.Trim();
+                settings["fromName"] = FromName.Trim();
+                if (Kind == "postmark")
+                {
+                    settings["messageStream"] = string.IsNullOrWhiteSpace(MessageStream)
+                                    ? DefaultMessageStream
+                                    : MessageStream.Trim();
+                }
+                return;
+            }
+            if (Kind == "twilio")
+            {
+                settings["accountSid"] = AccountSid.Trim();
+                settings["fromNumber"] = FromNumber.Trim();
+            }
         }
-        else if (Kind == "twilio")
-        {
-            settings["accountSid"] = AccountSid.Trim();
-            settings["fromNumber"] = FromNumber.Trim();
-        }
+        ApplyProviderSettings();
         if (!string.IsNullOrWhiteSpace(Endpoint))
+        {
             settings["endpoint"] = Endpoint.Trim();
+        }
         return settings.ToJsonString();
     }
 
@@ -268,16 +271,22 @@ public sealed class CommunicationsSettingsViewModel(
         Message = null;
         try
         {
-            if (EditingId is { } id)
-                await InScopeAsync<CommunicationProviderService>(async service =>
+            async Task SaveProviderAsync()
+            {
+                if (EditingId is { } id)
                 {
-                    await service.UpdateAsync(id, CurrentInput());
-                });
-            else
+                    await InScopeAsync<CommunicationProviderService>(async service =>
+                                {
+                                    await service.UpdateAsync(id, CurrentInput());
+                                });
+                    return;
+                }
                 await InScopeAsync<CommunicationProviderService>(async service =>
-                {
-                    await service.CreateAsync(CurrentInput());
-                });
+                                    {
+                                        await service.CreateAsync(CurrentInput());
+                                    });
+            }
+            await SaveProviderAsync();
             ShowForm = false;
             Report(EditingId is null ? "Provider added." : "Provider updated.");
             await ReloadAsync();
@@ -309,7 +318,10 @@ public sealed class CommunicationsSettingsViewModel(
     {
         try
         {
-            var input = ToInput(provider) with { Enabled = !provider.Enabled };
+            var input = ToInput(provider) with
+            {
+                Enabled = !provider.Enabled
+            };
             await InScopeAsync<CommunicationProviderService>(async service =>
             {
                 await service.UpdateAsync(provider.Id, input);
@@ -389,7 +401,7 @@ public sealed class CommunicationsSettingsViewModel(
         Message = null;
         try
         {
-            var delivery = await InScopeAsync<DatabaseCommunicationSender, ClientMessageDelivery>(
+            var delivery = await InScopeAsync<ICommunicationTestSender, ClientMessageDelivery>(
                 sender => sender.SendTestAsync(id, TestRecipient.Trim())
             );
             Report($"Test message sent via {delivery.Provider}.");

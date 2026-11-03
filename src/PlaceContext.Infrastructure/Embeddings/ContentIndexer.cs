@@ -2,7 +2,9 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Search;
+using PlaceContext.Application.Secrets;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Infrastructure.Embeddings;
@@ -43,16 +45,24 @@ public sealed class ContentIndexer : IContentIndexer
 
     public async Task IndexAsync(Guid projectId, string kind, string sourceKey, string text, CancellationToken ct = default)
     {
-        if (!IsEnabled || string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(sourceKey)) return;
+        if (!IsEnabled || string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(sourceKey))
+        {
+            return;
+        }
         await IndexManyAsync(projectId, kind, new[] { (sourceKey, text) }, ct);
     }
 
     public async Task IndexManyAsync(
         Guid projectId, string kind, IReadOnlyList<(string SourceKey, string Text)> items, CancellationToken ct = default)
     {
-        if (!IsEnabled || items.Count == 0) return;
-        if (!await EnsureReadyAsync(ct)) return;
-
+        if (!IsEnabled || items.Count == 0)
+        {
+            return;
+        }
+        if (!await EnsureReadyAsync(ct))
+        {
+            return;
+        }
         var prepared = items
             .Where(i => !string.IsNullOrWhiteSpace(i.SourceKey) && !string.IsNullOrWhiteSpace(i.Text))
             .Select(i => (
@@ -62,8 +72,10 @@ public sealed class ContentIndexer : IContentIndexer
             .GroupBy(i => i.Key, StringComparer.Ordinal)
             .Select(g => g.Last())
             .ToList();
-        if (prepared.Count == 0) return;
-
+        if (prepared.Count == 0)
+        {
+            return;
+        }
         try
         {
             // Batch embed (gateway may have its own batch limit — chunk at 32).
@@ -72,13 +84,18 @@ public sealed class ContentIndexer : IContentIndexer
             {
                 var slice = prepared.Skip(offset).Take(batch).ToList();
                 var vectors = await _gateway.EmbedAsync(slice.Select(s => s.Text).ToList(), ct);
-                if (vectors.Count != slice.Count) continue;
-
+                if (vectors.Count != slice.Count)
+                {
+                    continue;
+                }
                 var conn = (NpgsqlConnection)_db.Database.GetDbConnection();
                 await OpenAsync(conn, ct);
                 for (var i = 0; i < slice.Count; i++)
                 {
-                    if (vectors[i].Length == 0) continue;
+                    if (vectors[i].Length == 0)
+                    {
+                        continue;
+                    }
                     var cipher = _enc.Protect(slice[i].Text, TextPurpose);
                     await using var cmd = conn.CreateCommand();
                     cmd.CommandText = """
@@ -113,14 +130,17 @@ public sealed class ContentIndexer : IContentIndexer
         Guid projectId, string query, int take = 10, string? kind = null, CancellationToken ct = default)
     {
         if (!IsEnabled || string.IsNullOrWhiteSpace(query) || !await EnsureReadyAsync(ct))
+        {
             return Array.Empty<ContentSearchHit>();
-
+        }
         take = Math.Clamp(take, 1, 50);
         try
         {
             var vectors = await _gateway.EmbedAsync(new[] { query.Length > MaxTextChars ? query[..MaxTextChars] : query }, ct);
-            if (vectors.Count == 0 || vectors[0].Length == 0) return Array.Empty<ContentSearchHit>();
-
+            if (vectors.Count == 0 || vectors[0].Length == 0)
+            {
+                return Array.Empty<ContentSearchHit>();
+            }
             var conn = (NpgsqlConnection)_db.Database.GetDbConnection();
             await OpenAsync(conn, ct);
             await using var cmd = conn.CreateCommand();
@@ -145,8 +165,10 @@ public sealed class ContentIndexer : IContentIndexer
             cmd.Parameters.AddWithValue("tenant", _tenant.TenantId);
             cmd.Parameters.AddWithValue("project", projectId);
             cmd.Parameters.AddWithValue("take", take);
-            if (kind is not null) cmd.Parameters.AddWithValue("kind", kind);
-
+            if (kind is not null)
+            {
+                cmd.Parameters.AddWithValue("kind", kind);
+            }
             var hits = new List<ContentSearchHit>();
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
@@ -170,16 +192,31 @@ public sealed class ContentIndexer : IContentIndexer
 
     private async Task<bool> EnsureReadyAsync(CancellationToken ct)
     {
-        if (_state == 1) return true;
-        if (_state == 2) return false;
-        if (!IsEnabled) { _state = 2; return false; }
+        if (_state == 1)
+        {
+            return true;
+        }
+        if (_state == 2)
+        {
+            return false;
+        }
+        if (!IsEnabled)
+        {
+            _state = 2;
+            return false;
+        }
 
         await Gate.WaitAsync(ct);
         try
         {
-            if (_state == 1) return true;
-            if (_state == 2) return false;
-
+            if (_state == 1)
+            {
+                return true;
+            }
+            if (_state == 2)
+            {
+                return false;
+            }
             var conn = (NpgsqlConnection)_db.Database.GetDbConnection();
             await OpenAsync(conn, ct);
             await using var cmd = conn.CreateCommand();
@@ -218,7 +255,9 @@ public sealed class ContentIndexer : IContentIndexer
     private static async Task OpenAsync(NpgsqlConnection conn, CancellationToken ct)
     {
         if (conn.State != System.Data.ConnectionState.Open)
+        {
             await conn.OpenAsync(ct);
+        }
     }
 
     private static string ToVectorLiteral(float[] vector)

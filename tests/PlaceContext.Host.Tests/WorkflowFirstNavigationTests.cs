@@ -1,4 +1,5 @@
-using PlaceContext.Host.Build;
+using PlaceContext.Application.Build;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Tests;
@@ -65,7 +66,10 @@ public sealed class WorkflowFirstNavigationTests
         while (folder is not null)
         {
             var path = Path.Combine(folder.FullName, "src", "PlaceContext.Host");
-            if (Directory.Exists(path)) return path;
+            if (Directory.Exists(path))
+            {
+                return path;
+            }
             folder = folder.Parent;
         }
         throw new DirectoryNotFoundException("PlaceContext.Host root not found.");

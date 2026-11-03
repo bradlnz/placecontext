@@ -16,19 +16,29 @@ public sealed class RunOutputViewModel(IJSRuntime js) : PageViewModel, IComponen
     {
         var length = Truncated && char.IsHighSurrogate(Value[MaxPreviewChars - 1]) ? MaxPreviewChars - 1 : MaxPreviewChars;
         var current = (Value: Truncated ? Value[..length] : Value, Language: Truncated ? "plaintext" : Language, Label);
-        if (_rendered == current) return;
-        if (_rendered is null || _rendered.Value.Label != Label)
+        if (_rendered == current)
         {
-            await js.InvokeAsync<bool>("pcmonaco.init", EditorId, current.Value, current.Language, null, null, true, current.Label);
+            return;
         }
-        else
+        async Task ApplyOutputAsync()
+        {
+            if (_rendered is null || _rendered.Value.Label != Label)
+            {
+                await js.InvokeAsync<bool>("pcmonaco.init", EditorId, current.Value, current.Language, null, null, true, current.Label);
+                return;
+            }
             await js.InvokeVoidAsync("pcmonaco.setValue", EditorId, current.Value, current.Language);
+        }
+        await ApplyOutputAsync();
         _rendered = current;
     }
 
     public async ValueTask DisposeAsync()
     {
-        try { await js.InvokeVoidAsync("pcmonaco.destroy", EditorId); }
+        try
+        {
+            await js.InvokeVoidAsync("pcmonaco.destroy", EditorId);
+        }
         catch (JSDisconnectedException) { }
     }
 }

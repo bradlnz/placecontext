@@ -1,3 +1,4 @@
+@using PlaceContext.Application.Access
 @page "/project/{ProjectId:guid}/tests/{TestId:guid}"
 @attribute [Authorize(Policy = Permission.JobsEdit)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout

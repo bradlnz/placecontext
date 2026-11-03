@@ -1,9 +1,8 @@
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application;
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class DataMapViewModel : PageViewModel
@@ -20,13 +19,28 @@ public sealed partial class DataMapViewModel : PageViewModel
     }
 
     // ── Parameters ────────────────────────────────────────────────────────────────────────────
-    public Guid ProjectId { get; private set; }
+    public Guid ProjectId
+    {
+        get; private set;
+    }
 
     // ── Data state ────────────────────────────────────────────────────────────────────────────
-    public IReadOnlyList<DataMappingView>? Mappings { get; private set; }
-    public IReadOnlyList<JobView>? Jobs { get; private set; }
-    public IReadOnlyList<ProjectTableInfo>? Tables { get; private set; }
-    public string? Message { get; private set; }
+    public IReadOnlyList<DataMappingView>? Mappings
+    {
+        get; private set;
+    }
+    public IReadOnlyList<JobView>? Jobs
+    {
+        get; private set;
+    }
+    public IReadOnlyList<ProjectTableInfo>? Tables
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
     public bool Loading { get; private set; } = true;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
@@ -93,7 +107,9 @@ public sealed partial class DataMapViewModel : PageViewModel
     public async Task EnsureLayoutAsync()
     {
         if (PosLoaded)
+        {
             return;
+        }
         PosLoaded = true;
         try
         {
@@ -107,8 +123,12 @@ public sealed partial class DataMapViewModel : PageViewModel
                     Dictionary<string, double[]>
                 >(json);
                 if (saved is not null)
+                {
                     foreach (var (k, v) in saved.Where(kv => kv.Value.Length == 2))
+                    {
                         Pos[k] = (v[0], v[1]);
+                    }
+                }
             }
         }
         catch { }

@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Artifacts;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Search;
 using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 
@@ -67,7 +69,10 @@ public sealed class JobRunDataRecorder
     private async Task EmbedRowsAsync(
         Guid projectId, Guid runId, IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct)
     {
-        if (_indexer is not { IsEnabled: true }) return;
+        if (_indexer is not { IsEnabled: true })
+        {
+            return;
+        }
         var items = new List<(string, string)>();
         for (var i = 0; i < rows.Count; i++)
         {
@@ -76,14 +81,22 @@ public sealed class JobRunDataRecorder
             var parts = new List<string>();
             for (var c = 0; c < Columns.Count && c < r.Count; c++)
             {
-                if (string.IsNullOrWhiteSpace(r[c])) continue;
+                if (string.IsNullOrWhiteSpace(r[c]))
+                {
+                    continue;
+                }
                 parts.Add($"{Columns[c].Name}: {r[c]}");
             }
-            if (parts.Count == 0) continue;
+            if (parts.Count == 0)
+            {
+                continue;
+            }
             items.Add(($"job_run_data:{runId}:{i}", string.Join("\n", parts)));
         }
         if (items.Count > 0)
+        {
             await _indexer.IndexManyAsync(projectId, ContentKind.ProjectData, items, ct);
+        }
     }
 
     internal static IReadOnlyList<IReadOnlyList<string?>> BuildRows(Job job, JobRun run, DateTimeOffset recordedAt)
@@ -91,12 +104,14 @@ public sealed class JobRunDataRecorder
         var rows = new List<IReadOnlyList<string?>>(run.ShardResults.Count + 1);
 
         foreach (var shard in run.ShardResults.OrderBy(s => s.Index))
+        {
             rows.Add(Row(job, run, recordedAt, "map", shard.Index, shard.ExitCode, shard.Outcome.ToString(), shard.Artifact));
-
+        }
         if (run.ReduceResult is { } reduce)
+        {
             rows.Add(Row(job, run, recordedAt, "reduce", null, reduce.ExitCode,
-                reduce.Succeeded ? "Succeeded" : "Failed", reduce.Artifact));
-
+                        reduce.Succeeded ? "Succeeded" : "Failed", reduce.Artifact));
+        }
         return rows;
     }
 

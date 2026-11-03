@@ -1,17 +1,25 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
+using PlaceContext.Application.Auth;
 using PlaceContext.Application.Billing;
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class LoginViewModel(
     IAuthService? auth = null, NavigationManager? navigation = null,
     IOptions<RunBillingDeploymentOptions>? hosting = null) : PageViewModel
 {
-    public string? Error { get; private set; }
-    public string? ReturnUrl { get; private set; }
-    public string? Email { get; private set; }
+    public string? Error
+    {
+        get; private set;
+    }
+    public string? ReturnUrl
+    {
+        get; private set;
+    }
+    public string? Email
+    {
+        get; private set;
+    }
 
     public void SetParameters(string? error, string? returnUrl, string? email)
     {

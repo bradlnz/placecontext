@@ -95,8 +95,9 @@ public sealed class StrictPageMvvmContractTests
     {
         var match = Regex.Match(source, "@code\\s*\\{(?<body>[\\s\\S]*)\\}\\s*$");
         if (!match.Success)
+        {
             return [];
-
+        }
         return Regex
             .Matches(
                 match.Groups["body"].Value,
@@ -146,7 +147,9 @@ public sealed class StrictPageMvvmContractTests
                 $"{page}.razor"
             );
             if (File.Exists(path))
+            {
                 return File.ReadAllText(path);
+            }
             directory = directory.Parent;
         }
 

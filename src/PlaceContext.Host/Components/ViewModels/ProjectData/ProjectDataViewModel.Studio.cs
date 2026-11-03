@@ -1,19 +1,11 @@
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.SavedQueries;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
-
-/// <summary>Which resource list the SQL Studio sidebar is showing.</summary>
-public enum SidebarPane
-{
-    Tables,
-    Indexes,
-    Queries,
-}
 
 public sealed partial class ProjectDataViewModel
 {
@@ -24,7 +16,7 @@ public sealed partial class ProjectDataViewModel
     private void ResetStudioResources()
     {
         SidebarPane = SidebarPane.Tables;
-        Indices = Array.Empty<OpenSearchIndexView>();
+        Indices = Array.Empty<SearchIndexView>();
         IndicesReady = false;
         IndicesError = null;
         OpenSearchSetupRequired = false;
@@ -41,31 +33,53 @@ public sealed partial class ProjectDataViewModel
     public void ShowPane(SidebarPane pane)
     {
         if (SidebarPane == pane)
+        {
             return;
+        }
         SidebarPane = pane;
         NotifyStateChanged();
         if (pane == SidebarPane.Indexes)
+        {
             _ = LoadIndicesAsync();
-        else if (pane == SidebarPane.Queries && !SavedQueriesReady)
+            return;
+        }
+        if (pane == SidebarPane.Queries && !SavedQueriesReady)
+        {
             _ = LoadSavedQueriesAsync();
+        }
     }
 
     // ── Indexes (OpenSearch) ─────────────────────────────────────────────────────────────────
-    public IReadOnlyList<OpenSearchIndexView> Indices { get; private set; } =
-        Array.Empty<OpenSearchIndexView>();
-    public bool IndicesReady { get; private set; }
-    public string? IndicesError { get; private set; }
-    public bool OpenSearchSetupRequired { get; private set; }
+    public IReadOnlyList<SearchIndexView> Indices
+    {
+        get; private set;
+    } =
+        Array.Empty<SearchIndexView>();
+    public bool IndicesReady
+    {
+        get; private set;
+    }
+    public string? IndicesError
+    {
+        get; private set;
+    }
+    public bool OpenSearchSetupRequired
+    {
+        get; private set;
+    }
     public string OpenSearchSetupUrl =>
         $"{PageRoutes.ConnectionsSettings}?project={ProjectId}#search-index";
 
     public async Task LoadIndicesAsync(bool force = false)
     {
         if (!force && IndicesReady)
+        {
             return;
+        }
         if (_loadingIndices)
+        {
             return;
-
+        }
         _loadingIndices = true;
         IndicesReady = false;
         NotifyStateChanged();
@@ -96,12 +110,27 @@ public sealed partial class ProjectDataViewModel
         );
 
     // ── Materialize table → OpenSearch index ────────────────────────────────────────────────
-    public bool ShowMaterializeDialog { get; private set; }
-    public string? MaterializeTableName { get; private set; }
+    public bool ShowMaterializeDialog
+    {
+        get; private set;
+    }
+    public string? MaterializeTableName
+    {
+        get; private set;
+    }
     public string MaterializeIndexName { get; set; } = "";
-    public bool Materializing { get; private set; }
-    public string? MaterializeError { get; private set; }
-    public string? MaterializeMessage { get; private set; }
+    public bool Materializing
+    {
+        get; private set;
+    }
+    public string? MaterializeError
+    {
+        get; private set;
+    }
+    public string? MaterializeMessage
+    {
+        get; private set;
+    }
 
     public void OpenMaterializeDialog(string tableName)
     {
@@ -155,27 +184,48 @@ public sealed partial class ProjectDataViewModel
     {
         await LoadIndicesAsync(force: true);
         if (Indices.Any(index => string.Equals(index.Name, indexName, StringComparison.Ordinal)))
+        {
             return;
-
+        }
         for (var attempt = 0; attempt < MaterializeIndexRefreshAttempts; attempt++)
         {
             await Task.Delay(MaterializeIndexRefreshDelay);
             await LoadIndicesAsync(force: true);
             if (Indices.Any(index => string.Equals(index.Name, indexName, StringComparison.Ordinal)))
+            {
                 return;
+            }
         }
     }
 
     // ── Saved queries ────────────────────────────────────────────────────────────────────────
-    public IReadOnlyList<SavedQueryRecord> SavedQueries { get; private set; } =
+    public IReadOnlyList<SavedQueryRecord> SavedQueries
+    {
+        get; private set;
+    } =
         Array.Empty<SavedQueryRecord>();
-    public bool SavedQueriesReady { get; private set; }
-    public string? SavedQueriesError { get; private set; }
+    public bool SavedQueriesReady
+    {
+        get; private set;
+    }
+    public string? SavedQueriesError
+    {
+        get; private set;
+    }
 
-    public bool ShowSaveQueryDialog { get; private set; }
+    public bool ShowSaveQueryDialog
+    {
+        get; private set;
+    }
     public string SaveQueryName { get; set; } = "";
-    public string? SaveQueryError { get; private set; }
-    public bool SavingQuery { get; private set; }
+    public string? SaveQueryError
+    {
+        get; private set;
+    }
+    public bool SavingQuery
+    {
+        get; private set;
+    }
 
     public async Task LoadSavedQueriesAsync()
     {
@@ -270,7 +320,9 @@ public sealed partial class ProjectDataViewModel
     {
         var includeIndexes = SidebarPane == SidebarPane.Indexes;
         if (!SqlEditorMonaco || (_sqlSchemaPushed && (!includeIndexes || _sqlSchemaIncludesIndexes)))
+        {
             return;
+        }
         _sqlSchemaPushed = true;
         _sqlSchemaIncludesIndexes |= includeIndexes;
         await SqlSchemaHelper.PushAsync(_svc, _js, ProjectId, includeIndexes);

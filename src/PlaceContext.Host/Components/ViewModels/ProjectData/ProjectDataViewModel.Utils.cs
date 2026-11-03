@@ -1,6 +1,5 @@
-using PlaceContext.Application;
-using PlaceContext.Application.Ports;
 using PlaceContext.Application.Shared;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -25,36 +24,34 @@ public sealed partial class ProjectDataViewModel
                     {
                         field.Append('"');
                         i++;
+                        continue;
                     }
-                    else
-                        inQuotes = false;
+                    inQuotes = false;
+                    continue;
                 }
-                else
-                    field.Append(c);
+                field.Append(c);
+                continue;
             }
-            else
+            switch (c)
             {
-                switch (c)
-                {
-                    case '"':
-                        inQuotes = true;
-                        break;
-                    case ',':
-                        row.Add(field.ToString());
-                        field.Clear();
-                        break;
-                    case '\r':
-                        break;
-                    case '\n':
-                        row.Add(field.ToString());
-                        field.Clear();
-                        records.Add(row.ToArray());
-                        row = new List<string>();
-                        break;
-                    default:
-                        field.Append(c);
-                        break;
-                }
+                case '"':
+                    inQuotes = true;
+                    break;
+                case ',':
+                    row.Add(field.ToString());
+                    field.Clear();
+                    break;
+                case '\r':
+                    break;
+                case '\n':
+                    row.Add(field.ToString());
+                    field.Clear();
+                    records.Add(row.ToArray());
+                    row = new List<string>();
+                    break;
+                default:
+                    field.Append(c);
+                    break;
             }
         }
         if (field.Length > 0 || row.Count > 0)
@@ -73,18 +70,30 @@ public sealed partial class ProjectDataViewModel
             .Select(v => v!.Trim())
             .ToList();
         if (sample.Count == 0)
+        {
             return DataColumnTypes.Text;
+        }
         bool All(Func<string, bool> f) => sample.All(f);
         if (All(v => v is "true" or "false" or "TRUE" or "FALSE" or "True" or "False"))
+        {
             return DataColumnTypes.Boolean;
+        }
         if (All(v => long.TryParse(v, System.Globalization.NumberStyles.Integer, ci, out _)))
+        {
             return DataColumnTypes.Bigint;
+        }
         if (All(v => decimal.TryParse(v, System.Globalization.NumberStyles.Number, ci, out _)))
+        {
             return DataColumnTypes.Numeric;
+        }
         if (All(v => Guid.TryParse(v, out _)))
+        {
             return DataColumnTypes.Uuid;
+        }
         if (All(v => DateTime.TryParse(v, ci, System.Globalization.DateTimeStyles.None, out _)))
+        {
             return DataColumnTypes.Timestamptz;
+        }
         return DataColumnTypes.Text;
     }
 
@@ -96,9 +105,13 @@ public sealed partial class ProjectDataViewModel
             .Text.RegularExpressions.Regex.Replace(new string(chars), "_+", "_")
             .Trim('_');
         if (string.IsNullOrEmpty(s))
+        {
             return $"col{ordinal + 1}";
+        }
         if (!char.IsLetter(s[0]) && s[0] != '_')
+        {
             s = "c_" + s;
+        }
         return s.Length > 63 ? s[..63] : s;
     }
 

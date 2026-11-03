@@ -1,7 +1,10 @@
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Artifacts;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Search;
 using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
@@ -94,9 +97,15 @@ public sealed class DataMappingIngestionService
     public async Task IngestChainOutputAsync(Guid chainId, Guid chainRunId, Guid projectId,
         string? finalOutput, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(finalOutput)) return;
+        if (string.IsNullOrWhiteSpace(finalOutput))
+        {
+            return;
+        }
         IReadOnlyList<DataMapping> mappings;
-        try { mappings = await _mappings.ListForJobAsync(chainId, ct); }
+        try
+        {
+            mappings = await _mappings.ListForJobAsync(chainId, ct);
+        }
         catch (Exception ex)
         {
             _log?.LogWarning(ex, "Loading data mappings for chain {ChainId} failed.", chainId);
@@ -133,11 +142,15 @@ public sealed class DataMappingIngestionService
     {
         using var doc = ParsePayload(primary);
         var root = Navigate(doc.RootElement, mapping.RowsPath);
-        if (root is not { } records) return;
-
+        if (root is not { } records)
+        {
+            return;
+        }
         var recordList = Records(records).ToList();
-        if (recordList.Count == 0) return;
-
+        if (recordList.Count == 0)
+        {
+            return;
+        }
         // Each field lands in its declared column as JSON text. Objects and arrays stay whole —
         // they are not flattened into leaf columns, so huge nested payloads can't explode the schema.
         var cellRows = recordList
@@ -155,7 +168,10 @@ public sealed class DataMappingIngestionService
             .Select(c => c.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var columnIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < ProvenanceColumns.Count; i++) columnIndex[ProvenanceColumns[i].Name] = i;
+        for (var i = 0; i < ProvenanceColumns.Count; i++)
+        {
+            columnIndex[ProvenanceColumns[i].Name] = i;
+        }
         foreach (var field in mapping.Fields)
         {
             if (!taken.Add(field.Column))
@@ -192,7 +208,10 @@ public sealed class DataMappingIngestionService
             written[columnIndex["mapping_id"]] = true;
             foreach (var (_, col, text) in cells)
             {
-                if (!columnIndex.TryGetValue(col, out var idx) || written[idx]) continue;
+                if (!columnIndex.TryGetValue(col, out var idx) || written[idx])
+                {
+                    continue;
+                }
                 row[idx] = text;
                 written[idx] = true;
             }
@@ -238,7 +257,10 @@ public sealed class DataMappingIngestionService
                 var parts = new List<string> { $"table: {mapping.TargetTable}" };
                 for (var c = 0; c < columns.Count && c < r.Count; c++)
                 {
-                    if (string.IsNullOrWhiteSpace(r[c])) continue;
+                    if (string.IsNullOrWhiteSpace(r[c]))
+                    {
+                        continue;
+                    }
                     parts.Add($"{columns[c].Name}: {r[c]}");
                 }
                 items.Add(($"{mapping.TargetTable}:{runId}:{i}", string.Join("\n", parts)));
@@ -253,7 +275,10 @@ public sealed class DataMappingIngestionService
     private void Surface(Guid projectId, Guid runId, string table, string detail, Exception? ex = null)
     {
         _log?.LogError(ex, "Data map → '{Table}' for run {RunId}: {Detail}", table, runId, detail);
-        if (_notifier is null) return;
+        if (_notifier is null)
+        {
+            return;
+        }
         var at = _clock.UtcNow;
         _notifier.Sync(new RunStatusUpdate(
             $"data-map:{runId:N}:{table}", projectId, $"Data map failed — {table}",
@@ -264,12 +289,15 @@ public sealed class DataMappingIngestionService
     // shard's artifact, else a JSON array of all shard artifacts — same shape chains thread forward.
     private static string? PrimaryArtifact(JobRun run)
     {
-        if (run.ReduceResult?.Artifact is { Length: > 0 } r) return r;
+        if (run.ReduceResult?.Artifact is { Length: > 0 } r)
+        {
+            return r;
+        }
         var shardArtifacts = run.ShardResults
-            .OrderBy(s => s.Index)
-            .Where(s => !string.IsNullOrWhiteSpace(s.Artifact))
-            .Select(s => s.Artifact!)
-            .ToList();
+                    .OrderBy(s => s.Index)
+                    .Where(s => !string.IsNullOrWhiteSpace(s.Artifact))
+                    .Select(s => s.Artifact!)
+                    .ToList();
         return shardArtifacts.Count switch
         {
             0 => null,
@@ -283,15 +311,24 @@ public sealed class DataMappingIngestionService
     // can still ingest logs, summaries, model answers, and other scalar job results.
     private static JsonDocument ParsePayload(string primary)
     {
-        try { return JsonDocument.Parse(primary); }
+        try
+        {
+            return JsonDocument.Parse(primary);
+        }
         catch (JsonException)
         {
             var lines = primary.Split('\n');
             for (var i = lines.Length - 1; i >= 0; i--)
             {
                 var line = lines[i].Trim();
-                if (line.Length == 0 || (line[0] != '{' && line[0] != '[')) continue;
-                try { return JsonDocument.Parse(line); }
+                if (line.Length == 0 || (line[0] != '{' && line[0] != '['))
+                {
+                    continue;
+                }
+                try
+                {
+                    return JsonDocument.Parse(line);
+                }
                 catch (JsonException) { /* keep scanning earlier lines */ }
             }
             return JsonDocument.Parse(JsonSerializer.Serialize(primary.Trim()));
@@ -305,10 +342,15 @@ public sealed class DataMappingIngestionService
         if (el.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in el.EnumerateArray())
+            {
                 if (item.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+                {
                     yield return item;
+                }
+            }
+            yield break;
         }
-        else if (el.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+        if (el.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
         {
             yield return el;
         }
@@ -318,13 +360,21 @@ public sealed class DataMappingIngestionService
     // and `$.data.items` is the explicit-root form. Null/empty remains the rows-path root.
     private static JsonElement? Navigate(JsonElement el, string? path)
     {
-        if (string.IsNullOrWhiteSpace(path) || path == "$") return el;
-        if (path.StartsWith("$.", StringComparison.Ordinal)) path = path[2..];
+        if (string.IsNullOrWhiteSpace(path) || path == "$")
+        {
+            return el;
+        }
+        if (path.StartsWith("$.", StringComparison.Ordinal))
+        {
+            path = path[2..];
+        }
         var current = el;
         foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(segment, out var next))
+            {
                 return null;
+            }
             current = next;
         }
         return current;

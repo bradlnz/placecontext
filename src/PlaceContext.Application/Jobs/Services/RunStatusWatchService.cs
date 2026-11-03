@@ -1,4 +1,5 @@
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 
@@ -66,9 +67,12 @@ public sealed class RunStatusWatchService
         }
 
         foreach (var chain in chains)
+        {
             foreach (var stepRunId in chain.StepRunIds)
+            {
                 state.ChainStepRuns[stepRunId] = now;
-
+            }
+        }
         SweepChains(state, chains, now);
         SweepJobRuns(state, jobRuns, now);
 
@@ -93,7 +97,10 @@ public sealed class RunStatusWatchService
                 // State is part of the fingerprint: a transition from executing → awaiting
                 // input → resumed must update one notification, not create duplicates.
                 var fingerprint = $"{chain.Status}:{chain.FinishedSteps}/{chain.TotalSteps}:{chain.CurrentStepName}";
-                if (state.Chains.TryGetValue(chain.RunId, out var prev) && prev == fingerprint) continue;
+                if (state.Chains.TryGetValue(chain.RunId, out var prev) && prev == fingerprint)
+                {
+                    continue;
+                }
                 state.Chains[chain.RunId] = fingerprint;
                 _notifier.Sync(new RunStatusUpdate(key, chain.ProjectId, title,
                     chain.Status == ChainRunStatus.AwaitingInput ? RunOutcome.NeedsInput : RunOutcome.Running,
@@ -101,22 +108,28 @@ public sealed class RunStatusWatchService
                         : chain.Status == ChainRunStatus.Waiting ? "Workflow waiting to continue"
                         : ChainProgress(chain),
                     link, chain.StartedAt, null));
+                continue;
             }
-            else
+            state.Chains.Remove(chain.RunId);
+            // Suppress re-notification of terminal rows outside the retention floor.
+            if ((chain.FinishedAt ?? now) < floor)
             {
-                state.Chains.Remove(chain.RunId);
-                // Suppress re-notification of terminal rows outside the retention floor.
-                if ((chain.FinishedAt ?? now) < floor) continue;
-                if (!state.NotifiedTerminal.TryAdd(chain.RunId, chain.FinishedAt ?? now)) continue;
-                _notifier.Sync(new RunStatusUpdate(key, chain.ProjectId, title, MapChain(chain.Status),
-                    $"chain finished — {chain.Status} ({chain.FinishedSteps} step(s) ran)",
-                    link, chain.StartedAt, chain.FinishedAt));
+                continue;
             }
+            if (!state.NotifiedTerminal.TryAdd(chain.RunId, chain.FinishedAt ?? now))
+            {
+                continue;
+            }
+            _notifier.Sync(new RunStatusUpdate(key, chain.ProjectId, title, MapChain(chain.Status),
+                                $"chain finished — {chain.Status} ({chain.FinishedSteps} step(s) ran)",
+                                link, chain.StartedAt, chain.FinishedAt));
         }
 
         // Rows that vanished without a terminal status (e.g. a deleted project) — forget them.
         foreach (var gone in state.Chains.Keys.Where(id => !seen.Contains(id)).ToList())
+        {
             state.Chains.Remove(gone);
+        }
     }
 
     private void SweepJobRuns(RunWatchState state, IReadOnlyList<JobRunStatusRow> jobRuns, DateTimeOffset now)
@@ -125,8 +138,10 @@ public sealed class RunStatusWatchService
         var seen = new HashSet<Guid>();
         foreach (var run in jobRuns)
         {
-            if (state.ChainStepRuns.ContainsKey(run.RunId)) continue; // the chain's notification covers it
-
+            if (state.ChainStepRuns.ContainsKey(run.RunId))
+            {
+                continue; // the chain's notification covers it
+            }
             var key = JobRunKey(run.RunId);
             var title = $"Run job — {run.JobName}";
             var link = $"/observability?run={run.RunId}"; // deep-opens this run's detail
@@ -134,32 +149,45 @@ public sealed class RunStatusWatchService
             if (run.Status is JobRunStatus.Running or JobRunStatus.Queued)
             {
                 seen.Add(run.RunId);
-                if (!state.JobRuns.Add(run.RunId)) continue;
+                if (!state.JobRuns.Add(run.RunId))
+                {
+                    continue;
+                }
                 _notifier.Sync(new RunStatusUpdate(key, run.ProjectId, title, RunOutcome.Running,
-                    null, link, run.StartedAt, null));
+                                    null, link, run.StartedAt, null));
+                continue;
             }
-            else
+            state.JobRuns.Remove(run.RunId);
+            // Suppress re-notification of terminal rows outside the retention floor.
+            if ((run.FinishedAt ?? now) < floor)
             {
-                state.JobRuns.Remove(run.RunId);
-                // Suppress re-notification of terminal rows outside the retention floor.
-                if ((run.FinishedAt ?? now) < floor) continue;
-                if (!state.NotifiedTerminal.TryAdd(run.RunId, run.FinishedAt ?? now)) continue;
-                _notifier.Sync(new RunStatusUpdate(key, run.ProjectId, title, Map(run.Status),
-                    $"run finished — {run.Status}", link, run.StartedAt, run.FinishedAt));
+                continue;
             }
+            if (!state.NotifiedTerminal.TryAdd(run.RunId, run.FinishedAt ?? now))
+            {
+                continue;
+            }
+            _notifier.Sync(new RunStatusUpdate(key, run.ProjectId, title, Map(run.Status),
+                                $"run finished — {run.Status}", link, run.StartedAt, run.FinishedAt));
         }
 
         foreach (var gone in state.JobRuns.Where(id => !seen.Contains(id)).ToList())
+        {
             state.JobRuns.Remove(gone);
+        }
     }
 
     private static void Evict(RunWatchState state, DateTimeOffset now)
     {
         var floor = now - MemoryRetention;
         foreach (var id in state.NotifiedTerminal.Where(kv => kv.Value < floor).Select(kv => kv.Key).ToList())
+        {
             state.NotifiedTerminal.Remove(id);
+        }
         foreach (var id in state.ChainStepRuns.Where(kv => kv.Value < floor).Select(kv => kv.Key).ToList())
+        {
             state.ChainStepRuns.Remove(id);
+        }
     }
 
     private static string ChainProgress(ChainRunStatusRow chain)

@@ -104,7 +104,7 @@ uses Jev to assess captured price evidence, and produces a report comparing veri
 Run the deterministic tests without a real model:
 
 ```bash
-cargo test --locked --manifest-path src/PlaceContext.QemuAgent/Cargo.toml --target-dir dist/qemu-agent-build
+cargo test --locked --manifest-path src/PlaceContext.DesktopAgent/Cargo.toml --target-dir dist/qemu-agent-build
 dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~JevQemuTaskAgentTests
 PLACECONTEXT_TEST_QEMU_IMAGE=/absolute/path/browser-linux.qcow2 \
 PLACECONTEXT_TEST_QEMU_KVM=true \

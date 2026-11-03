@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application;
 using PlaceContext.Host.Api;
 using PlaceContext.Host.Auth;
 
@@ -30,8 +30,10 @@ public sealed class SchedulesController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<ScheduleResponse>>> ListForProject(Guid projectId)
     {
         var ct = HttpContext.RequestAborted;
-        if (await _svc.GetProjectByIdAsync(projectId, ct) is null) return NotFound();
-
+        if (await _svc.GetProjectByIdAsync(projectId, ct) is null)
+        {
+            return NotFound();
+        }
         var triggers = await _svc.ListTriggersAsync(projectId, ct);
         return Ok(triggers.Select(ScheduleApiMapper.ToResponse).ToList());
     }
@@ -54,23 +56,41 @@ public sealed class SchedulesController : ControllerBase
     public async Task<ActionResult<ScheduleResponse>> Create(Guid projectId, [FromBody] CreateScheduleRequest request)
     {
         var ct = HttpContext.RequestAborted;
-        if (await _svc.GetProjectByIdAsync(projectId, ct) is null) return NotFound();
-
+        if (await _svc.GetProjectByIdAsync(projectId, ct) is null)
+        {
+            return NotFound();
+        }
         var job = await _svc.GetJobAsync(request.JobId, ct);
-        if (job is null) return NotFound(new { error = $"Job {request.JobId} not found." });
+        if (job is null)
+        {
+            return NotFound(new
+            {
+                error = $"Job {request.JobId} not found."
+            });
+        }
         if (job.ProjectId != projectId)
-            return BadRequest(new { error = $"Job {request.JobId} belongs to a different project." });
-
+        {
+            return BadRequest(new
+            {
+                error = $"Job {request.JobId} belongs to a different project."
+            });
+        }
         try
         {
             var trigger = await _svc.CreateTriggerAsync(
                 new CreateTriggerCommand(request.JobId, request.Name, request.Kind, request.CronExpression, request.EventName), ct);
             var response = ScheduleApiMapper.ToResponse(trigger);
-            return CreatedAtRoute("GetScheduleById", new { id = response.Id }, response);
+            return CreatedAtRoute("GetScheduleById", new
+            {
+                id = response.Id
+            }, response);
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
         }
     }
 
@@ -84,8 +104,10 @@ public sealed class SchedulesController : ControllerBase
     public async Task<ActionResult<ScheduleResponse>> Update(Guid id, [FromBody] UpdateScheduleRequest request)
     {
         var ct = HttpContext.RequestAborted;
-        if (await _svc.GetTriggerAsync(id, ct) is null) return NotFound();
-
+        if (await _svc.GetTriggerAsync(id, ct) is null)
+        {
+            return NotFound();
+        }
         try
         {
             var trigger = await _svc.UpdateTriggerAsync(
@@ -94,11 +116,17 @@ public sealed class SchedulesController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
         }
         catch (InvalidOperationException ex)
         {
-            return NotFound(new { error = ex.Message });
+            return NotFound(new
+            {
+                error = ex.Message
+            });
         }
     }
 

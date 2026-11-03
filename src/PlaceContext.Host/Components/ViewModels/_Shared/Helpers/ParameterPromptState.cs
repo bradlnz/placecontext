@@ -1,5 +1,5 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 using PlaceContext.Application.Dtos;
 
 namespace PlaceContext.Host.Components.ViewModels.Helpers;
@@ -12,7 +12,10 @@ namespace PlaceContext.Host.Components.ViewModels.Helpers;
 public sealed class ParameterPromptState
 {
     public const string ChainAttachmentField = "attachment";
-    public static JobParameterDto ChainAttachmentParameter { get; } = new(
+    public static JobParameterDto ChainAttachmentParameter
+    {
+        get;
+    } = new(
         ChainAttachmentField,
         "File attachment",
         Required: false,
@@ -20,7 +23,10 @@ public sealed class ParameterPromptState
     );
 
     public Dictionary<string, string> Args { get; private set; } = new(StringComparer.Ordinal);
-    public string? Error { get; private set; }
+    public string? Error
+    {
+        get; private set;
+    }
 
     public string Get(string key) => Args.TryGetValue(key, out var v) ? v : "";
 
@@ -54,7 +60,9 @@ public sealed class ParameterPromptState
             .Select(f => f.Label)
             .ToList();
         if (missing.Count == 0)
+        {
             return true;
+        }
         Error = $"Required: {string.Join(", ", missing)}";
         return false;
     }
@@ -97,8 +105,9 @@ public sealed class ParameterPromptState
     {
         reference = default;
         if (string.IsNullOrWhiteSpace(value))
+        {
             return false;
-
+        }
         try
         {
             using var document = JsonDocument.Parse(value);
@@ -107,8 +116,9 @@ public sealed class ParameterPromptState
                 || !document.RootElement.TryGetProperty("$file", out var file)
                 || file.ValueKind != JsonValueKind.Object
             )
+            {
                 return false;
-
+            }
             reference = document.RootElement.Clone();
             return true;
         }
@@ -128,29 +138,39 @@ public sealed class ParameterPromptState
     public static string? WithChainAttachment(string? payload, string? marker)
     {
         if (!TryParseFileReference(marker ?? "", out var reference))
+        {
             return payload;
-
-        JsonObject result;
-        if (string.IsNullOrWhiteSpace(payload))
-        {
-            result = new JsonObject();
         }
-        else
+        JsonObject result;
+        JsonObject CreatePayload()
         {
+            JsonObject resolvedResult;
+            if (string.IsNullOrWhiteSpace(payload))
+            {
+                resolvedResult = new JsonObject();
+                return resolvedResult;
+            }
             try
             {
                 var existing = JsonNode.Parse(payload);
-                if (existing is JsonObject existingObject)
-                    result = (JsonObject)existingObject.DeepClone();
-                else
-                    result = new JsonObject { ["previous"] = existing?.DeepClone() };
+                void ApplyPayload()
+                {
+                    if (existing is JsonObject existingObject)
+                    {
+                        resolvedResult = (JsonObject)existingObject.DeepClone();
+                        return;
+                    }
+                    resolvedResult = new JsonObject { ["previous"] = existing?.DeepClone() };
+                }
+                ApplyPayload();
             }
             catch (JsonException)
             {
-                result = new JsonObject { ["previous"] = payload };
+                resolvedResult = new JsonObject { ["previous"] = payload };
             }
+            return resolvedResult;
         }
-
+        result = CreatePayload();
         result[ChainAttachmentField] = JsonNode.Parse(reference.GetRawText());
         return result.ToJsonString();
     }

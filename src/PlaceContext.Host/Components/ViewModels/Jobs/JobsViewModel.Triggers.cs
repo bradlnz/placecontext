@@ -1,24 +1,35 @@
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class JobsViewModel
 {
     // ── Triggers state ────────────────────────────────────────────────────────────────────────
-    public IReadOnlyList<TriggerView>? Triggers { get; private set; }
-    public IReadOnlyList<EventTypeView>? EventTypes { get; private set; }
+    public IReadOnlyList<TriggerView>? Triggers
+    {
+        get; private set;
+    }
+    public IReadOnlyList<EventTypeView>? EventTypes
+    {
+        get; private set;
+    }
     public string TrName { get; set; } = "";
     public string TrKind { get; set; } = "Schedule";
     public string TrCron { get; set; } = "0 0 * * *";
     public string TrEvent { get; set; } = "";
-    public bool TrBusy { get; private set; }
-    public string? TrError { get; private set; }
+    public bool TrBusy
+    {
+        get; private set;
+    }
+    public string? TrError
+    {
+        get; private set;
+    }
 
     // ── Triggers ──────────────────────────────────────────────────────────────────────────────
     public IEnumerable<TriggerView> JobTriggers() =>
@@ -28,7 +39,9 @@ public sealed partial class JobsViewModel
     {
         TrError = null;
         if (!SelectedJobId.HasValue)
+        {
             return;
+        }
         if (string.IsNullOrWhiteSpace(TrName))
         {
             TrError = "Name is required.";
@@ -81,7 +94,9 @@ public sealed partial class JobsViewModel
             await _svc.DeleteTriggerAsync(triggerId);
             Triggers = await _svc.ListTriggersAsync(ProjectId);
             if (SelectedTriggerId == triggerId)
+            {
                 SelectedTriggerId = null;
+            }
             NotifyStateChanged();
         }
         catch (Exception ex)

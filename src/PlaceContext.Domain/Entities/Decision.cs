@@ -28,13 +28,31 @@ public sealed class Decision
         DecidedAt = decidedAt;
     }
 
-    public DecisionId Id { get; }
-    public ProjectId ProjectId { get; }
-    public string Question { get; }
-    public string Choice { get; }
-    public Rationale Rationale { get; }
+    public DecisionId Id
+    {
+        get;
+    }
+    public ProjectId ProjectId
+    {
+        get;
+    }
+    public string Question
+    {
+        get;
+    }
+    public string Choice
+    {
+        get;
+    }
+    public Rationale Rationale
+    {
+        get;
+    }
     public IReadOnlyList<DecisionId> Supersedes => _supersedes;
-    public DateTimeOffset DecidedAt { get; }
+    public DateTimeOffset DecidedAt
+    {
+        get;
+    }
 
     public static Decision Record(
         ProjectId projectId,
@@ -45,9 +63,13 @@ public sealed class Decision
         IEnumerable<DecisionId>? supersedes = null)
     {
         if (string.IsNullOrWhiteSpace(question))
+        {
             throw new ArgumentException("Decision question must not be empty.", nameof(question));
+        }
         if (string.IsNullOrWhiteSpace(choice))
+        {
             throw new ArgumentException("Decision choice must not be empty.", nameof(choice));
+        }
         ArgumentNullException.ThrowIfNull(rationale);
 
         return new Decision(

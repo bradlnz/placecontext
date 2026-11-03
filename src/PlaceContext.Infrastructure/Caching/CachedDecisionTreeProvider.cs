@@ -29,8 +29,9 @@ public sealed class CachedDecisionTreeProvider : IDecisionTreeProvider
     public async Task<DecisionTree> BuildAsync(ProjectId projectId, CancellationToken ct = default)
     {
         if (_cache.TryGetValue(Key(projectId), out DecisionTree? cached) && cached is not null)
+        {
             return cached;
-
+        }
         var tree = await _inner.BuildAsync(projectId, ct);
         _cache.Set(Key(projectId), tree, Ttl);
         return tree;

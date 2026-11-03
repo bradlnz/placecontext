@@ -1,3 +1,4 @@
+@using PlaceContext.Application.Access
 @page "/project/{ProjectId:guid}/build"
 @attribute [Authorize(Policy = Permission.ProjectsView)]
 @inject NavigationManager Navigation

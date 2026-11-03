@@ -1,10 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json;
-using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Billing;
+using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Observability;
-using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -53,14 +52,16 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
 
         // Validate the run belongs to this chain
         if (originalRun.ChainId != command.ChainId)
+        {
             throw new InvalidOperationException($"Run {command.OriginalRunId} does not belong to chain {command.ChainId}.");
-
+        }
         // Determine the replay start step
         var fromStep = command.FromStepIndex ?? FindFirstFailedStep(originalRun);
         if (fromStep < 0 || fromStep >= originalRun.Steps.Count)
+        {
             throw new ArgumentOutOfRangeException(nameof(command.FromStepIndex),
-                $"Step index {fromStep} is out of range (chain has {originalRun.Steps.Count} steps).");
-
+                        $"Step index {fromStep} is out of range (chain has {originalRun.Steps.Count} steps).");
+        }
         // Capture the input payload for the replay start step:
         // Use the output from the step just before it (or the original run's input if replaying step 0)
         var inputPayload = command.InputPayload ?? FindStepInput(originalRun, fromStep);
@@ -82,13 +83,17 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
         // child steps. Capacity is held for the replay's whole execution.
         var newRunId = command.ReplayRunId ?? Guid.NewGuid();
         if (_allowance is not null)
+        {
             await _allowance.ReserveAsync(chain.ProjectId, newRunId, "workflow", ct);
+        }
         await using var capacityLease = _capacity is null ? null
-            : await _capacity.AcquireAsync(newRunId, "workflow", ct);
+                    : await _capacity.AcquireAsync(newRunId, "workflow", ct);
         using var linkedCapacity = capacityLease is null ? null
             : CancellationTokenSource.CreateLinkedTokenSource(ct, capacityLease.LostToken);
-        if (linkedCapacity is not null) ct = linkedCapacity.Token;
-
+        if (linkedCapacity is not null)
+        {
+            ct = linkedCapacity.Token;
+        }
         var replayNames = chain.Stages.SelectMany(stage => stage.Action is { } action
             ? new[] { action.DisplayName }
             : stage.JobIds.Select(_ => "(replay)")).ToList();
@@ -165,15 +170,18 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
                     break;
                 }
                 if (outcome == ChainStepStatus.Partial)
+                {
                     status = ChainRunStatus.Partial;
-
+                }
                 // Thread output to next step
                 payload = PrimaryOutput(run);
                 flatIndex++;
             }
 
             if (status == ChainRunStatus.Failed)
+            {
                 break;
+            }
         }
 
         chainRun.Complete(status, payload, DateTimeOffset.UtcNow);
@@ -188,7 +196,9 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
         for (var i = 0; i < run.Steps.Count; i++)
         {
             if (run.Steps[i].Status is ChainStepStatus.Failed or ChainStepStatus.Partial)
+            {
                 return i;
+            }
         }
         // No failed step found — replay from the beginning
         return 0;
@@ -197,8 +207,10 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
     /// <summary>Finds the input payload for a given step by looking at the previous step's output.</summary>
     private static string? FindStepInput(ChainRun run, int stepIndex)
     {
-        if (stepIndex == 0) return null;
-
+        if (stepIndex == 0)
+        {
+            return null;
+        }
         // Find the previous step that succeeded and use its output
         for (var i = stepIndex - 1; i >= 0; i--)
         {
@@ -217,18 +229,34 @@ public sealed class ReplayJobChainHandler : ICommandHandler<ReplayJobChainComman
 
     private static string? PrimaryOutput(JobRunDetailView run)
     {
-        if (run.ReduceResult?.Artifact is { Length: > 0 } reduce) return reduce;
-        var artifacts = run.ShardResults
-            .OrderBy(s => s.Index)
-            .Where(s => !string.IsNullOrWhiteSpace(s.Artifact))
-            .Select(s => s.Artifact!)
-            .ToList();
-        if (artifacts.Count == 0) return null;
-        if (artifacts.Count == 1) return artifacts[0];
-        return "[" + string.Join(",", artifacts.Select(a =>
+        if (run.ReduceResult?.Artifact is { Length: > 0 } reduce)
         {
-            try { using var d = JsonDocument.Parse(a); return a; }
-            catch { return JsonSerializer.Serialize(a); }
-        })) + "]";
+            return reduce;
+        }
+        var artifacts = run.ShardResults
+                    .OrderBy(s => s.Index)
+                    .Where(s => !string.IsNullOrWhiteSpace(s.Artifact))
+                    .Select(s => s.Artifact!)
+                    .ToList();
+        if (artifacts.Count == 0)
+        {
+            return null;
+        }
+        if (artifacts.Count == 1)
+        {
+            return artifacts[0];
+        }
+        return "[" + string.Join(",", artifacts.Select(a =>
+                {
+                    try
+                    {
+                        using var d = JsonDocument.Parse(a);
+                        return a;
+                    }
+                    catch
+                    {
+                        return JsonSerializer.Serialize(a);
+                    }
+                })) + "]";
     }
 }

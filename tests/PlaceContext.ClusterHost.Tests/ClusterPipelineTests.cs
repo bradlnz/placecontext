@@ -1,9 +1,11 @@
 using System.Net;
-using System.Text;
 using System.Text.Json;
+using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using PlaceContext.Application.Cluster;
 using PlaceContext.ClusterHost;
+using PlaceContext.Infrastructure.Cluster;
 
 namespace PlaceContext.ClusterHost.Tests;
 
@@ -31,8 +33,9 @@ public sealed class ClusterPipelineTests
 
         var output = new StringBuilder();
         await foreach (var text in pipeline.GenerateStreamAsync(request, CancellationToken.None))
+        {
             output.Append(text);
-
+        }
         Assert.Equal(" world", output.ToString());
         Assert.Equal(
             [

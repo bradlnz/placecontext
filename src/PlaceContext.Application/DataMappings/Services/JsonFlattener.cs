@@ -1,5 +1,5 @@
-using System.Text;
 using System.Text.Json;
+using System.Text;
 using PlaceContext.Application.Shared;
 
 namespace PlaceContext.Application.Features;
@@ -42,7 +42,10 @@ public static class JsonFlattener
                 first = false;
                 Walk(prop.Value, path.Length == 0 ? prop.Name : path + "." + prop.Name, leaves);
             }
-            if (first) leaves.Add(new FlatLeaf(path, el)); // empty object {} is a leaf
+            if (first)
+            {
+                leaves.Add(new FlatLeaf(path, el)); // empty object {} is a leaf
+            }
             return;
         }
         leaves.Add(new FlatLeaf(path, el));
@@ -64,18 +67,25 @@ public static class JsonFlattener
             var c = char.ToLowerInvariant(ch);
             if (c is >= 'a' and <= 'z' or >= '0' and <= '9' or '_')
             {
-                if (pendingUnderscore && sb.Length > 0) sb.Append('_');
+                if (pendingUnderscore && sb.Length > 0)
+                {
+                    sb.Append('_');
+                }
                 pendingUnderscore = false;
                 sb.Append(c);
+                continue;
             }
-            else
-            {
-                pendingUnderscore = true; // collapse any run of invalid chars into one '_'
-            }
+            pendingUnderscore = true; // collapse any run of invalid chars into one '_'
         }
         var name = sb.ToString().Trim('_');
-        if (name.Length == 0) name = "_"; // every char was invalid — "_" is still a valid identifier
-        if (char.IsDigit(name[0])) name = "_" + name;
+        if (name.Length == 0)
+        {
+            name = "_"; // every char was invalid — "_" is still a valid identifier
+        }
+        if (char.IsDigit(name[0]))
+        {
+            name = "_" + name;
+        }
         return name.Length > MaxIdentifierLength ? name[..MaxIdentifierLength] : name;
     }
 
@@ -95,8 +105,14 @@ public static class JsonFlattener
             JsonValueKind.String => DataColumnTypes.Text,
             _ => DataColumnTypes.Jsonb, // arrays and empty objects (non-empty objects never reach a leaf)
         };
-        if (kind is null) return current;
-        if (current is null || current == kind) return kind;
+        if (kind is null)
+        {
+            return current;
+        }
+        if (current is null || current == kind)
+        {
+            return kind;
+        }
         return DataColumnTypes.Text; // mixed kinds — the one type every value's text form casts to
     }
 

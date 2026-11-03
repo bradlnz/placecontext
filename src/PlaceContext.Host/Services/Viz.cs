@@ -18,7 +18,9 @@ public static class Viz
             return ((s >> 8) & 0x7fffff) / (double)0x7fffff;
         }
         for (var i = 0; i < pts.Length; i++)
+        {
             pts[i] = (6 + Rnd() * (w - 12), 6 + Rnd() * (h - 12));
+        }
         return pts;
     }
 
@@ -38,16 +40,28 @@ public static class Viz
     public static string LangColor(string path)
     {
         // Heuristic accent from the project's dominant marker — purely decorative.
-        if (path.EndsWith(".rs")) return "#e3651f";
+        if (path.EndsWith(".rs"))
+        {
+            return "#e3651f";
+        }
         return "#8b7cff";
     }
 
     public static string Ago(DateTimeOffset when)
     {
         var span = DateTimeOffset.UtcNow - when;
-        if (span.TotalSeconds < 60) return "just now";
-        if (span.TotalMinutes < 60) return $"{(int)span.TotalMinutes}m ago";
-        if (span.TotalHours < 24) return $"{(int)span.TotalHours}h ago";
+        if (span.TotalSeconds < 60)
+        {
+            return "just now";
+        }
+        if (span.TotalMinutes < 60)
+        {
+            return $"{(int)span.TotalMinutes}m ago";
+        }
+        if (span.TotalHours < 24)
+        {
+            return $"{(int)span.TotalHours}h ago";
+        }
         return $"{(int)span.TotalDays}d ago";
     }
 }

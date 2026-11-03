@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Host.Tools;
 
 namespace PlaceContext.Host.Tests;
@@ -9,7 +11,7 @@ public sealed class RpcChainIngestionContractTests
     [Fact]
     public void Mcp_exposes_durable_idempotent_submission_and_polling_tools()
     {
-        var tools = Source("src/PlaceContext.Host/Tools/PlaceContextTools.cs");
+        var tools = Source("src/PlaceContext.Host/Mcp/PlaceContextTools.cs");
 
         Assert.Contains("Name = \"submit_job_chain\"", tools);
         Assert.Contains("Name = \"get_job_chain_submission\"", tools);
@@ -41,7 +43,7 @@ public sealed class RpcChainIngestionContractTests
     public void Submission_worker_is_replica_safe_and_does_not_duplicate_established_runs()
     {
         var worker = Source(
-            "src/PlaceContext.Infrastructure/Scheduling/RpcChainSubmissionWorker.cs");
+            "src/PlaceContext.Infrastructure/Scheduling/Workers/RpcChainSubmissionBackgroundService.cs");
 
         Assert.Contains("FOR UPDATE SKIP LOCKED", worker);
         Assert.Contains("HeartbeatAt", worker);
@@ -60,7 +62,7 @@ public sealed class RpcChainIngestionContractTests
         var infrastructure = Source(
             "src/PlaceContext.Infrastructure/DependencyInjection.cs");
         var queue = Source(
-            "src/PlaceContext.Infrastructure/Scheduling/DbJobChainSubmissionQueue.cs");
+            "src/PlaceContext.Infrastructure/Scheduling/Persistence/DbJobChainSubmissionQueue.cs");
 
         Assert.Contains("CREATE TABLE IF NOT EXISTS rpc_chain_submissions", infrastructure);
         Assert.Contains("\"ChainRunId\" uuid NOT NULL UNIQUE", infrastructure);
@@ -93,7 +95,9 @@ public sealed class RpcChainIngestionContractTests
         while (directory is not null)
         {
             if (File.Exists(Path.Combine(directory.FullName, "PlaceContext.slnx")))
+            {
                 return directory.FullName;
+            }
             directory = directory.Parent;
         }
         throw new DirectoryNotFoundException("Could not locate the PlaceContext repository root.");

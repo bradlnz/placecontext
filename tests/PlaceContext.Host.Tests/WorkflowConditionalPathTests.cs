@@ -1,11 +1,12 @@
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Workload.VirtualMachines;
+using PlaceContext.Application;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.Shared;
 using PlaceContext.Host.Components.ViewModels;
@@ -20,7 +21,7 @@ public sealed class WorkflowConditionalPathTests
         var dispatcher = new RecordingDispatcher();
         var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!, null!);
         await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Browser task", null,
-            [new([], Action: new QemuChainActionView("browser-linux", "Original task", "browser", 2048, 2, 600, true))], DateTimeOffset.UtcNow));
+            [new([], Action: new VirtualMachineChainActionView("browser-linux", "Original task", "browser", 2048, 2, 600, true))], DateTimeOffset.UtcNow));
         vm.EditQemuAction(0);
         vm.QemuCommand = "Updated task from the QEMU dialog";
         vm.QemuPauseForLogin = true;
@@ -30,7 +31,7 @@ public sealed class WorkflowConditionalPathTests
         Assert.Null(vm.QemuError);
         Assert.False(vm.ShowQemuEditor);
         Assert.False(vm.ShowEditor);
-        var action = Assert.IsType<QemuChainAction>(Assert.Single(dispatcher.Saved!.StageActions!));
+        var action = Assert.IsType<VirtualMachineChainAction>(Assert.Single(dispatcher.Saved!.StageActions!));
         Assert.True(action.PauseForLogin);
         Assert.Equal(loginId, action.LoginProfileId);
         Assert.Equal("Updated task from the QEMU dialog", action.Command);
@@ -46,7 +47,7 @@ public sealed class WorkflowConditionalPathTests
         var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!, null!);
         await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Browser task", null, [], DateTimeOffset.UtcNow));
         vm.OpenQemuActionAt(0);
-        vm.QemuImageProfile = "browser-linux";
+        vm.VirtualMachineImageProfile = "browser-linux";
         vm.QemuCommand = "";
         await vm.SaveQemuWorkflowAsync();
         Assert.NotNull(vm.QemuError);
@@ -133,7 +134,10 @@ public sealed class WorkflowConditionalPathTests
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
         {
             var result = await renderer.RenderComponentAsync<ChainCanvas>(ParameterView.FromDictionary(new Dictionary<string, object?>
-            { ["Stages"] = stages, ["Gates"] = new Dictionary<int, ChainGateView> { [0] = stages[0].Gate! } }));
+            {
+                ["Stages"] = stages,
+                ["Gates"] = new Dictionary<int, ChainGateView> { [0] = stages[0].Gate! }
+            }));
             return result.ToHtmlString();
         });
         Assert.Contains("True", html);
@@ -152,7 +156,10 @@ public sealed class WorkflowConditionalPathTests
         public Task<T> Send<T>(ICommand<T> command, CancellationToken ct = default)
         {
             Saved = Assert.IsType<UpdateJobChainCommand>(command);
-            if (SaveError is not null) throw new InvalidOperationException(SaveError);
+            if (SaveError is not null)
+            {
+                throw new InvalidOperationException(SaveError);
+            }
             return Task.FromResult(default(T)!);
         }
         public Task<T> Query<T>(IQuery<T> query, CancellationToken ct = default) => Task.FromResult((T)(object)(query switch

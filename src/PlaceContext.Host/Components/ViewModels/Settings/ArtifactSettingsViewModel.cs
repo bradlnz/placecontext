@@ -1,4 +1,4 @@
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -14,9 +14,18 @@ public sealed class ArtifactSettingsViewModel(IArtifactViewConfigService config,
     }
 
     public List<RuleRow> Rows { get; } = [];
-    public bool Saving { get; private set; }
-    public bool Saved { get; private set; }
-    public string? Message { get; private set; }
+    public bool Saving
+    {
+        get; private set;
+    }
+    public bool Saved
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
 
     public async Task LoadAsync()
     {
@@ -41,7 +50,9 @@ public sealed class ArtifactSettingsViewModel(IArtifactViewConfigService config,
     {
         var target = index + delta;
         if (target < 0 || target >= Rows.Count)
+        {
             return;
+        }
         (Rows[index], Rows[target]) = (Rows[target], Rows[index]);
         NotifyStateChanged();
     }

@@ -1,0 +1,1 @@
+Does the visible main product match both offer.product and the requested product, including specified brand, variety, dietary attributes and size?

@@ -15,9 +15,10 @@ public class DecisionTreeTests
         var pid = ProjectId.New();
         var ledger = ActivityLog.Start(pid);
         for (var i = 1; i <= 3; i++)
+        {
             ledger.Append($"change {i}", Author.Agent("claude"), Rationale.None, TestDelta.None,
-                ActivityVerification.None, new[] { "core.cs" }, Array.Empty<GraphNodeId>(), T0);
-
+                        ActivityVerification.None, new[] { "core.cs" }, Array.Empty<GraphNodeId>(), T0);
+        }
         var decisions = new[] { Decision.Record(pid, "Use EF?", "Yes", Rationale.None, T0) };
         var activity = new[] { new ToolActivity("record_activity", false), new ToolActivity("query_graph", true) };
 
@@ -84,9 +85,10 @@ public class DecisionTreeTests
         var pid = ProjectId.New();
         var ledger = ActivityLog.Start(pid);
         for (var i = 1; i <= 4; i++)
+        {
             ledger.Append($"c{i}", Author.Agent("claude"), Rationale.None, TestDelta.None,
-                ActivityVerification.None, new[] { "hot.cs" }, Array.Empty<GraphNodeId>(), T0);
-
+                        ActivityVerification.None, new[] { "hot.cs" }, Array.Empty<GraphNodeId>(), T0);
+        }
         var tree = new DecisionTreeAssembler().Assemble(
             ProjectName.From("alpha"), Array.Empty<Decision>(), ledger, Array.Empty<ToolActivity>());
 

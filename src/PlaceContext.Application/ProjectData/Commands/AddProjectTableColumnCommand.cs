@@ -1,6 +1,5 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.ProjectData;
 namespace PlaceContext.Application.Features;
 
 /// <summary>Add a column to an existing table in a project's database.</summary>

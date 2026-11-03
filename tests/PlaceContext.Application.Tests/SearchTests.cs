@@ -1,6 +1,8 @@
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Search;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
@@ -13,7 +15,7 @@ public class SearchTests
     private static readonly DateTimeOffset T0 = new(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
 
     private static async Task<SearchHandler> SeedAsync(
-        IOpenSearchDataGateway? openSearch = null,
+        ISearchDataGateway? openSearch = null,
         IPermissionService? permissions = null)
     {
         var projects = new InMemoryProjectRepository();
@@ -66,7 +68,7 @@ public class SearchTests
     public async Task OpenSearch_maps_address_and_name_results()
     {
         var projectId = Guid.NewGuid();
-        var gateway = new FakeOpenSearchGateway(_ => new OpenSearchSearchView(
+        var gateway = new FakeSearchGateway(_ => new SearchResultView(
             2,
             3,
             new[]
@@ -98,7 +100,7 @@ public class SearchTests
     public async Task OpenSearch_runs_one_bounded_free_text_query_for_active_project()
     {
         var projectId = Guid.NewGuid();
-        var gateway = new FakeOpenSearchGateway(_ => EmptyOpenSearch());
+        var gateway = new FakeSearchGateway(_ => EmptyOpenSearch());
 
         await (await SeedAsync(gateway, new FakePermissionService(true)))
             .HandleAsync(new SearchQuery("  Smith Street  ", ProjectId: projectId));
@@ -115,7 +117,7 @@ public class SearchTests
     [Fact]
     public async Task OpenSearch_is_not_queried_without_data_read()
     {
-        var gateway = new FakeOpenSearchGateway(_ => EmptyOpenSearch());
+        var gateway = new FakeSearchGateway(_ => EmptyOpenSearch());
 
         await (await SeedAsync(gateway, new FakePermissionService(false)))
             .HandleAsync(new SearchQuery("payments", ProjectId: Guid.NewGuid()));
@@ -126,7 +128,7 @@ public class SearchTests
     [Fact]
     public async Task OpenSearch_failure_does_not_break_workspace_search()
     {
-        var gateway = new FakeOpenSearchGateway(_ => throw new InvalidOperationException("unavailable"));
+        var gateway = new FakeSearchGateway(_ => throw new InvalidOperationException("unavailable"));
 
         var results = await (await SeedAsync(gateway, new FakePermissionService(true)))
             .HandleAsync(new SearchQuery("payments", ProjectId: Guid.NewGuid()));
@@ -138,7 +140,7 @@ public class SearchTests
     public async Task OpenSearch_deep_link_encodes_index_query_and_document_id()
     {
         var projectId = Guid.NewGuid();
-        var gateway = new FakeOpenSearchGateway(_ => new OpenSearchSearchView(
+        var gateway = new FakeSearchGateway(_ => new SearchResultView(
             1, 1,
             new[] { Hit("property records", "doc/1+2", ("address", "12 Smith Street")) },
             null));
@@ -155,7 +157,7 @@ public class SearchTests
     {
         var projectId = Guid.NewGuid();
         var artifactId = Guid.NewGuid();
-        var gateway = new FakeOpenSearchGateway(_ => new OpenSearchSearchView(
+        var gateway = new FakeSearchGateway(_ => new SearchResultView(
             1, 1,
             new[] { Hit("reports", "doc-1", ("title", "Feasibility report"),
                 ("artifact_id", artifactId.ToString())) },
@@ -168,44 +170,44 @@ public class SearchTests
         Assert.Equal($"/artifacts?artifact={artifactId}", hit.Url);
     }
 
-    private static OpenSearchHitView Hit(
+    private static SearchHitView Hit(
         string index, string id, params (string Key, string Value)[] fields)
         => new(index, id, 1, fields.ToDictionary(field => field.Key, field => (string?)field.Value));
 
-    private static OpenSearchSearchView EmptyOpenSearch()
-        => new(0, 1, Array.Empty<OpenSearchHitView>(), null);
+    private static SearchResultView EmptyOpenSearch()
+        => new(0, 1, Array.Empty<SearchHitView>(), null);
 
-    private sealed class FakeOpenSearchGateway : IOpenSearchDataGateway
+    private sealed class FakeSearchGateway : ISearchDataGateway
     {
-        private readonly Func<OpenSearchSearchRequest, OpenSearchSearchView> _search;
+        private readonly Func<SearchResultRequest, SearchResultView> _search;
 
-        public FakeOpenSearchGateway(Func<OpenSearchSearchRequest, OpenSearchSearchView> search)
+        public FakeSearchGateway(Func<SearchResultRequest, SearchResultView> search)
             => _search = search;
 
-        public List<OpenSearchSearchRequest> Requests { get; } = new();
+        public List<SearchResultRequest> Requests { get; } = new();
 
-        public Task<IReadOnlyList<OpenSearchIndexView>> ListIndicesAsync(
+        public Task<IReadOnlyList<SearchIndexView>> ListIndicesAsync(
             Guid projectId, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<OpenSearchIndexView>>(Array.Empty<OpenSearchIndexView>());
+            => Task.FromResult<IReadOnlyList<SearchIndexView>>(Array.Empty<SearchIndexView>());
 
-        public Task<IReadOnlyList<OpenSearchFieldView>> ListFieldsAsync(
+        public Task<IReadOnlyList<SearchFieldView>> ListFieldsAsync(
             Guid projectId, string indexPattern, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<OpenSearchFieldView>>(Array.Empty<OpenSearchFieldView>());
+            => Task.FromResult<IReadOnlyList<SearchFieldView>>(Array.Empty<SearchFieldView>());
 
-        public Task<OpenSearchLastUpdatedView> GetLastUpdatedAsync(
+        public Task<SearchLastUpdatedView> GetLastUpdatedAsync(
             Guid projectId, string indexPattern, IReadOnlyList<string> candidateFields,
             CancellationToken ct = default)
-            => Task.FromResult(new OpenSearchLastUpdatedView(null, null));
+            => Task.FromResult(new SearchLastUpdatedView(null, null));
 
-        public Task<OpenSearchSearchView> SearchAsync(
-            OpenSearchSearchRequest request, CancellationToken ct = default)
+        public Task<SearchResultView> SearchAsync(
+            SearchResultRequest request, CancellationToken ct = default)
         {
             Requests.Add(request);
             return Task.FromResult(_search(request));
         }
 
         public Task CreateIndexAsync(
-            Guid projectId, string indexName, IReadOnlyList<OpenSearchMappingField> mappingFields,
+            Guid projectId, string indexName, IReadOnlyList<SearchMappingField> mappingFields,
             CancellationToken ct = default)
             => Task.CompletedTask;
 
@@ -223,11 +225,11 @@ public class SearchTests
             => Task.FromResult(new ProjectQueryResult(
                 new[] { "index" }, new IReadOnlyList<string?>[] { new[] { sql } }, 0, false));
 
-        public Task<OpenSearchExportView> ExportIndexAsync(
+        public Task<SearchExportView> ExportIndexAsync(
             Guid projectId, string indexPattern, int maxRows = 500,
             CancellationToken ct = default)
-            => Task.FromResult(new OpenSearchExportView(
-                Array.Empty<OpenSearchExportField>(), Array.Empty<IReadOnlyList<string?>>(), false));
+            => Task.FromResult(new SearchExportView(
+                Array.Empty<SearchExportField>(), Array.Empty<IReadOnlyList<string?>>(), false));
     }
 
     private sealed class FakePermissionService : IPermissionService

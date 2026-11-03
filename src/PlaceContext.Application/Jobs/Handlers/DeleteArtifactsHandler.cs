@@ -1,5 +1,6 @@
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -24,18 +25,26 @@ public sealed class DeleteArtifactsHandler : ICommandHandler<DeleteArtifactsComm
         foreach (var id in command.ArtifactIds.Distinct())
         {
             var link = await _links.GetByIdAsync(id, ct);
-            if (link is null) continue;
+            if (link is null)
+            {
+                continue;
+            }
             found.Add(link);
             await _links.RemoveAsync(id, ct);
         }
 
-        if (found.Count == 0) return 0;
-
+        if (found.Count == 0)
+        {
+            return 0;
+        }
         // One transaction drops every pointer, then the bytes are reaped best-effort.
         await _uow.SaveChangesAsync(ct);
         foreach (var link in found)
         {
-            try { await _store.DeleteAsync(link.Bucket, link.ObjectKey, ct); }
+            try
+            {
+                await _store.DeleteAsync(link.Bucket, link.ObjectKey, ct);
+            }
             catch { /* orphaned object bytes are harmless — the link is already gone */ }
         }
 

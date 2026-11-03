@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.DataProtection;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Infrastructure.Security;
 
 namespace PlaceContext.Infrastructure.Tests;

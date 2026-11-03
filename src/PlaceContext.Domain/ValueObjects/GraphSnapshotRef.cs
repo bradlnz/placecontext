@@ -6,11 +6,26 @@ namespace PlaceContext.Domain.ValueObjects;
 /// </summary>
 public sealed record GraphSnapshotRef
 {
-    public string GraphJsonPath { get; }
-    public DateTimeOffset BuiltAt { get; }
-    public int NodeCount { get; }
-    public int LinkCount { get; }
-    public IReadOnlyList<GodNode> GodNodes { get; }
+    public string GraphJsonPath
+    {
+        get;
+    }
+    public DateTimeOffset BuiltAt
+    {
+        get;
+    }
+    public int NodeCount
+    {
+        get;
+    }
+    public int LinkCount
+    {
+        get;
+    }
+    public IReadOnlyList<GodNode> GodNodes
+    {
+        get;
+    }
 
     private GraphSnapshotRef(
         string graphJsonPath,
@@ -34,10 +49,13 @@ public sealed record GraphSnapshotRef
         IEnumerable<GodNode> godNodes)
     {
         if (string.IsNullOrWhiteSpace(graphJsonPath))
+        {
             throw new ArgumentException("GraphJsonPath must not be empty.", nameof(graphJsonPath));
+        }
         if (nodeCount < 0 || linkCount < 0)
+        {
             throw new ArgumentException("Graph counts must be non-negative.");
-
+        }
         return new GraphSnapshotRef(graphJsonPath, builtAt, nodeCount, linkCount, godNodes.ToList());
     }
 }

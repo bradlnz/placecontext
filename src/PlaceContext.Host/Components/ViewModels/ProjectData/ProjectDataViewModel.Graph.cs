@@ -5,8 +5,14 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class ProjectDataViewModel
 {
-    public GraphVizView? GraphSidePaneGraph { get; private set; }
-    public string? GraphSidePaneTitle { get; private set; }
+    public GraphVizView? GraphSidePaneGraph
+    {
+        get; private set;
+    }
+    public string? GraphSidePaneTitle
+    {
+        get; private set;
+    }
 
     public async Task OpenGraphPaneAsync(string tableName, IReadOnlyDictionary<string, string?> values, int rowIndex)
     {

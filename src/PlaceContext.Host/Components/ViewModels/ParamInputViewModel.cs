@@ -1,30 +1,16 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.Components;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Jobs;
 namespace PlaceContext.Host.Components.ViewModels;
 
-public enum ParameterInputType
-{
-    Text,
-    Select,
-    Number,
-    Date,
-    DateTime,
-    Time,
-    Checkbox,
-    File,
-}
-
 public sealed class ParamInputViewModel(
-    IObjectStore objectStore,
-    IHttpClientFactory httpClientFactory
+    JobInputFileService uploads
 ) : PageViewModel, IComponentViewModel
 {
-    private const long MaxFileBytes = 40L * 1024 * 1024;
+    private const long MaxFileBytes = JobInputFileService.MaxFileBytes;
     private JobParameterDto _parameter = default!;
     private Guid _projectId;
     private string _value = string.Empty;
@@ -32,8 +18,14 @@ public sealed class ParamInputViewModel(
     public Guid ProjectId => _projectId;
     public string Value => _value;
     public ParameterInputType InputType => ParameterInputCatalog.Parse(_parameter.Type);
-    public bool Uploading { get; private set; }
-    public string? UploadError { get; private set; }
+    public bool Uploading
+    {
+        get; private set;
+    }
+    public string? UploadError
+    {
+        get; private set;
+    }
     public string Accept =>
         _parameter.Options is { Count: > 0 }
             ? string.Join(",", _parameter.Options)
@@ -64,7 +56,7 @@ public sealed class ParamInputViewModel(
             UploadError = "A project is required before uploading.";
             return;
         }
-        if (!objectStore.IsEnabled)
+        if (!uploads.IsEnabled)
         {
             UploadError = "File storage is not configured.";
             return;
@@ -77,48 +69,8 @@ public sealed class ParamInputViewModel(
         Uploading = true;
         try
         {
-            var filename = SanitizeFilename(file.Name);
-            var contentType = ContentTypeFor(filename, file.ContentType);
-            var key = $"job-inputs/{_projectId:N}/{Guid.NewGuid():N}-{filename}";
-            await objectStore.EnsureBucketAsync(objectStore.ReportsBucket);
-            var uploadUrl = await objectStore.PresignUploadAsync(
-                objectStore.ReportsBucket,
-                key,
-                TimeSpan.FromMinutes(20)
-            );
-            using var content = new StreamContent(file.OpenReadStream(MaxFileBytes));
-            content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
-            // BrowserFileStream is not seekable, so StreamContent cannot infer its length and
-            // otherwise sends the presigned PUT using chunked transfer encoding. S3-compatible
-            // stores such as DigitalOcean Spaces reject that request with HTTP 400.
-            content.Headers.ContentLength = file.Size;
-            using var response = await httpClientFactory
-                .CreateClient()
-                .PutAsync(uploadUrl, content);
-            if (!response.IsSuccessStatusCode)
-            {
-                var details = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException(
-                    string.IsNullOrWhiteSpace(details)
-                        ? $"File storage returned {(int)response.StatusCode} ({response.ReasonPhrase})."
-                        : $"File storage returned {(int)response.StatusCode} ({response.ReasonPhrase}): {details}",
-                    null,
-                    response.StatusCode
-                );
-            }
-            var marker = JsonSerializer.Serialize(
-                new Dictionary<string, object?>
-                {
-                    ["$file"] = new
-                    {
-                        bucket = objectStore.ReportsBucket,
-                        key,
-                        filename,
-                        content_type = contentType,
-                        size_bytes = file.Size,
-                    },
-                }
-            );
+            await using var stream = file.OpenReadStream(MaxFileBytes);
+            var marker = await uploads.UploadAsync(_projectId, file.Name, file.ContentType, file.Size, stream);
             _value = marker;
             await valueChanged.InvokeAsync(marker);
         }
@@ -136,7 +88,9 @@ public sealed class ParamInputViewModel(
     private static string? FileMarkerFilename(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
+        {
             return null;
+        }
         try
         {
             return JsonDocument
@@ -151,35 +105,4 @@ public sealed class ParamInputViewModel(
         }
     }
 
-    private static string SanitizeFilename(string name)
-    {
-        var leaf = Path.GetFileName(name);
-        var invalid = Path.GetInvalidFileNameChars();
-        var cleaned = new string(
-            leaf.Select(character => invalid.Contains(character) ? '_' : character).ToArray()
-        ).Trim();
-        return string.IsNullOrWhiteSpace(cleaned) ? "upload.bin" : cleaned;
-    }
-
-    private static string ContentTypeFor(string filename, string browserContentType)
-    {
-        if (
-            !string.IsNullOrWhiteSpace(browserContentType)
-            && !string.Equals(
-                browserContentType,
-                "application/octet-stream",
-                StringComparison.OrdinalIgnoreCase
-            )
-        )
-            return browserContentType;
-        return Path.GetExtension(filename).ToLowerInvariant() switch
-        {
-            ".pdf" => "application/pdf",
-            ".png" => "image/png",
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".webp" => "image/webp",
-            ".tif" or ".tiff" => "image/tiff",
-            _ => "application/octet-stream",
-        };
-    }
 }

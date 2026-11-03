@@ -1,12 +1,14 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -48,35 +50,92 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
         _ops = new BackgroundOperationRunner(operations);
     }
 
-    public bool CanViewActivity { get; private set; }
-    public bool Ready { get; private set; }
-    public string? LoadError { get; private set; }
-    public DateTimeOffset? CapturedAt { get; private set; }
-    public bool ChainsReady { get; private set; }
-    public IReadOnlyList<RunReportView> Reports { get; private set; } =
+    public bool CanViewActivity
+    {
+        get; private set;
+    }
+    public bool Ready
+    {
+        get; private set;
+    }
+    public string? LoadError
+    {
+        get; private set;
+    }
+    public DateTimeOffset? CapturedAt
+    {
+        get; private set;
+    }
+    public bool ChainsReady
+    {
+        get; private set;
+    }
+    public IReadOnlyList<RunReportView> Reports
+    {
+        get; private set;
+    } =
         Array.Empty<RunReportView>();
-    public int Running { get; private set; }
-    public int Queued { get; private set; }
-    public int Failed24 { get; private set; }
-    public int Succeeded24 { get; private set; }
+    public int Running
+    {
+        get; private set;
+    }
+    public int Queued
+    {
+        get; private set;
+    }
+    public int Failed24
+    {
+        get; private set;
+    }
+    public int Succeeded24
+    {
+        get; private set;
+    }
     public string Filter { get; private set; } = AllFilter;
     public IReadOnlyList<JobChainView> Chains { get; private set; } = Array.Empty<JobChainView>();
-    public IReadOnlyList<ProjectChartView> Charts { get; private set; } =
+    public IReadOnlyList<ProjectChartView> Charts
+    {
+        get; private set;
+    } =
         Array.Empty<ProjectChartView>();
-    public IReadOnlyList<DataEntityView> Entities { get; private set; } =
+    public IReadOnlyList<DataEntityView> Entities
+    {
+        get; private set;
+    } =
         Array.Empty<DataEntityView>();
-    public IReadOnlyList<ProjectTableInfo> EntityTables { get; private set; } =
+    public IReadOnlyList<ProjectTableInfo> EntityTables
+    {
+        get; private set;
+    } =
         Array.Empty<ProjectTableInfo>();
     public Dictionary<Guid, EntityChart> EntityCharts { get; } = new();
-    public bool EntityChartsLoading { get; private set; }
-    public string? EntityChartsError { get; private set; }
+    public bool EntityChartsLoading
+    {
+        get; private set;
+    }
+    public string? EntityChartsError
+    {
+        get; private set;
+    }
     public ParameterPromptState RunPrompt { get; } = new();
-    public JobChainView? RunPromptChain { get; private set; }
+    public JobChainView? RunPromptChain
+    {
+        get; private set;
+    }
     public List<(int Index, JobView Job)> RunPromptSteps { get; } = new();
     public string RunAttachment { get; private set; } = "";
-    public Guid? RunningChainId { get; private set; }
-    public string? ChainMessage { get; private set; }
-    public bool ChainError { get; private set; }
+    public Guid? RunningChainId
+    {
+        get; private set;
+    }
+    public string? ChainMessage
+    {
+        get; private set;
+    }
+    public bool ChainError
+    {
+        get; private set;
+    }
     public string WorkspaceProjectName => _ui.CurrentProjectName ?? "the workspace";
     public Guid? CurrentProjectId => _projectOverride ?? _ui.CurrentProjectId;
     public IReadOnlyList<string> FilterOptions { get; } = ["all", "running", "queued", "failed", "succeeded"];
@@ -118,17 +177,26 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
     public async Task LoadAsync()
     {
         var version = ++_loadVersion;
-        Ready = false; CanViewActivity = false;
+        Ready = false;
+        CanViewActivity = false;
         ChainsReady = false;
-        Reports = []; Charts = []; Chains = []; Entities = []; EntityTables = [];
-        EntityCharts.Clear(); ResetChartCache();
-        CapturedAt = null; LoadError = null;
+        Reports = [];
+        Charts = [];
+        Chains = [];
+        Entities = [];
+        EntityTables = [];
+        EntityCharts.Clear();
+        ResetChartCache();
+        CapturedAt = null;
+        LoadError = null;
         var reports = LoadReportsAsync(version);
         if (CurrentProjectId is { } projectId)
+        {
             await Task.WhenAll(reports, LoadChainsAsync(projectId, version),
-                LoadChartsAsync(projectId, version), LoadEntitiesAsync(projectId, version));
-        else
-            await reports;
+                        LoadChartsAsync(projectId, version), LoadEntitiesAsync(projectId, version));
+            return;
+        }
+        await reports;
     }
 
     private async Task LoadReportsAsync(int version)
@@ -136,34 +204,54 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
         try
         {
             var allowed = _permissions is null || await _permissions.HasAsync(Permission.JobsView);
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             CanViewActivity = allowed;
             if (!allowed)
+            {
                 throw new UnauthorizedAccessException("Job activity is not available with your permissions.");
+            }
             var projectId = CurrentProjectId;
             var reports = await _service.ListRecentRunReportsAsync(take: 50, projectId: projectId);
             var counts = projectId is { } id ? await _service.GetProjectRunCountsAsync(id) : null;
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             Reports = reports;
             LoadError = null;
             CapturedAt = DateTimeOffset.UtcNow;
-            if (counts is not null)
+            void ApplyMetrics()
             {
-                Running = counts.GetValueOrDefault("Running");
-                Queued = counts.GetValueOrDefault("Queued");
-                Failed24 = counts.GetValueOrDefault("Failed");
-                Succeeded24 = counts.GetValueOrDefault("Succeeded");
+                if (counts is not null)
+                {
+                    Running = counts.GetValueOrDefault("Running");
+                    Queued = counts.GetValueOrDefault("Queued");
+                    Failed24 = counts.GetValueOrDefault("Failed");
+                    Succeeded24 = counts.GetValueOrDefault("Succeeded");
+                    return;
+                }
+                UpdateRunMetrics();
             }
-            else UpdateRunMetrics();
+            ApplyMetrics();
         }
         catch
         {
-            if (version != _loadVersion) return;
-            Reports = []; CapturedAt = null;
+            if (version != _loadVersion)
+            {
+                return;
+            }
+            Reports = [];
+            CapturedAt = null;
             Running = Queued = Failed24 = Succeeded24 = 0;
             LoadError = "Could not load job activity. Please try again.";
         }
-        if (version != _loadVersion) return;
+        if (version != _loadVersion)
+        {
+            return;
+        }
         Ready = true;
         NotifyStateChanged();
     }
@@ -172,14 +260,24 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
     {
         try
         {
-            if (_permissions is not null && !await _permissions.HasAsync(Permission.ChainsManage)) { Chains = []; return; }
+            if (_permissions is not null && !await _permissions.HasAsync(Permission.ChainsManage))
+            {
+                Chains = [];
+                return;
+            }
             var chains = await _service.ListJobChainsAsync(projectId);
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             Chains = chains;
         }
         catch
         {
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             Chains = Array.Empty<JobChainView>();
         }
         finally
@@ -196,9 +294,16 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
     {
         try
         {
-            if (_permissions is not null && !await _permissions.HasAsync(Permission.DataRead)) { Charts = []; return; }
+            if (_permissions is not null && !await _permissions.HasAsync(Permission.DataRead))
+            {
+                Charts = [];
+                return;
+            }
             var charts = await _service.ListProjectChartsAsync(projectId);
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             Charts = charts;
             NotifyStateChanged();
         }
@@ -209,14 +314,24 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
     {
         try
         {
-            if (_permissions is not null && !await _permissions.HasAsync(Permission.DataRead)) { Entities = []; return; }
+            if (_permissions is not null && !await _permissions.HasAsync(Permission.DataRead))
+            {
+                Entities = [];
+                return;
+            }
             var entities = await _service.ListDataEntitiesAsync(projectId);
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             Entities = entities;
             if (Entities.Count > 0)
             {
                 var tables = await _service.ListProjectDataTablesAsync(projectId);
-                if (version != _loadVersion) return;
+                if (version != _loadVersion)
+                {
+                    return;
+                }
                 EntityTables = tables;
             }
             NotifyStateChanged();
@@ -276,7 +391,10 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
 
     public async Task PrepareQuickChainRunAsync(JobChainView chain)
     {
-        if (RunningChainId is not null || chain.ProjectId != CurrentProjectId) return;
+        if (RunningChainId is not null || chain.ProjectId != CurrentProjectId)
+        {
+            return;
+        }
         var version = _loadVersion;
         RunningChainId = chain.Id;
         ChainError = false;
@@ -285,7 +403,10 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
         try
         {
             var jobs = await _service.ListJobsAsync(chain.ProjectId);
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             var plan = ChainParameterPromptPlan.Build(chain, jobs);
             RunPromptChain = chain;
             RunPromptSteps.Clear();
@@ -295,7 +416,10 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
         }
         catch (Exception ex)
         {
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             ChainError = true;
             ChainMessage = ex.Message;
         }
@@ -314,7 +438,9 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
     public async Task SubmitQuickChainPromptAsync()
     {
         if (RunPromptChain is null)
+        {
             return;
+        }
         if (!RunPrompt.ValidateChainStepParameters(RunPromptSteps))
         {
             ChainError = true;
@@ -403,11 +529,17 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
 
     public async Task LoadEntityChartsAsync()
     {
-        if (EntityChartsLoading) return;
+        if (EntityChartsLoading)
+        {
+            return;
+        }
         EntityChartsLoading = true;
         EntityChartsError = null;
         NotifyStateChanged();
-        try { await BuildEntityChartsAsync(); }
+        try
+        {
+            await BuildEntityChartsAsync();
+        }
         finally
         {
             EntityChartsLoading = false;
@@ -419,40 +551,55 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
     {
         foreach (var entity in Entities.Take(6))
         {
-            if (entity.ProjectId != CurrentProjectId) return;
+            if (entity.ProjectId != CurrentProjectId)
+            {
+                return;
+            }
             if (EntityCharts.ContainsKey(entity.Id))
+            {
                 continue;
+            }
             try
             {
                 var columns = await _service.ListProjectTableColumnsAsync(
                     entity.ProjectId,
                     entity.TableName
                 );
-                if (entity.ProjectId != CurrentProjectId) return;
+                if (entity.ProjectId != CurrentProjectId)
+                {
+                    return;
+                }
                 var column = entity
-                    .Relations.Select(relation => relation.Column)
-                    .Concat(
-                        columns
-                            .Where(column =>
-                                (column.Type.Contains("text") || column.Type.Contains("char"))
-                                && !string.Equals(
-                                    column.Name,
-                                    entity.LabelColumn,
-                                    StringComparison.OrdinalIgnoreCase
-                                )
-                            )
-                            .Select(column => column.Name)
-                    )
-                    .FirstOrDefault();
+                                    .Relations.Select(relation => relation.Column)
+                                    .Concat(
+                                        columns
+                                            .Where(column =>
+                                                (column.Type.Contains("text") || column.Type.Contains("char"))
+                                                && !string.Equals(
+                                                    column.Name,
+                                                    entity.LabelColumn,
+                                                    StringComparison.OrdinalIgnoreCase
+                                                )
+                                            )
+                                            .Select(column => column.Name)
+                                    )
+                                    .FirstOrDefault();
                 if (column is null)
+                {
                     continue;
+                }
                 var result = await _service.ExecuteProjectDataAsync(
-                    entity.ProjectId,
-                    $"SELECT \"{column.Replace("\"", "")}\"::text, count(*) FROM \"{entity.TableName.Replace("\"", "")}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 4"
-                );
-                if (entity.ProjectId != CurrentProjectId) return;
+                                    entity.ProjectId,
+                                    $"SELECT \"{column.Replace("\"", "")}\"::text, count(*) FROM \"{entity.TableName.Replace("\"", "")}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 4"
+                                );
+                if (entity.ProjectId != CurrentProjectId)
+                {
+                    return;
+                }
                 if (result.Rows.Count == 0)
+                {
                     continue;
+                }
                 var max = result.Rows.Max(row => long.TryParse(row[1], out var count) ? count : 0);
                 EntityCharts[entity.Id] = new EntityChart(
                     column,
@@ -471,14 +618,20 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
             }
             catch (Exception ex)
             {
-                if (entity.ProjectId == CurrentProjectId) EntityChartsError = ex.Message;
+                if (entity.ProjectId == CurrentProjectId)
+                {
+                    EntityChartsError = ex.Message;
+                }
             }
         }
     }
 
     private void OnUiChanged()
     {
-        if (_projectId == CurrentProjectId) return;
+        if (_projectId == CurrentProjectId)
+        {
+            return;
+        }
         _projectId = CurrentProjectId;
         Chains = [];
         CancelQuickChainPrompt();
@@ -500,17 +653,27 @@ public sealed class DashboardViewModel : PageViewModel, IComponentViewModel, IDi
         {
             var id = CanvasId(chart.TableName);
             if (_rendered.TryGetValue(id, out var timestamp) && timestamp == chart.GeneratedAt)
+            {
                 continue;
-            entries.Add(new { id, spec = chart.Html });
+            }
+            entries.Add(new
+            {
+                id,
+                spec = chart.Html
+            });
             rendered.Add((id, chart.GeneratedAt));
         }
         if (entries.Count == 0)
+        {
             return;
+        }
         try
         {
             await _js.InvokeVoidAsync("pcchart.renderAll", entries);
             foreach (var (id, at) in rendered)
+            {
                 _rendered[id] = at;
+            }
         }
         catch (JSException) { }
     }

@@ -1,7 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Artifacts;
+using PlaceContext.Application.Shared;
 using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Infrastructure.Artifacts;
@@ -28,13 +29,15 @@ public sealed class ArtifactShareTokenService : IArtifactShareTokenService
         CancellationToken ct = default)
     {
         if (lifetimeDays is < 1 or > MaximumLifetimeDays)
+        {
             throw new ArgumentOutOfRangeException(
-                nameof(lifetimeDays), $"Share links must expire within 1–{MaximumLifetimeDays} days.");
-
+                        nameof(lifetimeDays), $"Share links must expire within 1–{MaximumLifetimeDays} days.");
+        }
         if (artifactId == Guid.Empty
             || !await _db.RunArtifacts.AsNoTracking().AnyAsync(item => item.Id == artifactId, ct))
+        {
             throw new InvalidOperationException("Artifact not found.");
-
+        }
         var token = NewToken();
         var now = _clock.UtcNow;
         var row = await _db.ArtifactShareTokens
@@ -79,7 +82,10 @@ public sealed class ArtifactShareTokenService : IArtifactShareTokenService
     {
         var row = await _db.ArtifactShareTokens
             .SingleOrDefaultAsync(item => item.ArtifactId == artifactId, ct);
-        if (row is null || row.RevokedAt is not null) return false;
+        if (row is null || row.RevokedAt is not null)
+        {
+            return false;
+        }
         row.RevokedAt = _clock.UtcNow;
         await _db.SaveChangesAsync(ct);
         return true;
@@ -87,10 +93,15 @@ public sealed class ArtifactShareTokenService : IArtifactShareTokenService
 
     public async Task<SharedArtifact?> ResolveAsync(string token, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(token) || token.Length > 128) return null;
+        if (string.IsNullOrWhiteSpace(token) || token.Length > 128)
+        {
+            return null;
+        }
         token = token.Trim();
-        if (!token.StartsWith("pc_art_", StringComparison.Ordinal)) return null;
-
+        if (!token.StartsWith("pc_art_", StringComparison.Ordinal))
+        {
+            return null;
+        }
         var hash = Hash(token);
         var now = _clock.UtcNow;
         var share = await _db.ArtifactShareTokens.IgnoreQueryFilters().AsNoTracking()
@@ -98,19 +109,26 @@ public sealed class ArtifactShareTokenService : IArtifactShareTokenService
                 item.TokenHash == hash
                 && item.RevokedAt == null
                 && item.ExpiresAt > now, ct);
-        if (share is null) return null;
-
+        if (share is null)
+        {
+            return null;
+        }
         var artifact = await _db.RunArtifacts.IgnoreQueryFilters().AsNoTracking()
             .SingleOrDefaultAsync(item =>
                 item.Id == share.ArtifactId && item.TenantId == share.TenantId, ct);
-        if (artifact is null) return null;
-
+        if (artifact is null)
+        {
+            return null;
+        }
         // The verified bearer grants access only to this share, not to the caller's other tracked rows.
         await using var shareDb = new AppDbContext(_db.ContextOptions,
-            new Tenancy.TenantInfo(share.TenantId, "", "", "UTC"));
+            new PlaceContext.Application.Tenancy.TenantInfo(share.TenantId, "", "", "UTC"));
         var access = await shareDb.ArtifactShareTokens.SingleOrDefaultAsync(item => item.Id == share.Id
             && item.TokenHash == hash && item.RevokedAt == null && item.ExpiresAt > now, ct);
-        if (access is null) return null;
+        if (access is null)
+        {
+            return null;
+        }
         access.LastAccessedAt = now;
         await shareDb.SaveChangesAsync(ct);
         return new SharedArtifact(

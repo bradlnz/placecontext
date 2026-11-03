@@ -1,5 +1,5 @@
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
@@ -41,37 +41,71 @@ public class ProjectDataTests
         public string? Dropped;
 
         public Task CreateTableAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns, CancellationToken ct = default)
-        { SawProject = projectId; CreatedTable = tableName; return Task.CompletedTask; }
+        {
+            SawProject = projectId;
+            CreatedTable = tableName;
+            return Task.CompletedTask;
+        }
 
         public Task RenameTableAsync(Guid projectId, string from, string to, CancellationToken ct = default)
-        { SawProject = projectId; Renamed = (from, to); return Task.CompletedTask; }
+        {
+            SawProject = projectId;
+            Renamed = (from, to);
+            return Task.CompletedTask;
+        }
 
         public Task DropTableAsync(Guid projectId, string tableName, CancellationToken ct = default)
-        { SawProject = projectId; Dropped = tableName; return Task.CompletedTask; }
+        {
+            SawProject = projectId;
+            Dropped = tableName;
+            return Task.CompletedTask;
+        }
 
         public Task<string> ExportTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
-        { SawProject = projectId; return Task.FromResult("a,b\n1,2\n"); }
+        {
+            SawProject = projectId;
+            return Task.FromResult("a,b\n1,2\n");
+        }
 
         public (string Table, ProjectColumnSpec Column)? AddedColumn;
         public (string Table, string Column)? DroppedColumn;
 
         public Task<IReadOnlyList<ProjectColumnInfo>> ListColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
-        { SawProject = projectId; return Task.FromResult<IReadOnlyList<ProjectColumnInfo>>(new[] { new ProjectColumnInfo("id", "uuid", true, true) }); }
+        {
+            SawProject = projectId;
+            return Task.FromResult<IReadOnlyList<ProjectColumnInfo>>(new[] { new ProjectColumnInfo("id", "uuid", true, true) });
+        }
 
         public Task AddColumnAsync(Guid projectId, string tableName, ProjectColumnSpec column, CancellationToken ct = default)
-        { SawProject = projectId; AddedColumn = (tableName, column); return Task.CompletedTask; }
+        {
+            SawProject = projectId;
+            AddedColumn = (tableName, column);
+            return Task.CompletedTask;
+        }
 
         public Task DropColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default)
-        { SawProject = projectId; DroppedColumn = (tableName, columnName); return Task.CompletedTask; }
+        {
+            SawProject = projectId;
+            DroppedColumn = (tableName, columnName);
+            return Task.CompletedTask;
+        }
 
         public (string Table, IReadOnlyList<ProjectColumnSpec> Columns, IReadOnlyList<IReadOnlyList<string?>> Rows)? Appended;
 
         public Task AppendReadOnlyRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct = default)
-        { SawProject = projectId; Appended = (tableName, columns, rows); return Task.CompletedTask; }
+        {
+            SawProject = projectId;
+            Appended = (tableName, columns, rows);
+            return Task.CompletedTask;
+        }
         public Task<int> ImportRowsAsync(Guid projectId, string tableName, IReadOnlyList<ProjectColumnSpec> columns,
             IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
-        { SawProject = projectId; Appended = (tableName, columns, rows); return Task.FromResult(rows.Count); }
+        {
+            SawProject = projectId;
+            Appended = (tableName, columns, rows);
+            return Task.FromResult(rows.Count);
+        }
         public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
             => Task.CompletedTask;
         public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,

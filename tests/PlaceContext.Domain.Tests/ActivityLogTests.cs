@@ -36,8 +36,10 @@ public class ActivityLogTests
     public void RecentWindow_returns_last_n_newest_last()
     {
         var ledger = ActivityLog.Start(Pid);
-        for (var i = 0; i < 5; i++) Append(ledger);
-
+        for (var i = 0; i < 5; i++)
+        {
+            Append(ledger);
+        }
         var window = ledger.RecentWindow(2);
         Assert.Equal(new[] { 4, 5 }, window.Select(r => r.Sequence));
     }

@@ -5,8 +5,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Secrets;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Scheduling;
 using PlaceContext.Infrastructure.Tenancy;
@@ -21,14 +23,19 @@ public sealed class ChainQueueTests
     {
         var schema = "queue_test_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES"))
-            { SearchPath = schema }.ConnectionString;
+        {
+            SearchPath = schema
+        }.ConnectionString;
         await using var connection = new NpgsqlConnection(cs);
         await connection.OpenAsync();
         await using (var setup = new NpgsqlCommand($"""
             CREATE SCHEMA "{schema}";
             CREATE TABLE job_chains ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "ProjectId" uuid NOT NULL);
             CREATE TABLE chain_runs ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "Status" text NOT NULL, "FinishedAt" timestamptz);
-            """, connection)) await setup.ExecuteNonQueryAsync();
+            """, connection))
+        {
+            await setup.ExecuteNonQueryAsync();
+        }
         var tenant = new FakeCurrentTenant(Guid.NewGuid());
         var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs).Options;
         var project = Guid.NewGuid();
@@ -90,7 +97,15 @@ public sealed class ChainQueueTests
             await Assert.ThrowsAsync<ArgumentException>(() => queues.SaveAsync(null, project, chain, "invalid retention", true, 60, 366));
             await Assert.ThrowsAsync<ArgumentException>(() => queues.SaveAsync(null, Guid.NewGuid(), chain, "wrong project", true));
             await Assert.ThrowsAsync<ArgumentException>(() => queues.SubmitAsync(queue.Id, JsonSerializer.SerializeToElement(new[] { 1 }), null));
-            var payload = JsonSerializer.SerializeToElement(new { orderId = "123", customer = new { name = "Ada" }, items = new[] { new { quantity = 2 } } });
+            var payload = JsonSerializer.SerializeToElement(new
+            {
+                orderId = "123",
+                customer = new
+                {
+                    name = "Ada"
+                },
+                items = new[] { new { quantity = 2 } }
+            });
             var receipt = await queues.SubmitAsync(queue.Id, payload, "same-message");
             Assert.Equal(receipt.TrackingId, (await queues.SubmitAsync(queue.Id, payload, "same-message")).TrackingId);
             Assert.NotEqual(receipt.TrackingId, (await queues.SubmitAsync(second.Id, payload, "same-message")).TrackingId);
@@ -113,7 +128,10 @@ public sealed class ChainQueueTests
             await queues.SaveAsync(queue.Id, project, chain, "incoming", false);
             await Assert.ThrowsAsync<InvalidOperationException>(() => queues.SubmitAsync(queue.Id, payload, null));
             await queues.SaveAsync(queue.Id, project, chain, "incoming", true);
-            for (var i = 0; i < 6; i++) await queues.SubmitAsync(queue.Id, payload, null);
+            for (var i = 0; i < 6; i++)
+            {
+                await queues.SubmitAsync(queue.Id, payload, null);
+            }
             permissions.Allowed = false;
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => queues.DeleteAsync(queue.Id));
             await Assert.ThrowsAsync<UnauthorizedAccessException>(() => queues.SubmitAsync(queue.Id, payload, null));
@@ -211,10 +229,10 @@ public sealed class ChainQueueTests
         }
     }
 
-    private sealed class ProbeWorker(IServiceScopeFactory scopes) : RpcChainSubmissionWorker(scopes,
-        NullLogger<RpcChainSubmissionWorker>.Instance, new ConfigurationBuilder().Build())
+    private sealed class ProbeWorker(IServiceScopeFactory scopes) : RpcChainSubmissionBackgroundService(scopes,
+        NullLogger<RpcChainSubmissionBackgroundService>.Instance, new ConfigurationBuilder().Build())
     {
-        public Task Reflect(Guid id, ChainRunView run) => (Task)typeof(RpcChainSubmissionWorker)
+        public Task Reflect(Guid id, ChainRunView run) => (Task)typeof(RpcChainSubmissionBackgroundService)
             .GetMethod("ReflectRunStatusAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(this, new object[] { id, run, CancellationToken.None })!;
         public Task Cleanup() => CleanupTrackingAsync(CancellationToken.None);

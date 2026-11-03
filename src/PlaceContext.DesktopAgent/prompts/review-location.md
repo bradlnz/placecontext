@@ -1,0 +1,1 @@
+Does the screenshot explicitly confirm offer.postcode as the SELECTED shopping location matching the requested postcode? A postcode typed but not selected, or an absent location, means no.

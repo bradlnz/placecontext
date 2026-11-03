@@ -1,10 +1,8 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Diagnostics;
 using System.Text.Json;
 using PlaceContext.Application.Observability;
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Infrastructure.Observability;
 
 /// <summary>
@@ -63,7 +61,9 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
             InstrumentPublished = (instrument, listener) =>
             {
                 if (instrument.Meter.Name == JobTelemetry.SourceName)
+                {
                     listener.EnableMeasurementEvents(instrument);
+                }
             },
         };
         _meterListener.SetMeasurementEventCallback<long>(OnLongMeasurement);
@@ -77,17 +77,25 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
     {
         switch (activity.OperationName)
         {
-            case "job.shard": CaptureShard(activity); break;
-            case "job.run": CaptureRun(activity); break;
-            case "job.chain": CaptureChain(activity); break;
+            case "job.shard":
+                CaptureShard(activity);
+                break;
+            case "job.run":
+                CaptureRun(activity);
+                break;
+            case "job.chain":
+                CaptureChain(activity);
+                break;
         }
     }
 
     private void CaptureShard(Activity activity)
     {
         var runId = TagGuid(activity, "run.id");
-        if (runId is null) return; // can't correlate to a run — drop rather than guess
-
+        if (runId is null)
+        {
+            return; // can't correlate to a run — drop rather than guess
+        }
         var index = int.TryParse(TagString(activity, "shard.index"), out var i) ? i : 0;
         var outcome = TagString(activity, "shard.outcome");
         var exitCode = int.TryParse(TagString(activity, "shard.exit_code"), out var ec) ? ec : (int?)null;
@@ -106,8 +114,9 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
 
         IReadOnlyList<ShardTelemetry> shards = Array.Empty<ShardTelemetry>();
         if (runId != Guid.Empty && _pendingShards.TryRemove(runId, out var bag))
+        {
             shards = bag.OrderBy(s => s.Index).ToList();
-
+        }
         var telemetry = new JobRunTelemetry(
             runId, jobId, jobName, projectId, status, replay,
             new DateTimeOffset(activity.StartTimeUtc, TimeSpan.Zero),
@@ -118,7 +127,10 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
         lock (_runsGate)
         {
             _runs.AddFirst(telemetry);
-            while (_runs.Count > MaxRuns) _runs.RemoveLast();
+            while (_runs.Count > MaxRuns)
+            {
+                _runs.RemoveLast();
+            }
         }
     }
 
@@ -140,7 +152,10 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
         IReadOnlyList<ChainRunStepTelemetry> steps = Array.Empty<ChainRunStepTelemetry>();
         if (TagString(activity, "chain.steps.json") is { Length: > 0 } stepsJson)
         {
-            try { steps = ParseSteps(stepsJson); }
+            try
+            {
+                steps = ParseSteps(stepsJson);
+            }
             catch (JsonException) { /* malformed tag — keep the chain telemetry without step detail */ }
         }
 
@@ -152,7 +167,10 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
         lock (_chainRunsGate)
         {
             _chainRuns.AddFirst(telemetry);
-            while (_chainRuns.Count > MaxChainRuns) _chainRuns.RemoveLast();
+            while (_chainRuns.Count > MaxChainRuns)
+            {
+                _chainRuns.RemoveLast();
+            }
         }
     }
 
@@ -209,16 +227,27 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
     {
         switch (instrument.Name)
         {
-            case "placecontext.jobs.run.duration": _runDuration.Record(measurement); break;
-            case "placecontext.jobs.shard.duration": _shardDuration.Record(measurement); break;
-            case "placecontext.jobs.chain.duration": _chainDuration.Record(measurement); break;
+            case "placecontext.jobs.run.duration":
+                _runDuration.Record(measurement);
+                break;
+            case "placecontext.jobs.shard.duration":
+                _shardDuration.Record(measurement);
+                break;
+            case "placecontext.jobs.chain.duration":
+                _chainDuration.Record(measurement);
+                break;
         }
     }
 
     private static string TagValue(ReadOnlySpan<KeyValuePair<string, object?>> tags, string key)
     {
         foreach (var t in tags)
-            if (t.Key == key) return t.Value?.ToString() ?? "unknown";
+        {
+            if (t.Key == key)
+            {
+                return t.Value?.ToString() ?? "unknown";
+            }
+        }
         return "unknown";
     }
 
@@ -239,42 +268,62 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
 
     public IReadOnlyList<JobRunTelemetry> RecentRuns(int take = 50)
     {
-        lock (_runsGate) return _runs.Take(take).ToList();
+        lock (_runsGate)
+        {
+            return _runs.Take(take).ToList();
+        }
     }
 
     public IReadOnlyList<JobRunTelemetry> RunsForJob(Guid jobId, int take = 20)
     {
-        lock (_runsGate) return _runs.Where(r => r.JobId == jobId).Take(take).ToList();
+        lock (_runsGate)
+        {
+            return _runs.Where(r => r.JobId == jobId).Take(take).ToList();
+        }
     }
 
     public IReadOnlyList<ChainRunTelemetry> RecentChainRuns(int take = 50)
     {
-        lock (_chainRunsGate) return _chainRuns.Take(take).ToList();
+        lock (_chainRunsGate)
+        {
+            return _chainRuns.Take(take).ToList();
+        }
     }
 
     public IReadOnlyList<TraceSpanNode> TraceForRun(Guid runId)
     {
         JobRunTelemetry? run;
-        lock (_runsGate) run = _runs.FirstOrDefault(r => r.RunId == runId);
-        if (run is null) return Array.Empty<TraceSpanNode>();
-
+        lock (_runsGate)
+        {
+            run = _runs.FirstOrDefault(r => r.RunId == runId);
+        }
+        if (run is null)
+        {
+            return Array.Empty<TraceSpanNode>();
+        }
         var shardChildren = run.Shards.OrderBy(s => s.Index).Select(s =>
         {
             var tags = new Dictionary<string, string>
             {
                 ["shard.index"] = s.Index.ToString(),
             };
-            if (s.Outcome is not null) tags["shard.outcome"] = s.Outcome;
-            if (s.ExitCode is not null) tags["shard.exit_code"] = s.ExitCode.Value.ToString();
+            if (s.Outcome is not null)
+            {
+                tags["shard.outcome"] = s.Outcome;
+            }
+            if (s.ExitCode is not null)
+            {
+                tags["shard.exit_code"] = s.ExitCode.Value.ToString();
+            }
             return new TraceSpanNode(
-                Name: $"job.shard[{s.Index}]",
-                TraceId: run.TraceId,
-                SpanId: null,
-                ParentSpanId: run.SpanId,
-                StartedAt: run.StartedAt,
-                DurationMs: s.DurationMs ?? 0,
-                Tags: tags,
-                Children: Array.Empty<TraceSpanNode>());
+                            Name: $"job.shard[{s.Index}]",
+                            TraceId: run.TraceId,
+                            SpanId: null,
+                            ParentSpanId: run.SpanId,
+                            StartedAt: run.StartedAt,
+                            DurationMs: s.DurationMs ?? 0,
+                            Tags: tags,
+                            Children: Array.Empty<TraceSpanNode>());
         }).ToList();
 
         var rootTags = new Dictionary<string, string>
@@ -282,10 +331,18 @@ public sealed class JobTelemetryCollector : IJobTelemetryReader, IDisposable
             ["run.id"] = run.RunId.ToString(),
             ["job.id"] = run.JobId.ToString(),
         };
-        if (run.JobName is not null) rootTags["job.name"] = run.JobName;
-        if (run.Status is not null) rootTags["run.status"] = run.Status;
-        if (run.Replay) rootTags["job.replay"] = "true";
-
+        if (run.JobName is not null)
+        {
+            rootTags["job.name"] = run.JobName;
+        }
+        if (run.Status is not null)
+        {
+            rootTags["run.status"] = run.Status;
+        }
+        if (run.Replay)
+        {
+            rootTags["job.replay"] = "true";
+        }
         return new[]
         {
             new TraceSpanNode(

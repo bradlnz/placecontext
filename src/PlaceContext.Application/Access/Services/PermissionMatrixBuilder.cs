@@ -1,6 +1,4 @@
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Application.Access;
 
 /// <summary>Pure helper assembling the full-catalog <see cref="PermissionGrantView"/> matrix for one

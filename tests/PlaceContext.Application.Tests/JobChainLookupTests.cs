@@ -18,9 +18,10 @@ public sealed class JobChainLookupTests
         var jobs = new NamesOnlyJobs(known);
         var chains = new InMemoryJobChainRepository();
         for (var i = 0; i < 100; i++)
+        {
             await chains.AddAsync(JobChain.Create(project, "Workflow " + i, null,
-                [new ChainStage([known, known], new ConditionGate("true", [ChainStage.Of(missing)]))], DateTimeOffset.UtcNow));
-
+                        [new ChainStage([known, known], new ConditionGate("true", [ChainStage.Of(missing)]))], DateTimeOffset.UtcNow));
+        }
         var views = await new ListJobChainsHandler(chains, jobs).HandleAsync(new(project));
 
         Assert.Equal(100, views.Count);

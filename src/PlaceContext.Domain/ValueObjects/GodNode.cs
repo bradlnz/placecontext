@@ -6,9 +6,18 @@ namespace PlaceContext.Domain.ValueObjects;
 /// </summary>
 public sealed record GodNode
 {
-    public GraphNodeId Id { get; }
-    public NormLabel Label { get; }
-    public int Degree { get; }
+    public GraphNodeId Id
+    {
+        get;
+    }
+    public NormLabel Label
+    {
+        get;
+    }
+    public int Degree
+    {
+        get;
+    }
 
     private GodNode(GraphNodeId id, NormLabel label, int degree)
     {
@@ -20,8 +29,9 @@ public sealed record GodNode
     public static GodNode Of(GraphNodeId id, NormLabel label, int degree)
     {
         if (degree < 0)
+        {
             throw new ArgumentException("GodNode degree must be non-negative.", nameof(degree));
-
+        }
         return new GodNode(id, label, degree);
     }
 

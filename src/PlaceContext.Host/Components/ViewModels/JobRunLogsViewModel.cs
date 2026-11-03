@@ -1,8 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Workload;
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class JobRunLogsViewModel(IWorkloadOutputBuffer output) : PageViewModel, IComponentViewModel
@@ -13,10 +12,22 @@ public sealed class JobRunLogsViewModel(IWorkloadOutputBuffer output) : PageView
     public string Search { get; set; } = "";
     public string Stream { get; set; } = "";
     public string Level { get; set; } = "";
-    public bool Paused { get; private set; }
-    public bool IsLive { get; private set; }
-    public bool Truncated { get; private set; }
-    public DateTimeOffset? UpdatedAt { get; private set; }
+    public bool Paused
+    {
+        get; private set;
+    }
+    public bool IsLive
+    {
+        get; private set;
+    }
+    public bool Truncated
+    {
+        get; private set;
+    }
+    public DateTimeOffset? UpdatedAt
+    {
+        get; private set;
+    }
     public IReadOnlyList<JobLogEvent> Events { get; private set; } = [];
     public IEnumerable<string> Streams => Events.Select(e => e.Stream).Distinct();
     public IEnumerable<JobLogEvent> Filtered => Events.Where(e =>
@@ -33,16 +44,24 @@ public sealed class JobRunLogsViewModel(IWorkloadOutputBuffer output) : PageView
             Paused = false;
             Stream = "";
         }
-        if (Paused) return;
+        if (Paused)
+        {
+            return;
+        }
         IsLive = run.Status is "Running" or "Queued";
         var live = IsLive ? output.Snapshot(run.Id) : null;
         var sources = live is { Text.Length: > 0 }
             ? new List<(string Stream, string? Text)> { ("live", live.Text) }
             : run.ShardResults.OrderBy(s => s.Index).Select(s => ($"shard {s.Index}", s.Log)).ToList();
         if (live is not { Text.Length: > 0 } && run.ReduceResult is { } reduce)
+        {
             sources.Add(("reduce", reduce.Log));
+        }
         UpdatedAt = live?.UpdatedAt ?? run.FinishedAt;
-        if (_sources.SequenceEqual(sources)) return;
+        if (_sources.SequenceEqual(sources))
+        {
+            return;
+        }
         _sources = sources;
 
         var events = new Queue<(int Index, string Stream, string Line)>();
@@ -65,18 +84,27 @@ public sealed class JobRunLogsViewModel(IWorkloadOutputBuffer output) : PageView
                 }
                 events.Enqueue((++count, stream, line));
                 // shortcut: retain 2,000 events in memory; use server-side paging when retained logs outgrow memory.
-                if (events.Count > MaxEvents) events.Dequeue();
+                if (events.Count > MaxEvents)
+                {
+                    events.Dequeue();
+                }
             }
         }
         Events = events.Select(entry => Parse(entry.Index, entry.Stream, entry.Line)).ToList();
         Truncated = count > MaxEvents;
-        if (Stream.Length > 0 && !Streams.Contains(Stream)) Stream = "";
+        if (Stream.Length > 0 && !Streams.Contains(Stream))
+        {
+            Stream = "";
+        }
     }
 
     public void TogglePause(JobRunDetailView run)
     {
         Paused = !Paused;
-        if (!Paused) SetRun(run);
+        if (!Paused)
+        {
+            SetRun(run);
+        }
     }
 
     private static readonly Regex Prefix = new(
@@ -102,9 +130,15 @@ public sealed class JobRunLogsViewModel(IWorkloadOutputBuffer output) : PageView
             }
             catch (JsonException) { }
         }
-        if (timestamp.Success) time ??= timestamp.Groups["time"].Value;
+        if (timestamp.Success)
+        {
+            time ??= timestamp.Groups["time"].Value;
+        }
         var severity = Severity.Match(line[timestamp.Length..]);
-        if (severity.Success) level ??= severity.Groups[1].Value;
+        if (severity.Success)
+        {
+            level ??= severity.Groups[1].Value;
+        }
         level = level?.ToUpperInvariant() switch
         {
             "INFORMATION" => "INFO",
@@ -119,8 +153,12 @@ public sealed class JobRunLogsViewModel(IWorkloadOutputBuffer output) : PageView
     private static string? ReadString(JsonElement root, params string[] names)
     {
         foreach (var name in names)
+        {
             if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String)
+            {
                 return value.GetString();
+            }
+        }
         return null;
     }
 }

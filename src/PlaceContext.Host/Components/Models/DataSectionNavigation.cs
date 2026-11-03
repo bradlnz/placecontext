@@ -2,7 +2,10 @@ namespace PlaceContext.Host.Components.Models;
 
 public static class DataSectionNavigation
 {
-    public static IReadOnlyList<DataSectionItem> Items { get; } =
+    public static IReadOnlyList<DataSectionItem> Items
+    {
+        get;
+    } =
     [
         new(DataSection.Tables, "Records", "data"),
         new(DataSection.Analytics, "Analytics", "analytics"),

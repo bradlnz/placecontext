@@ -1,8 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Auth;
 namespace PlaceContext.Infrastructure.Cluster;
 
 public sealed class InMemoryAgentTokenManager : IAgentTokenManager
@@ -33,15 +32,18 @@ public sealed class InMemoryAgentTokenManager : IAgentTokenManager
     public Task<AgentToken?> ConsumeTokenAsync(string token)
     {
         if (string.IsNullOrWhiteSpace(token) || !token.StartsWith(Prefix, StringComparison.Ordinal))
+        {
             return Task.FromResult<AgentToken?>(null);
-
+        }
         var hash = HashToken(token);
         if (!_tokens.TryGetValue(hash, out var entry))
+        {
             return Task.FromResult<AgentToken?>(null);
-
+        }
         if (entry.UsedAt is not null || entry.ExpiresAt < DateTimeOffset.UtcNow)
+        {
             return Task.FromResult<AgentToken?>(null);
-
+        }
         entry.UsedAt = DateTimeOffset.UtcNow;
         return Task.FromResult<AgentToken?>(new AgentToken(entry.Id, entry.TenantId, entry.TokenPrefix, entry.ExpiresAt));
     }
@@ -61,12 +63,27 @@ public sealed class InMemoryAgentTokenManager : IAgentTokenManager
 
     private sealed class TokenEntry
     {
-        public Guid Id { get; set; }
-        public Guid TenantId { get; set; }
+        public Guid Id
+        {
+            get; set;
+        }
+        public Guid TenantId
+        {
+            get; set;
+        }
         public string TokenPrefix { get; set; } = "";
         public string Hash { get; set; } = "";
-        public DateTimeOffset CreatedAt { get; set; }
-        public DateTimeOffset ExpiresAt { get; set; }
-        public DateTimeOffset? UsedAt { get; set; }
+        public DateTimeOffset CreatedAt
+        {
+            get; set;
+        }
+        public DateTimeOffset ExpiresAt
+        {
+            get; set;
+        }
+        public DateTimeOffset? UsedAt
+        {
+            get; set;
+        }
     }
 }

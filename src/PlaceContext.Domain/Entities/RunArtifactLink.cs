@@ -30,28 +30,67 @@ public sealed class RunArtifactLink
         OcrError = ocrError;
     }
 
-    public Guid Id { get; }
-    public Guid RunId { get; }
-    public Guid JobId { get; }
-    public Guid ProjectId { get; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid RunId
+    {
+        get;
+    }
+    public Guid JobId
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
 
     /// <summary>Which post-job action produced this artifact.</summary>
-    public PostJobActionKind Kind { get; }
+    public PostJobActionKind Kind
+    {
+        get;
+    }
 
     /// <summary>Human-readable label (e.g. "HTML report", "report.csv").</summary>
-    public string Title { get; }
+    public string Title
+    {
+        get;
+    }
 
-    public string Bucket { get; }
-    public string ObjectKey { get; }
-    public string ContentType { get; }
-    public long SizeBytes { get; }
-    public DateTimeOffset CreatedAt { get; }
+    public string Bucket
+    {
+        get;
+    }
+    public string ObjectKey
+    {
+        get;
+    }
+    public string ContentType
+    {
+        get;
+    }
+    public long SizeBytes
+    {
+        get;
+    }
+    public DateTimeOffset CreatedAt
+    {
+        get;
+    }
 
     /// <summary>When OCR completed for this artifact (null = still pending).</summary>
-    public DateTimeOffset? OcrProcessedAt { get; private set; }
+    public DateTimeOffset? OcrProcessedAt
+    {
+        get; private set;
+    }
 
     /// <summary>Set when OCR was attempted but failed — the reason the daemon reported.</summary>
-    public string? OcrError { get; private set; }
+    public string? OcrError
+    {
+        get; private set;
+    }
 
     /// <summary>Records OCR completion. <paramref name="error"/> null = success; otherwise the failure reason.</summary>
     public void MarkOcrProcessed(DateTimeOffset at, string? error)

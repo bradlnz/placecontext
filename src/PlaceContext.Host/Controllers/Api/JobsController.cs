@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Billing;
-using PlaceContext.Domain.Repositories;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Features;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application;
 using PlaceContext.Host.Api;
 using PlaceContext.Host.Auth;
 
@@ -25,14 +26,12 @@ public sealed class JobsController : ControllerBase
 {
     private readonly PlaceContextService _svc;
     private readonly IJobChainSubmissionQueue? _submissions;
-    private readonly IJobChainRepository? _chains;
     private readonly bool _managedHosting;
     public JobsController(PlaceContextService svc, IJobChainSubmissionQueue? submissions = null,
-        IJobChainRepository? chains = null, IOptions<RunBillingDeploymentOptions>? hosting = null)
+        IOptions<RunBillingDeploymentOptions>? hosting = null)
     {
         _svc = svc;
         _submissions = submissions;
-        _chains = chains;
         _managedHosting = hosting?.Value.ManagedHosting ?? false;
     }
 
@@ -43,10 +42,12 @@ public sealed class JobsController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<JobResponse>>> ListForProject(Guid projectId)
     {
         var ct = HttpContext.RequestAborted;
-        if (await _svc.GetProjectByIdAsync(projectId, ct) is null) return NotFound();
-
+        if (await _svc.GetProjectByIdAsync(projectId, ct) is null)
+        {
+            return NotFound();
+        }
         var jobs = await _svc.ListJobsAsync(projectId, ct);
-        return Ok(jobs.Select(JobApiMapper.ToResponse).ToList());
+        return Ok(jobs.Select(JobDefinitionMapper.ToResponse).ToList());
     }
 
     /// <summary>GET /api/v1/jobs/{id} — a single job definition, or 404.</summary>
@@ -55,7 +56,7 @@ public sealed class JobsController : ControllerBase
     public async Task<ActionResult<JobResponse>> GetById(Guid id)
     {
         var job = await _svc.GetJobAsync(id, HttpContext.RequestAborted);
-        return job is null ? NotFound() : Ok(JobApiMapper.ToResponse(job));
+        return job is null ? NotFound() : Ok(JobDefinitionMapper.ToResponse(job));
     }
 
     /// <summary>POST /api/v1/projects/{projectId}/jobs — creates a job definition under the project.
@@ -66,17 +67,25 @@ public sealed class JobsController : ControllerBase
     public async Task<ActionResult<JobResponse>> Create(Guid projectId, [FromBody] JobRequest request)
     {
         var ct = HttpContext.RequestAborted;
-        if (await _svc.GetProjectByIdAsync(projectId, ct) is null) return NotFound();
-
+        if (await _svc.GetProjectByIdAsync(projectId, ct) is null)
+        {
+            return NotFound();
+        }
         try
         {
-            var job = await _svc.CreateJobAsync(JobApiMapper.ToCreateCommand(projectId, request), ct);
-            var response = JobApiMapper.ToResponse(job);
-            return CreatedAtRoute("GetJobById", new { id = response.Id }, response);
+            var job = await _svc.CreateJobAsync(JobDefinitionMapper.ToCreateCommand(projectId, request), ct);
+            var response = JobDefinitionMapper.ToResponse(job);
+            return CreatedAtRoute("GetJobById", new
+            {
+                id = response.Id
+            }, response);
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
         }
     }
 
@@ -87,16 +96,21 @@ public sealed class JobsController : ControllerBase
     public async Task<ActionResult<JobResponse>> Update(Guid id, [FromBody] JobRequest request)
     {
         var ct = HttpContext.RequestAborted;
-        if (await _svc.GetJobAsync(id, ct) is null) return NotFound();
-
+        if (await _svc.GetJobAsync(id, ct) is null)
+        {
+            return NotFound();
+        }
         try
         {
-            var job = await _svc.UpdateJobAsync(JobApiMapper.ToUpdateCommand(id, request), ct);
-            return Ok(JobApiMapper.ToResponse(job));
+            var job = await _svc.UpdateJobAsync(JobDefinitionMapper.ToUpdateCommand(id, request), ct);
+            return Ok(JobDefinitionMapper.ToResponse(job));
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
         }
     }
 
@@ -161,14 +175,28 @@ public sealed class JobsController : ControllerBase
         {
             if (_managedHosting)
             {
-                if (_submissions is null || _chains is null)
-                    return StatusCode(503, new { error = "Managed workflow queue is not configured." });
-                var chain = await _chains.GetByIdAsync(chainId, ct);
-                if (chain is null) return NotFound(new { error = "Workflow not found." });
+                if (_submissions is null)
+                {
+                    return StatusCode(503, new
+                    {
+                        error = "Managed workflow queue is not configured."
+                    });
+                }
+                var chain = await _svc.GetJobChainAsync(chainId, ct);
+                if (chain is null)
+                {
+                    return NotFound(new
+                    {
+                        error = "Workflow not found."
+                    });
+                }
                 var receipt = await _submissions.EnqueueAsync(chain.ProjectId, chainId,
-                    request?.InputPayload, idempotencyKey, ct);
+                                    request?.InputPayload, idempotencyKey, ct);
                 return AcceptedAtAction(nameof(GetWorkflowSubmission),
-                    new { trackingId = receipt.TrackingId }, receipt);
+                    new
+                    {
+                        trackingId = receipt.TrackingId
+                    }, receipt);
             }
             var result = await _svc.RunJobChainAsync(
                 chainId,
@@ -176,16 +204,34 @@ public sealed class JobsController : ControllerBase
                 ct: ct);
             return Ok(result);
         }
-        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
-        catch (UnauthorizedAccessException) { return Forbid(); }
-        catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new
+            {
+                error = ex.Message
+            });
+        }
     }
 
     [HttpGet("workflow-submissions/{trackingId:guid}")]
     [Authorize(Policy = Permission.JobsView)]
     public async Task<IActionResult> GetWorkflowSubmission(Guid trackingId)
     {
-        if (_submissions is null) return NotFound();
+        if (_submissions is null)
+        {
+            return NotFound();
+        }
         var receipt = await _submissions.GetAsync(trackingId, HttpContext.RequestAborted);
         return receipt is null ? NotFound() : Ok(receipt);
     }
@@ -210,25 +256,43 @@ public sealed class JobsController : ControllerBase
         {
             if (_managedHosting)
             {
-                if (_submissions is null || _chains is null)
-                    return StatusCode(503, new { error = "Managed workflow queue is not configured." });
-                var chain = await _chains.GetByIdAsync(chainId, ct);
+                if (_submissions is null)
+                {
+                    return StatusCode(503, new
+                    {
+                        error = "Managed workflow queue is not configured."
+                    });
+                }
+                var chain = await _svc.GetJobChainAsync(chainId, ct);
                 var original = await _svc.GetChainRunAsync(request.OriginalRunId, ct);
                 if (chain is null || original is null || original.ChainId != chainId
                     || original.ProjectId != chain.ProjectId)
-                    return NotFound(new { error = "Original workflow run not found." });
+                {
+                    return NotFound(new
+                    {
+                        error = "Original workflow run not found."
+                    });
+                }
                 if (request.FromStepIndex is { } step && (step < 0 || step >= original.Steps.Count))
-                    return BadRequest(new { error = "Replay step index is out of range." });
+                {
+                    return BadRequest(new
+                    {
+                        error = "Replay step index is out of range."
+                    });
+                }
                 var receipt = await _submissions.EnqueueAsync(chain.ProjectId, chainId,
-                    request.InputPayload,
-                    idempotencyKey: "replay:" + request.OriginalRunId.ToString("N")
-                        + ":" + (string.IsNullOrWhiteSpace(idempotencyKey)
-                            ? Guid.NewGuid().ToString("N") : idempotencyKey.Trim()),
-                    ct: ct, stepPayloadOverrides: request.StepPayloadOverrides,
-                    replayOriginalRunId: request.OriginalRunId,
-                    replayFromStepIndex: request.FromStepIndex);
+                                    request.InputPayload,
+                                    idempotencyKey: "replay:" + request.OriginalRunId.ToString("N")
+                                        + ":" + (string.IsNullOrWhiteSpace(idempotencyKey)
+                                            ? Guid.NewGuid().ToString("N") : idempotencyKey.Trim()),
+                                    ct: ct, stepPayloadOverrides: request.StepPayloadOverrides,
+                                    replayOriginalRunId: request.OriginalRunId,
+                                    replayFromStepIndex: request.FromStepIndex);
                 return AcceptedAtAction(nameof(GetWorkflowSubmission),
-                    new { trackingId = receipt.TrackingId }, receipt);
+                    new
+                    {
+                        trackingId = receipt.TrackingId
+                    }, receipt);
             }
             var result = await _svc.ReplayJobChainAsync(
                 new PlaceContext.Application.Features.ReplayJobChainCommand(
@@ -238,11 +302,17 @@ public sealed class JobsController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
         }
         catch (ArgumentOutOfRangeException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
         }
     }
 }

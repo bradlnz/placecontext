@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using PlaceContext.Application.Cluster;
 using PlaceContext.ClusterHost;
 
 namespace PlaceContext.ClusterHost.Tests;
@@ -59,8 +60,9 @@ public sealed class ClusterApiAuthenticationMiddlewareTests
         context.Request.Path = path;
         context.Response.Body = new MemoryStream();
         if (supplied is not null)
+        {
             context.Request.Headers[ClusterApiAuthenticationMiddleware.HeaderName] = supplied;
-
+        }
         await middleware.InvokeAsync(
             context,
             Options.Create(new ClusterProxyOptions { ApiToken = configured }));

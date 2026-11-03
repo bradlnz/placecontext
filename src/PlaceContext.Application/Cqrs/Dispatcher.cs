@@ -1,5 +1,5 @@
-using PlaceContext.Application.Ports;
 using Microsoft.Extensions.DependencyInjection;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Application.Cqrs;
 
@@ -32,7 +32,9 @@ public sealed class Dispatcher : IDispatcher
         {
             var permissions = scope.ServiceProvider.GetRequiredService<IPermissionService>();
             if (!await permissions.HasAsync(gated.RequiredPermission, ct))
+            {
                 throw new UnauthorizedAccessException($"Missing permission '{gated.RequiredPermission}'.");
+            }
         }
         var handlerType = typeof(ICommandHandler<,>).MakeGenericType(command.GetType(), typeof(TResult));
         var handler = scope.ServiceProvider.GetRequiredService(handlerType);
@@ -47,7 +49,9 @@ public sealed class Dispatcher : IDispatcher
         {
             var permissions = scope.ServiceProvider.GetRequiredService<IPermissionService>();
             if (!await permissions.HasAsync(gated.RequiredPermission, ct))
+            {
                 throw new UnauthorizedAccessException($"Missing permission '{gated.RequiredPermission}'.");
+            }
         }
         var handlerType = typeof(IQueryHandler<,>).MakeGenericType(query.GetType(), typeof(TResult));
         var handler = scope.ServiceProvider.GetRequiredService(handlerType);

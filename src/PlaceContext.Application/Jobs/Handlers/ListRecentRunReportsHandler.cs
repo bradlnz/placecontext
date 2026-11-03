@@ -21,7 +21,10 @@ public sealed class ListRecentRunReportsHandler : IQueryHandler<ListRecentRunRep
     {
         var runs = await _runs.ListRecentAsync(query.Take, ct, query.ProjectId);
 
-        if (runs.Count == 0) return [];
+        if (runs.Count == 0)
+        {
+            return [];
+        }
         var names = await _jobs.GetNamesAsync(runs.Select(r => r.JobId).Distinct().ToArray(), ct);
         var projectNames = await _projects.GetNamesAsync(runs.Select(r => r.ProjectId).Distinct().ToArray(), ct);
 

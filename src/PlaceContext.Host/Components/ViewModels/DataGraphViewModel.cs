@@ -1,6 +1,6 @@
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -15,12 +15,27 @@ public sealed class DataGraphViewModel : PageViewModel
         _js = js;
     }
 
-    public Guid ProjectId { get; private set; }
-    public GraphVizView? Graph { get; private set; }
-    public bool Loading { get; private set; }
-    public string? Error { get; private set; }
+    public Guid ProjectId
+    {
+        get; private set;
+    }
+    public GraphVizView? Graph
+    {
+        get; private set;
+    }
+    public bool Loading
+    {
+        get; private set;
+    }
+    public string? Error
+    {
+        get; private set;
+    }
 
-    public string? SelectedNodeId { get; private set; }
+    public string? SelectedNodeId
+    {
+        get; private set;
+    }
 
     private string _searchTerm = string.Empty;
     public string SearchTerm
@@ -29,7 +44,9 @@ public sealed class DataGraphViewModel : PageViewModel
         set
         {
             if (_searchTerm == value)
+            {
                 return;
+            }
             _searchTerm = value;
             NotifyStateChanged();
         }
@@ -73,8 +90,9 @@ public sealed class DataGraphViewModel : PageViewModel
     public void SelectNode(string? nodeId)
     {
         if (SelectedNodeId == nodeId)
+        {
             return;
-
+        }
         SelectedNodeId = nodeId;
         NodeSelected?.Invoke(nodeId);
         NotifyStateChanged();
@@ -97,8 +115,9 @@ public sealed class DataGraphViewModel : PageViewModel
     private IReadOnlyList<GraphNodeView> BuildFilteredNodes()
     {
         if (Graph is null)
+        {
             return Array.Empty<GraphNodeView>();
-
+        }
         var nodes = Graph.Nodes;
         if (!string.IsNullOrWhiteSpace(SelectedNodeId))
         {
@@ -106,9 +125,14 @@ public sealed class DataGraphViewModel : PageViewModel
             foreach (var link in Graph.Links)
             {
                 if (link.Source == SelectedNodeId)
+                {
                     neighborIds.Add(link.Target);
-                else if (link.Target == SelectedNodeId)
+                    continue;
+                }
+                if (link.Target == SelectedNodeId)
+                {
                     neighborIds.Add(link.Source);
+                }
             }
             nodes = nodes.Where(n => neighborIds.Contains(n.Id)).ToList();
         }

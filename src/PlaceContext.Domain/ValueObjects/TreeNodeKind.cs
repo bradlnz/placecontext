@@ -1,4 +1,7 @@
 namespace PlaceContext.Domain.ValueObjects;
 
 /// <summary>What a node in the knowledge graph represents.</summary>
-public enum TreeNodeKind { Root, Decision, Change, File, Activity, Tool, JobRunOutput, Job, Table, Chain, Entity, Artifact, JobRun, Address, Location }
+public enum TreeNodeKind
+{
+    Root, Decision, Change, File, Activity, Tool, JobRunOutput, Job, Table, Chain, Entity, Artifact, JobRun, Address, Location
+}

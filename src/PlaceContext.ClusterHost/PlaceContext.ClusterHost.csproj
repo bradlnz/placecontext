@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>PlaceContext.ClusterHost</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PlaceContext.Application/PlaceContext.Application.csproj" />
+    <ProjectReference Include="../PlaceContext.Infrastructure/PlaceContext.Infrastructure.csproj" />
+  </ItemGroup>
 </Project>

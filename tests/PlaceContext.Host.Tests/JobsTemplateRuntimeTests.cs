@@ -1,6 +1,6 @@
 using Microsoft.JSInterop;
+using PlaceContext.Application.Operations;
 using PlaceContext.Host.Components.ViewModels;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Tests;
 
@@ -10,7 +10,7 @@ public sealed class JobsTemplateRuntimeTests : IDisposable
     private readonly JobsViewModel _vm;
 
     public JobsTemplateRuntimeTests() =>
-        _vm = new JobsViewModel(null!, new OperationCenter(null!, null!), _js, null!);
+        _vm = new JobsViewModel(null!, new OperationCenter(null!, default), _js, null!);
 
     [Fact]
     public async Task Every_template_switches_to_its_language_specific_source_and_entrypoint()
@@ -100,7 +100,9 @@ public sealed class JobsTemplateRuntimeTests : IDisposable
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
         {
             if (identifier == "pcmonaco.getValue")
+            {
                 return ValueTask.FromResult((TValue)(object)Value);
+            }
             if (identifier is "pcmonaco.init" or "pcmonaco.setValue")
             {
                 Value = (string)args![1]!;

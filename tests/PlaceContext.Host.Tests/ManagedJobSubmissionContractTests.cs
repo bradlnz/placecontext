@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
-using PlaceContext.Host.Controllers;
 using PlaceContext.Host.Auth;
+using PlaceContext.Host.Controllers;
 
 namespace PlaceContext.Host.Tests;
 
@@ -15,7 +15,9 @@ public sealed class ManagedJobSubmissionContractTests
             .Cast<AuthorizeAttribute>(), rule => rule.Policy == CoreApiScopes.JobsRead);
         var d = new DirectoryInfo(AppContext.BaseDirectory);
         while (d is not null && !File.Exists(Path.Combine(d.FullName, "PlaceContext.slnx")))
+        {
             d = d.Parent;
+        }
         Assert.NotNull(d);
         var source = File.ReadAllText(Path.Combine(d!.FullName,
             "src/PlaceContext.Host/Controllers/CoreApiJobsController.cs"));

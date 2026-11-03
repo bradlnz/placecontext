@@ -1,15 +1,16 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Workload;
+using PlaceContext.Application;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.ViewModels;
-using PlaceContext.Infrastructure.Operations;
 using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.TestSupport;
 
@@ -67,7 +68,12 @@ public sealed class JobEditorExecutionTests
         await UntilAsync(() => harness.Vm.LastRun?.Status == "Failed");
         Assert.True(harness.Vm.Running);
 
-        var final = harness.Vm.LastRun! with { Id = Guid.NewGuid(), Status = "Succeeded", AttemptNumber = 2 };
+        var final = harness.Vm.LastRun! with
+        {
+            Id = Guid.NewGuid(),
+            Status = "Succeeded",
+            AttemptNumber = 2
+        };
         harness.FinalAttempt.SetResult(final);
         await UntilAsync(() => !harness.Vm.Running);
         Assert.Equal(final, harness.Vm.LastRun);
@@ -101,7 +107,10 @@ public sealed class JobEditorExecutionTests
     private static async Task UntilAsync(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        while (!condition()) await Task.Delay(20, timeout.Token);
+        while (!condition())
+        {
+            await Task.Delay(20, timeout.Token);
+        }
     }
 
     private sealed class Harness : IDispatcher, IJobRunner, IWorkloadRunner, IJSRuntime, IHostApplicationLifetime, IAsyncDisposable
@@ -112,13 +121,28 @@ public sealed class JobEditorExecutionTests
         private readonly RecordingUnitOfWork _uow = new();
         private readonly FakeClock _clock = new(DateTimeOffset.UtcNow);
         private readonly ServiceProvider _provider;
-        public JobEditorViewModel Vm { get; }
-        public OperationCenter Operations { get; }
-        public int Launches { get; private set; }
-        public int EditorInitializations { get; private set; }
+        public JobEditorViewModel Vm
+        {
+            get;
+        }
+        public OperationCenter Operations
+        {
+            get;
+        }
+        public int Launches
+        {
+            get; private set;
+        }
+        public int EditorInitializations
+        {
+            get; private set;
+        }
         public TaskCompletionSource<WorkloadRunRequest> Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<WorkloadRunResult> Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource<JobRunDetailView>? FinalAttempt { get; set; }
+        public TaskCompletionSource<JobRunDetailView>? FinalAttempt
+        {
+            get; set;
+        }
 
         public Harness()
         {
@@ -129,7 +153,7 @@ public sealed class JobEditorExecutionTests
             _jobs.AddAsync(job).GetAwaiter().GetResult();
             var service = new PlaceContextService(this, this, null!, null!);
             _provider = new ServiceCollection().AddSingleton(service).BuildServiceProvider();
-            Operations = new(_provider.GetRequiredService<IServiceScopeFactory>(), this);
+            Operations = new(_provider.GetRequiredService<IServiceScopeFactory>(), ApplicationStopping);
             Vm = new(service, new PortalUiState(), null!, this, Operations);
             Vm.Initialize(job.ProjectId, job.Id);
         }
@@ -165,15 +189,20 @@ public sealed class JobEditorExecutionTests
         public Task CancelAsync(string correlationId, CancellationToken ct = default) => Task.CompletedTask;
         public ValueTask<T> InvokeAsync<T>(string identifier, object?[]? args)
         {
-            if (identifier == "pcmonaco.init") EditorInitializations++;
+            if (identifier == "pcmonaco.init")
+            {
+                EditorInitializations++;
+            }
             return ValueTask.FromResult(identifier == "pcmonaco.init" ? (T)(object)true :
-                identifier == "pcmonaco.getValue" ? (T)(object)"print('edited')" : default!);
+                            identifier == "pcmonaco.getValue" ? (T)(object)"print('edited')" : default!);
         }
         public ValueTask<T> InvokeAsync<T>(string identifier, CancellationToken ct, object?[]? args) => InvokeAsync<T>(identifier, args);
         public CancellationToken ApplicationStarted => CancellationToken.None;
         public CancellationToken ApplicationStopping => CancellationToken.None;
         public CancellationToken ApplicationStopped => CancellationToken.None;
-        public void StopApplication() { }
+        public void StopApplication()
+        {
+        }
         public async ValueTask DisposeAsync()
         {
             await Vm.DisposeAsync();

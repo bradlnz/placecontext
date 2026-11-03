@@ -1,8 +1,8 @@
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
-using PlaceContext.Application;
+using Microsoft.AspNetCore.Components;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -19,23 +19,50 @@ public sealed class DataEntitiesViewModel : PageViewModel
         NavigationManager navigation
     ) => (_service, _ui, _navigation) = (service, ui, navigation);
 
-    public Guid ProjectId { get; private set; }
-    public IReadOnlyList<DataEntityView> Entities { get; private set; } =
+    public Guid ProjectId
+    {
+        get; private set;
+    }
+    public IReadOnlyList<DataEntityView> Entities
+    {
+        get; private set;
+    } =
         Array.Empty<DataEntityView>();
-    public IReadOnlyList<ProjectTableInfo> Tables { get; private set; } =
+    public IReadOnlyList<ProjectTableInfo> Tables
+    {
+        get; private set;
+    } =
         Array.Empty<ProjectTableInfo>();
-    public bool ShowEditor { get; set; }
-    public bool Busy { get; private set; }
-    public Guid? EditId { get; private set; }
+    public bool ShowEditor
+    {
+        get; set;
+    }
+    public bool Busy
+    {
+        get; private set;
+    }
+    public Guid? EditId
+    {
+        get; private set;
+    }
     public string EditName { get; set; } = "";
     public string EditTable { get; set; } = "";
     public string EditLabel { get; set; } = "";
-    public string? Error { get; private set; }
+    public string? Error
+    {
+        get; private set;
+    }
     public List<RelationEdit> EditRelations { get; } = new();
     public List<string> EditTags { get; } = new();
     public string TagInput { get; set; } = "";
-    public bool Rescanning { get; private set; }
-    public string? RescanMessage { get; private set; }
+    public bool Rescanning
+    {
+        get; private set;
+    }
+    public string? RescanMessage
+    {
+        get; private set;
+    }
 
     public sealed class RelationEdit
     {
@@ -92,17 +119,21 @@ public sealed class DataEntitiesViewModel : PageViewModel
         EditLabel = entity?.LabelColumn ?? "";
         EditRelations.Clear();
         if (entity is not null)
+        {
             EditRelations.AddRange(
-                entity.Relations.Select(r => new RelationEdit
-                {
-                    Column = r.Column,
-                    TargetEntity = r.TargetEntity,
-                    TargetColumn = r.TargetColumn,
-                })
-            );
+                        entity.Relations.Select(r => new RelationEdit
+                        {
+                            Column = r.Column,
+                            TargetEntity = r.TargetEntity,
+                            TargetColumn = r.TargetColumn,
+                        })
+                    );
+        }
         EditTags.Clear();
         if (entity is not null)
+        {
             EditTags.AddRange(entity.Tags);
+        }
         TagInput = "";
         Error = null;
         ShowEditor = true;
@@ -114,10 +145,14 @@ public sealed class DataEntitiesViewModel : PageViewModel
     public void TagKey(KeyboardEventArgs args)
     {
         if (args.Key is not ("Enter" or ","))
+        {
             return;
+        }
         var tag = TagInput.Trim().TrimEnd(',').Trim();
         if (tag.Length > 0 && !EditTags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+        {
             EditTags.Add(tag);
+        }
         TagInput = "";
     }
 
@@ -140,24 +175,26 @@ public sealed class DataEntitiesViewModel : PageViewModel
             var tags = EditTags.ToList();
             var pending = TagInput.Trim().TrimEnd(',').Trim();
             if (pending.Length > 0 && !tags.Contains(pending, StringComparer.OrdinalIgnoreCase))
+            {
                 tags.Add(pending);
+            }
             await _service.SaveDataEntityAsync(
-                new SaveDataEntityCommand(
-                    ProjectId,
-                    EditName,
-                    EditTable,
-                    EditLabel,
-                    EditRelations
-                        .Select(r => new EntityRelationDto(
-                            r.Column,
-                            r.TargetEntity,
-                            r.TargetColumn
-                        ))
-                        .ToList(),
-                    tags,
-                    EditId
-                )
-            );
+                            new SaveDataEntityCommand(
+                                ProjectId,
+                                EditName,
+                                EditTable,
+                                EditLabel,
+                                EditRelations
+                                    .Select(r => new EntityRelationDto(
+                                        r.Column,
+                                        r.TargetEntity,
+                                        r.TargetColumn
+                                    ))
+                                    .ToList(),
+                                tags,
+                                EditId
+                            )
+                        );
             await LoadAsync(ProjectId);
             ShowEditor = false;
         }
@@ -175,7 +212,9 @@ public sealed class DataEntitiesViewModel : PageViewModel
     public async Task DeleteAsync()
     {
         if (EditId is not { } id)
+        {
             return;
+        }
         try
         {
             await _service.DeleteDataEntityAsync(id);

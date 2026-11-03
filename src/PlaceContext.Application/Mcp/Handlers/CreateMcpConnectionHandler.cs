@@ -1,7 +1,6 @@
-using System.Net.Http;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Mcp;
 using PlaceContext.Domain.Repositories;
@@ -27,7 +26,9 @@ public sealed class CreateMcpConnectionHandler : ICommandHandler<CreateMcpConnec
             command.EndpointUrl, command.Command, command.Args,
             command.AuthType, command.AuthToken, command.AuthHeader, _clock.UtcNow);
         if (command.AuthType == McpAuthType.OAuth)
+        {
             conn.SetOAuthCredentials(command.OAuthClientId, command.OAuthScopes, _clock.UtcNow);
+        }
         await _repo.AddAsync(conn, ct);
         await _uow.SaveChangesAsync(ct);
         return McpConnectionMapper.ToView(conn);

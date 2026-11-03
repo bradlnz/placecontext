@@ -1,6 +1,5 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.ProjectData;
 namespace PlaceContext.Application.Features;
 
 public sealed class DropProjectViewHandler : ICommandHandler<DropProjectViewCommand, bool>

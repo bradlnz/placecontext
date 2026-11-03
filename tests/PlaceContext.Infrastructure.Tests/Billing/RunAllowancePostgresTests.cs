@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using PlaceContext.Application.Billing;
 using Npgsql;
+using PlaceContext.Application.Billing;
 using PlaceContext.Infrastructure.Billing;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tests.AgentWorkflows;
@@ -16,11 +16,16 @@ public sealed class RunAllowancePostgresTests
     {
         var schema = "quota_test_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(
-            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES")) { SearchPath = schema }.ConnectionString;
+            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES"))
+        {
+            SearchPath = schema
+        }.ConnectionString;
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await using (var create = new NpgsqlCommand($"CREATE SCHEMA \"{schema}\"", conn))
+        {
             await create.ExecuteNonQueryAsync();
+        }
         try
         {
             var opts = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs).Options;
@@ -71,7 +76,10 @@ public sealed class RunAllowancePostgresTests
                         projectId, Guid.NewGuid(), "job");
                     return true;
                 }
-                catch (InvalidOperationException) { return false; }
+                catch (InvalidOperationException)
+                {
+                    return false;
+                }
             }));
             Assert.Equal(12, attempts.Count(x => x));
             await using (var verify = new AppDbContext(opts, tenant))

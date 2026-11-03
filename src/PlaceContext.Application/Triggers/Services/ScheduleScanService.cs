@@ -1,4 +1,7 @@
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Triggers;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -35,8 +38,10 @@ public sealed class ScheduleScanService
     {
         var now = _clock.UtcNow;
         var due = await _triggers.ListDueSchedulesAsync(now, ct);
-        if (due.Count == 0) return 0;
-
+        if (due.Count == 0)
+        {
+            return 0;
+        }
         var tenantId = _tenant.TenantId;
         var tz = _tenant.TimeZoneId;
 

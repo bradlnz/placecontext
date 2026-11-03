@@ -1,7 +1,7 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -18,10 +18,19 @@ public sealed class OverviewViewModel : PageViewModel
         NavigationManager navigation
     ) => (_service, _ui, _navigation) = (service, ui, navigation);
 
-    public IReadOnlyList<ProjectSummaryView>? Projects { get; private set; }
-    public FocusView? Focus { get; private set; }
+    public IReadOnlyList<ProjectSummaryView>? Projects
+    {
+        get; private set;
+    }
+    public FocusView? Focus
+    {
+        get; private set;
+    }
     public IReadOnlyList<Stat> Stats { get; private set; } = Array.Empty<Stat>();
-    public bool Busy { get; private set; }
+    public bool Busy
+    {
+        get; private set;
+    }
 
     public sealed record Stat(string Label, string Value, string Sub, string Color);
 

@@ -1,5 +1,5 @@
 using Microsoft.JSInterop;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Auth;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -11,9 +11,15 @@ public sealed class ApiTokensSettingsViewModel(IUserApiTokenService tokens, Port
     public sealed record ApiEndpointExample(string Title, string Command);
 
     public const string DefaultLifetimeDays = "90";
-    public IReadOnlyList<UserApiTokenView> Tokens { get; private set; } =
+    public IReadOnlyList<UserApiTokenView> Tokens
+    {
+        get; private set;
+    } =
         Array.Empty<UserApiTokenView>();
-    public IReadOnlyList<ApiEndpoint> UsableEndpoints { get; } =
+    public IReadOnlyList<ApiEndpoint> UsableEndpoints
+    {
+        get;
+    } =
         new[]
         {
             new ApiEndpoint("POST", "/api/v1/queues/{queueId}/messages", "Submit a JSON object to a workflow queue (requires permission to run jobs)."),
@@ -49,7 +55,10 @@ public sealed class ApiTokensSettingsViewModel(IUserApiTokenService tokens, Port
                 "Search within the resolved project."
             )
         };
-    public IReadOnlyList<ApiEndpointExample> EndpointExamples { get; } =
+    public IReadOnlyList<ApiEndpointExample> EndpointExamples
+    {
+        get;
+    } =
         new[]
         {
             new ApiEndpointExample(
@@ -66,13 +75,28 @@ public sealed class ApiTokensSettingsViewModel(IUserApiTokenService tokens, Port
             )
         };
     public bool Loading { get; private set; } = true;
-    public bool Busy { get; private set; }
-    public string? Message { get; private set; }
-    public string? CreateError { get; private set; }
+    public bool Busy
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
+    public string? CreateError
+    {
+        get; private set;
+    }
     public string NewName { get; set; } = "";
     public string LifetimeDays { get; set; } = DefaultLifetimeDays;
-    public string? CreatedRaw { get; private set; }
-    public string? CreatedPrefix { get; private set; }
+    public string? CreatedRaw
+    {
+        get; private set;
+    }
+    public string? CreatedPrefix
+    {
+        get; private set;
+    }
     public async Task CopyExampleAsync(string command)
     {
         await js.InvokeVoidAsync("navigator.clipboard.writeText", command);

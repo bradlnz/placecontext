@@ -1,5 +1,5 @@
-using System.Text;
 using System.Text.Json;
+using System.Text;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 
@@ -23,28 +23,39 @@ public static class PostJobArtifacts
         var sb = new StringBuilder();
         sb.Append(HtmlHead(job.Name));
         sb.Append($"<h1>{Esc(job.Name)}</h1>");
-        if (run.FinishedAt is { } f) sb.Append($"<p class=meta>Generated {f:yyyy-MM-dd HH:mm} UTC</p>");
-
+        if (run.FinishedAt is { } f)
+        {
+            sb.Append($"<p class=meta>Generated {f:yyyy-MM-dd HH:mm} UTC</p>");
+        }
         // Prefer the reduce artifact (the job's final, aggregated output) if it exists; else each shard.
         var rendered = false;
-        if (run.ReduceResult?.Artifact is { Length: > 0 } reduceArtifact)
+        void RenderArtifacts()
         {
-            sb.Append(RenderArtifactHtml(reduceArtifact));
-            rendered = true;
-        }
-        else
-        {
+            if (run.ReduceResult?.Artifact is { Length: > 0 } reduceArtifact)
+            {
+                sb.Append(RenderArtifactHtml(reduceArtifact));
+                rendered = true;
+                return;
+            }
             foreach (var s in run.ShardResults)
             {
-                if (string.IsNullOrWhiteSpace(s.Artifact)) continue;
+                if (string.IsNullOrWhiteSpace(s.Artifact))
+                {
+                    continue;
+                }
                 if (run.ShardResults.Count(x => !string.IsNullOrWhiteSpace(x.Artifact)) > 1)
+                {
                     sb.Append($"<h2>Shard {s.Index}</h2>");
+                }
                 sb.Append(RenderArtifactHtml(s.Artifact!));
                 rendered = true;
             }
         }
-        if (!rendered) sb.Append("<p class=meta>This run produced no data artifact.</p>");
-
+        RenderArtifacts();
+        if (!rendered)
+        {
+            sb.Append("<p class=meta>This run produced no data artifact.</p>");
+        }
         sb.Append("</body></html>");
         return new BuiltFile("report.html", Bytes(sb), "text/html; charset=utf-8", "HTML report");
     }
@@ -81,43 +92,60 @@ public static class PostJobArtifacts
         var scalars = new List<JsonProperty>();
         var complex = new List<JsonProperty>();
         foreach (var p in obj.EnumerateObject())
+        {
             (p.Value.ValueKind is JsonValueKind.Array or JsonValueKind.Object ? complex : scalars).Add(p);
-
+        }
         if (scalars.Count > 0)
         {
             sb.Append("<dl class=kv>");
             foreach (var p in scalars)
             {
-                if (p.Value.ValueKind is JsonValueKind.Null) continue;
+                if (p.Value.ValueKind is JsonValueKind.Null)
+                {
+                    continue;
+                }
                 sb.Append($"<dt>{Esc(Humanize(p.Name))}</dt><dd>{Scalar(p.Value)}</dd>");
             }
             sb.Append("</dl>");
         }
         if (depth < MaxDepth)
+        {
             foreach (var p in complex)
             {
                 sb.Append($"<h3>{Esc(Humanize(p.Name))}</h3>");
                 sb.Append(RenderElement(p.Value, depth + 1));
             }
+        }
         return sb.ToString();
     }
 
     private static string RenderArray(JsonElement arr, int depth)
     {
         var items = arr.EnumerateArray().ToList();
-        if (items.Count == 0) return "<p class=meta>(none)</p>";
-
+        if (items.Count == 0)
+        {
+            return "<p class=meta>(none)</p>";
+        }
         if (items[0].ValueKind == JsonValueKind.Object)
         {
             var sb = new StringBuilder("<div class=cards>");
-            for (var i = 0; i < items.Count && i < MaxItems; i++) sb.Append(RenderCard(items[i]));
-            if (items.Count > MaxItems) sb.Append($"<p class=meta>… and {items.Count - MaxItems} more</p>");
+            for (var i = 0; i < items.Count && i < MaxItems; i++)
+            {
+                sb.Append(RenderCard(items[i]));
+            }
+            if (items.Count > MaxItems)
+            {
+                sb.Append($"<p class=meta>… and {items.Count - MaxItems} more</p>");
+            }
             sb.Append("</div>");
             return sb.ToString();
         }
 
         var ul = new StringBuilder("<ul>");
-        foreach (var it in items.Take(MaxItems)) ul.Append($"<li>{Scalar(it)}</li>");
+        foreach (var it in items.Take(MaxItems))
+        {
+            ul.Append($"<li>{Scalar(it)}</li>");
+        }
         ul.Append("</ul>");
         return ul.ToString();
     }
@@ -128,22 +156,35 @@ public static class PostJobArtifacts
         foreach (var p in obj.EnumerateObject())
         {
             var lk = p.Name.ToLowerInvariant();
-            if (title is null && p.Value.ValueKind == JsonValueKind.String && TitleKeys.Contains(lk)) title = p.Value.GetString();
-            if (url is null && p.Value.ValueKind == JsonValueKind.String && UrlKeys.Contains(lk)) url = p.Value.GetString();
+            if (title is null && p.Value.ValueKind == JsonValueKind.String && TitleKeys.Contains(lk))
+            {
+                title = p.Value.GetString();
+            }
+            if (url is null && p.Value.ValueKind == JsonValueKind.String && UrlKeys.Contains(lk))
+            {
+                url = p.Value.GetString();
+            }
         }
 
         var sb = new StringBuilder("<div class=card>");
         if (!string.IsNullOrWhiteSpace(title))
+        {
             sb.Append(url is not null
-                ? $"<div class=ctitle><a href=\"{EscAttr(url)}\" target=_blank rel=noopener>{Esc(title!)}</a></div>"
-                : $"<div class=ctitle>{Esc(title!)}</div>");
-
+                        ? $"<div class=ctitle><a href=\"{EscAttr(url)}\" target=_blank rel=noopener>{Esc(title!)}</a></div>"
+                        : $"<div class=ctitle>{Esc(title!)}</div>");
+        }
         sb.Append("<dl class=kv>");
         foreach (var p in obj.EnumerateObject())
         {
             var lk = p.Name.ToLowerInvariant();
-            if (TitleKeys.Contains(lk) || UrlKeys.Contains(lk)) continue; // already shown as the card title/link
-            if (p.Value.ValueKind is JsonValueKind.Null) continue;
+            if (TitleKeys.Contains(lk) || UrlKeys.Contains(lk))
+            {
+                continue; // already shown as the card title/link
+            }
+            if (p.Value.ValueKind is JsonValueKind.Null)
+            {
+                continue;
+            }
             var val = p.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array ? Esc(Compact(p.Value)) : Scalar(p.Value);
             sb.Append($"<dt>{Esc(Humanize(p.Name))}</dt><dd>{val}</dd>");
         }
@@ -158,7 +199,9 @@ public static class PostJobArtifacts
         {
             var s = v.GetString() ?? "";
             if (s.StartsWith("http://") || s.StartsWith("https://"))
+            {
                 return $"<a href=\"{EscAttr(s)}\" target=_blank rel=noopener>{Esc(s)}</a>";
+            }
             return Esc(s);
         }
         return Esc(v.ToString());
@@ -177,8 +220,15 @@ public static class PostJobArtifacts
         for (var i = 0; i < key.Length; i++)
         {
             var c = key[i];
-            if (c is '_' or '-') { spaced.Append(' '); continue; }
-            if (char.IsUpper(c) && i > 0 && !char.IsUpper(key[i - 1])) spaced.Append(' ');
+            if (c is '_' or '-')
+            {
+                spaced.Append(' ');
+                continue;
+            }
+            if (char.IsUpper(c) && i > 0 && !char.IsUpper(key[i - 1]))
+            {
+                spaced.Append(' ');
+            }
             spaced.Append(c);
         }
         var s = spaced.ToString().Trim();
@@ -204,9 +254,13 @@ public static class PostJobArtifacts
         var sb = new StringBuilder();
         sb.Append("shard,exit_code,outcome,artifact\n");
         foreach (var s in run.ShardResults)
+        {
             sb.Append($"{s.Index},{s.ExitCode},{s.Outcome},{CsvField(s.Artifact ?? "")}\n");
+        }
         if (run.ReduceResult is { } r)
+        {
             sb.Append($"reduce,{r.ExitCode},{(r.Succeeded ? "Succeeded" : "Failed")},{CsvField(r.Artifact ?? "")}\n");
+        }
         return new BuiltFile("run.csv", Bytes(sb), "text/csv; charset=utf-8", "CSV export");
     }
 
@@ -216,16 +270,24 @@ public static class PostJobArtifacts
         foreach (var s in run.ShardResults)
         {
             if (!string.IsNullOrEmpty(s.Artifact))
+            {
                 yield return RawFile($"raw/shard-{s.Index}/result.json", s.Artifact!);
+            }
             foreach (var a in s.Artifacts)
+            {
                 yield return RawFile($"raw/shard-{s.Index}/{a.Name}", a.Content);
+            }
         }
         if (run.ReduceResult is { } r)
         {
             if (!string.IsNullOrEmpty(r.Artifact))
+            {
                 yield return RawFile("raw/reduce/result.json", r.Artifact!);
+            }
             foreach (var a in r.Artifacts)
+            {
                 yield return RawFile($"raw/reduce/{a.Name}", a.Content);
+            }
         }
     }
 
@@ -287,7 +349,10 @@ public static class PostJobArtifacts
     private static string CsvField(string s)
     {
         var v = s.Replace("\r", " ").Replace("\n", " ");
-        if (v.Contains(',') || v.Contains('"')) v = "\"" + v.Replace("\"", "\"\"") + "\"";
+        if (v.Contains(',') || v.Contains('"'))
+        {
+            v = "\"" + v.Replace("\"", "\"\"") + "\"";
+        }
         return v;
     }
 

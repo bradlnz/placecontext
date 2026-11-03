@@ -1,6 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Search;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -21,11 +21,14 @@ public sealed class SearchRunOutputsHandler
         SearchRunOutputsQuery query, CancellationToken ct = default)
     {
         if (!_embeddings.IsEnabled || string.IsNullOrWhiteSpace(query.Query))
+        {
             return Array.Empty<RunOutputMatchView>();
-
+        }
         var vectors = await _embeddings.EmbedAsync(new[] { query.Query }, ct);
-        if (vectors.Count == 0) return Array.Empty<RunOutputMatchView>();
-
+        if (vectors.Count == 0)
+        {
+            return Array.Empty<RunOutputMatchView>();
+        }
         var matches = await _store.SearchAsync(query.ProjectId, vectors[0], query.Take, ct);
         return matches
             .Select(m => new RunOutputMatchView(

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -15,8 +15,14 @@ public sealed class InspectorViewModel : PageViewModel, IDisposable
     public InspectorViewModel(PlaceContextService service, PortalUiState ui) =>
         (_service, _ui) = (service, ui);
 
-    public IReadOnlyList<ToolCallView>? Calls { get; private set; }
-    public ToolCallView? Active { get; private set; }
+    public IReadOnlyList<ToolCallView>? Calls
+    {
+        get; private set;
+    }
+    public ToolCallView? Active
+    {
+        get; private set;
+    }
 
     public async Task LoadAsync()
     {

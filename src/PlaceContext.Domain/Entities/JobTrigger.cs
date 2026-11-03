@@ -41,34 +41,70 @@ public sealed class JobTrigger
         UpdatedAt = updatedAt;
     }
 
-    public Guid Id { get; }
-    public Guid ProjectId { get; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
 
     /// <summary>The job this trigger runs.</summary>
-    public Guid? JobId { get; }
+    public Guid? JobId
+    {
+        get;
+    }
 
     /// <summary>Human-readable label for this trigger.</summary>
-    public string Name { get; private set; }
+    public string Name
+    {
+        get; private set;
+    }
 
-    public TriggerKind Kind { get; }
+    public TriggerKind Kind
+    {
+        get;
+    }
 
     /// <summary>When false, the trigger never fires (paused).</summary>
-    public bool Enabled { get; private set; }
+    public bool Enabled
+    {
+        get; private set;
+    }
 
     /// <summary>Cron expression (schedule triggers only); null for event triggers.</summary>
-    public string? CronExpression { get; private set; }
+    public string? CronExpression
+    {
+        get; private set;
+    }
 
     /// <summary>Subscribed event name (event triggers only); null for schedule triggers.</summary>
-    public string? EventName { get; private set; }
+    public string? EventName
+    {
+        get; private set;
+    }
 
     /// <summary>Next time this schedule is due to fire (UTC); null for event triggers or when paused.</summary>
-    public DateTimeOffset? NextRunAt { get; private set; }
+    public DateTimeOffset? NextRunAt
+    {
+        get; private set;
+    }
 
     /// <summary>Last time this trigger fired a run (UTC); null if it has never fired.</summary>
-    public DateTimeOffset? LastFiredAt { get; private set; }
+    public DateTimeOffset? LastFiredAt
+    {
+        get; private set;
+    }
 
-    public DateTimeOffset CreatedAt { get; }
-    public DateTimeOffset UpdatedAt { get; private set; }
+    public DateTimeOffset CreatedAt
+    {
+        get;
+    }
+    public DateTimeOffset UpdatedAt
+    {
+        get; private set;
+    }
 
     /// <summary>True when the schedule is due at <paramref name="now"/> (enabled cron-based trigger with a past NextRunAt).</summary>
     public bool IsDue(DateTimeOffset now) =>
@@ -89,8 +125,9 @@ public sealed class JobTrigger
         ValidateIds(projectId, jobId);
         ValidateName(name);
         if (string.IsNullOrWhiteSpace(cronExpression))
+        {
             throw new ArgumentException("A schedule trigger requires a cron expression.", nameof(cronExpression));
-
+        }
         return new JobTrigger(
             Guid.NewGuid(), projectId, jobId, name.Trim(), TriggerKind.Schedule,
             enabled: true, cronExpression: cronExpression.Trim(), eventName: null,
@@ -104,8 +141,9 @@ public sealed class JobTrigger
         ValidateIds(projectId, jobId);
         ValidateName(name);
         if (string.IsNullOrWhiteSpace(eventName))
+        {
             throw new ArgumentException("An event trigger requires an event name.", nameof(eventName));
-
+        }
         return new JobTrigger(
             Guid.NewGuid(), projectId, jobId, name.Trim(), TriggerKind.Event,
             enabled: true, cronExpression: null, eventName: eventName.Trim(),
@@ -129,7 +167,9 @@ public sealed class JobTrigger
     {
         LastFiredAt = firedAt;
         if (Kind == TriggerKind.Schedule)
+        {
             NextRunAt = nextRunAt;
+        }
         UpdatedAt = firedAt;
     }
 
@@ -137,10 +177,13 @@ public sealed class JobTrigger
     public void Reschedule(string cronExpression, DateTimeOffset? nextRunAt, DateTimeOffset now)
     {
         if (Kind != TriggerKind.Schedule)
+        {
             throw new InvalidOperationException("Only schedule triggers can be rescheduled.");
+        }
         if (string.IsNullOrWhiteSpace(cronExpression))
+        {
             throw new ArgumentException("A schedule trigger requires a cron expression.", nameof(cronExpression));
-
+        }
         CronExpression = cronExpression.Trim();
         NextRunAt = nextRunAt;
         UpdatedAt = now;
@@ -158,7 +201,9 @@ public sealed class JobTrigger
     public void RenameEvent(string eventName, DateTimeOffset now)
     {
         if (string.IsNullOrWhiteSpace(eventName))
+        {
             throw new ArgumentException("Event name must not be empty.", nameof(eventName));
+        }
         EventName = eventName.Trim();
         UpdatedAt = now;
     }
@@ -168,7 +213,9 @@ public sealed class JobTrigger
     {
         Enabled = true;
         if (Kind == TriggerKind.Schedule)
+        {
             NextRunAt = nextRunAt;
+        }
         UpdatedAt = now;
     }
 
@@ -183,14 +230,20 @@ public sealed class JobTrigger
     private static void ValidateIds(Guid projectId, Guid jobId)
     {
         if (projectId == Guid.Empty)
+        {
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
+        }
         if (jobId == Guid.Empty)
+        {
             throw new ArgumentException("JobId must not be empty.", nameof(jobId));
+        }
     }
 
     private static void ValidateName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("Trigger name must not be empty.", nameof(name));
+        }
     }
 }

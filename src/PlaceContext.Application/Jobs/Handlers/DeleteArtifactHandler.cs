@@ -1,5 +1,6 @@
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -21,14 +22,19 @@ public sealed class DeleteArtifactHandler : ICommandHandler<DeleteArtifactComman
     {
         // GetByIdAsync respects the tenant global filter — a caller only sees its own artifacts.
         var link = await _links.GetByIdAsync(command.ArtifactId, ct);
-        if (link is null) return false;
-
+        if (link is null)
+        {
+            return false;
+        }
         // Drop the DB pointer first (the source of truth for what's visible), then best-effort
         // delete the bytes. If the object delete fails we've still removed the dangling link.
         await _links.RemoveAsync(command.ArtifactId, ct);
         await _uow.SaveChangesAsync(ct);
 
-        try { await _store.DeleteAsync(link.Bucket, link.ObjectKey, ct); }
+        try
+        {
+            await _store.DeleteAsync(link.Bucket, link.ObjectKey, ct);
+        }
         catch { /* orphaned object bytes are harmless — the link is already gone */ }
 
         return true;

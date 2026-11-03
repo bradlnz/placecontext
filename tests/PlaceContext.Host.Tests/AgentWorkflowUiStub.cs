@@ -15,12 +15,24 @@ internal sealed class AgentWorkflowUiStub : IAgentWorkflows
     public Task<AgentWorkspace> LoadAsync(Guid projectId, CancellationToken ct = default) => Task.FromResult(
         new AgentWorkspace(true, true, [Workflow, FreeWorkflow], [new(Workflow.Id, Active, DateTimeOffset.UtcNow)], []));
     public Task SetSubscriptionAsync(Guid projectId, string agentId, bool active, CancellationToken ct = default)
-    { Active = active; return Task.CompletedTask; }
+    {
+        Active = active;
+        return Task.CompletedTask;
+    }
     public async Task<AgentRun> RunAsync(Guid projectId, string agentId, Guid requestId, string input, CancellationToken ct = default)
     {
-        Runs++; RequestIds.Add(requestId); Started.TrySetResult();
-        if (Pause is not null) await Pause.Task.WaitAsync(ct);
-        if (FailOnce) { FailOnce = false; throw new InvalidOperationException("Response lost"); }
+        Runs++;
+        RequestIds.Add(requestId);
+        Started.TrySetResult();
+        if (Pause is not null)
+        {
+            await Pause.Task.WaitAsync(ct);
+        }
+        if (FailOnce)
+        {
+            FailOnce = false;
+            throw new InvalidOperationException("Response lost");
+        }
         return new(requestId, agentId, AgentRunStatus.Completed, "Result", null, 1000, 250, 1.25m, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
     }
 }

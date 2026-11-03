@@ -27,7 +27,9 @@ public sealed record ChainParameterPromptPlan(
             {
                 var job = jobs.FirstOrDefault(item => item.Id == chainStep.JobId);
                 if (job is { Parameters.Count: > 0 })
+                {
                     steps.Add((executionIndex, job));
+                }
                 executionIndex++;
             }
         }

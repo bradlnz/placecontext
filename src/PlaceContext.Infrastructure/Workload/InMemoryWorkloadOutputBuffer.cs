@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Workload;
 namespace PlaceContext.Infrastructure.Workload;
 
 /// <summary>
@@ -17,7 +16,10 @@ public sealed class InMemoryWorkloadOutputBuffer : IWorkloadOutputBuffer
 
     public void Append(string correlationId, string text, bool isError = false)
     {
-        if (string.IsNullOrEmpty(text)) return;
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
         var entry = _entries.GetOrAdd(correlationId, static _ => new Entry());
         lock (entry.Gate)
         {
@@ -59,8 +61,10 @@ public sealed class InMemoryWorkloadOutputBuffer : IWorkloadOutputBuffer
             .Where(item => item.Key.StartsWith(prefix, StringComparison.Ordinal))
             .OrderBy(item => item.Key, StringComparer.Ordinal)
             .ToList();
-        if (matches.Count == 0) return null;
-
+        if (matches.Count == 0)
+        {
+            return null;
+        }
         var combined = new StringBuilder();
         var complete = true;
         var updatedAt = DateTimeOffset.MinValue;
@@ -69,17 +73,28 @@ public sealed class InMemoryWorkloadOutputBuffer : IWorkloadOutputBuffer
             lock (entry.Gate)
             {
                 if (matches.Count > 1)
+                {
                     combined.AppendLine($"── {StreamLabel(key)} ──");
+                }
                 combined.Append(entry.Stdout);
                 if (entry.Stderr.Length > 0)
                 {
-                    if (combined.Length > 0 && combined[^1] != '\n') combined.AppendLine();
+                    if (combined.Length > 0 && combined[^1] != '\n')
+                    {
+                        combined.AppendLine();
+                    }
                     combined.AppendLine("[stderr]");
                     combined.Append(entry.Stderr);
                 }
-                if (combined.Length > 0 && combined[^1] != '\n') combined.AppendLine();
+                if (combined.Length > 0 && combined[^1] != '\n')
+                {
+                    combined.AppendLine();
+                }
                 complete &= entry.IsComplete;
-                if (entry.UpdatedAt > updatedAt) updatedAt = entry.UpdatedAt;
+                if (entry.UpdatedAt > updatedAt)
+                {
+                    updatedAt = entry.UpdatedAt;
+                }
             }
         }
         return new LiveWorkloadOutput(combined.ToString(), complete, updatedAt);
@@ -88,14 +103,20 @@ public sealed class InMemoryWorkloadOutputBuffer : IWorkloadOutputBuffer
     private static string StreamLabel(string correlationId)
     {
         var map = correlationId.LastIndexOf("-map-", StringComparison.Ordinal);
-        if (map >= 0) return $"map {correlationId[(map + 5)..]}";
+        if (map >= 0)
+        {
+            return $"map {correlationId[(map + 5)..]}";
+        }
         return correlationId.EndsWith("-reduce", StringComparison.Ordinal) ? "reduce" : "workload";
     }
 
     private static void AppendBounded(StringBuilder builder, string text)
     {
         builder.Append(text);
-        if (builder.Length <= MaxCharsPerWorkload) return;
+        if (builder.Length <= MaxCharsPerWorkload)
+        {
+            return;
+        }
         builder.Remove(0, builder.Length - MaxCharsPerWorkload);
     }
 
@@ -107,7 +128,9 @@ public sealed class InMemoryWorkloadOutputBuffer : IWorkloadOutputBuffer
             lock (entry.Gate)
             {
                 if (entry.IsComplete && entry.UpdatedAt < cutoff)
+                {
                     _entries.TryRemove(key, out _);
+                }
             }
         }
     }
@@ -117,7 +140,10 @@ public sealed class InMemoryWorkloadOutputBuffer : IWorkloadOutputBuffer
         public object Gate { get; } = new();
         public StringBuilder Stdout { get; } = new();
         public StringBuilder Stderr { get; } = new();
-        public bool IsComplete { get; set; }
+        public bool IsComplete
+        {
+            get; set;
+        }
         public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     }
 }

@@ -1,8 +1,10 @@
+@using PlaceContext.Application.Access
+@using PlaceContext.Application.SavedQueries
+@using PlaceContext.Application.ProjectData
 @page "/project/{ProjectId:guid}/data"
 @attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @using PlaceContext.Application.Features
-@using PlaceContext.Application.Ports
 @using PlaceContext.Application.Dtos
 @using System.Text
 @using System.Text.Json
@@ -18,6 +20,9 @@
 <div class="page data-page sql-studio-page">
 
     <DataTabs ProjectId="ProjectId" Active="@DataSection.Tables" />
+    <AuthorizeView Policy="@Policies.DatabaseInspection">
+        <a class="dcbtn" href="@PageRoutes.DatabaseSettings">PlaceContext database</a>
+    </AuthorizeView>
 
     <section class="sql-studio">
         <aside class="studio-sidebar">
@@ -301,7 +306,7 @@
                                                         }
                                                         else
                                                         {
-                                                            <OpenSearchDataValue ProjectId="ProjectId" Column="@columnName" Value="@cellValue" NullText="∅" />
+                                                            <SearchDataValue ProjectId="ProjectId" Column="@columnName" Value="@cellValue" NullText="∅" />
                                                         }
                                                     </td>
                                                 }
@@ -651,7 +656,7 @@
                 .Where(t => t.Name.Contains(_tableFilter, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-    private List<OpenSearchIndexView> FilteredIndices =>
+    private List<SearchIndexView> FilteredIndices =>
         string.IsNullOrWhiteSpace(_tableFilter)
             ? Vm.Indices.ToList()
             : Vm.Indices

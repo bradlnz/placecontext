@@ -1,6 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 
@@ -35,8 +35,9 @@ public sealed class UpdateJobHandler : ICommandHandler<UpdateJobCommand, JobView
             command.ReduceImage, command.ReduceRuntimeId, command.ReduceSource, command.ReduceEntrypoint, command.ReduceFiles,
             parameterContext: "Reduce");
         if (reduceSource is not null)
+        {
             reduceSpec = new ReduceSpec(reduceSource, command.ReduceEnv ?? new Dictionary<string, string>());
-
+        }
         var policy = new ExitCodePolicy(command.SuccessExitCodes, command.PartialExitCodes);
 
         job.Update(

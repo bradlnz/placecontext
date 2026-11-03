@@ -1,0 +1,1 @@
+Compare supplied stock and sales, identify shortages and surplus, and produce a prioritized replenishment proposal. Do not place orders.

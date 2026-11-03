@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
 using PlaceContext.Host.Auth;
 using PlaceContext.Host.Controllers;
 using Pages = PlaceContext.Host.Components.Pages;
@@ -14,7 +14,7 @@ public sealed class SectionAuthorizationTests
             { typeof(Pages.Dashboard), Permission.ProjectsView },
             { typeof(Pages.Overview), Permission.ProjectsView },
             { typeof(Pages.ProjectView), Permission.ProjectsView },
-            { typeof(Pages.Onboarding), Permission.ProjectsView },
+            { typeof(Pages.Onboarding), Permission.SettingsManage },
             { typeof(Pages.Artifacts), Permission.ArtifactsView },
             { typeof(Pages.DataEntities), Permission.DataRead },
             { typeof(Pages.DataMap), Permission.DataRead },
@@ -39,6 +39,7 @@ public sealed class SectionAuthorizationTests
     public static TheoryData<Type> DefaultAdminPages =>
         new()
         {
+            typeof(Pages.BillingSettings),
             typeof(Pages.AccessSettings),
             typeof(Pages.ArtifactSettings),
             typeof(Pages.BackupSettings),

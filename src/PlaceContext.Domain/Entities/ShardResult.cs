@@ -17,8 +17,9 @@ public sealed class ShardResult
         IReadOnlyList<RunArtifact>? artifacts = null)
     {
         if (index < 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(index), "Shard index must be >= 0.");
-
+        }
         Index = index;
         ExitCode = exitCode;
         Outcome = outcome;
@@ -28,20 +29,38 @@ public sealed class ShardResult
     }
 
     /// <summary>Zero-based shard index (matches the position in <see cref="MapSpec.InputPayloads"/>).</summary>
-    public int Index { get; }
+    public int Index
+    {
+        get;
+    }
 
     /// <summary>Raw exit code returned by the container.</summary>
-    public int ExitCode { get; }
+    public int ExitCode
+    {
+        get;
+    }
 
     /// <summary>Outcome derived from the exit code via the job's <see cref="ExitCodePolicy"/>.</summary>
-    public WorkloadOutcome Outcome { get; }
+    public WorkloadOutcome Outcome
+    {
+        get;
+    }
 
     /// <summary>Opaque JSON artifact written by the container to /out/result.json. Null if not produced.</summary>
-    public string? Artifact { get; }
+    public string? Artifact
+    {
+        get;
+    }
 
     /// <summary>Combined stdout/stderr captured from the container. May be truncated.</summary>
-    public string? Log { get; }
+    public string? Log
+    {
+        get;
+    }
 
     /// <summary>Named output files captured from /out beyond result.json (e.g. report.csv). May be empty.</summary>
-    public IReadOnlyList<RunArtifact> Artifacts { get; }
+    public IReadOnlyList<RunArtifact> Artifacts
+    {
+        get;
+    }
 }

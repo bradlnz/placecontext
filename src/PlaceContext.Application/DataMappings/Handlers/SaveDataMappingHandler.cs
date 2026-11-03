@@ -1,6 +1,7 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -32,23 +33,32 @@ public sealed class SaveDataMappingHandler : ICommandHandler<SaveDataMappingComm
         // The source is a job's runs or a chain's final output — either way it must exist in
         // this project.
         string sourceName;
-        if (command.SourceKind == "chain")
+        async Task<string> ResolveSourceNameAsync()
         {
-            var chain = await _chains.GetByIdAsync(command.JobId, ct)
-                ?? throw new InvalidOperationException($"Chain {command.JobId} not found.");
-            if (chain.ProjectId != command.ProjectId)
-                throw new InvalidOperationException("The mapping's chain must belong to the same project.");
-            sourceName = chain.Name;
+            string resolvedSourceName;
+            if (command.SourceKind == "chain")
+            {
+                var chain = await _chains.GetByIdAsync(command.JobId, ct)
+                    ?? throw new InvalidOperationException($"Chain {command.JobId} not found.");
+                if (chain.ProjectId != command.ProjectId)
+                {
+                    throw new InvalidOperationException("The mapping's chain must belong to the same project.");
+                }
+                resolvedSourceName = chain.Name;
+                return resolvedSourceName;
+            }
+            {
+                var job = await _jobs.GetByIdAsync(command.JobId, ct)
+                    ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
+                if (job.ProjectId != command.ProjectId)
+                {
+                    throw new InvalidOperationException("The mapping's job must belong to the same project.");
+                }
+                resolvedSourceName = job.Name;
+                return resolvedSourceName;
+            }
         }
-        else
-        {
-            var job = await _jobs.GetByIdAsync(command.JobId, ct)
-                ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
-            if (job.ProjectId != command.ProjectId)
-                throw new InvalidOperationException("The mapping's job must belong to the same project.");
-            sourceName = job.Name;
-        }
-
+        sourceName = await ResolveSourceNameAsync();
         var fields = command.Fields
             .Select(f => new DataFieldMapping(f.SourcePath.Trim(), f.Column.Trim(), f.Type.Trim()).ThrowIfInvalid())
             .ToList();
@@ -65,28 +75,33 @@ public sealed class SaveDataMappingHandler : ICommandHandler<SaveDataMappingComm
                 var have = existing.Select(c => c.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var missing = fields.Select(f => f.Column).Where(c => !have.Contains(c)).Distinct().ToList();
                 if (missing.Count > 0)
+                {
                     throw new InvalidOperationException(
-                        $"Table '{command.TargetTable.Trim()}' has no column(s) {string.Join(", ", missing.Select(m => $"'{m}'"))}. " +
-                        $"Its columns are: {string.Join(", ", existing.Select(c => c.Name))}. " +
-                        "Point the field(s) at an existing column, or add the column on the Data tab first.");
+                                        $"Table '{command.TargetTable.Trim()}' has no column(s) {string.Join(", ", missing.Select(m => $"'{m}'"))}. " +
+                                        $"Its columns are: {string.Join(", ", existing.Select(c => c.Name))}. " +
+                                        "Point the field(s) at an existing column, or add the column on the Data tab first.");
+                }
             }
         }
 
         DataMapping mapping;
-        if (command.MappingId is { } id)
+        async Task<DataMapping> SaveMappingAsync()
         {
-            mapping = await _mappings.GetByIdAsync(id, ct)
-                ?? throw new InvalidOperationException($"Data mapping {id} not found.");
-            mapping.Update(command.TargetTable, command.RowsPath, fields, command.Enabled, _clock.UtcNow);
-            await _mappings.UpdateAsync(mapping, ct);
-        }
-        else
-        {
-            mapping = DataMapping.Create(command.ProjectId, command.JobId, command.TargetTable,
+            DataMapping resolvedMapping;
+            if (command.MappingId is { } id)
+            {
+                resolvedMapping = await _mappings.GetByIdAsync(id, ct)
+                    ?? throw new InvalidOperationException($"Data mapping {id} not found.");
+                resolvedMapping.Update(command.TargetTable, command.RowsPath, fields, command.Enabled, _clock.UtcNow);
+                await _mappings.UpdateAsync(resolvedMapping, ct);
+                return resolvedMapping;
+            }
+            resolvedMapping = DataMapping.Create(command.ProjectId, command.JobId, command.TargetTable,
                 command.RowsPath, fields, _clock.UtcNow, command.Enabled, command.SourceKind);
-            await _mappings.AddAsync(mapping, ct);
+            await _mappings.AddAsync(resolvedMapping, ct);
+            return resolvedMapping;
         }
-
+        mapping = await SaveMappingAsync();
         await _uow.SaveChangesAsync(ct);
         return DataMappingViewMapper.ToView(mapping, sourceName);
     }

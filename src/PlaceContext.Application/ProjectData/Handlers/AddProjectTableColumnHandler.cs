@@ -1,5 +1,5 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -8,7 +8,11 @@ public sealed class AddProjectTableColumnHandler : ICommandHandler<AddProjectTab
 {
     private readonly IProjectRepository _projects;
     private readonly IProjectDataStore _store;
-    public AddProjectTableColumnHandler(IProjectRepository projects, IProjectDataStore store) { _projects = projects; _store = store; }
+    public AddProjectTableColumnHandler(IProjectRepository projects, IProjectDataStore store)
+    {
+        _projects = projects;
+        _store = store;
+    }
 
     public async Task<bool> HandleAsync(AddProjectTableColumnCommand c, CancellationToken ct = default)
     {

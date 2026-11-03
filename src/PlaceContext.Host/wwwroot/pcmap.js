@@ -5,12 +5,19 @@ window.pcmap = (function () {
   let leafletLoader = null;
 
   function ensureLeaflet() {
-    if (typeof window.L !== 'undefined') return Promise.resolve(window.L);
-    if (leafletLoader) return leafletLoader;
+    if (typeof window.L !== 'undefined') {
+      return Promise.resolve(window.L);
+    }
+    if (leafletLoader) {
+      return leafletLoader;
+    }
     leafletLoader = Promise.all([
       new Promise((resolve, reject) => {
         let link = document.getElementById('pc-leaflet-css');
-        if (link) { resolve(); return; }
+        if (link) {
+          resolve();
+          return;
+        }
         link = document.createElement('link');
         link.id = 'pc-leaflet-css';
         link.rel = 'stylesheet';
@@ -27,12 +34,14 @@ window.pcmap = (function () {
         script.onload = resolve;
         script.onerror = () => reject(new Error('Leaflet failed to load.'));
         document.head.appendChild(script);
-      })
-    ]).then(() => window.L).catch(error => {
-      leafletLoader = null;
-      console.warn('pcmap:', error.message);
-      throw error;
-    });
+      }),
+    ])
+      .then(() => window.L)
+      .catch((error) => {
+        leafletLoader = null;
+        console.warn('pcmap:', error.message);
+        throw error;
+      });
     return leafletLoader;
   }
 
@@ -44,25 +53,46 @@ window.pcmap = (function () {
 
   async function render(containerId, specRaw) {
     let spec;
-    try { spec = typeof specRaw === 'string' ? JSON.parse(specRaw) : specRaw; }
-    catch { return; }
-    try { await ensureLeaflet(); }
-    catch { return; }
+    try {
+      spec = typeof specRaw === 'string' ? JSON.parse(specRaw) : specRaw;
+    } catch {
+      return;
+    }
+    try {
+      await ensureLeaflet();
+    } catch {
+      return;
+    }
     const el = document.getElementById(containerId);
-    if (!el) return;
+    if (!el) {
+      return;
+    }
 
     // Blazor can replace the container element on re-render (streaming updates, session
     // loads) — the old Leaflet instance then sits on a detached node and the visible div
     // stays blank. Cheap no-op only when the SAME element is still initialized with the
     // SAME spec; otherwise tear down and rebuild.
     const specKey = JSON.stringify(spec);
-    if (maps[containerId] && maps[containerId]._el === el && specs[containerId] === specKey) return;
+    if (maps[containerId] && maps[containerId]._el === el && specs[containerId] === specKey) {
+      return;
+    }
     if (maps[containerId]) {
-      try { maps[containerId].remove(); } catch { /* already detached */ }
+      try {
+        maps[containerId].remove();
+      } catch {
+        /* already detached */
+      }
       delete maps[containerId];
     }
     // A recycled element Leaflet half-initialized earlier: wipe its state before re-creating.
-    if (el._leaflet_id) { try { el._leaflet_id = null; } catch { /* ignore */ } el.innerHTML = ''; }
+    if (el._leaflet_id) {
+      try {
+        el._leaflet_id = null;
+      } catch {
+        /* ignore */
+      }
+      el.innerHTML = '';
+    }
 
     specs[containerId] = specKey;
     el.innerHTML = '';
@@ -75,7 +105,7 @@ window.pcmap = (function () {
 
     const map = L.map(el, {
       zoomControl: true,
-      attributionControl: true
+      attributionControl: true,
     }).setView(center, zoom);
 
     // Tile layer — use CartoDB dark/light based on theme
@@ -85,7 +115,7 @@ window.pcmap = (function () {
     L.tileLayer(tileUrl, {
       attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
       subdomains: 'abcd',
-      maxZoom: 19
+      maxZoom: 19,
     }).addTo(map);
 
     // Markers
@@ -98,9 +128,11 @@ window.pcmap = (function () {
           color: '#fff',
           weight: 2,
           opacity: 1,
-          fillOpacity: 0.85
+          fillOpacity: 0.85,
         }).addTo(map);
-        if (m.label) marker.bindTooltip(m.label, { permanent: false });
+        if (m.label) {
+          marker.bindTooltip(m.label, { permanent: false });
+        }
       }
     }
 
@@ -112,20 +144,26 @@ window.pcmap = (function () {
           color: color,
           weight: 2,
           fillColor: color,
-          fillOpacity: p.fillOpacity || 0.15
+          fillOpacity: p.fillOpacity || 0.15,
         }).addTo(map);
       }
     }
 
     // Fit bounds if we have markers or polygons
     if (spec.markers?.length > 0) {
-      const allLats = spec.markers.map(m => m.lat);
-      const allLngs = spec.markers.map(m => m.lng);
+      const allLats = spec.markers.map((m) => m.lat);
+      const allLngs = spec.markers.map((m) => m.lng);
       const minLat = Math.min(...allLats);
       const maxLat = Math.max(...allLats);
       const minLng = Math.min(...allLngs);
       const maxLng = Math.max(...allLngs);
-      map.fitBounds([[minLat, minLng], [maxLat, maxLng]], { padding: [30, 30] });
+      map.fitBounds(
+        [
+          [minLat, minLng],
+          [maxLat, maxLng],
+        ],
+        { padding: [30, 30] },
+      );
     }
 
     // Force a re-render after layout settles

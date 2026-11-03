@@ -1,3 +1,4 @@
+@using PlaceContext.Application.Access
 @page "/observability"
 @using PlaceContext.Host.Components.ViewModels.Helpers
 @attribute [Authorize(Policy = Permission.JobsView)]
@@ -426,9 +427,9 @@ else
                 </span>
             </div>
 
-            @if (chainRun.Steps.Any(step => step.ActionType == PlaceContext.Domain.ValueObjects.QemuChainAction.ActionType))
+            @if (chainRun.Steps.Any(step => step.ActionType == PlaceContext.Domain.ValueObjects.VirtualMachineChainAction.ActionType))
             {
-                <QemuReplay @key="chainRun.Id" Run="chainRun" />
+                <VirtualMachineReplay @key="chainRun.Id" Run="chainRun" />
             }
             <ChainPipeline Run="chainRun" OnStepClick="Vm.OpenChainStep" />
 

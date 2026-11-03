@@ -1,5 +1,4 @@
 using PlaceContext.Application.Access;
-using PlaceContext.Application.Ports;
 using Xunit;
 
 namespace PlaceContext.Application.Tests;

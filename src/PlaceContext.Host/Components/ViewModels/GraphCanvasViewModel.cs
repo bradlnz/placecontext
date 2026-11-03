@@ -1,21 +1,9 @@
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 using PlaceContext.Domain.Entities;
 
 namespace PlaceContext.Host.Components.ViewModels;
-
-public enum GraphNodeKind
-{
-    Unknown,
-    Artifact,
-}
-
-public enum GraphLinkConfidence
-{
-    Normal,
-    Ambiguous,
-}
 
 public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? service = null)
     : PageViewModel,
@@ -50,23 +38,47 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     public GraphVizView? Graph => _graph;
     public int Height { get; private set; } = 340;
     public Func<GraphNodeView, string?>? NodeUrl => _nodeUrl;
-    public bool Searchable { get; private set; }
-    public bool AllowFullscreen { get; private set; }
-    public bool DockDetails { get; private set; }
-    public bool SinglePanel { get; private set; }
-    public bool Fullscreen { get; private set; }
+    public bool Searchable
+    {
+        get; private set;
+    }
+    public bool AllowFullscreen
+    {
+        get; private set;
+    }
+    public bool DockDetails
+    {
+        get; private set;
+    }
+    public bool SinglePanel
+    {
+        get; private set;
+    }
+    public bool Fullscreen
+    {
+        get; private set;
+    }
     public bool IsPanelDragging => _draggingPanelId is not null;
     public string SearchTerm => _search;
-    public GraphNodeView? Selected { get; private set; }
+    public GraphNodeView? Selected
+    {
+        get; private set;
+    }
     public IReadOnlyList<GraphNodeView> OpenPanels { get; private set; } = [];
-    public IReadOnlyList<GraphNodeView> Matches { get; private set; } =
+    public IReadOnlyList<GraphNodeView> Matches
+    {
+        get; private set;
+    } =
         Array.Empty<GraphNodeView>();
     public IReadOnlyList<(GraphNodeView Node, GraphLinkConfidence Confidence)> SelectedNeighbors
     {
         get;
         private set;
     } = [];
-    public IReadOnlyList<(GraphNodeView Node, int Hops)> ReachableArtifacts { get; private set; } =
+    public IReadOnlyList<(GraphNodeView Node, int Hops)> ReachableArtifacts
+    {
+        get; private set;
+    } =
     [];
     public string ContainerStyle =>
         Fullscreen
@@ -118,8 +130,12 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
             _panelPositions.Clear();
             _draggingPanelId = null;
             if (_graph is not null)
+            {
                 for (var i = 0; i < _graph.Nodes.Count; i++)
+                {
                     _nodeIndex[_graph.Nodes[i].Id] = i;
+                }
+            }
         }
         Height = height;
         _nodeUrl = nodeUrl;
@@ -133,7 +149,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     public async Task LoadMoreAsync()
     {
         if (_graph is null || _renderedNodeCount >= _graph.Nodes.Count)
+        {
             return;
+        }
         var nextCount = Math.Min(_graph.Nodes.Count, _renderedNodeCount + NodeChunk);
         await LoadToNodeCountAsync(nextCount);
     }
@@ -141,53 +159,73 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     public async Task EnsureNodeVisibleAsync(string? nodeId)
     {
         if (string.IsNullOrWhiteSpace(nodeId) || _graph is null)
+        {
             return;
+        }
         if (!_nodeIndex.TryGetValue(nodeId, out var targetIndex))
+        {
             return;
+        }
         if (targetIndex < _renderedNodeCount)
+        {
             return;
+        }
         await LoadToNodeCountAsync(targetIndex + 1);
     }
 
     private async Task LoadToNodeCountAsync(int targetNodeCount)
     {
         if (_graph is null)
+        {
             return;
-
+        }
         var nextCount = Math.Min(_graph.Nodes.Count, targetNodeCount);
         if (nextCount <= _renderedNodeCount)
+        {
             return;
-
+        }
         var payload = BuildGraphPayload(nextCount);
         if (payload.Nodes.Count == 0)
+        {
             return;
+        }
         await _js.InvokeVoidAsync("pcgraph.append", Id, BuildPayloadForCall(payload));
     }
 
     private GraphPayload BuildGraphPayload(int? targetNodeCount = null)
     {
         if (_graph is null)
+        {
             return GraphPayload.Empty;
-
+        }
         var requestedCount = targetNodeCount ?? Math.Min(InitialNodeChunk, _graph.Nodes.Count);
         var targetCount = Math.Max(requestedCount, _renderedNodeCount + 1);
         if (targetCount > _graph.Nodes.Count)
+        {
             targetCount = _graph.Nodes.Count;
-
+        }
         var nodesToRender = new List<GraphNodeView>(_graph.Nodes.Take(targetCount).Skip(_renderedNodeCount));
         if (nodesToRender.Count == 0)
+        {
             return GraphPayload.Empty;
-
+        }
         var visibleIds = new HashSet<string>(_graph.Nodes.Take(targetCount).Select(n => n.Id), StringComparer.Ordinal);
         var linksToRender = new List<GraphLinkView>();
         foreach (var link in _graph.Links)
         {
-            if (linksToRender.Count > 50000) break;
+            if (linksToRender.Count > 50000)
+            {
+                break;
+            }
             if (!visibleIds.Contains(link.Source) || !visibleIds.Contains(link.Target))
+            {
                 continue;
+            }
             var key = BuildLinkKey(link.Source, link.Target);
             if (_sentLinkKeys.Add(key))
+            {
                 linksToRender.Add(link);
+            }
         }
 
         _renderedNodeCount = targetCount;
@@ -243,8 +281,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     private static string BuildGraphRenderKey(GraphVizView graph)
     {
         if (graph.Nodes.Count == 0)
+        {
             return $"{graph.ProjectId}:0:0";
-
+        }
         var first = graph.Nodes.First();
         var last = graph.Nodes[^1];
         return
@@ -263,25 +302,34 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
                 ? []
                 : WalkToArtifacts(Selected.Id);
         SelectedNeighbors = Selected is null ? [] : NeighborsFor(Selected);
-        if (selected is null && SinglePanel)
+        void SelectDetail()
         {
-            OpenPanels = [];
+            if (selected is null && SinglePanel)
+            {
+                OpenPanels = [];
+                return;
+            }
+            if (selected is not null)
+            {
+                OpenPanels = SinglePanel
+                    ? [selected]
+                    : OpenPanels
+                        .Where(node => node.Id != selected.Id)
+                        .Append(selected)
+                        .TakeLast(MaxOpenPanels)
+                        .ToList();
+            }
         }
-        else if (selected is not null)
-        {
-            OpenPanels = SinglePanel
-                ? [selected]
-                : OpenPanels
-                    .Where(node => node.Id != selected.Id)
-                    .Append(selected)
-                    .TakeLast(MaxOpenPanels)
-                    .ToList();
-        }
+        SelectDetail();
         NotifyStateChanged();
         if (_nodeClick is not null)
+        {
             await _nodeClick(nodeId);
+        }
         if (selected is not null)
+        {
             await LoadRunDetailsAsync(selected);
+        }
     }
 
     public IReadOnlyList<(GraphNodeView Node, GraphLinkConfidence Confidence)> NeighborsFor(
@@ -337,7 +385,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     public async Task ClosePanelAsync(string nodeId)
     {
         if (_draggingPanelId == nodeId)
+        {
             _draggingPanelId = null;
+        }
         _panelPositions.Remove(nodeId);
         OpenPanels = OpenPanels.Where(node => node.Id != nodeId).ToList();
         _runDetails.Remove(nodeId);
@@ -385,8 +435,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     public void MovePanel(double clientX, double clientY)
     {
         if (_draggingPanelId is null)
+        {
             return;
-
+        }
         _panelPositions[_draggingPanelId] = new PanelPosition(
             Math.Max(0, _windowStartLeft + clientX - _dragStartX),
             Math.Max(0, _windowStartTop + clientY - _dragStartY)
@@ -400,16 +451,21 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     {
         var openIds = OpenPanels.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
         foreach (var nodeId in _panelPositions.Keys.Where(nodeId => !openIds.Contains(nodeId)).ToList())
+        {
             _panelPositions.Remove(nodeId);
+        }
         if (_draggingPanelId is not null && !openIds.Contains(_draggingPanelId))
+        {
             _draggingPanelId = null;
+        }
     }
 
     private PanelPosition EnsurePanelPosition(string nodeId)
     {
         if (_panelPositions.TryGetValue(nodeId, out var position))
+        {
             return position;
-
+        }
         var offset = _panelPositions.Count % 7 * 26;
         position = new PanelPosition(14 + offset, 14 + offset);
         _panelPositions[nodeId] = position;
@@ -420,7 +476,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     {
         var panel = OpenPanels.FirstOrDefault(node => node.Id == nodeId);
         if (panel is null || OpenPanels.LastOrDefault()?.Id == nodeId)
+        {
             return;
+        }
         OpenPanels = OpenPanels.Where(node => node.Id != nodeId).Append(panel).ToList();
         NotifyStateChanged();
     }
@@ -428,8 +486,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     private async Task LoadRunDetailsAsync(GraphNodeView node)
     {
         if (!IsJobRun(node) || !_runDetailRequests.Add(node.Id))
+        {
             return;
-
+        }
         const string prefix = "run:";
         if (service is null
             || !node.Id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
@@ -443,10 +502,16 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
         try
         {
             var detail = await service.GetJobRunAsync(runId);
-            if (detail is null)
-                _runDetailErrors[node.Id] = "This run could not be found.";
-            else
+            void LoadDetail()
+            {
+                if (detail is null)
+                {
+                    _runDetailErrors[node.Id] = "This run could not be found.";
+                    return;
+                }
                 _runDetails[node.Id] = detail;
+            }
+            LoadDetail();
         }
         catch (Exception ex)
         {
@@ -491,7 +556,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     public bool IsImage(GraphNodeArtifactRef artifact)
     {
         if (artifact.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
             return true;
+        }
         var extension = Path.GetExtension(artifact.Title);
         return extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
@@ -530,7 +597,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
         Fullscreen = !Fullscreen;
         await Task.Yield();
         if (Selected is not null)
+        {
             await SelectAsync(Selected.Id);
+        }
     }
 
     public Task ClearAsync() =>
@@ -555,8 +624,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     public async Task AfterRenderAsync()
     {
         if (_graph is null || _graph.Nodes.Count == 0)
+        {
             return;
-
+        }
         var graphKey = BuildGraphRenderKey(_graph);
         if (_renderedGraphKey != graphKey || !ReferenceEquals(_graphForRender, _graph) || _renderedNodeCount == 0)
         {
@@ -607,7 +677,9 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
     private IReadOnlyList<(GraphNodeView Node, int Hops)> WalkToArtifacts(string fromId)
     {
         if (_graph is null)
+        {
             return [];
+        }
         var adjacency = new Dictionary<string, List<string>>();
         foreach (var link in _graph.Links)
         {
@@ -630,16 +702,22 @@ public sealed class GraphCanvasViewModel(IJSRuntime js, PlaceContextService? ser
         {
             var (id, hops) = frontier.Dequeue();
             if (hops >= 4)
+            {
                 continue;
+            }
             foreach (var next in adjacency.GetValueOrDefault(id) ?? [])
             {
                 if (!visited.Add(next))
+                {
                     continue;
+                }
                 if (
-                    byId.TryGetValue(next, out var node)
-                    && GraphCatalog.NodeKind(node.Kind) == GraphNodeKind.Artifact
-                )
+                                    byId.TryGetValue(next, out var node)
+                                    && GraphCatalog.NodeKind(node.Kind) == GraphNodeKind.Artifact
+                                )
+                {
                     found.Add((node, hops + 1));
+                }
                 frontier.Enqueue((next, hops + 1));
             }
         }

@@ -1,6 +1,5 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.Services;
@@ -54,8 +53,9 @@ public sealed class GetGraphVizHandler : IQueryHandler<GetGraphVizQuery, GraphVi
         if (!nodeId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
             || !Guid.TryParse(nodeId[prefix.Length..], out var artifactId)
             || !artifacts.TryGetValue(artifactId, out var artifact))
+        {
             return null;
-
+        }
         return new GraphNodeArtifactRef(
             artifact.Id,
             artifact.RunId,

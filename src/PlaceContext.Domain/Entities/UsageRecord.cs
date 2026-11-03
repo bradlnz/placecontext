@@ -18,12 +18,27 @@ public sealed class UsageRecord
         RecordedAt = recordedAt;
     }
 
-    public Guid Id { get; }
-    public ProjectId ProjectId { get; }
-    public TokenUsage Usage { get; }
+    public Guid Id
+    {
+        get;
+    }
+    public ProjectId ProjectId
+    {
+        get;
+    }
+    public TokenUsage Usage
+    {
+        get;
+    }
     /// <summary>Optional free-text label (e.g. "review pass", "feature X"). Never code or prompt content.</summary>
-    public string? Description { get; }
-    public DateTimeOffset RecordedAt { get; }
+    public string? Description
+    {
+        get;
+    }
+    public DateTimeOffset RecordedAt
+    {
+        get;
+    }
 
     public static UsageRecord Record(ProjectId projectId, TokenUsage usage, string? description, DateTimeOffset recordedAt)
         => new(Guid.NewGuid(), projectId, usage, string.IsNullOrWhiteSpace(description) ? null : description.Trim(), recordedAt);

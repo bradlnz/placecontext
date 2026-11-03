@@ -1,4 +1,6 @@
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Activity;
+using PlaceContext.Application.DataLinks;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.Services;
@@ -108,7 +110,9 @@ public sealed class DecisionTreeProvider : IDecisionTreeProvider
             {
                 var allRuns = new List<JobRun>();
                 foreach (var job in jobs)
+                {
                     allRuns.AddRange(await _runs.ListForJobAsync(job.Id, ct));
+                }
                 runs = allRuns.OrderByDescending(r => r.StartedAt).Take(60).ToList();
             }
         }

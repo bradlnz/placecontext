@@ -40,11 +40,26 @@ public sealed class ChainRun
         InputRequestJson = inputRequestJson;
     }
 
-    public Guid Id { get; }
-    public Guid ChainId { get; }
-    public Guid ProjectId { get; }
-    public string ChainName { get; }
-    public ChainRunStatus Status { get; private set; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid ChainId
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
+    public string ChainName
+    {
+        get;
+    }
+    public ChainRunStatus Status
+    {
+        get; private set;
+    }
     public IReadOnlyList<ChainStepRun> Steps => _steps;
 
     /// <summary>Steps grouped by stage, in run order — a group with more than one entry is a
@@ -61,14 +76,35 @@ public sealed class ChainRun
     /// <summary>The last executed stage's primary output — what the pipeline produced. For a
     /// fan-out stage this is the join's output (or, if the chain failed inside the fan-out itself,
     /// the last branch's output the caller chose to carry forward).</summary>
-    public string? FinalOutput { get; private set; }
+    public string? FinalOutput
+    {
+        get; private set;
+    }
 
-    public DateTimeOffset StartedAt { get; }
-    public DateTimeOffset? FinishedAt { get; private set; }
-    public DateTimeOffset? ResumeAt { get; private set; }
-    public int? ResumeStageIndex { get; private set; }
-    public string? ContinuationOverridesJson { get; private set; }
-    public string? InputRequestJson { get; private set; }
+    public DateTimeOffset StartedAt
+    {
+        get;
+    }
+    public DateTimeOffset? FinishedAt
+    {
+        get; private set;
+    }
+    public DateTimeOffset? ResumeAt
+    {
+        get; private set;
+    }
+    public int? ResumeStageIndex
+    {
+        get; private set;
+    }
+    public string? ContinuationOverridesJson
+    {
+        get; private set;
+    }
+    public string? InputRequestJson
+    {
+        get; private set;
+    }
 
     /// <summary>Starts a run: every step pending, the run itself Running. Callers may pre-allocate
     /// <paramref name="id"/> so the run is addressable before the handler returns. One job name is
@@ -78,10 +114,13 @@ public sealed class ChainRun
         Guid? id = null)
     {
         if (stepJobNames.Count != chain.ExecutionStepCount)
+        {
             throw new ArgumentException("One display name per chain step is required.", nameof(stepJobNames));
+        }
         if (id == Guid.Empty)
+        {
             throw new ArgumentException("A pre-allocated run id must not be empty.", nameof(id));
-
+        }
         var steps = new List<ChainStepRun>(stepJobNames.Count);
         var flatIndex = 0;
         for (var stageIndex = 0; stageIndex < chain.Stages.Count; stageIndex++)
@@ -110,7 +149,9 @@ public sealed class ChainRun
         string? continuationOverridesJson = null)
     {
         if (resumeStageIndex < 0 || resumeStageIndex >= StageCount)
+        {
             throw new ArgumentOutOfRangeException(nameof(resumeStageIndex));
+        }
         Status = ChainRunStatus.Waiting;
         FinalOutput = payload;
         ResumeAt = resumeAt;
@@ -130,7 +171,9 @@ public sealed class ChainRun
     public void Resume()
     {
         if (Status != ChainRunStatus.Waiting)
+        {
             throw new InvalidOperationException("Only a waiting chain run can be resumed.");
+        }
         Status = ChainRunStatus.Running;
     }
 
@@ -159,13 +202,20 @@ public sealed class ChainRun
     /// the same stage may be marked running independently of one another (a fan-out group runs
     /// concurrently) — callers must serialize their own writes onto this aggregate.</summary>
     public void MarkStepRunning(int index, Guid? runId, DateTimeOffset now)
-        => _steps[index] = _steps[index] with { Status = ChainStepStatus.Running, RunId = runId, StartedAt = now };
+        => _steps[index] = _steps[index] with
+        {
+            Status = ChainStepStatus.Running,
+            RunId = runId,
+            StartedAt = now
+        };
 
     public void MarkStepFinished(int index, Guid? runId, ChainStepStatus outcome, DateTimeOffset now,
         string? provider = null, string? externalId = null, string? error = null)
     {
         if (outcome is ChainStepStatus.Pending or ChainStepStatus.Running)
+        {
             throw new ArgumentException("A finished step needs a terminal outcome.", nameof(outcome));
+        }
         _steps[index] = _steps[index] with
         {
             RunId = runId,
@@ -198,11 +248,20 @@ public sealed class ChainRun
     public void Complete(ChainRunStatus status, string? finalOutput, DateTimeOffset now)
     {
         if (status is ChainRunStatus.Running or ChainRunStatus.Waiting or ChainRunStatus.AwaitingInput)
+        {
             throw new ArgumentException("A completed run needs a terminal status.", nameof(status));
+        }
         var cancelled = status == ChainRunStatus.Cancelled;
         for (var i = 0; i < _steps.Count; i++)
+        {
             if (_steps[i].Status == ChainStepStatus.Pending)
-                _steps[i] = _steps[i] with { Status = cancelled ? ChainStepStatus.Cancelled : ChainStepStatus.Skipped };
+            {
+                _steps[i] = _steps[i] with
+                {
+                    Status = cancelled ? ChainStepStatus.Cancelled : ChainStepStatus.Skipped
+                };
+            }
+        }
         Status = status;
         FinalOutput = finalOutput;
         FinishedAt = now;

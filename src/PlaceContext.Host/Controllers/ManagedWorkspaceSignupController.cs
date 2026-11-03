@@ -3,11 +3,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
+using PlaceContext.Application.Auth;
 using PlaceContext.Application.Billing;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Host.Tenancy;
-using PlaceContext.Infrastructure.Auth;
-using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -16,7 +15,7 @@ namespace PlaceContext.Host.Controllers;
 /// workspace-host exchange ticket can establish an authentication cookie.</summary>
 [AllowAnonymous]
 public sealed class ManagedWorkspaceSignupController(
-    ManagedWorkspaceSignup registration, IConfiguration configuration,
+    IWorkspaceSignup registration, IConfiguration configuration,
     IOptions<RunBillingDeploymentOptions> hosting,
     IAntiforgery antiforgery, ITenantStore tenants,
     ILogger<ManagedWorkspaceSignupController> logger) : ControllerBase
@@ -34,18 +33,26 @@ public sealed class ManagedWorkspaceSignupController(
         [FromForm] string plan,
         CancellationToken ct)
     {
-        if (!ApexRegistrationAllowed()) return NotFound();
+        if (!ApexRegistrationAllowed())
+        {
+            return NotFound();
+        }
         if (!await IsValidCsrfAsync())
+        {
             return SignupError("Your session expired. Reload the page and try again.", plan, workspace);
+        }
         var input = new WorkspaceSignupInput(workspaceName ?? "", workspace ?? "", email ?? "",
-            displayName ?? "", password ?? "", confirmPassword ?? "", plan ?? "");
+                    displayName ?? "", password ?? "", confirmPassword ?? "", plan ?? "");
         try
         {
             var result = await registration.StartAsync(input, ManagedSignupUrls.PublicOrigin(configuration)!, ct);
-            if (result.RequiresVerification) return Redirect("/signup?sent=1");
+            if (result.RequiresVerification)
+            {
+                return Redirect("/signup?sent=1");
+            }
             return Redirect(ManagedSignupUrls.TenantUri(configuration, result.Slug!,
-                "/auth/signup/complete").AbsoluteUri +
-                "?code=" + Uri.EscapeDataString(result.ExchangeCode!));
+                            "/auth/signup/complete").AbsoluteUri +
+                            "?code=" + Uri.EscapeDataString(result.ExchangeCode!));
         }
         catch (ArgumentException ex)
         {
@@ -67,9 +74,14 @@ public sealed class ManagedWorkspaceSignupController(
     [RequestSizeLimit(16 * 1024)]
     public async Task<IActionResult> Verify([FromForm] string token, CancellationToken ct)
     {
-        if (!ApexRegistrationAllowed()) return NotFound();
+        if (!ApexRegistrationAllowed())
+        {
+            return NotFound();
+        }
         if (!await IsValidCsrfAsync())
+        {
             return SignupError("Your session expired. Open the verification link again.");
+        }
         try
         {
             var result = await registration.VerifyAsync(token, ct);
@@ -98,21 +110,29 @@ public sealed class ManagedWorkspaceSignupController(
     {
         var tenant = CurrentTenant.Current;
         if (!registration.Enabled || tenant is null || tenant.Slug == "default"
-            || code is null) return NotFound();
-        if (!string.Equals(Request.Host.Host, ManagedSignupUrls.TenantUri(configuration, tenant.Slug).Host,
-                StringComparison.OrdinalIgnoreCase))
+            || code is null)
+        {
             return NotFound();
+        }
+        if (!string.Equals(Request.Host.Host, ManagedSignupUrls.TenantUri(configuration, tenant.Slug).Host,
+                        StringComparison.OrdinalIgnoreCase))
+        {
+            return NotFound();
+        }
         try
         {
             var identity = await registration.RedeemAsync(code, tenant.Id, ct);
             await AuthController.SignInAsync(HttpContext,
                 new AuthUser(identity.UserId, identity.TenantId,
                     identity.Email, identity.DisplayName, "Owner"));
-            return Redirect("/settings/billing?welcome=1&start=" +
+            return Redirect("/onboarding?start=" +
                 Uri.EscapeDataString(identity.Plan));
         }
-        catch (UnauthorizedAccessException) { return Redirect("/login?error=" +
-            Uri.EscapeDataString("That sign-in link expired. Sign in with the password you created.")); }
+        catch (UnauthorizedAccessException)
+        {
+            return Redirect("/login?error=" +
+            Uri.EscapeDataString("That sign-in link expired. Sign in with the password you created."));
+        }
     }
 
     [HttpPost("/auth/workspace")]
@@ -121,14 +141,20 @@ public sealed class ManagedWorkspaceSignupController(
     {
         if (!hosting.Value.ManagedHosting
             || !ManagedSignupUrls.IsApexHost(Request.Host.Host, configuration))
+        {
             return NotFound();
+        }
         if (!await IsValidCsrfAsync())
+        {
             return Redirect("/login?error=" + Uri.EscapeDataString("Reload and try again."));
+        }
         var slug = (workspace ?? "").Trim().ToLowerInvariant();
-        if (ManagedWorkspaceSignup.ValidateSlug(slug) is not null
+        if (WorkspaceSignupValidation.ValidateSlug(slug) is not null
             || await tenants.FindBySlugAsync(slug, ct) is null)
+        {
             return Redirect("/login?error=" + Uri.EscapeDataString(
-                "We couldn't find that workspace. Check its address or create one."));
+                        "We couldn't find that workspace. Check its address or create one."));
+        }
         return Redirect(ManagedSignupUrls.TenantUri(configuration, slug, "/login").AbsoluteUri);
     }
 
@@ -137,17 +163,28 @@ public sealed class ManagedWorkspaceSignupController(
 
     private async Task<bool> IsValidCsrfAsync()
     {
-        try { await antiforgery.ValidateRequestAsync(HttpContext); return true; }
-        catch (AntiforgeryValidationException) { return false; }
+        try
+        {
+            await antiforgery.ValidateRequestAsync(HttpContext);
+            return true;
+        }
+        catch (AntiforgeryValidationException)
+        {
+            return false;
+        }
     }
 
     private IActionResult SignupError(string error, string? plan = null, string? slug = null)
     {
         var query = "?error=" + Uri.EscapeDataString(error);
         if (plan is RunPlans.Basic or RunPlans.Standard)
+        {
             query += "&plan=" + Uri.EscapeDataString(plan);
+        }
         if (!string.IsNullOrWhiteSpace(slug) && slug.Length < 64)
+        {
             query += "&workspace=" + Uri.EscapeDataString(slug);
+        }
         return Redirect("/signup" + query);
     }
 }

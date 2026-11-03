@@ -1,9 +1,8 @@
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
 using PlaceContext.Application.Shared;
+using PlaceContext.Application;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -11,17 +10,50 @@ public sealed partial class DataMapViewModel
 {
     // ── Canvas state ──────────────────────────────────────────────────────────────────────────
     public Dictionary<string, (double X, double Y)> Pos { get; } = new();
-    public bool PosLoaded { get; private set; }
-    public string? DragKey { get; set; }
-    public double PanX { get; set; }
-    public double PanY { get; set; }
-    public bool Panning { get; set; }
-    public string? ConnectJobId { get; set; }
-    public JobView? ConnectJob { get; set; }
-    public (double X, double Y) ConnectEnd { get; set; }
-    public double LastX { get; set; }
-    public double LastY { get; set; }
-    public bool Moved { get; set; }
+    public bool PosLoaded
+    {
+        get; private set;
+    }
+    public string? DragKey
+    {
+        get; set;
+    }
+    public double PanX
+    {
+        get; set;
+    }
+    public double PanY
+    {
+        get; set;
+    }
+    public bool Panning
+    {
+        get; set;
+    }
+    public string? ConnectJobId
+    {
+        get; set;
+    }
+    public JobView? ConnectJob
+    {
+        get; set;
+    }
+    public (double X, double Y) ConnectEnd
+    {
+        get; set;
+    }
+    public double LastX
+    {
+        get; set;
+    }
+    public double LastY
+    {
+        get; set;
+    }
+    public bool Moved
+    {
+        get; set;
+    }
 
     public static readonly string[] ColumnTypes = DataColumnTypes.All.ToArray();
 
@@ -53,26 +85,36 @@ public sealed partial class DataMapViewModel
 
     public void OnCanvasMove(double clientX, double clientY)
     {
+        if (DragKey is null && ConnectJob is null && !Panning)
+        {
+            return;
+        }
         var dx = clientX - LastX;
         var dy = clientY - LastY;
-        if (DragKey is { } key)
+        void ApplyPointerMove()
         {
-            var p = GetPos(key);
-            Pos[key] = (Math.Max(0, p.X + dx), Math.Max(0, p.Y + dy));
-            if (Math.Abs(dx) + Math.Abs(dy) > 1)
-                Moved = true;
+            if (DragKey is { } key)
+            {
+                var p = GetPos(key);
+                Pos[key] = (Math.Max(0, p.X + dx), Math.Max(0, p.Y + dy));
+                if (Math.Abs(dx) + Math.Abs(dy) > 1)
+                {
+                    Moved = true;
+                }
+                return;
+            }
+            if (ConnectJob is not null)
+            {
+                ConnectEnd = (ConnectEnd.X + dx, ConnectEnd.Y + dy);
+                return;
+            }
+            if (Panning)
+            {
+                PanX += dx;
+                PanY += dy;
+            }
         }
-        else if (ConnectJob is not null)
-        {
-            ConnectEnd = (ConnectEnd.X + dx, ConnectEnd.Y + dy);
-        }
-        else if (Panning)
-        {
-            PanX += dx;
-            PanY += dy;
-        }
-        else
-            return;
+        ApplyPointerMove();
         LastX = clientX;
         LastY = clientY;
     }
@@ -92,24 +134,30 @@ public sealed partial class DataMapViewModel
             if (clickedJob is not null && Guid.TryParse(clickedJob, out var jobId))
             {
                 if (Mappings?.FirstOrDefault(m => m.JobId == jobId) is { } existing)
+                {
                     OpenEditor(existing);
-                else if (Jobs?.FirstOrDefault(j => j.Id == jobId) is { } job)
+                    return;
+                }
+                if (Jobs?.FirstOrDefault(j => j.Id == jobId) is { } job)
+                {
                     OpenEditorForJob(job);
+                }
             }
+            return;
         }
-        else if (ConnectJob is { } job)
+        if (ConnectJob is { } connectedJob)
         {
             ConnectJob = null;
-            OpenEditorForJob(job);
+            OpenEditorForJob(connectedJob);
         }
     }
 
     public async Task OnTableUpAsync(string table)
     {
-        if (ConnectJob is { } job)
+        if (ConnectJob is { } connectedJob)
         {
             ConnectJob = null;
-            OpenEditorForJob(job);
+            OpenEditorForJob(connectedJob);
             EdTable = table;
             return;
         }
@@ -138,7 +186,9 @@ public sealed partial class DataMapViewModel
     public string ConnectPath()
     {
         if (ConnectJobId is null)
+        {
             return "";
+        }
         var from = GetPos(ConnectJobId);
         var x1 = from.X + 190 + PanX;
         var y1 = from.Y + 22 + PanY;

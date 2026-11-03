@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Artifacts;
 using UglyToad.PdfPig;
 
 namespace PlaceContext.Infrastructure.Documents;
@@ -23,7 +23,10 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
 
     public string? ExtractText(byte[] content, string fileName)
     {
-        if (content.Length == 0) return null;
+        if (content.Length == 0)
+        {
+            return null;
+        }
         var extension = Path.GetExtension(fileName);
 
         try
@@ -37,7 +40,10 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                 _ => null,
             };
 
-            if (string.IsNullOrWhiteSpace(text)) return null;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
             text = text.Replace("\0", "", StringComparison.Ordinal).Trim();
             return text.Length <= MaxChars ? text : text[..MaxChars] + "\n\n[content truncated]";
         }
@@ -53,7 +59,10 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         var builder = new StringBuilder();
         foreach (var page in document.GetPages())
         {
-            if (page.Number > MaxPages || builder.Length >= MaxChars) break;
+            if (page.Number > MaxPages || builder.Length >= MaxChars)
+            {
+                break;
+            }
             builder.Append(page.Text).Append('\n');
         }
         return builder.ToString();
@@ -73,14 +82,25 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
             foreach (var node in paragraph.Descendants())
             {
                 if (node.Name == word + "t")
+                {
                     builder.Append(node.Value);
-                else if (node.Name == word + "tab")
+                    continue;
+                }
+                if (node.Name == word + "tab")
+                {
                     builder.Append('\t');
-                else if (node.Name == word + "br")
+                    continue;
+                }
+                if (node.Name == word + "br")
+                {
                     builder.AppendLine();
+                }
             }
             builder.AppendLine();
-            if (builder.Length >= MaxChars) break;
+            if (builder.Length >= MaxChars)
+            {
+                break;
+            }
         }
 
         return builder.ToString();
@@ -98,7 +118,10 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                                      entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
                      .OrderBy(entry => entry.FullName, StringComparer.Ordinal))
         {
-            if (builder.Length > 0) builder.AppendLine();
+            if (builder.Length > 0)
+            {
+                builder.AppendLine();
+            }
             builder.AppendLine($"## {Path.GetFileNameWithoutExtension(entry.Name)}");
             var document = LoadXml(entry);
 
@@ -112,14 +135,22 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
                               cell.Descendants(spreadsheet + "t").FirstOrDefault()?.Value ?? "";
                     if (type == "s" && int.TryParse(raw, out var sharedIndex) &&
                         sharedIndex >= 0 && sharedIndex < sharedStrings.Count)
+                    {
                         raw = sharedStrings[sharedIndex];
+                    }
                     cells.Add(raw.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' '));
                 }
                 builder.AppendLine(string.Join('\t', cells));
-                if (builder.Length >= MaxChars) break;
+                if (builder.Length >= MaxChars)
+                {
+                    break;
+                }
             }
 
-            if (builder.Length >= MaxChars) break;
+            if (builder.Length >= MaxChars)
+            {
+                break;
+            }
         }
 
         return builder.ToString();
@@ -128,7 +159,10 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
     private static IReadOnlyList<string> ReadSharedStrings(ZipArchive archive, XNamespace spreadsheet)
     {
         var entry = archive.GetEntry("xl/sharedStrings.xml");
-        if (entry is null) return Array.Empty<string>();
+        if (entry is null)
+        {
+            return Array.Empty<string>();
+        }
         var document = LoadXml(entry);
         return document.Descendants(spreadsheet + "si")
             .Select(item => string.Concat(item.Descendants(spreadsheet + "t").Select(text => text.Value)))
@@ -151,7 +185,9 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
     private static XDocument LoadXml(ZipArchiveEntry entry)
     {
         if (entry.Length > MaxXmlEntryBytes)
+        {
             throw new InvalidDataException("Document XML is too large.");
+        }
         using var stream = entry.Open();
         return XDocument.Load(stream, LoadOptions.None);
     }

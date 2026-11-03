@@ -1,5 +1,4 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Organization;
 namespace PlaceContext.TestSupport;
 
 /// <summary>In-memory <see cref="ITenantSettingsPort"/> — a single settings row per tenant id.</summary>

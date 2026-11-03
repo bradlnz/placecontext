@@ -92,7 +92,10 @@ public class JobChainStageTests
     [Fact]
     public void Create_with_stages_preserves_fan_out_shape()
     {
-        var a = Guid.NewGuid(); var b1 = Guid.NewGuid(); var b2 = Guid.NewGuid(); var c = Guid.NewGuid();
+        var a = Guid.NewGuid();
+        var b1 = Guid.NewGuid();
+        var b2 = Guid.NewGuid();
+        var c = Guid.NewGuid();
         var stages = new[] { ChainStage.Of(a), new ChainStage(new[] { b1, b2 }), ChainStage.Of(c) };
 
         var chain = JobChain.Create(ProjectId, "fan-out", null, stages, T0);
@@ -108,7 +111,8 @@ public class JobChainStageTests
     [Fact]
     public void Create_with_a_flat_id_list_is_every_stage_size_one()
     {
-        var a = Guid.NewGuid(); var b = Guid.NewGuid();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
         var chain = JobChain.Create(ProjectId, "linear", null, new[] { a, b }, T0);
 
         Assert.Equal(2, chain.Stages.Count);
@@ -125,7 +129,8 @@ public class JobChainStageTests
     {
         var chain = JobChain.Create(ProjectId, "c", null, new[] { Guid.NewGuid() }, T0);
         var id = chain.Id;
-        var b1 = Guid.NewGuid(); var b2 = Guid.NewGuid();
+        var b1 = Guid.NewGuid();
+        var b2 = Guid.NewGuid();
 
         chain.Update("renamed", "desc", new[] { new ChainStage(new[] { b1, b2 }) }, T0.AddMinutes(1));
 
@@ -138,7 +143,9 @@ public class JobChainStageTests
     [Fact]
     public void Rehydrate_round_trips_stage_shape()
     {
-        var a = Guid.NewGuid(); var b1 = Guid.NewGuid(); var b2 = Guid.NewGuid();
+        var a = Guid.NewGuid();
+        var b1 = Guid.NewGuid();
+        var b2 = Guid.NewGuid();
         var stages = new[] { ChainStage.Of(a), new ChainStage(new[] { b1, b2 }) };
         var id = Guid.NewGuid();
 
@@ -153,7 +160,10 @@ public class JobChainStageTests
 
     private static JobChain FanOutJoinChain(out Guid a, out Guid b1, out Guid b2, out Guid join)
     {
-        a = Guid.NewGuid(); b1 = Guid.NewGuid(); b2 = Guid.NewGuid(); join = Guid.NewGuid();
+        a = Guid.NewGuid();
+        b1 = Guid.NewGuid();
+        b2 = Guid.NewGuid();
+        join = Guid.NewGuid();
         return JobChain.Create(ProjectId, "fan-out-join", null,
             new[] { ChainStage.Of(a), new ChainStage(new[] { b1, b2 }), ChainStage.Of(join) }, T0);
     }

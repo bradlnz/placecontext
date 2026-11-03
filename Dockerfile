@@ -2,7 +2,7 @@
 # QEMU images are x86-64, independently of the application host architecture.
 FROM --platform=linux/amd64 rust:1.98-bookworm AS qemu-agent
 WORKDIR /agent
-COPY src/PlaceContext.QemuAgent/ ./
+COPY src/PlaceContext.DesktopAgent/ ./
 RUN cargo test --locked && \
     cargo rustc --locked --release --target x86_64-unknown-linux-gnu -- -C target-feature=+crt-static
 

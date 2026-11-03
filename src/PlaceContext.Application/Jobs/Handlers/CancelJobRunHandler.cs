@@ -1,5 +1,6 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Workload;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -32,9 +33,14 @@ public sealed class CancelJobRunHandler : ICommandHandler<CancelJobRunCommand, b
     public async Task<bool> HandleAsync(CancelJobRunCommand command, CancellationToken ct = default)
     {
         var run = await _runs.GetByIdAsync(command.RunId, ct);
-        if (run is null) return false;
-        if (run.Status != Domain.Entities.JobRunStatus.Running) return true; // idempotent
-
+        if (run is null)
+        {
+            return false;
+        }
+        if (run.Status != Domain.Entities.JobRunStatus.Running)
+        {
+            return true; // idempotent
+        }
         // Revoke the pulse before deleting containers, so queued shards cannot keep starting.
         run.Cancel(_clock.UtcNow);
         await _runs.UpdateAsync(run, ct);
@@ -64,7 +70,10 @@ public sealed class CancelJobRunHandler : ICommandHandler<CancelJobRunCommand, b
 
     private async Task CancelWorkloadAsync(string correlationId, CancellationToken ct)
     {
-        try { await _runner.CancelAsync(correlationId, ct); }
+        try
+        {
+            await _runner.CancelAsync(correlationId, ct);
+        }
         catch { /* best-effort */ }
     }
 }

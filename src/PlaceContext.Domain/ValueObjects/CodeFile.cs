@@ -17,22 +17,32 @@ public sealed record CodeFile
     /// Relative path within the work dir, using forward slashes (e.g. "index.js", "lib/report.js").
     /// Leading slashes are trimmed; "<c>..</c>" segments are rejected (no path traversal out of /work).
     /// </summary>
-    public string Path { get; }
+    public string Path
+    {
+        get;
+    }
 
     /// <summary>Opaque file content.</summary>
-    public string Content { get; }
+    public string Content
+    {
+        get;
+    }
 
     private static string Normalize(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
+        {
             throw new ArgumentException("File path must not be empty.", nameof(path));
-
+        }
         var normalized = path.Trim().Replace('\\', '/').TrimStart('/');
         if (normalized.Length == 0)
+        {
             throw new ArgumentException("File path must not be empty.", nameof(path));
+        }
         if (normalized.Split('/').Any(seg => seg is ".."))
+        {
             throw new ArgumentException($"File path '{path}' must not contain '..' segments.", nameof(path));
-
+        }
         return normalized;
     }
 }

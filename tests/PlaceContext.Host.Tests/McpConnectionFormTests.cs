@@ -1,10 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
-using PlaceContext.Application;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application;
 using PlaceContext.Host.Auth;
 using PlaceContext.Host.Components.ViewModels;
 
@@ -17,8 +17,10 @@ public sealed class McpConnectionFormTests
     {
         var dispatcher = new Dispatcher();
         var vm = Create(dispatcher);
-        vm.Name = "Tools"; vm.Endpoint = "https://example.test/mcp";
-        vm.AuthType = "bearer"; vm.AuthToken = "test-token";
+        vm.Name = "Tools";
+        vm.Endpoint = "https://example.test/mcp";
+        vm.AuthType = "bearer";
+        vm.AuthToken = "test-token";
         var project = Guid.NewGuid();
         var result = await vm.SaveAsync(project);
         Assert.NotNull(result);
@@ -45,7 +47,10 @@ public sealed class McpConnectionFormTests
     {
         var dispatcher = new Dispatcher { Fail = true };
         var vm = Create(dispatcher);
-        vm.Name = "Local tools"; vm.Transport = "stdio"; vm.Command = "npx"; vm.Args = "[\"server\"]";
+        vm.Name = "Local tools";
+        vm.Transport = "stdio";
+        vm.Command = "npx";
+        vm.Args = "[\"server\"]";
         vm.Endpoint = "https://unused.test";
         Assert.Null(await vm.SaveAsync(Guid.NewGuid()));
         Assert.Equal("Local tools", vm.Name);
@@ -82,9 +87,12 @@ public sealed class McpConnectionFormTests
         public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
         {
             Saved = Assert.IsType<CreateMcpConnectionCommand>(command);
-            if (Fail) throw new InvalidOperationException("Could not save.");
+            if (Fail)
+            {
+                throw new InvalidOperationException("Could not save.");
+            }
             object result = new McpConnectionView(Guid.NewGuid(), Saved.ProjectId, Saved.Name, Saved.Transport,
-                Saved.EndpointUrl, Saved.Command, Saved.Args, Saved.AuthType, true, null, null, DateTimeOffset.UtcNow);
+                            Saved.EndpointUrl, Saved.Command, Saved.Args, Saved.AuthType, true, null, null, DateTimeOffset.UtcNow);
             return Task.FromResult((TResult)result);
         }
         public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default) => throw new NotSupportedException();

@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Tests;
 
@@ -15,7 +15,7 @@ public sealed class JobsPaneStateTests
     {
         var dispatcher = new DelayedDispatcher();
         var vm = new JobsViewModel(new PlaceContextService(dispatcher, null!, null!, null!),
-            new OperationCenter(null!, null!), null!, new Navigation());
+            new OperationCenter(null!, default), null!, new Navigation());
         var opening = vm.OpenRunDetailAsync(Guid.NewGuid());
         vm.CloseRunDetail();
         dispatcher.Detail.SetResult(new JobRunDetailView(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Succeeded",
@@ -30,7 +30,7 @@ public sealed class JobsPaneStateTests
     public void Closing_editor_removes_the_deep_link_and_leaving_clears_transient_panes()
     {
         var navigation = new Navigation();
-        var vm = new JobsViewModel(null!, new OperationCenter(null!, null!), null!, navigation);
+        var vm = new JobsViewModel(null!, new OperationCenter(null!, default), null!, navigation);
         vm.NewJob();
         Assert.True(vm.ShowEditor);
         vm.CloseEditor();
@@ -53,8 +53,14 @@ public sealed class JobsPaneStateTests
         public Task<T> Send<T>(ICommand<T> command, CancellationToken ct = default) => throw new NotSupportedException();
         public async Task<T> Query<T>(IQuery<T> query, CancellationToken ct = default)
         {
-            if (query is GetJobRunQuery) return (T)(object)(await Detail.Task)!;
-            if (typeof(T) == typeof(IReadOnlyList<RunArtifactLinkView>)) return (T)(object)Array.Empty<RunArtifactLinkView>();
+            if (query is GetJobRunQuery)
+            {
+                return (T)(object)(await Detail.Task)!;
+            }
+            if (typeof(T) == typeof(IReadOnlyList<RunArtifactLinkView>))
+            {
+                return (T)(object)Array.Empty<RunArtifactLinkView>();
+            }
             throw new NotSupportedException();
         }
     }

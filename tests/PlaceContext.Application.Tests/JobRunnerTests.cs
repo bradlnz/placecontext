@@ -74,7 +74,9 @@ public class JobRunnerTests
                 return DetailView(runId, "Failed", attempt: 1);
             }
             if (attempt == 2)
+            {
                 return DetailView(runId, "Failed", originalRunId: originalRunId, attempt: 2);
+            }
             return DetailView(runId, "Succeeded", originalRunId: originalRunId, attempt: 3);
         });
         var runner = new JobRunner(jobs, dispatcher);
@@ -189,7 +191,10 @@ public class JobRunnerTests
         Assert.Equal(8, seen.Value);
     }
 
-    private sealed class AccessCounter { public int Value; }
+    private sealed class AccessCounter
+    {
+        public int Value;
+    }
 
     private sealed class ConcurrentReadGuardRepository(Job job, AccessCounter counter) : IJobRepository
     {
@@ -207,7 +212,10 @@ public class JobRunnerTests
                 Interlocked.Increment(ref counter.Value);
                 return id == job.Id ? job : null;
             }
-            finally { Interlocked.Decrement(ref _inFlight); }
+            finally
+            {
+                Interlocked.Decrement(ref _inFlight);
+            }
         }
 
         public Task AddAsync(Job item, CancellationToken ct = default) => throw new NotSupportedException();
@@ -223,7 +231,10 @@ public class JobRunnerTests
     {
         public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
         {
-            if (command is not RunJobCommand run) throw new NotSupportedException();
+            if (command is not RunJobCommand run)
+            {
+                throw new NotSupportedException();
+            }
             return Task.FromResult((TResult)(object)DetailView(run.RunId ?? Guid.NewGuid(), "Succeeded"));
         }
         public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default)
@@ -244,8 +255,9 @@ public class JobRunnerTests
         public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
         {
             if (command is not RunJobCommand runCmd)
+            {
                 throw new NotSupportedException($"Unexpected command type: {command.GetType().Name}");
-
+            }
             Commands.Add(runCmd);
             var view = _factory(runCmd.RunId ?? Guid.NewGuid());
             return Task.FromResult((TResult)(object)view);

@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
-using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Host.Tests;
 

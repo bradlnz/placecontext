@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Membership;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -65,7 +67,9 @@ public sealed class AccessSettingsViewModel(
         var uri = new Uri(Nav.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
         if (query.TryGetValue("error", out var message) && !string.IsNullOrWhiteSpace(message))
+        {
             Message = message.ToString();
+        }
     }
 
     public async Task AfterRenderAsync(bool firstRender)
@@ -149,7 +153,9 @@ public sealed class AccessSettingsViewModel(
             await LoadMembersAsync();
             await LoadRolesAsync(); // member counts changed
             if (Expanded == userId)
+            {
                 await LoadMatrixAsync(userId);
+            }
             Message = "Role updated.";
         }
         catch (Exception ex)
@@ -199,7 +205,9 @@ public sealed class AccessSettingsViewModel(
     public async Task ManageMemberAsync(ChangeEventArgs e)
     {
         if (!Guid.TryParse(e.Value?.ToString(), out var userId))
+        {
             return;
+        }
         if (Expanded != userId)
         {
             Expanded = userId;
@@ -265,9 +273,11 @@ public sealed class AccessSettingsViewModel(
     public void TogglePerm(HashSet<string> set, string permission, object? value)
     {
         if (value is true)
+        {
             set.Add(permission);
-        else
-            set.Remove(permission);
+            return;
+        }
+        set.Remove(permission);
     }
 
     public void ToggleRoleEdit(RoleView role)

@@ -1,6 +1,9 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Networking;
+using PlaceContext.Application.Organization;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -85,7 +88,10 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             _clock.UtcNow,
             new TenantSettingsManifest(settings.TimeZoneId, settings.BrandingJson, settings.GitHubLogin),
             projectManifests, jobManifests, chainManifests, triggerManifests, eventManifests, mappingManifests)
-        { WorkerNetworks = workerNetworks, NetworkAssignments = networkAssignments };
+        {
+            WorkerNetworks = workerNetworks,
+            NetworkAssignments = networkAssignments
+        };
     }
 
     // JobViewMapper.ToView already assembles the workload-source shape correctly (image vs. code,
@@ -119,7 +125,7 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             },
             stage.Action switch
             {
-                QemuChainAction vm => new ChainActionManifest(vm.Type, ImageProfile: vm.ImageProfile, Command: vm.Command,
+                VirtualMachineChainAction vm => new ChainActionManifest(vm.Type, ImageProfile: vm.ImageProfile, Command: vm.Command,
                     OutputField: vm.OutputField, MemoryMb: vm.MemoryMb, Cpus: vm.Cpus, TimeoutSeconds: vm.TimeoutSeconds, AllowNetwork: vm.AllowNetwork, PauseForLogin: vm.PauseForLogin || vm.LoginProfileId is not null),
                 LoopChainAction loop => new ChainActionManifest(loop.Type,
                     Instructions: loop.Instructions, ResponseField: loop.ResponseField, ResponseType: loop.ResponseType, AgentProvider: loop.AgentProvider),

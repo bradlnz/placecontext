@@ -13,7 +13,10 @@ public sealed class GetProjectByIdHandler : IQueryHandler<GetProjectByIdQuery, P
     public async Task<ProjectSummaryView?> HandleAsync(GetProjectByIdQuery query, CancellationToken ct = default)
     {
         // ProjectId.From rejects Guid.Empty — treat that the same as "not found" rather than a 500.
-        if (query.ProjectId == Guid.Empty) return null;
+        if (query.ProjectId == Guid.Empty)
+        {
+            return null;
+        }
         var project = await _projects.GetByIdAsync(ProjectId.From(query.ProjectId), ct);
         return project is null ? null : ViewMapper.ToSummary(project);
     }

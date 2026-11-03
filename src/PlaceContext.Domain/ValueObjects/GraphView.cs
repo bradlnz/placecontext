@@ -6,8 +6,14 @@ namespace PlaceContext.Domain.ValueObjects;
 /// </summary>
 public sealed record GraphView
 {
-    public IReadOnlyList<GraphVizNode> Nodes { get; }
-    public IReadOnlyList<GraphVizLink> Links { get; }
+    public IReadOnlyList<GraphVizNode> Nodes
+    {
+        get;
+    }
+    public IReadOnlyList<GraphVizLink> Links
+    {
+        get;
+    }
 
     private GraphView(IReadOnlyList<GraphVizNode> nodes, IReadOnlyList<GraphVizLink> links)
     {

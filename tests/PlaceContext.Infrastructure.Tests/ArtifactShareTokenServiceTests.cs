@@ -1,6 +1,5 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using PlaceContext.Application.Ports;
+using Microsoft.EntityFrameworkCore;
 using PlaceContext.Infrastructure.Artifacts;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;

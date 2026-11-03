@@ -1,3 +1,4 @@
+using PlaceContext.Application.Organization;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Dtos;

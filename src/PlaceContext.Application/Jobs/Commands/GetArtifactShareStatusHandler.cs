@@ -1,6 +1,5 @@
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Application.Features;
 
 public sealed class GetArtifactShareStatusHandler

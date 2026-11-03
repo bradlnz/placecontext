@@ -1,6 +1,6 @@
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Tenancy;
 namespace PlaceContext.Application.Features;
 
 public sealed class CreateArtifactShareHandler : ICommandHandler<CreateArtifactShareCommand, ArtifactShareCreated>

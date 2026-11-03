@@ -16,12 +16,16 @@ public static class JsonPayloadHelper
         foreach (var payload in payloads)
         {
             if (string.IsNullOrWhiteSpace(payload))
+            {
                 continue;
+            }
             try
             {
                 using var doc = JsonDocument.Parse(payload);
                 if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                {
                     continue;
+                }
                 foreach (var prop in doc.RootElement.EnumerateObject())
                 {
                     var isFileMarker =
@@ -32,12 +36,14 @@ public static class JsonPayloadHelper
                         prop.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array
                         && !isFileMarker
                     )
+                    {
                         continue;
+                    }
                     var value =
-                        isFileMarker ? prop.Value.GetRawText()
-                        : prop.Value.ValueKind == JsonValueKind.String
-                            ? prop.Value.GetString() ?? ""
-                        : prop.Value.ToString();
+                                            isFileMarker ? prop.Value.GetRawText()
+                                            : prop.Value.ValueKind == JsonValueKind.String
+                                                ? prop.Value.GetString() ?? ""
+                                            : prop.Value.ToString();
                     result.TryAdd(prop.Name, value);
                 }
             }

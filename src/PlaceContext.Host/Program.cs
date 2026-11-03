@@ -1,3 +1,6 @@
+using PlaceContext.Application.Membership;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Auth;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,7 +11,6 @@ using Microsoft.AspNetCore.SignalR;
 using PlaceContext.Host;
 using PlaceContext.Host.Auth;
 using PlaceContext.Application;
-using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components;
 using PlaceContext.Host.Components.ViewModels;
 using PlaceContext.Host.Controllers;
@@ -17,6 +19,7 @@ using PlaceContext.Host.Tenancy;
 using PlaceContext.Host.Tools;
 using PlaceContext.Infrastructure;
 using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Application.Tenancy;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -30,7 +33,6 @@ using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
-using PlaceContext.Host.Branding;
 using PlaceContext.Host.Startup;
 using PlaceContext.Infrastructure.Security;
 using Microsoft.AspNetCore.DataProtection.XmlEncryption;
@@ -75,7 +77,9 @@ builder.Services.AddInfrastructure(builder.Configuration);
             t.AddSource(PlaceContext.Application.Observability.JobTelemetry.SourceName)
              .AddAspNetCoreInstrumentation();
             if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+            {
                 t.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+            }
         })
         .WithMetrics(m =>
         {
@@ -83,7 +87,9 @@ builder.Services.AddInfrastructure(builder.Configuration);
              .AddAspNetCoreInstrumentation()
              .AddRuntimeInstrumentation();
             if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+            {
                 m.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint));
+            }
         });
 }
 
@@ -169,11 +175,7 @@ var shardEndpoints = localAiSection.GetSection("ShardEndpoints").Get<List<string
 Console.WriteLine($"[startup] LocalAI.Endpoint='{localAiEndpoint}'  Model='{localAiModel}'  ShardEndpoints=[{string.Join(", ", shardEndpoints)}]");
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PortalUiState>();
-builder.Services.AddScoped<BrandingService>();
 
-builder.Services.AddScoped<PlaceContext.Host.Build.BuildChatAgent>();
-builder.Services.AddScoped<PlaceContext.Host.Build.BuildMcpTools>();
-builder.Services.AddHostedService<PlaceContext.Host.Build.BuildChatWorker>();
 
 // ── Page ViewModels ──────────────────────────────────────────────────────────
 // Page ViewModels are scoped to the Blazor circuit. Repeated stateful component ViewModels opt
@@ -183,9 +185,11 @@ foreach (var viewModelType in pageViewModelType.Assembly.GetTypes()
              .Where(type => !type.IsAbstract && pageViewModelType.IsAssignableFrom(type)))
 {
     if (typeof(IComponentViewModel).IsAssignableFrom(viewModelType))
+    {
         builder.Services.AddTransient(viewModelType);
-    else
-        builder.Services.AddScoped(viewModelType);
+        continue;
+    }
+    builder.Services.AddScoped(viewModelType);
 }
 
 // Share the Data Protection key ring across replicas (persisted in Postgres) and pin the application
@@ -201,8 +205,10 @@ foreach (var viewModelType in pageViewModelType.Assembly.GetTypes()
     // Outside Development a passphrase is required so a Postgres dump cannot decrypt vault secrets
     // or auth cookies. Dev may omit it for zero-config local runs.
     if (string.IsNullOrWhiteSpace(dpKey) && !builder.Environment.IsDevelopment())
+    {
         throw new InvalidOperationException(
-            "PlaceContext:DataProtection:Key must be set outside Development (shared passphrase encrypting the Data Protection key ring).");
+                "PlaceContext:DataProtection:Key must be set outside Development (shared passphrase encrypting the Data Protection key ring).");
+    }
     if (!string.IsNullOrWhiteSpace(dpKey))
     {
         var encryptor = new PassphraseXmlEncryptor(dpKey);
@@ -317,7 +323,10 @@ builder.Services
                 if (ctx.Principal?.Identity is ClaimsIdentity id &&
                     !string.Equals(dbRole, id.FindFirst("role")?.Value, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (id.FindFirst("role") is { } stale) id.RemoveClaim(stale);
+                    if (id.FindFirst("role") is { } stale)
+                    {
+                        id.RemoveClaim(stale);
+                    }
                     id.AddClaim(new Claim("role", dbRole));
                 }
             },
@@ -362,13 +371,16 @@ builder.Services.AddAuthorization(o =>
     // Fine-grained permission policies — the policy name IS the permission string (see the Permission
     // catalog), so gating a new sensitive tool/endpoint/page is just [Authorize(Policy = Permission.X)].
     // Backed by PermissionAuthorizationHandler, which resolves role defaults + tenant-scoped overrides.
-    foreach (var permission in PlaceContext.Application.Ports.Permission.All)
+    foreach (var permission in PlaceContext.Application.Access.Permission.All)
+    {
         o.AddPolicy(permission, p => p.RequireAuthenticatedUser()
-            .AddRequirements(new PermissionRequirement(permission)));
-    // Default-admin-only policy — gates the /settings/* area (beyond the self-service API tokens
+                .AddRequirements(new PermissionRequirement(permission)));
+    }    // Default-admin-only policy — gates the /settings/* area (beyond the self-service API tokens
     // page) and the controllers backing it to the tenant's bootstrap administrator.
     o.AddPolicy(Policies.DefaultAdmin, p => p.RequireAuthenticatedUser()
         .AddRequirements(new DefaultAdminRequirement()));
+    o.AddPolicy(Policies.DatabaseInspection, p => p.RequireAuthenticatedUser()
+        .AddRequirements(new DefaultAdminRequirement(includeOwners: true)));
     foreach (var scope in CoreApiScopes.All)
     {
         var scopeName = scope;
@@ -443,19 +455,31 @@ await DefaultWorkspaceBootstrap.RunAsync(
 // text in their declared column, so huge nested payloads don't explode into hundreds of leaf
 // columns. The bootstrap remains available via PlaceContext:DataMapFlattening:BootstrapOnStartup=true
 // for backfilling historically flattened tables if ever needed.
-if (app.Configuration.GetValue("PlaceContext:DataMapFlattening:BootstrapOnStartup", false))
+async Task BootstrapDataMappingAsync()
+{
+    if (!app.Configuration.GetValue("PlaceContext:DataMapFlattening:BootstrapOnStartup", false))
+    {
+        app.Logger.LogInformation("Data-map flattening bootstrap skipped (PlaceContext:DataMapFlattening:BootstrapOnStartup is false).");
+        return;
+    }
     await PlaceContext.Infrastructure.ProjectData.JsonFlatteningBootstrap.RunAsync(app.Services);
-else
-    app.Logger.LogInformation("Data-map flattening bootstrap skipped (PlaceContext:DataMapFlattening:BootstrapOnStartup is false).");
+}
+await BootstrapDataMappingAsync();
 
 // Encrypt any legacy plaintext before serving.
 // OFF by default: the EF passes load whole Jobs/JobRuns tables (map/reduce source + full run
 // artifacts, MBs per row, all tenants) into memory at once and OOM the pod. Opt in with
 // PlaceContext:EncryptionAtRest:BootstrapOnStartup=true only on a host sized for the one-shot scan.
-if (app.Configuration.GetValue("PlaceContext:EncryptionAtRest:BootstrapOnStartup", false))
+async Task BootstrapEncryptionAsync()
+{
+    if (!app.Configuration.GetValue("PlaceContext:EncryptionAtRest:BootstrapOnStartup", false))
+    {
+        app.Logger.LogInformation("Encryption-at-rest startup bootstrap skipped (PlaceContext:EncryptionAtRest:BootstrapOnStartup is not true).");
+        return;
+    }
     await PlaceContext.Infrastructure.DependencyInjection.EncryptExistingDataAsync(app.Services);
-else
-    app.Logger.LogInformation("Encryption-at-rest startup bootstrap skipped (PlaceContext:EncryptionAtRest:BootstrapOnStartup is not true).");
+}
+await BootstrapEncryptionAsync();
 
 // The platform is free. Agent subscriptions are simulated only in explicitly configured Development hosts.
 

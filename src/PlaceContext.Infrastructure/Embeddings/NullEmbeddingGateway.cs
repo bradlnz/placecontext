@@ -1,5 +1,4 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Search;
 namespace PlaceContext.Infrastructure.Embeddings;
 
 /// <summary>The default <see cref="IEmbeddingGateway"/> when no Voyage API key is configured. Disabled,

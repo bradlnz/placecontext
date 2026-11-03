@@ -10,8 +10,14 @@ namespace PlaceContext.Domain.ValueObjects;
 /// </summary>
 public sealed record DecisionTree
 {
-    public IReadOnlyList<DecisionTreeNode> Nodes { get; }
-    public IReadOnlyList<DecisionTreeEdge> Edges { get; }
+    public IReadOnlyList<DecisionTreeNode> Nodes
+    {
+        get;
+    }
+    public IReadOnlyList<DecisionTreeEdge> Edges
+    {
+        get;
+    }
 
     private DecisionTree(IReadOnlyList<DecisionTreeNode> nodes, IReadOnlyList<DecisionTreeEdge> edges)
     {

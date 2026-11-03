@@ -1,4 +1,4 @@
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Application.Tenancy;
 
 namespace PlaceContext.Host;
 
@@ -12,7 +12,13 @@ public static class WorkspaceTime
     public static DateTimeOffset ToWorkspaceTime(this DateTimeOffset d)
     {
         var tzId = CurrentTenant.Current?.TimeZoneId ?? "UTC";
-        try { return TimeZoneInfo.ConvertTime(d, TimeZoneInfo.FindSystemTimeZoneById(tzId)); }
-        catch { return d; }
+        try
+        {
+            return TimeZoneInfo.ConvertTime(d, TimeZoneInfo.FindSystemTimeZoneById(tzId));
+        }
+        catch
+        {
+            return d;
+        }
     }
 }

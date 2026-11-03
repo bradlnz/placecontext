@@ -1,6 +1,8 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Triggers;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -35,13 +37,16 @@ public sealed class UpdateTriggerHandler : ICommandHandler<UpdateTriggerCommand,
         var now = _clock.UtcNow;
 
         if (command.Name is not null)
+        {
             trigger.Rename(command.Name, now);
-
+        }
         if (command.CronExpression is not null)
         {
             var cron = command.CronExpression.Trim();
             if (!_cron.IsValid(cron))
+            {
                 throw new ArgumentException($"'{cron}' is not a valid cron expression.");
+            }
             var next = _cron.Next(cron, now, _tenant.TimeZoneId);
             trigger.Reschedule(cron, next, now);
         }
@@ -49,23 +54,27 @@ public sealed class UpdateTriggerHandler : ICommandHandler<UpdateTriggerCommand,
         if (command.EventName is not null)
         {
             if (string.IsNullOrWhiteSpace(command.EventName))
+            {
                 throw new ArgumentException("Event name must not be empty.");
+            }
             trigger.RenameEvent(command.EventName.Trim(), now);
         }
 
         if (command.Enabled is { } enabled)
         {
-            if (enabled)
+            void ApplyEnabledState()
             {
-                var next = trigger.Kind is PlaceContext.Domain.ValueObjects.TriggerKind.Schedule
-                    ? _cron.Next(trigger.CronExpression!, now, _tenant.TimeZoneId)
-                    : (DateTimeOffset?)null;
-                trigger.Enable(next, now);
-            }
-            else
-            {
+                if (enabled)
+                {
+                    var next = trigger.Kind is PlaceContext.Domain.ValueObjects.TriggerKind.Schedule
+                        ? _cron.Next(trigger.CronExpression!, now, _tenant.TimeZoneId)
+                        : (DateTimeOffset?)null;
+                    trigger.Enable(next, now);
+                    return;
+                }
                 trigger.Disable(now);
             }
+            ApplyEnabledState();
         }
 
         await _uow.SaveChangesAsync(ct);

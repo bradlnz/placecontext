@@ -1,9 +1,10 @@
 using System.Diagnostics;
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -24,20 +25,25 @@ public sealed class SaveJobTestCaseHandler
         SaveJobTestCaseCommand command, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(command.Name))
+        {
             throw new ArgumentException("Test name is required.", nameof(command));
-
+        }
         var job = await _jobs.GetByIdAsync(command.JobId, ct)
             ?? throw new InvalidOperationException($"Job {command.JobId} not found.");
         if (job.ProjectId != command.ProjectId)
+        {
             throw new InvalidOperationException("The test and job must belong to the same project.");
-
+        }
         var now = _clock.UtcNow;
         var existing = command.TestId is { } id ? await _tests.GetAsync(id, ct) : null;
         if (command.TestId is not null && existing is null)
+        {
             throw new InvalidOperationException($"Test {command.TestId} not found.");
+        }
         if (existing is not null && existing.ProjectId != command.ProjectId)
+        {
             throw new InvalidOperationException("Test does not belong to this project.");
-
+        }
         var input = NullIfWhiteSpace(command.InputPayload);
         var expected = command.AssertionType == JobTestAssertionType.Succeeds
             ? null

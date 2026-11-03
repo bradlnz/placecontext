@@ -1,11 +1,11 @@
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -54,17 +54,35 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
         EditorId = $"pcmonaco-{Guid.NewGuid():N}";
     }
 
-    public Guid ProjectId { get; private set; }
-    public Guid JobId { get; private set; }
-    public string EditorId { get; }
+    public Guid ProjectId
+    {
+        get; private set;
+    }
+    public Guid JobId
+    {
+        get; private set;
+    }
+    public string EditorId
+    {
+        get;
+    }
     public JobView? Job => _job;
     public IReadOnlyList<EditorFile> Files => _files;
     public int ActiveIndex => _active;
-    public string? Entrypoint { get; private set; }
+    public string? Entrypoint
+    {
+        get; private set;
+    }
     public string RuntimeId { get; private set; } = DefaultRuntime;
-    public JobRunDetailView? LastRun { get; private set; }
+    public JobRunDetailView? LastRun
+    {
+        get; private set;
+    }
     public string? Message => _message;
-    public string? ExecutionError { get; private set; }
+    public string? ExecutionError
+    {
+        get; private set;
+    }
     public bool Loading { get; private set; } = true;
     public bool Saving => _saving;
     public bool Running => _running;
@@ -79,8 +97,14 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
 
     public string JsonText(string value) => Presentation.Json(value);
 
-    public bool PanelOpen { get; set; }
-    public bool MonacoLite { get; private set; }
+    public bool PanelOpen
+    {
+        get; set;
+    }
+    public bool MonacoLite
+    {
+        get; private set;
+    }
     public bool AddingFile => _addingFile;
     public string NewFileName
     {
@@ -93,8 +117,14 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
         get => _renameValue;
         set => _renameValue = value;
     }
-    public ElementReference NewFileInput { get; set; }
-    public ElementReference RenameInput { get; set; }
+    public ElementReference NewFileInput
+    {
+        get; set;
+    }
+    public ElementReference RenameInput
+    {
+        get; set;
+    }
 
     public void TogglePanel() => PanelOpen = !PanelOpen;
 
@@ -209,8 +239,9 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
         if (args.Key == "Enter")
         {
             await ConfirmAddFile();
+            return;
         }
-        else if (args.Key == "Escape")
+        if (args.Key == "Escape")
         {
             _addingFile = false;
         }
@@ -295,8 +326,9 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
         if (args.Key == "Enter")
         {
             await ConfirmRenameAsync();
+            return;
         }
-        else if (args.Key == "Escape")
+        if (args.Key == "Escape")
         {
             _renamingIndex = -1;
         }
@@ -382,8 +414,10 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
                         throw;
                     }
                 }, correlationKey: key);
-            if (error is not null) throw new InvalidOperationException(error);
-
+            if (error is not null)
+            {
+                throw new InvalidOperationException(error);
+            }
             StopRunPolling();
             _runPoll = new CancellationTokenSource();
             _ = WatchRunAsync(runId, completion.Task, _runPoll.Token);
@@ -416,13 +450,18 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
             var finished = await completion;
             LastRun = finished.Run ?? LastRun;
             ExecutionError = finished.Error;
-            if (finished.Run is { } result) _message = $"Run {result.Status}.";
+            if (finished.Run is { } result)
+            {
+                _message = $"Run {result.Status}.";
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception exception)
         {
             if (!ct.IsCancellationRequested)
+            {
                 ExecutionError = $"Could not refresh execution results: {exception.Message}";
+            }
         }
         finally
         {
@@ -563,7 +602,13 @@ public sealed class JobEditorViewModel : PageViewModel, IAsyncDisposable
             Content = content;
         }
 
-        public string Path { get; set; }
-        public string Content { get; set; }
+        public string Path
+        {
+            get; set;
+        }
+        public string Content
+        {
+            get; set;
+        }
     }
 }

@@ -1,6 +1,7 @@
 using System.Text.Json;
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Workload;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
@@ -157,9 +158,9 @@ public class JobParameterTests
         var clock = new FakeClock(T0);
 
         // Runner returns result.json plus a named report.csv.
-        runner.EnqueueResult(new PlaceContext.Application.Ports.WorkloadRunResult(
+        runner.EnqueueResult(new PlaceContext.Application.Workload.WorkloadRunResult(
             0, "{}", "stdout", "",
-            new[] { new PlaceContext.Application.Ports.WorkloadArtifact("report.csv", "a,b\n1,2") }));
+            new[] { new PlaceContext.Application.Workload.WorkloadArtifact("report.csv", "a,b\n1,2") }));
 
         var map = new MapSpec("img/worker:latest", new[] { "{}" }, new Dictionary<string, string>());
         var job = Job.Create(Guid.NewGuid(), "j", null, map, null, 1, ExitCodePolicy.Default, T0);

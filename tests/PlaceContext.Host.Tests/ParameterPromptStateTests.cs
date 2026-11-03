@@ -163,7 +163,9 @@ public sealed class ParameterPromptStateTests
         {
             using var doc = JsonDocument.Parse(json);
             foreach (var prop in doc.RootElement.EnumerateObject())
+            {
                 Assert.DoesNotContain(':', prop.Name);
+            }
         }
     }
 

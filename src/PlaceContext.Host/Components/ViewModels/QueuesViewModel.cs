@@ -1,29 +1,58 @@
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application;
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class QueuesViewModel(IChainQueueService queues, PlaceContextService service, PortalUiState ui,
     NavigationManager navigation) : PageViewModel
 {
-    public Guid ProjectId { get; private set; }
-    public Guid? DetailQueueId { get; private set; }
+    public Guid ProjectId
+    {
+        get; private set;
+    }
+    public Guid? DetailQueueId
+    {
+        get; private set;
+    }
     public string Tab { get; private set; } = "messages";
     public string Search { get; set; } = "";
     public string IntakeFilter { get; set; } = "";
     public string Sort { get; set; } = "created";
     public string MessageSearch { get; set; } = "";
     public string MessageFilter { get; set; } = "";
-    public DateTimeOffset? UpdatedAt { get; private set; }
-    public JobChainSubmission? InspectMessage { get; private set; }
-    public Guid? InspectRunId { get; private set; }
-    public ChainRunView? InspectRun { get; private set; }
-    public JobRunDetailView? InspectJob { get; private set; }
-    public Guid? InspectJobId { get; private set; }
-    public bool InspectLoading { get; private set; }
-    public string? InspectError { get; private set; }
+    public DateTimeOffset? UpdatedAt
+    {
+        get; private set;
+    }
+    public JobChainSubmission? InspectMessage
+    {
+        get; private set;
+    }
+    public Guid? InspectRunId
+    {
+        get; private set;
+    }
+    public ChainRunView? InspectRun
+    {
+        get; private set;
+    }
+    public JobRunDetailView? InspectJob
+    {
+        get; private set;
+    }
+    public Guid? InspectJobId
+    {
+        get; private set;
+    }
+    public bool InspectLoading
+    {
+        get; private set;
+    }
+    public string? InspectError
+    {
+        get; private set;
+    }
     private int _inspectVersion;
 
     public async Task InspectAsync(JobChainSubmission message, Guid? runId = null)
@@ -32,7 +61,10 @@ public sealed class QueuesViewModel(IChainQueueService queues, PlaceContextServi
         var version = _inspectVersion;
         var id = runId ?? message.ChainRunId;
         if (DetailQueueId is null || !Messages.Any(item => item.TrackingId == message.TrackingId)
-            || (id != message.ChainRunId && !message.PreviousRunIds.Contains(id))) return;
+            || (id != message.ChainRunId && !message.PreviousRunIds.Contains(id)))
+        {
+            return;
+        }
         InspectMessage = message;
         InspectRunId = id;
         InspectLoading = true;
@@ -40,13 +72,32 @@ public sealed class QueuesViewModel(IChainQueueService queues, PlaceContextServi
         try
         {
             var run = await service.GetChainRunAsync(id);
-            if (version != _inspectVersion) return;
-            if (run is null || run.ProjectId != ProjectId) throw new InvalidOperationException("This workflow run is no longer available.");
+            if (version != _inspectVersion)
+            {
+                return;
+            }
+            if (run is null || run.ProjectId != ProjectId)
+            {
+                throw new InvalidOperationException("This workflow run is no longer available.");
+            }
             InspectRun = run;
             await SelectInspectJobAsync(run.Steps.LastOrDefault(step => step.RunId.HasValue)?.RunId?.ToString());
         }
-        catch (Exception ex) { if (version == _inspectVersion) InspectError = ex.Message; }
-        finally { if (version == _inspectVersion) { InspectLoading = false; NotifyStateChanged(); } }
+        catch (Exception ex)
+        {
+            if (version == _inspectVersion)
+            {
+                InspectError = ex.Message;
+            }
+        }
+        finally
+        {
+            if (version == _inspectVersion)
+            {
+                InspectLoading = false;
+                NotifyStateChanged();
+            }
+        }
     }
 
     public Task RefreshInspectAsync() => InspectMessage is { } message ? InspectAsync(message, InspectRunId) : Task.CompletedTask;
@@ -58,13 +109,25 @@ public sealed class QueuesViewModel(IChainQueueService queues, PlaceContextServi
         InspectJob = null;
         InspectError = null;
         InspectJobId = Guid.TryParse(value, out var id) && InspectRun?.Steps.Any(step => step.RunId == id) == true ? id : null;
-        if (InspectJobId is not { } selected) return;
+        if (InspectJobId is not { } selected)
+        {
+            return;
+        }
         try
         {
             var job = await service.GetJobRunAsync(selected);
-            if (version == _inspectVersion && InspectJobId == selected) InspectJob = job;
+            if (version == _inspectVersion && InspectJobId == selected)
+            {
+                InspectJob = job;
+            }
         }
-        catch (Exception ex) { if (version == _inspectVersion && InspectJobId == selected) InspectError = ex.Message; }
+        catch (Exception ex)
+        {
+            if (version == _inspectVersion && InspectJobId == selected)
+            {
+                InspectError = ex.Message;
+            }
+        }
         NotifyStateChanged();
     }
 
@@ -115,35 +178,81 @@ public sealed class QueuesViewModel(IChainQueueService queues, PlaceContextServi
         && (queue.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || chain.Contains(search, StringComparison.OrdinalIgnoreCase)
             || queue.Id.ToString().Contains(search, StringComparison.OrdinalIgnoreCase));
     public void SelectTab(string tab) => navigation.NavigateTo(navigation.GetUriWithQueryParameter("tab", tab));
-    public void EditSelected() { if (Selected is not null) Edit(Selected); }
+    public void EditSelected()
+    {
+        if (Selected is not null)
+        {
+            Edit(Selected);
+        }
+    }
     public IReadOnlyList<ChainQueueDefinition> Queues { get; private set; } = [];
     public IReadOnlyList<JobChainView> Chains { get; private set; } = [];
     public IReadOnlyList<JobChainSubmission> Messages { get; private set; } = [];
-    public ChainQueueDefinition? Selected { get; private set; }
+    public ChainQueueDefinition? Selected
+    {
+        get; private set;
+    }
     public bool Loading { get; private set; } = true;
-    public bool Busy { get; private set; }
-    public ChainQueueDefinition? Deleting { get; private set; }
-    public string? DeleteError { get; private set; }
-    public bool ShowEditor { get; private set; }
-    public Guid? EditId { get; private set; }
+    public bool Busy
+    {
+        get; private set;
+    }
+    public ChainQueueDefinition? Deleting
+    {
+        get; private set;
+    }
+    public string? DeleteError
+    {
+        get; private set;
+    }
+    public bool ShowEditor
+    {
+        get; private set;
+    }
+    public Guid? EditId
+    {
+        get; private set;
+    }
     public string Name { get; set; } = "";
     public string ChainId { get; set; } = "";
     public int MessageTtlSeconds { get; set; } = 86400;
     public int ReceiptRetentionDays { get; set; } = 30;
     public int MaxAttempts { get; set; } = 3;
     public int RetryDelaySeconds { get; set; } = 3;
-    public int DeliveryDelaySeconds { get; set; }
+    public int DeliveryDelaySeconds
+    {
+        get; set;
+    }
     public bool Enabled { get; set; } = true;
-    public string? Error { get; private set; }
-    public string? FormError { get; private set; }
+    public string? Error
+    {
+        get; private set;
+    }
+    public string? FormError
+    {
+        get; private set;
+    }
     public string Endpoint => Selected is null ? "" : new Uri(new Uri(navigation.BaseUri), $"api/v1/queues/{Selected.Id}/messages").ToString();
     public string Example => "curl --request POST '" + Endpoint + "' \\\n  --header \"Authorization: Bearer $PC_TOKEN\" \\\n  --header 'Content-Type: application/json' \\\n  --header 'Idempotency-Key: order-123' \\\n  --data '{\"orderId\":\"123\",\"customer\":{\"name\":\"Ada\"},\"items\":[{\"sku\":\"A1\",\"quantity\":2}]}'";
 
     public async Task LoadAsync(Guid projectId, Guid? queueId = null, string? tab = null)
     {
-        if (ProjectId != projectId || DetailQueueId != queueId) CloseInspect();
-        if (ProjectId != projectId) { Selected = null; Messages = []; Search = ""; IntakeFilter = ""; }
-        if (DetailQueueId != queueId) { MessageSearch = ""; MessageFilter = ""; }
+        if (ProjectId != projectId || DetailQueueId != queueId)
+        {
+            CloseInspect();
+        }
+        if (ProjectId != projectId)
+        {
+            Selected = null;
+            Messages = [];
+            Search = "";
+            IntakeFilter = "";
+        }
+        if (DetailQueueId != queueId)
+        {
+            MessageSearch = "";
+            MessageFilter = "";
+        }
         ProjectId = projectId;
         DetailQueueId = queueId;
         Tab = tab is "monitoring" or "configuration" or "integration" ? tab : "messages";
@@ -154,29 +263,48 @@ public sealed class QueuesViewModel(IChainQueueService queues, PlaceContextServi
 
     public async Task RefreshAsync()
     {
-        if (Busy) return;
+        if (Busy)
+        {
+            return;
+        }
         Busy = true;
         Error = null;
         try
         {
             Queues = await queues.ListAsync(ProjectId);
             Chains = await service.ListJobChainsAsync(ProjectId);
-            if (Selected is not null) Selected = Queues.FirstOrDefault(queue => queue.Id == Selected.Id);
+            if (Selected is not null)
+            {
+                Selected = Queues.FirstOrDefault(queue => queue.Id == Selected.Id);
+            }
             if (DetailQueueId is { } id)
             {
                 Selected = Queues.FirstOrDefault(queue => queue.Id == id);
-                if (Selected is null) Error = "This queue no longer exists or is not available in this project.";
+                if (Selected is null)
+                {
+                    Error = "This queue no longer exists or is not available in this project.";
+                }
             }
             Messages = Selected is null ? [] : await queues.ListMessagesAsync(Selected.Id);
             UpdatedAt = DateTimeOffset.UtcNow;
         }
-        catch (Exception ex) { Error = ex.Message; }
-        finally { Busy = false; NotifyStateChanged(); }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Busy = false;
+            NotifyStateChanged();
+        }
     }
 
     public async Task SelectAsync(ChainQueueDefinition queue)
     {
-        if (Busy) return;
+        if (Busy)
+        {
+            return;
+        }
         Selected = queue;
         await RefreshAsync();
     }
@@ -196,21 +324,39 @@ public sealed class QueuesViewModel(IChainQueueService queues, PlaceContextServi
         FormError = null;
         ShowEditor = true;
     }
-    public void CloseEditor() { if (!Busy) ShowEditor = false; }
+    public void CloseEditor()
+    {
+        if (!Busy)
+        {
+            ShowEditor = false;
+        }
+    }
 
     public async Task SaveAsync()
     {
-        if (Busy) return;
+        if (Busy)
+        {
+            return;
+        }
         Busy = true;
         FormError = null;
         try
         {
-            if (!Guid.TryParse(ChainId, out var chainId)) throw new ArgumentException("Choose a workflow.");
+            if (!Guid.TryParse(ChainId, out var chainId))
+            {
+                throw new ArgumentException("Choose a workflow.");
+            }
             Selected = await queues.SaveAsync(EditId, ProjectId, chainId, Name, Enabled, MessageTtlSeconds, ReceiptRetentionDays, MaxAttempts, RetryDelaySeconds, DeliveryDelaySeconds);
             ShowEditor = false;
         }
-        catch (Exception ex) { FormError = ex.Message; }
-        finally { Busy = false; }
+        catch (Exception ex)
+        {
+            FormError = ex.Message;
+        }
+        finally
+        {
+            Busy = false;
+        }
         if (!ShowEditor && Selected is { } saved)
         {
             await RefreshAsync();
@@ -220,25 +366,50 @@ public sealed class QueuesViewModel(IChainQueueService queues, PlaceContextServi
 
     public async Task RetryAsync(JobChainSubmission message)
     {
-        if (Busy || Selected is null) return;
+        if (Busy || Selected is null)
+        {
+            return;
+        }
         Busy = true;
         Error = null;
-        try { await queues.RetryAsync(Selected.Id, message.TrackingId); }
-        catch (Exception ex) { Error = ex.Message; return; }
-        finally { Busy = false; }
+        try
+        {
+            await queues.RetryAsync(Selected.Id, message.TrackingId);
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            return;
+        }
+        finally
+        {
+            Busy = false;
+        }
         await RefreshAsync();
     }
 
     public void RequestDelete()
     {
-        if (Busy) return;
+        if (Busy)
+        {
+            return;
+        }
         Deleting = Selected;
         DeleteError = null;
     }
-    public void CancelDelete() { if (!Busy) Deleting = null; }
+    public void CancelDelete()
+    {
+        if (!Busy)
+        {
+            Deleting = null;
+        }
+    }
     public async Task DeleteAsync()
     {
-        if (Deleting is not { } queue || Busy) return;
+        if (Deleting is not { } queue || Busy)
+        {
+            return;
+        }
         Busy = true;
         DeleteError = null;
         try
@@ -248,8 +419,14 @@ public sealed class QueuesViewModel(IChainQueueService queues, PlaceContextServi
             Selected = null;
             Messages = [];
         }
-        catch (Exception ex) { DeleteError = ex.Message; }
-        finally { Busy = false; }
+        catch (Exception ex)
+        {
+            DeleteError = ex.Message;
+        }
+        finally
+        {
+            Busy = false;
+        }
         if (Deleting is null)
         {
             DetailQueueId = null;
@@ -260,11 +437,24 @@ public sealed class QueuesViewModel(IChainQueueService queues, PlaceContextServi
 
     public async Task ToggleIntakeAsync()
     {
-        if (Selected is not { } selected || Busy) return;
+        if (Selected is not { } selected || Busy)
+        {
+            return;
+        }
         Busy = true;
-        try { Selected = await queues.SaveAsync(selected.Id, selected.ProjectId, selected.ChainId, selected.Name, !selected.Enabled, selected.MessageTtlSeconds, selected.ReceiptRetentionDays, selected.MaxAttempts, selected.RetryDelaySeconds, selected.DeliveryDelaySeconds); }
-        catch (Exception ex) { Error = ex.Message; return; }
-        finally { Busy = false; }
+        try
+        {
+            Selected = await queues.SaveAsync(selected.Id, selected.ProjectId, selected.ChainId, selected.Name, !selected.Enabled, selected.MessageTtlSeconds, selected.ReceiptRetentionDays, selected.MaxAttempts, selected.RetryDelaySeconds, selected.DeliveryDelaySeconds);
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            return;
+        }
+        finally
+        {
+            Busy = false;
+        }
         await RefreshAsync();
     }
 }

@@ -1,6 +1,8 @@
 using System.Text;
-using PlaceContext.Application.Ports;
 using Microsoft.Extensions.Logging;
+using PlaceContext.Application.Artifacts;
+using PlaceContext.Application.Search;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -79,7 +81,9 @@ public sealed class PostJobActionService
                         break;
                     case PostJobActionKind.RawBundle:
                         foreach (var f in PostJobArtifacts.RawBundle(run))
+                        {
                             added |= await StoreAsync(job, run, action, f, bucket, ct);
+                        }
                         break;
                 }
             }
@@ -92,7 +96,10 @@ public sealed class PostJobActionService
             }
         }
 
-        if (added) await _uow.SaveChangesAsync(ct);
+        if (added)
+        {
+            await _uow.SaveChangesAsync(ct);
+        }
     }
 
     // ── The mandatory, return-type-driven primary artifact ──────────────────────────────────────────
@@ -127,17 +134,17 @@ public sealed class PostJobActionService
 
     private (PostJobActionKind Kind, PostJobArtifacts.BuiltFile File) BuildPrimaryArtifact(
         Job job, JobRun run) => job.ReturnType switch
-    {
-        JobReturnType.Table => (PostJobActionKind.HtmlReport, PostJobArtifacts.HtmlReport(job, run)),
-        JobReturnType.Chart => (PostJobActionKind.Chart, StyledChart(job, run)),
-        JobReturnType.Csv => (PostJobActionKind.Csv, PostJobArtifacts.Csv(run)),
-        JobReturnType.Html => (PostJobActionKind.HtmlOutput, HtmlResult(job, run)),
-        JobReturnType.Text => (PostJobActionKind.RawBundle, TextResult(run)),
-        JobReturnType.Pdf => (PostJobActionKind.RawBundle, FileResult(job, run, PdfExtensions)),
-        JobReturnType.Image => (PostJobActionKind.RawBundle, FileResult(job, run, ImageExtensions)),
-        JobReturnType.Video => (PostJobActionKind.RawBundle, FileResult(job, run, VideoExtensions)),
-        _ => (PostJobActionKind.RawBundle, JsonResult(run)), // Json
-    };
+        {
+            JobReturnType.Table => (PostJobActionKind.HtmlReport, PostJobArtifacts.HtmlReport(job, run)),
+            JobReturnType.Chart => (PostJobActionKind.Chart, StyledChart(job, run)),
+            JobReturnType.Csv => (PostJobActionKind.Csv, PostJobArtifacts.Csv(run)),
+            JobReturnType.Html => (PostJobActionKind.HtmlOutput, HtmlResult(job, run)),
+            JobReturnType.Text => (PostJobActionKind.RawBundle, TextResult(run)),
+            JobReturnType.Pdf => (PostJobActionKind.RawBundle, FileResult(job, run, PdfExtensions)),
+            JobReturnType.Image => (PostJobActionKind.RawBundle, FileResult(job, run, ImageExtensions)),
+            JobReturnType.Video => (PostJobActionKind.RawBundle, FileResult(job, run, VideoExtensions)),
+            _ => (PostJobActionKind.RawBundle, JsonResult(run)), // Json
+        };
 
     private static readonly string[] PdfExtensions = { ".pdf" };
     private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".tif", ".tiff", ".avif" };
@@ -159,13 +166,18 @@ public sealed class PostJobActionService
                 string.Equals(f.Name, declared, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(Path.GetFileName(f.Name), declared, StringComparison.OrdinalIgnoreCase));
             if (named is not null)
+            {
                 return new PostJobArtifacts.BuiltFile(Path.GetFileName(named.Name), named.GetBytes(),
-                    DocContentType(named.Name) ?? "application/octet-stream", Path.GetFileName(named.Name));
+                                DocContentType(named.Name) ?? "application/octet-stream", Path.GetFileName(named.Name));
+            }
         }
         foreach (var f in files)
         {
             var ext = Path.GetExtension(f.Name).ToLowerInvariant();
-            if (!extensions.Contains(ext)) continue;
+            if (!extensions.Contains(ext))
+            {
+                continue;
+            }
             var contentType = DocContentType(f.Name) ?? "application/octet-stream";
             return new PostJobArtifacts.BuiltFile(Path.GetFileName(f.Name), f.GetBytes(), contentType,
                 Path.GetFileName(f.Name));
@@ -180,7 +192,10 @@ public sealed class PostJobActionService
     private static PostJobArtifacts.BuiltFile StyledChart(Job job, JobRun run)
     {
         var file = PostJobArtifacts.Chart(job, run);
-        return file with { Content = Encoding.UTF8.GetBytes(LlmHtml.StyleChart(Encoding.UTF8.GetString(file.Content))) };
+        return file with
+        {
+            Content = Encoding.UTF8.GetBytes(LlmHtml.StyleChart(Encoding.UTF8.GetString(file.Content)))
+        };
     }
 
     // Even an empty return yields a well-formed artifact — mandatory generation has no
@@ -188,9 +203,12 @@ public sealed class PostJobActionService
     private static PostJobArtifacts.BuiltFile JsonResult(JobRun run)
     {
         var data = PrimaryData(run);
-        if (string.IsNullOrWhiteSpace(data)) data = "null";
+        if (string.IsNullOrWhiteSpace(data))
+        {
+            data = "null";
+        }
         return new PostJobArtifacts.BuiltFile("result.json", Encoding.UTF8.GetBytes(data),
-            "application/json", "JSON result");
+                    "application/json", "JSON result");
     }
 
     private static PostJobArtifacts.BuiltFile TextResult(JobRun run) =>
@@ -203,10 +221,12 @@ public sealed class PostJobActionService
     {
         var data = PrimaryData(run);
         if (IsHtmlDocument(data))
+        {
             return new PostJobArtifacts.BuiltFile("output.html", Encoding.UTF8.GetBytes(data),
-                "text/html; charset=utf-8", "HTML output");
+                        "text/html; charset=utf-8", "HTML output");
+        }
         _log?.LogWarning("Run {RunId} (job {JobId}) declares an Html return type but did not return an HTML document — rendering a report instead.",
-            run.Id, job.Id);
+                    run.Id, job.Id);
         return PostJobArtifacts.HtmlReport(job, run);
     }
 
@@ -229,23 +249,33 @@ public sealed class PostJobActionService
         {
             foreach (var f in files)
             {
-                if (IsHtmlFile(f) && !f.IsBinary) await StoreHtmlAsync($"{prefix}/{f.Name}", f.Content, f.Name);
-                else if (DocContentType(f.Name) is { } contentType)
+                if (IsHtmlFile(f) && !f.IsBinary)
+                {
+                    await StoreHtmlAsync($"{prefix}/{f.Name}", f.Content, f.Name);
+                    continue;
+                }
+                if (DocContentType(f.Name) is { } contentType)
+                {
                     await StoreDocAsync($"{prefix}/{f.Name}", f.GetBytes(), f.Name, PostJobActionKind.RawBundle, contentType);
+                }
             }
         }
 
         foreach (var shard in run.ShardResults)
         {
             if (shard.Artifact is { } a && IsHtmlDocument(a))
+            {
                 await StoreHtmlAsync($"shard-{shard.Index}.html", a, $"Shard {shard.Index} HTML output");
+            }
             await StoreFilesAsync(shard.Artifacts, $"out/{shard.Index}");
         }
 
         if (run.ReduceResult is { } reduce)
         {
             if (reduce.Artifact is { } r && IsHtmlDocument(r))
+            {
                 await StoreHtmlAsync("reduce.html", r, "Reduce HTML output");
+            }
             await StoreFilesAsync(reduce.Artifacts, "out/reduce");
         }
 
@@ -289,7 +319,10 @@ public sealed class PostJobActionService
     // The job's primary data: the reduce artifact when present (final aggregate), else the shard artifacts.
     private static string PrimaryData(JobRun run)
     {
-        if (run.ReduceResult?.Artifact is { Length: > 0 } r) return r;
+        if (run.ReduceResult?.Artifact is { Length: > 0 } r)
+        {
+            return r;
+        }
         var parts = run.ShardResults.Where(s => !string.IsNullOrWhiteSpace(s.Artifact)).Select(s => s.Artifact!);
         return string.Join("\n", parts);
     }
@@ -311,10 +344,12 @@ public sealed class PostJobActionService
                 var bytes = file.Content.Length > 8000 ? file.Content[..8000] : file.Content;
                 var text = Encoding.UTF8.GetString(bytes);
                 if (!string.IsNullOrWhiteSpace(text))
+                {
                     await _contentIndexer.IndexAsync(
-                        run.ProjectId, ContentKind.Document,
-                        $"run/{run.Id:N}/{file.FileName}",
-                        $"{job.Name} — {file.Title}\n\n{text}", ct);
+                                        run.ProjectId, ContentKind.Document,
+                                        $"run/{run.Id:N}/{file.FileName}",
+                                        $"{job.Name} — {file.Title}\n\n{text}", ct);
+                }
             }
             catch { }
         }

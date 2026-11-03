@@ -2,8 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Shared;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tenancy;
 
@@ -41,9 +42,11 @@ public static class EncryptionAtRestBootstrap
         n += await EncryptProjectDataTextCellsAsync(config, enc, log, ct);
 
         if (n > 0)
+        {
             log.LogInformation("Encryption-at-rest bootstrap: rewrote {Count} field(s)/row(s).", n);
-        else
-            log.LogInformation("Encryption-at-rest bootstrap: nothing to rewrite (already encrypted or empty).");
+            return;
+        }
+        log.LogInformation("Encryption-at-rest bootstrap: nothing to rewrite (already encrypted or empty).");
     }
 
     internal static async Task<int> EncryptTenantAsync(AppDbContext db, IDataEncryptor enc, CancellationToken ct = default)
@@ -78,12 +81,22 @@ public static class EncryptionAtRestBootstrap
                         && !r.FinalOutput.StartsWith(Prefix)))
                 .Take(ChainRunBatch)
                 .ToListAsync(ct);
-            if (rows.Count == 0) break;
-
+            if (rows.Count == 0)
+            {
+                break;
+            }
             foreach (var row in rows)
             {
-                if (NeedsProtect(enc, row.StepsJson)) { row.StepsJson = enc.Protect(row.StepsJson, p); n++; }
-                if (NeedsProtect(enc, row.FinalOutput)) { row.FinalOutput = enc.Protect(row.FinalOutput, p); n++; }
+                if (NeedsProtect(enc, row.StepsJson))
+                {
+                    row.StepsJson = enc.Protect(row.StepsJson, p);
+                    n++;
+                }
+                if (NeedsProtect(enc, row.FinalOutput))
+                {
+                    row.FinalOutput = enc.Protect(row.FinalOutput, p);
+                    n++;
+                }
             }
             await db.SaveChangesAsync(ct);
             db.ChangeTracker.Clear();
@@ -98,15 +111,46 @@ public static class EncryptionAtRestBootstrap
         var n = 0;
         foreach (var r in rows)
         {
-            if (NeedsProtect(enc, r.MapSource)) { r.MapSource = enc.Protect(r.MapSource, p); n++; }
-            if (NeedsProtect(enc, r.MapFilesJson)) { r.MapFilesJson = enc.Protect(r.MapFilesJson, p); n++; }
-            if (NeedsProtect(enc, r.InputPayloadsJson)) { r.InputPayloadsJson = enc.Protect(r.InputPayloadsJson, p); n++; }
-            if (NeedsProtect(enc, r.MapEnvJson)) { r.MapEnvJson = enc.Protect(r.MapEnvJson, p); n++; }
-            if (NeedsProtect(enc, r.ReduceSource)) { r.ReduceSource = enc.Protect(r.ReduceSource, p); n++; }
-            if (NeedsProtect(enc, r.ReduceFilesJson)) { r.ReduceFilesJson = enc.Protect(r.ReduceFilesJson, p); n++; }
-            if (NeedsProtect(enc, r.ReduceEnvJson)) { r.ReduceEnvJson = enc.Protect(r.ReduceEnvJson, p); n++; }
+            if (NeedsProtect(enc, r.MapSource))
+            {
+                r.MapSource = enc.Protect(r.MapSource, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.MapFilesJson))
+            {
+                r.MapFilesJson = enc.Protect(r.MapFilesJson, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.InputPayloadsJson))
+            {
+                r.InputPayloadsJson = enc.Protect(r.InputPayloadsJson, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.MapEnvJson))
+            {
+                r.MapEnvJson = enc.Protect(r.MapEnvJson, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.ReduceSource))
+            {
+                r.ReduceSource = enc.Protect(r.ReduceSource, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.ReduceFilesJson))
+            {
+                r.ReduceFilesJson = enc.Protect(r.ReduceFilesJson, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.ReduceEnvJson))
+            {
+                r.ReduceEnvJson = enc.Protect(r.ReduceEnvJson, p);
+                n++;
+            }
         }
-        if (n > 0) await db.SaveChangesAsync(ct);
+        if (n > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         return n;
     }
 
@@ -117,11 +161,26 @@ public static class EncryptionAtRestBootstrap
         var n = 0;
         foreach (var r in rows)
         {
-            if (NeedsProtect(enc, r.ShardResultsJson)) { r.ShardResultsJson = enc.Protect(r.ShardResultsJson, p); n++; }
-            if (NeedsProtect(enc, r.ReduceResultJson)) { r.ReduceResultJson = enc.Protect(r.ReduceResultJson, p); n++; }
-            if (NeedsProtect(enc, r.SnapshotJson)) { r.SnapshotJson = enc.Protect(r.SnapshotJson, p); n++; }
+            if (NeedsProtect(enc, r.ShardResultsJson))
+            {
+                r.ShardResultsJson = enc.Protect(r.ShardResultsJson, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.ReduceResultJson))
+            {
+                r.ReduceResultJson = enc.Protect(r.ReduceResultJson, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.SnapshotJson))
+            {
+                r.SnapshotJson = enc.Protect(r.SnapshotJson, p);
+                n++;
+            }
         }
-        if (n > 0) await db.SaveChangesAsync(ct);
+        if (n > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         return n;
     }
 
@@ -132,9 +191,16 @@ public static class EncryptionAtRestBootstrap
         var n = 0;
         foreach (var r in rows)
         {
-            if (NeedsProtect(enc, r.Markdown)) { r.Markdown = enc.Protect(r.Markdown, p); n++; }
+            if (NeedsProtect(enc, r.Markdown))
+            {
+                r.Markdown = enc.Protect(r.Markdown, p);
+                n++;
+            }
         }
-        if (n > 0) await db.SaveChangesAsync(ct);
+        if (n > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         return n;
     }
 
@@ -145,9 +211,16 @@ public static class EncryptionAtRestBootstrap
         var n = 0;
         foreach (var r in rows)
         {
-            if (NeedsProtect(enc, r.Payload)) { r.Payload = enc.Protect(r.Payload, p); n++; }
+            if (NeedsProtect(enc, r.Payload))
+            {
+                r.Payload = enc.Protect(r.Payload, p);
+                n++;
+            }
         }
-        if (n > 0) await db.SaveChangesAsync(ct);
+        if (n > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         return n;
     }
 
@@ -158,11 +231,26 @@ public static class EncryptionAtRestBootstrap
         var n = 0;
         foreach (var r in rows)
         {
-            if (NeedsProtect(enc, r.Question)) { r.Question = enc.Protect(r.Question, p); n++; }
-            if (NeedsProtect(enc, r.Choice)) { r.Choice = enc.Protect(r.Choice, p); n++; }
-            if (NeedsProtect(enc, r.Rationale)) { r.Rationale = enc.Protect(r.Rationale, p); n++; }
+            if (NeedsProtect(enc, r.Question))
+            {
+                r.Question = enc.Protect(r.Question, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.Choice))
+            {
+                r.Choice = enc.Protect(r.Choice, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.Rationale))
+            {
+                r.Rationale = enc.Protect(r.Rationale, p);
+                n++;
+            }
         }
-        if (n > 0) await db.SaveChangesAsync(ct);
+        if (n > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         return n;
     }
 
@@ -173,10 +261,21 @@ public static class EncryptionAtRestBootstrap
         var n = 0;
         foreach (var r in rows)
         {
-            if (NeedsProtect(enc, r.Summary)) { r.Summary = enc.Protect(r.Summary, p); n++; }
-            if (NeedsProtect(enc, r.Rationale)) { r.Rationale = enc.Protect(r.Rationale, p); n++; }
+            if (NeedsProtect(enc, r.Summary))
+            {
+                r.Summary = enc.Protect(r.Summary, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.Rationale))
+            {
+                r.Rationale = enc.Protect(r.Rationale, p);
+                n++;
+            }
         }
-        if (n > 0) await db.SaveChangesAsync(ct);
+        if (n > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         return n;
     }
 
@@ -187,9 +286,16 @@ public static class EncryptionAtRestBootstrap
         var n = 0;
         foreach (var r in rows)
         {
-            if (NeedsProtect(enc, r.Html)) { r.Html = enc.Protect(r.Html, p); n++; }
+            if (NeedsProtect(enc, r.Html))
+            {
+                r.Html = enc.Protect(r.Html, p);
+                n++;
+            }
         }
-        if (n > 0) await db.SaveChangesAsync(ct);
+        if (n > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         return n;
     }
 
@@ -200,11 +306,26 @@ public static class EncryptionAtRestBootstrap
         var n = 0;
         foreach (var r in rows)
         {
-            if (NeedsProtect(enc, r.Summary)) { r.Summary = enc.Protect(r.Summary, p); n++; }
-            if (NeedsProtect(enc, r.RequestJson)) { r.RequestJson = enc.Protect(r.RequestJson, p); n++; }
-            if (NeedsProtect(enc, r.ResponseJson)) { r.ResponseJson = enc.Protect(r.ResponseJson, p); n++; }
+            if (NeedsProtect(enc, r.Summary))
+            {
+                r.Summary = enc.Protect(r.Summary, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.RequestJson))
+            {
+                r.RequestJson = enc.Protect(r.RequestJson, p);
+                n++;
+            }
+            if (NeedsProtect(enc, r.ResponseJson))
+            {
+                r.ResponseJson = enc.Protect(r.ResponseJson, p);
+                n++;
+            }
         }
-        if (n > 0) await db.SaveChangesAsync(ct);
+        if (n > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         return n;
     }
 
@@ -215,9 +336,16 @@ public static class EncryptionAtRestBootstrap
         var n = 0;
         foreach (var r in rows)
         {
-            if (NeedsProtect(enc, r.Payload)) { r.Payload = enc.Protect(r.Payload, p); n++; }
+            if (NeedsProtect(enc, r.Payload))
+            {
+                r.Payload = enc.Protect(r.Payload, p);
+                n++;
+            }
         }
-        if (n > 0) await db.SaveChangesAsync(ct);
+        if (n > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         return n;
     }
 
@@ -236,13 +364,19 @@ public static class EncryptionAtRestBootstrap
                 n++;
             }
         }
-        if (n > 0) await db.SaveChangesAsync(ct);
+        if (n > 0)
+        {
+            await db.SaveChangesAsync(ct);
+        }
         return n;
     }
 
     private static bool LooksLikeAccidentalPlaintext(string? s)
     {
-        if (string.IsNullOrEmpty(s) || s.Length > 512) return false;
+        if (string.IsNullOrEmpty(s) || s.Length > 512)
+        {
+            return false;
+        }
         return s.Any(char.IsWhiteSpace) || s.All(c => char.IsLetterOrDigit(c) || "-_.".Contains(c));
     }
 
@@ -270,7 +404,9 @@ public static class EncryptionAtRestBootstrap
             cmd.CommandText = "SELECT nspname FROM pg_namespace WHERE nspname LIKE 'proj_%' ORDER BY 1";
             await using var r = await cmd.ExecuteReaderAsync(ct);
             while (await r.ReadAsync(ct))
+            {
                 schemas.Add(r.GetString(0));
+            }
         }
 
         foreach (var schema in schemas)
@@ -288,7 +424,9 @@ public static class EncryptionAtRestBootstrap
                 cmd.Parameters.AddWithValue("s", schema);
                 await using var r = await cmd.ExecuteReaderAsync(ct);
                 while (await r.ReadAsync(ct))
+                {
                     tables.Add(r.GetString(0));
+                }
             }
 
             foreach (var table in tables)
@@ -332,12 +470,16 @@ public static class EncryptionAtRestBootstrap
             cmd.Parameters.AddWithValue("t", table);
             await using var r = await cmd.ExecuteReaderAsync(ct);
             while (await r.ReadAsync(ct))
+            {
                 columns.Add((r.GetString(0), r.GetString(1)));
+            }
         }
 
         var n = 0;
         foreach (var (col, typ) in columns)
+        {
             n += await EncryptColumnBatchesAsync(conn, enc, purpose, qSchema, qTable, QuoteIdent(col), typ, ct);
+        }
         return n;
     }
 
@@ -366,7 +508,9 @@ public static class EncryptionAtRestBootstrap
                 sel.Parameters.AddWithValue("lim", ProjectDataBatch);
                 await using var r = await sel.ExecuteReaderAsync(ct);
                 while (await r.ReadAsync(ct))
+                {
                     batch.Add((r.GetString(0), r.GetString(1)));
+                }
             }
 
             if (batch.Count == 0)
@@ -378,17 +522,28 @@ public static class EncryptionAtRestBootstrap
             foreach (var (ctid, plain) in batch)
             {
                 // Skip absurdly large cells rather than OOM the Host.
-                if (plain.Length > DataProtectionEncryptor.MaxPlaintextChars) continue;
-                // jsonb::text wraps strings in quotes — strip JSON string encoding when present.
+                if (plain.Length > DataProtectionEncryptor.MaxPlaintextChars)
+                {
+                    continue;
+                }                // jsonb::text wraps strings in quotes — strip JSON string encoding when present.
                 var value = typ == DataColumnTypes.Jsonb ? UnwrapJsonbText(plain) : plain;
-                if (enc.IsProtected(value)) continue;
+                if (enc.IsProtected(value))
+                {
+                    continue;
+                }
                 var cipher = enc.Protect(value, purpose);
                 await using var upd = conn.CreateCommand();
                 upd.Transaction = tx;
-                if (typ == DataColumnTypes.Jsonb)
-                    upd.CommandText = $"UPDATE {qSchema}.{qTable} SET {qCol} = to_jsonb(@v::text) WHERE ctid = @ctid::tid";
-                else
+                void EncryptColumn()
+                {
+                    if (typ == DataColumnTypes.Jsonb)
+                    {
+                        upd.CommandText = $"UPDATE {qSchema}.{qTable} SET {qCol} = to_jsonb(@v::text) WHERE ctid = @ctid::tid";
+                        return;
+                    }
                     upd.CommandText = $"UPDATE {qSchema}.{qTable} SET {qCol} = @v WHERE ctid = @ctid::tid";
+                }
+                EncryptColumn();
                 upd.Parameters.AddWithValue("v", cipher);
                 upd.Parameters.AddWithValue("ctid", ctid);
                 await upd.ExecuteNonQueryAsync(ct);
@@ -406,7 +561,10 @@ public static class EncryptionAtRestBootstrap
     {
         if (s.Length >= 2 && s[0] == '"' && s[^1] == '"')
         {
-            try { return System.Text.Json.JsonSerializer.Deserialize<string>(s) ?? s; }
+            try
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<string>(s) ?? s;
+            }
             catch { /* keep raw */ }
         }
         return s;

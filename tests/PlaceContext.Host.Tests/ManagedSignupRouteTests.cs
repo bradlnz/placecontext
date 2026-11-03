@@ -51,7 +51,7 @@ public sealed class ManagedSignupRouteTests
         Assert.False(ManagedSignupUrls.IsPublicApexPath("/settings/billing"));
         Assert.False(ManagedSignupUrls.IsPublicApexPath("/api/v1/projects"));
         Assert.False(ManagedSignupUrls.IsPublicApexPath("/auth/signup/complete"));
-        var middleware = Source("src/PlaceContext.Host/Tenancy/TenantResolutionMiddleware.cs");
+        var middleware = Source("src/PlaceContext.Host/Middleware/TenantResolutionMiddleware.cs");
         Assert.Contains("context.Response.Redirect(\"/login\")", middleware);
     }
 
@@ -67,8 +67,13 @@ public sealed class ManagedSignupRouteTests
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
         while (current is not null && !File.Exists(Path.Combine(current.FullName, "PlaceContext.slnx")))
+        {
             current = current.Parent;
-        if (current is null) throw new FileNotFoundException("Repository root not found");
+        }
+        if (current is null)
+        {
+            throw new FileNotFoundException("Repository root not found");
+        }
         return File.ReadAllText(Path.Combine(current.FullName, path));
     }
 }

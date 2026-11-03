@@ -1,6 +1,4 @@
-using System.Net.Http;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Mcp;

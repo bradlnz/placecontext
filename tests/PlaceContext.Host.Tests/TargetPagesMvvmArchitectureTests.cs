@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Auth;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Host.Components.ViewModels;
 using PlaceContext.Host.Wiki;
 using PlaceContext.Infrastructure.Persistence;
@@ -40,7 +41,9 @@ public sealed class TargetPagesMvvmArchitectureTests
         {
             var host = Path.Combine(directory.FullName, "src", "PlaceContext.Host");
             if (Directory.Exists(host))
+            {
                 return File.ReadAllText(Path.Combine(host, relativePath));
+            }
             directory = directory.Parent;
         }
 

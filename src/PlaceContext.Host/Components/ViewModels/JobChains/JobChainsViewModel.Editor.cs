@@ -1,28 +1,42 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Operations;
 using PlaceContext.Application.Workflows;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class JobChainsViewModel
 {
     // ── Editor state ──────────────────────────────────────────────────────────────────────────
-    public bool ShowEditor { get; private set; }
-    public bool Saving { get; private set; }
-    public Guid? EditChainId { get; private set; }
-    public string? EditorError { get; private set; }
+    public bool ShowEditor
+    {
+        get; private set;
+    }
+    public bool Saving
+    {
+        get; private set;
+    }
+    public Guid? EditChainId
+    {
+        get; private set;
+    }
+    public string? EditorError
+    {
+        get; private set;
+    }
     public string EditorTab { get; set; } = "details";
     public string EditorView { get; set; } = "canvas";
     public string EdName { get; set; } = "";
     public string EdDescription { get; set; } = "";
-    public WorkflowReadinessReport? Readiness { get; private set; }
+    public WorkflowReadinessReport? Readiness
+    {
+        get; private set;
+    }
 
     private IReadOnlyList<JobChainStageView> SaveableStageViews() => BuildCanvasStageViews()
         .Where(stage => stage.Jobs.Count > 0 || stage.Action is not null).ToArray();
@@ -42,30 +56,69 @@ public sealed partial class JobChainsViewModel
     public Dictionary<int, ChainAction?> EdStageActions { get; } = new();
 
     // ── Send Email action editor ─────────────────────────────────────────────────────────────
-    public bool ShowEmailActionEditor { get; private set; }
-    public int? EmailActionEditorStageIndex { get; private set; }
+    public bool ShowEmailActionEditor
+    {
+        get; private set;
+    }
+    public int? EmailActionEditorStageIndex
+    {
+        get; private set;
+    }
     public string EmailRecipient { get; set; } = "";
     public string EmailRecipientName { get; set; } = "";
     public string EmailSubject { get; set; } = "";
     public string EmailBody { get; set; } = "";
     public string EmailAttachmentPath { get; set; } = "";
-    public string? EmailActionError { get; private set; }
-    public bool LoadingEmailJsonPaths { get; private set; }
-    public string? EmailJsonPathSource { get; private set; }
-    public IReadOnlyList<EmailJsonPathSuggestion> EmailJsonPaths { get; private set; } =
+    public string? EmailActionError
+    {
+        get; private set;
+    }
+    public bool LoadingEmailJsonPaths
+    {
+        get; private set;
+    }
+    public string? EmailJsonPathSource
+    {
+        get; private set;
+    }
+    public IReadOnlyList<EmailJsonPathSuggestion> EmailJsonPaths
+    {
+        get; private set;
+    } =
         Array.Empty<EmailJsonPathSuggestion>();
-    public bool ShowSmsActionEditor { get; private set; }
-    public int? SmsActionEditorStageIndex { get; private set; }
+    public bool ShowSmsActionEditor
+    {
+        get; private set;
+    }
+    public int? SmsActionEditorStageIndex
+    {
+        get; private set;
+    }
     public string SmsRecipient { get; set; } = "";
     public string SmsBody { get; set; } = "";
-    public string? SmsActionError { get; private set; }
-    public bool ShowStageNodePicker { get; private set; }
-    public int StageNodePickerIndex { get; private set; }
+    public string? SmsActionError
+    {
+        get; private set;
+    }
+    public bool ShowStageNodePicker
+    {
+        get; private set;
+    }
+    public int StageNodePickerIndex
+    {
+        get; private set;
+    }
     private int? _actionInsertIndex;
 
     // ── Gate editor modal state ───────────────────────────────────────────────────────────────
-    public bool ShowGateEditor { get; private set; }
-    public int GateEditorStageIndex { get; private set; }
+    public bool ShowGateEditor
+    {
+        get; private set;
+    }
+    public int GateEditorStageIndex
+    {
+        get; private set;
+    }
     public string GateEditorType { get; set; } = "wait"; // "wait" or "condition"
     public double GateEditorDuration { get; set; } = 30;
     public string GateEditorExpression { get; set; } = "exists:data";
@@ -78,7 +131,9 @@ public sealed partial class JobChainsViewModel
     public void AddElseJob()
     {
         if (!Guid.TryParse(GateEditorElseJobId, out var jobId) || jobId == Guid.Empty)
+        {
             return;
+        }
         GateEditorElseStages.Add(ChainStage.Of(jobId));
         GateEditorElseJobId = "";
         NotifyStateChanged();
@@ -125,7 +180,7 @@ public sealed partial class JobChainsViewModel
         EdStageActions.Clear();
         foreach (var (stage, i) in chain.Stages.Select((stage, i) => (stage, i)))
         {
-            var definition = PlaceContext.Host.Build.WorkflowStage.FromView(stage).ToStage();
+            var definition = PlaceContext.Application.Build.WorkflowStage.FromView(stage).ToStage();
             EdStages.Add(definition.JobIds.ToList());
             EdStageGates[i] = definition.Gate;
             EdStageActions[i] = definition.Action;
@@ -157,14 +212,19 @@ public sealed partial class JobChainsViewModel
         StepRunDetail = null;
         StopPolling();
         var uri = _navigation.GetUriWithQueryParameters(new Dictionary<string, object?> { ["workflow"] = null, ["chain"] = null });
-        if (uri != _navigation.Uri) _navigation.NavigateTo(uri, replace: true);
+        if (uri != _navigation.Uri)
+        {
+            _navigation.NavigateTo(uri, replace: true);
+        }
         NotifyStateChanged();
     }
 
     public void AddStage()
     {
         if (!Guid.TryParse(EdAddJobId, out var jobId))
+        {
             return;
+        }
         EdStages.Add(new List<Guid> { jobId });
         EdAddJobId = "";
         NotifyStateChanged();
@@ -173,7 +233,9 @@ public sealed partial class JobChainsViewModel
     public void AddStage(Guid jobId)
     {
         if (jobId == Guid.Empty)
+        {
             return;
+        }
         EdStages.Add(new List<Guid> { jobId });
         NotifyStateChanged();
     }
@@ -209,9 +271,11 @@ public sealed partial class JobChainsViewModel
         {
             EdStages[stageIndex].RemoveAt(branchIndex);
             if (EdStages[stageIndex].Count == 0)
+            {
                 RemoveStage(stageIndex);
-            else
-                NotifyStateChanged();
+                return;
+            }
+            NotifyStateChanged();
         }
     }
 
@@ -219,7 +283,9 @@ public sealed partial class JobChainsViewModel
     {
         var target = index + delta;
         if (target < 0 || target >= EdStages.Count)
+        {
             return;
+        }
         (EdStages[index], EdStages[target]) = (EdStages[target], EdStages[index]);
         var sourceGate = EdStageGates.GetValueOrDefault(index);
         var targetGate = EdStageGates.GetValueOrDefault(target);
@@ -241,8 +307,9 @@ public sealed partial class JobChainsViewModel
             || targetIndex >= EdStages.Count
             || sourceIndex == targetIndex
         )
+        {
             return;
-
+        }
         var stage = EdStages[sourceIndex];
         var gate = EdStageGates.GetValueOrDefault(sourceIndex);
         var action = EdStageActions.GetValueOrDefault(sourceIndex);
@@ -250,7 +317,9 @@ public sealed partial class JobChainsViewModel
         ShiftGatesAfterRemoval(sourceIndex);
         ShiftActionsAfterRemoval(sourceIndex);
         if (targetIndex > sourceIndex)
+        {
             targetIndex--;
+        }
         EdStages.Insert(targetIndex, stage);
         ShiftGatesForInsert(targetIndex);
         ShiftActionsForInsert(targetIndex);
@@ -262,7 +331,9 @@ public sealed partial class JobChainsViewModel
     public void RemoveStage(int stageIndex)
     {
         if (stageIndex < 0 || stageIndex >= EdStages.Count)
+        {
             return;
+        }
         EdStages.RemoveAt(stageIndex);
         ShiftGatesAfterRemoval(stageIndex);
         ShiftActionsAfterRemoval(stageIndex);
@@ -272,7 +343,9 @@ public sealed partial class JobChainsViewModel
     public void AddPath(int stageIndex, Guid jobId)
     {
         if (stageIndex < 0 || stageIndex >= EdStages.Count || jobId == Guid.Empty)
+        {
             return;
+        }
         EdStages[stageIndex].Add(jobId);
         NotifyStateChanged();
     }
@@ -288,15 +361,18 @@ public sealed partial class JobChainsViewModel
             || sourceBranch >= EdStages[sourceStage].Count
             || sourceStage == targetStage
         )
+        {
             return;
-
+        }
         var jobId = EdStages[sourceStage][sourceBranch];
         EdStages[sourceStage].RemoveAt(sourceBranch);
         EdStages[targetStage].Add(jobId);
         if (EdStages[sourceStage].Count == 0)
+        {
             RemoveStage(sourceStage);
-        else
-            NotifyStateChanged();
+            return;
+        }
+        NotifyStateChanged();
     }
 
     private void ShiftGatesAfterRemoval(int removedIndex)
@@ -306,7 +382,9 @@ public sealed partial class JobChainsViewModel
             .ToDictionary(kv => kv.Key > removedIndex ? kv.Key - 1 : kv.Key, kv => kv.Value);
         EdStageGates.Clear();
         foreach (var (key, value) in shifted)
+        {
             EdStageGates[key] = value;
+        }
     }
 
     private void ShiftGatesForInsert(int insertedIndex)
@@ -314,23 +392,29 @@ public sealed partial class JobChainsViewModel
         var shifted = EdStageGates.OrderByDescending(kv => kv.Key).ToList();
         EdStageGates.Clear();
         foreach (var (key, value) in shifted)
+        {
             EdStageGates[key >= insertedIndex ? key + 1 : key] = value;
+        }
     }
 
     private void SetGate(int index, ChainGate? gate)
     {
         if (gate is null)
+        {
             EdStageGates.Remove(index);
-        else
-            EdStageGates[index] = gate;
+            return;
+        }
+        EdStageGates[index] = gate;
     }
 
     private void SetAction(int index, ChainAction? action)
     {
         if (action is null)
+        {
             EdStageActions.Remove(index);
-        else
-            EdStageActions[index] = action;
+            return;
+        }
+        EdStageActions[index] = action;
     }
 
     private void ShiftActionsAfterRemoval(int removedIndex)
@@ -340,7 +424,9 @@ public sealed partial class JobChainsViewModel
             .ToDictionary(kv => kv.Key > removedIndex ? kv.Key - 1 : kv.Key, kv => kv.Value);
         EdStageActions.Clear();
         foreach (var (key, value) in shifted)
+        {
             EdStageActions[key] = value;
+        }
     }
 
     private void ShiftActionsForInsert(int insertedIndex)
@@ -348,13 +434,17 @@ public sealed partial class JobChainsViewModel
         var shifted = EdStageActions.OrderByDescending(kv => kv.Key).ToList();
         EdStageActions.Clear();
         foreach (var (key, value) in shifted)
+        {
             EdStageActions[key >= insertedIndex ? key + 1 : key] = value;
+        }
     }
 
     public async Task OpenNewEmailAction()
     {
         if (!CanSendEmailAction)
+        {
             return;
+        }
         _actionInsertIndex = null;
         await OpenEmailActionFormAsync(EdStages.Count);
     }
@@ -362,7 +452,9 @@ public sealed partial class JobChainsViewModel
     public async Task OpenEmailActionAt(int stageIndex)
     {
         if (!CanSendEmailAction)
+        {
             return;
+        }
         _actionInsertIndex = stageIndex;
         await OpenEmailActionFormAsync(stageIndex);
     }
@@ -387,7 +479,9 @@ public sealed partial class JobChainsViewModel
             !CanSendEmailAction
             || EdStageActions.GetValueOrDefault(stageIndex) is not SendEmailChainAction email
         )
+        {
             return;
+        }
         _actionInsertIndex = null;
         EmailActionEditorStageIndex = stageIndex;
         EmailRecipient = email.Recipient;
@@ -474,10 +568,13 @@ public sealed partial class JobChainsViewModel
             var previousStageIndex = actionStageIndex - 1;
             // Message actions preserve the payload, so walk back to the nearest job stage.
             while (previousStageIndex >= 0 && EdStages[previousStageIndex].Count == 0)
+            {
                 previousStageIndex--;
+            }
             if (previousStageIndex < 0)
+            {
                 return;
-
+            }
             var jobIds = EdStages[previousStageIndex];
             var suggestions = new List<EmailJsonPathSuggestion>();
             var sourceNames = new List<string>();
@@ -486,11 +583,15 @@ public sealed partial class JobChainsViewModel
                 var runs = await _svc.ListJobRunsAsync(jobId);
                 var latest = runs.FirstOrDefault(run => run.Status is "Succeeded" or "Partial");
                 if (latest is null)
+                {
                     continue;
+                }
                 var detail = await _svc.GetJobRunAsync(latest.Id);
                 var sample = LatestJsonOutput(detail);
                 if (sample is null)
+                {
                     continue;
+                }
                 using var document = JsonDocument.Parse(sample);
                 var prefix = jobIds.Count > 1 ? branchIndex.ToString() : "";
                 FlattenJsonPaths(document.RootElement, prefix, suggestions, depth: 0);
@@ -502,10 +603,14 @@ public sealed partial class JobChainsViewModel
                 .Take(80)
                 .ToList();
             if (sourceNames.Count > 0)
+            {
                 EmailJsonPathSource =
-                    $"Latest successful output from {string.Join(", ", sourceNames.Distinct())}";
+                                $"Latest successful output from {string.Join(", ", sourceNames.Distinct())}";
+            }
             if (autoFill)
+            {
                 AutoFillDetectedEmailPaths();
+            }
         }
         catch (JsonException)
         {
@@ -533,11 +638,17 @@ public sealed partial class JobChainsViewModel
         );
         var attachment = EmailJsonPaths.FirstOrDefault(item => item.IsAttachmentCandidate);
         if (email is not null && string.IsNullOrWhiteSpace(EmailRecipient))
+        {
             EmailRecipient = $"{{{{{email.Path}}}}}";
+        }
         if (name is not null && string.IsNullOrWhiteSpace(EmailRecipientName))
+        {
             EmailRecipientName = $"{{{{{name.Path}}}}}";
+        }
         if (attachment is not null && string.IsNullOrWhiteSpace(EmailAttachmentPath))
+        {
             EmailAttachmentPath = $"{{{{{attachment.Path}}}}}";
+        }
     }
 
     private static void FlattenJsonPaths(
@@ -548,43 +659,56 @@ public sealed partial class JobChainsViewModel
     )
     {
         if (depth > 8 || result.Count >= 80)
+        {
             return;
+        }
         if (IsAttachmentValue(element) && path.Length > 0)
+        {
             result.Add(new EmailJsonPathSuggestion(path, "attachment", true));
-
+        }
         if (element.ValueKind == JsonValueKind.Object)
         {
             foreach (var property in element.EnumerateObject())
+            {
                 FlattenJsonPaths(property.Value, JoinPath(path, property.Name), result, depth + 1);
+            }
             return;
         }
         if (element.ValueKind == JsonValueKind.Array)
         {
             // A representative first element describes the paths available from homogeneous output.
             if (element.GetArrayLength() > 0)
+            {
                 FlattenJsonPaths(element[0], JoinPath(path, "0"), result, depth + 1);
+            }
             return;
         }
         if (path.Length == 0)
+        {
             return;
+        }
         result.Add(new EmailJsonPathSuggestion(path, Preview(element), false));
     }
 
     private static bool IsAttachmentValue(JsonElement element)
     {
         if (element.ValueKind == JsonValueKind.Array)
+        {
             return element.GetArrayLength() > 0 && IsAttachmentObject(element[0]);
+        }
         return IsAttachmentObject(element);
     }
 
     private static bool IsAttachmentObject(JsonElement element)
     {
         if (element.ValueKind != JsonValueKind.Object)
+        {
             return false;
+        }
         var names = element
-            .EnumerateObject()
-            .Select(property => property.Name.ToLowerInvariant())
-            .ToHashSet(StringComparer.Ordinal);
+                    .EnumerateObject()
+                    .Select(property => property.Name.ToLowerInvariant())
+                    .ToHashSet(StringComparer.Ordinal);
         return (names.Contains("name") || names.Contains("filename"))
             && (
                 names.Contains("content")
@@ -597,14 +721,16 @@ public sealed partial class JobChainsViewModel
     private static string? LatestJsonOutput(JobRunDetailView? detail)
     {
         if (detail?.ReduceResult?.Artifact is { Length: > 0 } reduce)
+        {
             return reduce;
+        }
         return detail
-            ?.ShardResults.OrderBy(shard => shard.Index)
-            .Select(shard =>
-                shard.Artifact
-                ?? shard.Artifacts.FirstOrDefault(artifact => !artifact.IsBinary)?.Content
-            )
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+                    ?.ShardResults.OrderBy(shard => shard.Index)
+                    .Select(shard =>
+                        shard.Artifact
+                        ?? shard.Artifacts.FirstOrDefault(artifact => !artifact.IsBinary)?.Content
+                    )
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
     }
 
     private static string JoinPath(string prefix, string part) =>
@@ -632,7 +758,9 @@ public sealed partial class JobChainsViewModel
     public void OpenNewSmsAction()
     {
         if (!CanSendSmsAction)
+        {
             return;
+        }
         _actionInsertIndex = null;
         OpenSmsActionForm();
     }
@@ -640,7 +768,9 @@ public sealed partial class JobChainsViewModel
     public void OpenSmsActionAt(int stageIndex)
     {
         if (!CanSendSmsAction)
+        {
             return;
+        }
         _actionInsertIndex = stageIndex;
         OpenSmsActionForm();
     }
@@ -661,7 +791,9 @@ public sealed partial class JobChainsViewModel
             !CanSendSmsAction
             || EdStageActions.GetValueOrDefault(stageIndex) is not SendSmsChainAction sms
         )
+        {
             return;
+        }
         _actionInsertIndex = null;
         SmsActionEditorStageIndex = stageIndex;
         SmsRecipient = sms.Recipient;
@@ -719,7 +851,9 @@ public sealed partial class JobChainsViewModel
     public void ChooseStageJob(Guid jobId)
     {
         if (jobId == Guid.Empty)
+        {
             return;
+        }
         var stageIndex = Math.Clamp(StageNodePickerIndex, 0, EdStages.Count);
         ShiftGatesForInsert(stageIndex);
         ShiftActionsForInsert(stageIndex);
@@ -733,7 +867,7 @@ public sealed partial class JobChainsViewModel
         ShowStageNodePicker = false;
         switch (type)
         {
-            case QemuChainAction.ActionType:
+            case VirtualMachineChainAction.ActionType:
                 OpenQemuActionAt(StageNodePickerIndex);
                 break;
             case LoopChainAction.HumanType:
@@ -800,7 +934,9 @@ public sealed partial class JobChainsViewModel
     public void SaveGate()
     {
         if (GateEditorType == "condition")
+        {
             GateEditorExpression = BuildConditionExpression();
+        }
         EdStageGates[GateEditorStageIndex] = GateEditorType switch
         {
             "wait" => new WaitGate(TimeSpan.FromSeconds(GateEditorDuration)),
@@ -856,7 +992,9 @@ public sealed partial class JobChainsViewModel
             {
                 var v = ToViewGate(gate);
                 if (v is not null)
+                {
                     result[index] = v;
+                }
             }
         }
         return result;
@@ -878,7 +1016,7 @@ public sealed partial class JobChainsViewModel
         (elseBranch ?? (gate as ConditionGate)?.ElseBranch)?.Select(BuildStageView).ToList(),
         action switch
         {
-            QemuChainAction vm => new QemuChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork, vm.PauseForLogin, vm.LoginProfileId),
+            VirtualMachineChainAction vm => new VirtualMachineChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork, vm.PauseForLogin, vm.LoginProfileId),
             LoopChainAction loop => new LoopChainActionView(loop.Type, loop.Instructions, loop.ResponseField, loop.ResponseType, loop.AgentProvider),
             SendEmailChainAction email => new SendEmailChainActionView(email.Recipient, email.RecipientName, email.Subject, email.Body, email.AttachmentPath),
             SendSmsChainAction sms => new SendSmsChainActionView(sms.Recipient, sms.Body),
@@ -922,10 +1060,11 @@ public sealed partial class JobChainsViewModel
         // Build the parallel gates list — one per stage, null when no gate is set.
         IReadOnlyList<ChainGate?>? stageGates = null;
         if (EdStageGates.Count > 0)
+        {
             stageGates = populatedStages
-                .Select(item => EdStageGates.GetValueOrDefault(item.OriginalIndex))
-                .ToList();
-
+                        .Select(item => EdStageGates.GetValueOrDefault(item.OriginalIndex))
+                        .ToList();
+        }
         // Authoring preflight validates definition metadata before a revision is saved.
         // Credential health and actual data contents must be tested by executing jobs.
         // If the metadata catalogue is loaded, fail closed on unresolved source jobs.
@@ -943,28 +1082,33 @@ public sealed partial class JobChainsViewModel
         Saving = true;
         try
         {
-            if (EditChainId.HasValue)
-                await _svc.UpdateJobChainAsync(
-                    EditChainId.Value,
-                    EdName.Trim(),
-                    string.IsNullOrWhiteSpace(EdDescription) ? null : EdDescription.Trim(),
-                    flatJobIds,
-                    stages,
-                    stageGates,
-                    stageActions,
-                    expectedUpdatedAt: _openedWorkflowUpdatedAt
-                );
-            else
+            async Task SaveChainAsync()
+            {
+                if (EditChainId.HasValue)
+                {
+                    await _svc.UpdateJobChainAsync(
+                                    EditChainId.Value,
+                                    EdName.Trim(),
+                                    string.IsNullOrWhiteSpace(EdDescription) ? null : EdDescription.Trim(),
+                                    flatJobIds,
+                                    stages,
+                                    stageGates,
+                                    stageActions,
+                                    expectedUpdatedAt: _openedWorkflowUpdatedAt
+                                );
+                    return;
+                }
                 await _svc.CreateJobChainAsync(
-                    ProjectId,
-                    EdName.Trim(),
-                    string.IsNullOrWhiteSpace(EdDescription) ? null : EdDescription.Trim(),
-                    flatJobIds,
-                    stages,
-                    stageGates,
-                    stageActions
-                );
-
+                                        ProjectId,
+                                        EdName.Trim(),
+                                        string.IsNullOrWhiteSpace(EdDescription) ? null : EdDescription.Trim(),
+                                        flatJobIds,
+                                        stages,
+                                        stageGates,
+                                        stageActions
+                                    );
+            }
+            await SaveChainAsync();
             Chains = await _svc.ListJobChainsAsync(ProjectId);
             ShowEditor = false;
             Message = EditChainId.HasValue
@@ -990,7 +1134,9 @@ public sealed partial class JobChainsViewModel
             Chains = await _svc.ListJobChainsAsync(ProjectId);
             ConfirmDeleteId = null;
             if (EditChainId == chainId)
+            {
                 CloseEditor();
+            }
             Message = "Workflow deleted.";
         }
         catch (Exception ex)

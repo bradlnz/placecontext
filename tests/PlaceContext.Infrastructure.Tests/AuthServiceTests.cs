@@ -1,9 +1,11 @@
-using PlaceContext.Application.Ports;
+using Microsoft.EntityFrameworkCore;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Communications;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Comms;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
-using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
@@ -25,7 +27,7 @@ public class AuthServiceTests
             .Options;
         var db = new AppDbContext(options, tenant);
         var providers = new CommunicationProviderService(
-            db, new EfProjectSecretRepository(db), new PlaintextSecretProtector());
+            new EfCommunicationProviderStore(db), db, new EfProjectSecretRepository(db), new PlaintextSecretProtector());
         return (new AuthService(db, communications ?? new FakeCommunicationSender(), providers), db);
     }
 
@@ -297,8 +299,9 @@ public class AuthServiceTests
             email.AuthenticationEmails.Single().Body, @"\b\d{6}\b").Value;
 
         for (var attempt = 0; attempt < 5; attempt++)
+        {
             Assert.False(await auth.ConfirmTwoFactorSetupAsync(user.Id, Wrong(code)));
-
+        }
         Assert.False(await auth.ConfirmTwoFactorSetupAsync(user.Id, code));
         Assert.False(await auth.IsTwoFactorEnabledAsync(user.Id));
     }

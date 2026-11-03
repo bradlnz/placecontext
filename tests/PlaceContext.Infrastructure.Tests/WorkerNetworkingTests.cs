@@ -1,16 +1,18 @@
+using System.Net;
+using System.Text.Json.Nodes;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using System.Net;
-using System.Text;
-using System.Text.Json.Nodes;
-using k8s;
 using Npgsql;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Networking;
+using PlaceContext.Application.Workload;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Networking;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Workload;
 using PlaceContext.TestSupport;
+using k8s;
 
 namespace PlaceContext.Infrastructure.Tests;
 
@@ -37,16 +39,14 @@ public sealed class WorkerNetworkingTests
         {
             await Assert.ThrowsAsync<InvalidOperationException>(() => KubeOvnNetwork.EnsureAsync(client, network, "placecontext-jobs", default));
             Assert.Single(handler.Resources);
+            return;
         }
-        else
-        {
-            await KubeOvnNetwork.EnsureAsync(client, network, "placecontext-jobs", default);
-            await KubeOvnNetwork.EnsureAsync(client, network, "placecontext-jobs", default);
-            Assert.Equal(2, handler.Resources.Count);
-            Assert.Equal(network.Cidr, handler.Resources["subnets"]["spec"]!["cidrBlock"]!.GetValue<string>());
-            Assert.Equal(network.ResourceName, handler.Resources["subnets"]["spec"]!["vpc"]!.GetValue<string>());
-            Assert.Equal(network.ResourceName, KubeOvnNetwork.Annotations(network)["ovn.kubernetes.io/logical_switch"]);
-        }
+        await KubeOvnNetwork.EnsureAsync(client, network, "placecontext-jobs", default);
+        await KubeOvnNetwork.EnsureAsync(client, network, "placecontext-jobs", default);
+        Assert.Equal(2, handler.Resources.Count);
+        Assert.Equal(network.Cidr, handler.Resources["subnets"]["spec"]!["cidrBlock"]!.GetValue<string>());
+        Assert.Equal(network.ResourceName, handler.Resources["subnets"]["spec"]!["vpc"]!.GetValue<string>());
+        Assert.Equal(network.ResourceName, KubeOvnNetwork.Annotations(network)["ovn.kubernetes.io/logical_switch"]);
     }
 
     private sealed class NetworkApi(bool wrongOwner) : DelegatingHandler
@@ -58,13 +58,27 @@ public sealed class WorkerNetworkingTests
             var plural = parts[3];
             if (request.Method == HttpMethod.Post)
             {
-                if (Resources.ContainsKey(plural)) return new(HttpStatusCode.Conflict) { RequestMessage = request, Content = new StringContent("{}", Encoding.UTF8, "application/json") };
+                if (Resources.ContainsKey(plural))
+                {
+                    return new(HttpStatusCode.Conflict)
+                    {
+                        RequestMessage = request,
+                        Content = new StringContent("{}", Encoding.UTF8, "application/json")
+                    };
+                }
                 var resource = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!;
-                if (wrongOwner) resource["metadata"]!["labels"]!["placecontext.io/tenant"] = Guid.NewGuid().ToString("N");
+                if (wrongOwner)
+                {
+                    resource["metadata"]!["labels"]!["placecontext.io/tenant"] = Guid.NewGuid().ToString("N");
+                }
                 resource["status"] = JsonNode.Parse("""{"conditions":[{"type":"Ready","status":"True"}]}""");
                 Resources.Add(plural, resource);
             }
-            return new(HttpStatusCode.OK) { RequestMessage = request, Content = new StringContent(Resources[plural].ToJsonString(), Encoding.UTF8, "application/json") };
+            return new(HttpStatusCode.OK)
+            {
+                RequestMessage = request,
+                Content = new StringContent(Resources[plural].ToJsonString(), Encoding.UTF8, "application/json")
+            };
         }
     }
 
@@ -91,8 +105,8 @@ public sealed class WorkerNetworkingTests
     {
         var request = new WorkloadRunRequest("image", "{}", new Dictionary<string, string>(), [], "test", null, null, null, Network: Policy());
         var options = Options.Create(new WorkloadRunnerOptions());
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new DockerWorkloadRunner(options).RunAsync(request));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new KubernetesWorkloadRunner(options).RunAsync(request));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new ContainerWorkloadRunner(options).RunAsync(request));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new ClusterWorkloadRunner(options).RunAsync(request));
         options.Value.PersistentRunnerImages = ["image"];
         await Assert.ThrowsAsync<InvalidOperationException>(() => new PersistentWorkloadRunner(options, null!, new FakeWorkloadRunner()).RunAsync(request));
     }
@@ -108,7 +122,10 @@ public sealed class WorkerNetworkingTests
             CREATE SCHEMA "{schema}";
             CREATE TABLE projects ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL);
             CREATE TABLE jobs ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "ProjectId" uuid NOT NULL);
-            """, connection)) await setup.ExecuteNonQueryAsync();
+            """, connection))
+        {
+            await setup.ExecuteNonQueryAsync();
+        }
         try
         {
             var tenant = new FakeCurrentTenant(Guid.NewGuid());
@@ -131,7 +148,10 @@ public sealed class WorkerNetworkingTests
             await Assert.ThrowsAsync<ArgumentException>(() => service.AssignAsync(Guid.NewGuid(), job, network.Id, group.Id));
             await Assert.ThrowsAsync<ArgumentException>(() => service.AssignAsync(project, job, network.Id, Guid.NewGuid()));
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveAsync(loaded with { Name = "Renamed" }));
-            await service.SaveAsync(loaded with { Groups = [group with { Name = "Renamed group" }] });
+            await service.SaveAsync(loaded with
+            {
+                Groups = [group with { Name = "Renamed group" }]
+            });
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveAsync(loaded));
             var fresh = Assert.Single((await service.LoadAsync(project)).Networks);
             await Assert.ThrowsAsync<InvalidOperationException>(() => service.SaveAsync(fresh with { Cidr = "10.30.0.0/24" }));

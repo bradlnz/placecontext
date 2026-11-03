@@ -1,4 +1,8 @@
+@using PlaceContext.Application.Access
+@using PlaceContext.Application.Cluster
 @page "/cluster"
+@page "/settings/cluster"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
 @attribute [Authorize(Policy = Permission.SettingsManage)]
 @implements IDisposable
 @inject ClusterViewModel Vm
@@ -24,6 +28,7 @@ else
                 <p class="page-sub">Monitor the machines running your workloads and grow the fleet when capacity changes.</p>
             </div>
             <div class="hero-actions">
+                <a class="dcbtn" href="/onboarding">Cloud or local setup</a>
                 <button class="dcbtn" @onclick="() => Vm.RefreshAsync(false)" disabled="@Vm.Busy" title="Refresh nodes" aria-label="Refresh nodes">
                     <span class="@(Vm.Busy ? "spin" : "")"><AppIcon Kind="refresh" /></span>
                     Refresh

@@ -1,14 +1,12 @@
 using System.Text.RegularExpressions;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
-using PlaceContext.Host.Branding;
-using PlaceContext.Infrastructure.Operations;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

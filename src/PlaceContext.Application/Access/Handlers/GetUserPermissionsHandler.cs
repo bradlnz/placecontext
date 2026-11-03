@@ -1,7 +1,7 @@
 using PlaceContext.Application.Access;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Membership;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -32,9 +32,11 @@ public sealed class GetUserPermissionsHandler : IQueryHandler<GetUserPermissions
     {
         var definition = await _roles.GetByNameAsync(roleName, ct);
         if (definition is not null)
+        {
             return new HashSet<string>(definition.Permissions, StringComparer.Ordinal);
+        }
         return Enum.TryParse<UserRole>(roleName, out var role)
-            ? RolePermissionDefaults.GetDefaults(role)
-            : new HashSet<string>(StringComparer.Ordinal);
+                    ? RolePermissionDefaults.GetDefaults(role)
+                    : new HashSet<string>(StringComparer.Ordinal);
     }
 }

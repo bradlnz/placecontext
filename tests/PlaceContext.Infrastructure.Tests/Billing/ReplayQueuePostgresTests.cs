@@ -1,7 +1,8 @@
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Scheduling;
 using PlaceContext.Infrastructure.Tenancy;
@@ -17,11 +18,16 @@ public sealed class ReplayQueuePostgresTests
     {
         var schema = "replayq_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(
-            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES")) { SearchPath = schema }.ConnectionString;
+            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES"))
+        {
+            SearchPath = schema
+        }.ConnectionString;
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await using (var setup = new NpgsqlCommand($"CREATE SCHEMA \"{schema}\"", conn))
+        {
             await setup.ExecuteNonQueryAsync();
+        }
         var tenant = new FakeCurrentTenant(Guid.NewGuid());
         var project = Guid.NewGuid();
         var chain = Guid.NewGuid();
@@ -33,7 +39,9 @@ public sealed class ReplayQueuePostgresTests
                 CREATE TABLE chain_runs ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL,
                     "ProjectId" uuid NOT NULL, "ChainId" uuid NOT NULL, "Status" text NOT NULL);
                 """, conn))
+            {
                 await schemaCommand.ExecuteNonQueryAsync();
+            }
             var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs).Options;
             await using var db = new AppDbContext(options, tenant);
             typeof(PlaceContext.Infrastructure.DependencyInjection)

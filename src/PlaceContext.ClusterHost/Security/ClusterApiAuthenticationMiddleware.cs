@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
+using PlaceContext.Application.Cluster;
 
 namespace PlaceContext.ClusterHost;
 
@@ -30,7 +31,10 @@ public sealed class ClusterApiAuthenticationMiddleware
         if (string.IsNullOrWhiteSpace(configured))
         {
             context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-            await context.Response.WriteAsJsonAsync(new { error = "Cluster API authentication is not configured." });
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "Cluster API authentication is not configured."
+            });
             return;
         }
 
@@ -38,7 +42,10 @@ public sealed class ClusterApiAuthenticationMiddleware
         if (!SecureEquals(supplied, configured))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            await context.Response.WriteAsJsonAsync(new { error = "Unauthorized." });
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "Unauthorized."
+            });
             return;
         }
 

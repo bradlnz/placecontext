@@ -1,5 +1,3 @@
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Application.Access;
 
 /// <summary>

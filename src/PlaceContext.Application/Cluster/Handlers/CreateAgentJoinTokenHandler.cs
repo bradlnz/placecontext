@@ -1,6 +1,6 @@
+using PlaceContext.Application.Auth;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Tenancy;
 namespace PlaceContext.Application.Cluster;
 
 public sealed class CreateAgentJoinTokenHandler : ICommandHandler<CreateAgentJoinTokenCommand, string>

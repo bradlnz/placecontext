@@ -1,0 +1,1 @@
+Ask a question that can be answered Yes or No.

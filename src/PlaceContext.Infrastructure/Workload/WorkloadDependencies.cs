@@ -172,7 +172,10 @@ public static class WorkloadDependencies
         foreach (var name in wanted)
         {
             var match = codeFiles.FirstOrDefault(f => string.Equals(f.Path, name, StringComparison.OrdinalIgnoreCase));
-            if (match.Path is not null) files.Add(match);
+            if (match.Path is not null)
+            {
+                files.Add(match);
+            }
         }
         return files;
     }
@@ -189,7 +192,9 @@ public static class WorkloadDependencies
             .Append(runtimeId).Append('\0')
             .Append(baseImage).Append('\0');
         foreach (var (path, content) in ManifestFiles(recipe, codeFiles))
+        {
             sb.Append(path).Append('\0').Append(content).Append('\0');
+        }
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())))[..16].ToLowerInvariant();
     }
 
@@ -205,9 +210,13 @@ public static class WorkloadDependencies
         sb.Append("FROM ").Append(baseImage).Append('\n');
         sb.Append("LABEL placecontext.warm=true\n");
         foreach (var (path, _) in ManifestFiles(recipe, codeFiles))
+        {
             sb.Append("COPY ").Append(path).Append(' ').Append(BakeAppDir).Append('/').Append(path).Append('\n');
+        }
         if (!string.IsNullOrWhiteSpace(recipe.BakeEnv))
+        {
             sb.Append("ENV ").Append(recipe.BakeEnv).Append('\n');
+        }
         sb.Append("RUN ").Append(Apply(recipe.BakeInstall, BakeAppDir, BakeDepsRoot)).Append('\n');
         return sb.ToString();
     }
@@ -223,13 +232,16 @@ public static class WorkloadDependencies
         var app = recipe.NeedsWritableApp ? $"{DockerDepsRoot}/app" : "/work";
         var setup = Apply(recipe.SetupTemplate, app, DockerDepsRoot);
         if (recipe.NeedsWritableApp)
+        {
             setup = $"cp -R /work {app} && " + setup;
-
+        }
         var invoke = string.Join(" ", cmd
             .Select(seg => recipe.NeedsWritableApp ? seg.Replace("/work", app, StringComparison.Ordinal) : seg)
             .Select(ShQuote));
-        if (recipe.InvokePrefix is not null) invoke = recipe.InvokePrefix + " " + invoke;
-
+        if (recipe.InvokePrefix is not null)
+        {
+            invoke = recipe.InvokePrefix + " " + invoke;
+        }
         return new[] { "sh", "-c", setup + " && exec " + invoke };
     }
 

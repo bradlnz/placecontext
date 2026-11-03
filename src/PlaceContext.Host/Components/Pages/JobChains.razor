@@ -1,3 +1,5 @@
+@using PlaceContext.Application.Access
+@using PlaceContext.Application.Workload.VirtualMachines
 @page "/project/{ProjectId:guid}/workflows"
 @page "/project/{ProjectId:guid}/chains"
 @attribute [Authorize(Policy = Permission.ChainsManage)]
@@ -118,7 +120,7 @@ else
                                         {
                                             <span class="step-chip loop-chip">@loopAction.DisplayName</span>
                                         }
-                                        else if (stage.Action is QemuChainActionView vmAction)
+                                        else if (stage.Action is VirtualMachineChainActionView vmAction)
                                         {
                                             <span class="step-chip"><AppIcon Kind="vm" /> QEMU · @vmAction.ImageProfile</span>
                                         }
@@ -362,9 +364,9 @@ else
                         </section>
                     }
 
-                    @if (Vm.OpenRun.Steps.Any(step => step.ActionType == QemuChainAction.ActionType))
+                    @if (Vm.OpenRun.Steps.Any(step => step.ActionType == VirtualMachineChainAction.ActionType))
                     {
-                        <QemuReplay @key="Vm.OpenRun.Id" Run="Vm.OpenRun" />
+                        <VirtualMachineReplay @key="Vm.OpenRun.Id" Run="Vm.OpenRun" />
                     }
 
                     <div class="running-steps-panel">
@@ -619,7 +621,7 @@ else
                                         {
                                             <button class="stage-job-chip" @onclick="@(() => Vm.OpenSmsActionEditor(stageIndex))"><AppIcon Kind="message" /><span><strong>Send SMS</strong><small>@smsAction.Recipient</small></span><span class="list-configure">Edit</span></button>
                                         }
-                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is QemuChainAction vmAction)
+                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is VirtualMachineChainAction vmAction)
                                         {
                                             <button class="stage-job-chip" @onclick="@(() => Vm.EditQemuAction(stageIndex))"><AppIcon Kind="vm" /><span><strong>@vmAction.ImageProfile</strong><small>@vmAction.MemoryMb MiB · @vmAction.Cpus CPU(s) · @vmAction.TimeoutSeconds s timeout</small></span><span class="list-configure">Configure</span></button>
                                         }
@@ -630,12 +632,12 @@ else
                                         @foreach (var (jobId, j) in stage.Select((id, j) => (id, j)))
                                         {
                                             var branchIndex = j;
-                                            <div class="stage-job-chip"><AppIcon Kind="code" /><span class="list-job-name">@Vm.JobName(jobId)</span><button class="dcbtn danger" aria-label="@($"Remove {Vm.JobName(jobId)} from step {stageIndex + 1}")" title="Remove job" @onclick="@(() => Vm.RemoveBranch(stageIndex, branchIndex))"><AppIcon Kind="close" /></button></div>
+                                            <div class="stage-job-chip"><AppIcon Kind="code" /><span class="list-job-name">@Vm.JobName(jobId)</span><JobCodeLink Job="@Vm.Jobs?.FirstOrDefault(job => job.Id == jobId)" /><button class="dcbtn danger" aria-label="@($"Remove {Vm.JobName(jobId)} from step {stageIndex + 1}")" title="Remove job" @onclick="@(() => Vm.RemoveBranch(stageIndex, branchIndex))"><AppIcon Kind="close" /></button></div>
                                         }
                                     </div>
                                     @if (stageGate is ConditionGate { ElseBranch: { Count: > 0 } other })
                                     {
-                                        <div class="list-false-path"><strong>When false</strong><WorkflowBranchPreview Stages="@other.Select(Vm.BuildStageView).ToList()" /><button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">Edit false path</button></div>
+                                        <div class="list-false-path"><strong>When false</strong><WorkflowBranchPreview Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())" Stages="@other.Select(Vm.BuildStageView).ToList()" /><button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">Edit false path</button></div>
                                     }
                                     @if (!Vm.HasStageAction(stageIndex))
                                     {
@@ -688,7 +690,7 @@ else
                             </button>
                         </div>
                         <div class="node-picker-divider">Jobs</div>
-                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(QemuChainAction.ActionType))">
+                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(VirtualMachineChainAction.ActionType))">
                             <span class="palette-icon" aria-hidden="true"><AppIcon Kind="vm" /></span>
                             <strong>QEMU environment</strong><small>Run a task in a fresh virtual machine</small>
                         </button>
@@ -742,7 +744,7 @@ else
 
         @if (Vm.ShowQemuEditor)
         {
-            var imageAvailable = Vm.QemuEnvironment.Images.Any(image => image.Name == Vm.QemuImageProfile && image.Available);
+            var imageAvailable = Vm.QemuEnvironment.Images.Any(image => image.Name == Vm.VirtualMachineImageProfile && image.Available);
             var environmentReady = Vm.QemuEnvironment.Enabled && Vm.QemuEnvironment.AgentReady && imageAvailable;
             <div class="dcmodal-overlay" @onclick="Vm.CloseQemuEditor">
                 <div class="dcmodal qemu-modal" role="dialog" aria-modal="true" aria-labelledby="qemu-editor-title" @onclick:stopPropagation="true">
@@ -758,7 +760,7 @@ else
                         </section>
                         <section class="qemu-section" aria-labelledby="qemu-environment-title">
                             <h4 id="qemu-environment-title">Environment</h4>
-                            <div class="dcfield"><label for="qemu-image">Image profile</label><input id="qemu-image" class="dcinput" list="qemu-profiles" maxlength="80" placeholder="browser-linux" @bind="Vm.QemuImageProfile" @bind:event="oninput" /><datalist id="qemu-profiles">@foreach (var profile in Vm.QemuEnvironment.Images.Where(image => image.Available)) { <option value="@profile.Name" /> }</datalist><small>Choose a Linux desktop profile available on your execution hosts.</small></div>
+                            <div class="dcfield"><label for="qemu-image">Image profile</label><input id="qemu-image" class="dcinput" list="qemu-profiles" maxlength="80" placeholder="browser-linux" @bind="Vm.VirtualMachineImageProfile" @bind:event="oninput" /><datalist id="qemu-profiles">@foreach (var profile in Vm.QemuEnvironment.Images.Where(image => image.Available)) { <option value="@profile.Name" /> }</datalist><small>Choose a Linux desktop profile available on your execution hosts.</small></div>
                             <div class="qemu-readiness" role="status">
                                 <span class="qemu-status @(environmentReady ? "ready" : "")"><AppIcon Kind="@(environmentReady ? "check" : "warning")" /> @(environmentReady ? "Ready to run" : "Setup required")</span>
                                 @if (!Vm.QemuEnvironment.Enabled) { <p>Execution is disabled on this host. You can save this step; an administrator must enable QEMU to run it.</p> }
@@ -773,9 +775,9 @@ else
                             <div class="dcfield"><label for="qemu-login">Saved browser session</label>
                                 <select id="qemu-login" class="dcinput" @bind="Vm.QemuLoginId">
                                     <option value="">Fresh browser — no saved login</option>
-                                    @if (!string.IsNullOrEmpty(Vm.QemuLoginId) && !Vm.QemuLogins.Any(p => p.Id.ToString() == Vm.QemuLoginId && p.ImageProfile == Vm.QemuImageProfile))
+                                    @if (!string.IsNullOrEmpty(Vm.QemuLoginId) && !Vm.QemuLogins.Any(p => p.Id.ToString() == Vm.QemuLoginId && p.ImageProfile == Vm.VirtualMachineImageProfile))
                                     { <option value="@Vm.QemuLoginId">Saved login unavailable — choose your own session</option> }
-                                    @foreach (var profile in Vm.QemuLogins.Where(p => p.ImageProfile == Vm.QemuImageProfile))
+                                    @foreach (var profile in Vm.QemuLogins.Where(p => p.ImageProfile == Vm.VirtualMachineImageProfile))
                                     { <option value="@profile.Id">@profile.Name</option> }
                                 </select><small>Only your private sessions for this project and image are listed. Each run gets its own copy.</small>
                             </div>
@@ -964,7 +966,7 @@ else
                                 {
                                     var index = i;
                                     <div class="dcfield">
-                                        <WorkflowBranchPreview Stages="@(new[] { Vm.BuildStageView(Vm.GateEditorElseStages[index]) })" />
+                                        <WorkflowBranchPreview Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())" Stages="@(new[] { Vm.BuildStageView(Vm.GateEditorElseStages[index]) })" />
                                         <button class="dcbtn btn-xs" aria-label="@($"Remove false path step {index + 1}")"
                                                 @onclick="@(() => Vm.RemoveElseStage(index))">Remove step</button>
                                     </div>

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -27,25 +27,52 @@ public sealed class ProjectViewModel : PageViewModel
         public const string Activity = "activity";
     }
 
-    public static IReadOnlyList<(string Key, string Label)> TabItems { get; } =
+    public static IReadOnlyList<(string Key, string Label)> TabItems
+    {
+        get;
+    } =
     [(Tabs.Overview, "Overview"), (Tabs.Requirements, "Requirements"), (Tabs.Activity, "Activity")];
 
     public static string NormalizeTab(string? tab) =>
         tab is Tabs.Requirements or Tabs.Activity ? tab : Tabs.Overview;
 
-    public Guid Id { get; private set; }
-    public ProjectOverviewView? Overview { get; private set; }
-    public ActivityTimelineView? Timeline { get; private set; }
-    public IReadOnlyList<DecisionView>? Decisions { get; private set; }
+    public Guid Id
+    {
+        get; private set;
+    }
+    public ProjectOverviewView? Overview
+    {
+        get; private set;
+    }
+    public ActivityTimelineView? Timeline
+    {
+        get; private set;
+    }
+    public IReadOnlyList<DecisionView>? Decisions
+    {
+        get; private set;
+    }
     public string Tab { get; private set; } = Tabs.Overview;
-    public string? Message { get; private set; }
-    public RequirementsView? Requirements { get; private set; }
+    public string? Message
+    {
+        get; private set;
+    }
+    public RequirementsView? Requirements
+    {
+        get; private set;
+    }
     public string RequirementsDraft { get; set; } = "";
     public string RequirementsSaved { get; private set; } = "";
-    public bool SavingRequirements { get; private set; }
+    public bool SavingRequirements
+    {
+        get; private set;
+    }
     public bool RequirementsDirty =>
         !string.Equals(RequirementsDraft, RequirementsSaved, StringComparison.Ordinal);
-    public bool ScrollPending { get; private set; }
+    public bool ScrollPending
+    {
+        get; private set;
+    }
     private int _loadVersion;
 
     public bool HasDecisionRationale(DecisionView decision) =>
@@ -74,7 +101,10 @@ public sealed class ProjectViewModel : PageViewModel
         var query = System.Web.HttpUtility.ParseQueryString(new Uri(_navigation.Uri).Query);
         Tab = NormalizeTab(query["tab"]);
         await LoadOverviewAsync();
-        if (version != _loadVersion) return;
+        if (version != _loadVersion)
+        {
+            return;
+        }
         await LoadDetailsAsync();
     }
 
@@ -82,7 +112,10 @@ public sealed class ProjectViewModel : PageViewModel
     {
         var version = _loadVersion;
         var overview = await _service.GetProjectOverviewAsync(Id);
-        if (version != _loadVersion) return;
+        if (version != _loadVersion)
+        {
+            return;
+        }
         Overview = overview;
         _ui.Set(Overview.Name, $"{Overview.Path} · {Overview.Status}");
         ScrollPending = true;
@@ -93,12 +126,23 @@ public sealed class ProjectViewModel : PageViewModel
     {
         var version = _loadVersion;
         if (Tab == Tabs.Requirements && Requirements is null)
+        {
             await LoadRequirementsAsync();
+        }
         if (Tab == Tabs.Activity)
         {
-            if (Timeline is null) await LoadTimelineAsync();
-            if (version != _loadVersion) return;
-            if (Decisions is null) await LoadDecisionsAsync();
+            if (Timeline is null)
+            {
+                await LoadTimelineAsync();
+            }
+            if (version != _loadVersion)
+            {
+                return;
+            }
+            if (Decisions is null)
+            {
+                await LoadDecisionsAsync();
+            }
         }
         NotifyStateChanged();
     }
@@ -109,11 +153,17 @@ public sealed class ProjectViewModel : PageViewModel
         try
         {
             var timeline = await _service.GetTimelineAsync(Id, 8);
-            if (version == _loadVersion) Timeline = timeline;
+            if (version == _loadVersion)
+            {
+                Timeline = timeline;
+            }
         }
         catch (Exception ex)
         {
-            if (version == _loadVersion) Message = $"Could not load timeline: {ex.Message}";
+            if (version == _loadVersion)
+            {
+                Message = $"Could not load timeline: {ex.Message}";
+            }
         }
     }
 
@@ -123,13 +173,19 @@ public sealed class ProjectViewModel : PageViewModel
         try
         {
             var requirements = await _service.GetProjectRequirementsAsync(Id);
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             Requirements = requirements;
             RequirementsDraft = RequirementsSaved = Requirements.Markdown;
         }
         catch (Exception ex)
         {
-            if (version == _loadVersion) Message = $"Could not load requirements: {ex.Message}";
+            if (version == _loadVersion)
+            {
+                Message = $"Could not load requirements: {ex.Message}";
+            }
         }
     }
 
@@ -139,11 +195,17 @@ public sealed class ProjectViewModel : PageViewModel
         try
         {
             var decisions = await _service.GetDecisionsAsync(Id);
-            if (version == _loadVersion) Decisions = decisions;
+            if (version == _loadVersion)
+            {
+                Decisions = decisions;
+            }
         }
         catch (Exception ex)
         {
-            if (version == _loadVersion) Message = $"Could not load decisions: {ex.Message}";
+            if (version == _loadVersion)
+            {
+                Message = $"Could not load decisions: {ex.Message}";
+            }
         }
     }
 
@@ -178,7 +240,9 @@ public sealed class ProjectViewModel : PageViewModel
     public async Task AfterRenderAsync()
     {
         if (!ScrollPending || Overview is null)
+        {
             return;
+        }
         ScrollPending = false;
         await _js.InvokeVoidAsync("placecontext.scrollToHash");
     }

@@ -1,5 +1,5 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 
@@ -32,9 +32,14 @@ public sealed class CancelChainRunHandler : ICommandHandler<CancelChainRunComman
     public async Task<bool> HandleAsync(CancelChainRunCommand command, CancellationToken ct = default)
     {
         var chainRun = await _runs.GetByIdAsync(command.ChainRunId, ct);
-        if (chainRun is null) return false;
-        if (chainRun.Status is not (ChainRunStatus.Running or ChainRunStatus.Waiting or ChainRunStatus.AwaitingInput)) return true;
-
+        if (chainRun is null)
+        {
+            return false;
+        }
+        if (chainRun.Status is not (ChainRunStatus.Running or ChainRunStatus.Waiting or ChainRunStatus.AwaitingInput))
+        {
+            return true;
+        }
         // Cancel every step that has a running job run, then mark each as Cancelled.
         var cancelTasks = new List<(int Index, Task Task)>();
         foreach (var step in chainRun.Steps)
@@ -48,8 +53,9 @@ public sealed class CancelChainRunHandler : ICommandHandler<CancelChainRunComman
         await Task.WhenAll(cancelTasks.Select(t => t.Task));
         var now = _clock.UtcNow;
         foreach (var (idx, _) in cancelTasks)
+        {
             chainRun.MarkStepFinished(idx, chainRun.Steps[idx].RunId, ChainStepStatus.Cancelled, now);
-
+        }
         // Mark the entire chain run as Cancelled.
         chainRun.Complete(ChainRunStatus.Cancelled, chainRun.FinalOutput, now);
         await _runs.UpdateAsync(chainRun, ct);

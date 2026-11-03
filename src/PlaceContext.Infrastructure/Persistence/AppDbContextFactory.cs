@@ -1,7 +1,7 @@
-using PlaceContext.Application.Ports;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+using PlaceContext.Application.Tenancy;
 
 namespace PlaceContext.Infrastructure.Persistence;
 

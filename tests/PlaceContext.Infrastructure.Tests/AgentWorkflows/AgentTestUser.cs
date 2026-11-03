@@ -1,5 +1,4 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Tenancy;
 namespace PlaceContext.Infrastructure.Tests.AgentWorkflows;
 
 internal sealed class AgentTestUser : ICurrentUser

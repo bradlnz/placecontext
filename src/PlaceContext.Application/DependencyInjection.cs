@@ -1,11 +1,14 @@
+using Microsoft.Extensions.DependencyInjection;
+using PlaceContext.Application.Artifacts;
+using PlaceContext.Application.Cluster;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.DatabaseInspection;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Observability;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.SavedQueries;
 using PlaceContext.Domain.Services;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace PlaceContext.Application;
 
@@ -20,6 +23,11 @@ public static class DependencyInjection
     {
         services.AddScoped<IDispatcher, Dispatcher>();
         services.AddScoped<PlaceContextService>();
+        services.AddScoped<DatabaseInspectionAccess>();
+        services.AddScoped<IQueryHandler<ListDatabaseTablesQuery, IReadOnlyList<DatabaseTable>>, ListDatabaseTablesHandler>();
+        services.AddScoped<IQueryHandler<ReadDatabaseTableQuery, DatabaseTablePage>, ReadDatabaseTableHandler>();
+        services.AddScoped<AgentWorkflows.IAgentWorkflows, AgentWorkflows.AgentWorkflowService>();
+        services.AddScoped<Communications.CommunicationProviderService>();
         services.AddScoped<NetworkFlowService>();
 
         // Pure domain services (no I/O) used by handlers.
@@ -38,6 +46,16 @@ public static class DependencyInjection
         services.AddScoped<EntityTagService>();
         services.AddScoped<RecordLinkService>();
         services.AddScoped<ProjectChartService>();
+
+        services.AddScoped<IQueryHandler<GetTenantBrandingQuery, TenantBranding>, GetTenantBrandingHandler>();
+        services.AddScoped<ICommandHandler<SetTenantBrandingCommand, bool>, SetTenantBrandingHandler>();
+
+        services.AddScoped<Jobs.ArtifactReader>();
+        services.AddScoped<IQueryHandler<GetJobChainQuery, JobChainView?>, GetJobChainHandler>();
+        services.AddScoped<Jobs.JobInputFileService>();
+        services.AddScoped<Mcp.McpOAuthService>();
+        services.AddScoped<Build.BuildChatAgent>();
+        services.AddScoped<Build.BuildMcpTools>();
 
         // Commands.
         services.AddScoped<ICommandHandler<CreateProjectCommand, ProjectSummaryView>, CreateProjectHandler>();
@@ -58,11 +76,11 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DeleteJobTestCaseCommand, bool>, DeleteJobTestCaseHandler>();
         services.AddScoped<ICommandHandler<RunJobTestCaseCommand, JobTestCaseView>, RunJobTestCaseHandler>();
         services.AddScoped<ICommandHandler<UpdateJobTestCodeCommand, JobTestCaseView>, UpdateJobTestCodeHandler>();
-        services.AddScoped<ICommandHandler<SaveOpenSearchDashboardCommand, OpenSearchDashboardView>, SaveOpenSearchDashboardHandler>();
-        services.AddScoped<ICommandHandler<DeleteOpenSearchDashboardCommand, bool>, DeleteOpenSearchDashboardHandler>();
+        services.AddScoped<ICommandHandler<SaveSearchDashboardCommand, SearchDashboardView>, SaveSearchDashboardHandler>();
+        services.AddScoped<ICommandHandler<DeleteSearchDashboardCommand, bool>, DeleteSearchDashboardHandler>();
         services.AddScoped<ICommandHandler<SaveSavedQueryCommand, SavedQueryRecord>, SaveSavedQueryHandler>();
         services.AddScoped<ICommandHandler<DeleteSavedQueryCommand, bool>, DeleteSavedQueryHandler>();
-        services.AddScoped<ICommandHandler<TriggerOpenSearchSyncCommand, OpenSearchSyncView>, TriggerOpenSearchSyncHandler>();
+        services.AddScoped<ICommandHandler<TriggerSearchSyncCommand, SearchSyncView>, TriggerSearchSyncHandler>();
         services.AddScoped<ICommandHandler<ReplayRunCommand, JobRunDetailView>, ReplayRunHandler>();
         services.AddScoped<ICommandHandler<UploadJobCodeCommand, JobView>, UploadJobCodeHandler>();
         services.AddScoped<ICommandHandler<DeleteJobCommand, bool>, DeleteJobHandler>();
@@ -90,8 +108,6 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DeleteTriggerCommand, bool>, DeleteTriggerHandler>();
         services.AddScoped<ICommandHandler<DefineEventTypeCommand, EventTypeView>, DefineEventTypeHandler>();
         services.AddScoped<ICommandHandler<EmitEventCommand, EventOccurrenceView>, EmitEventHandler>();
-
-        services.AddScoped<IMcpClientService, McpClientService>();
 
         // Job execution orchestrator (applies per-job retry policy).
         services.AddScoped<IJobRunner, JobRunner>();
@@ -141,12 +157,12 @@ public static class DependencyInjection
         services.AddScoped<IQueryHandler<GetJobRunQuery, JobRunDetailView?>, GetJobRunHandler>();
         services.AddScoped<IQueryHandler<ListJobTestCasesQuery, IReadOnlyList<JobTestCaseView>>, ListJobTestCasesHandler>();
         services.AddScoped<IQueryHandler<GetJobTestCaseQuery, JobTestCaseView?>, GetJobTestCaseHandler>();
-        services.AddScoped<IQueryHandler<ListOpenSearchIndicesQuery, IReadOnlyList<OpenSearchIndexView>>, ListOpenSearchIndicesHandler>();
-        services.AddScoped<IQueryHandler<ListOpenSearchFieldsQuery, IReadOnlyList<OpenSearchFieldView>>, ListOpenSearchFieldsHandler>();
-        services.AddScoped<IQueryHandler<GetOpenSearchLastUpdatedQuery, OpenSearchLastUpdatedView>, GetOpenSearchLastUpdatedHandler>();
-        services.AddScoped<IQueryHandler<SearchOpenSearchQuery, OpenSearchSearchView>, SearchOpenSearchHandler>();
-        services.AddScoped<IQueryHandler<SearchOpenSearchSqlQuery, ProjectQueryResult>, SearchOpenSearchSqlHandler>();
-        services.AddScoped<IQueryHandler<ListOpenSearchDashboardsQuery, IReadOnlyList<OpenSearchDashboardView>>, ListOpenSearchDashboardsHandler>();
+        services.AddScoped<IQueryHandler<ListSearchIndicesQuery, IReadOnlyList<SearchIndexView>>, ListSearchIndicesHandler>();
+        services.AddScoped<IQueryHandler<ListSearchFieldsQuery, IReadOnlyList<SearchFieldView>>, ListSearchFieldsHandler>();
+        services.AddScoped<IQueryHandler<GetSearchLastUpdatedQuery, SearchLastUpdatedView>, GetSearchLastUpdatedHandler>();
+        services.AddScoped<IQueryHandler<SearchDocumentsQuery, SearchResultView>, SearchDocumentsHandler>();
+        services.AddScoped<IQueryHandler<SearchSqlDocumentsQuery, ProjectQueryResult>, SearchSqlDocumentsHandler>();
+        services.AddScoped<IQueryHandler<ListSearchDashboardsQuery, IReadOnlyList<SearchDashboardView>>, ListSearchDashboardsHandler>();
         services.AddScoped<IQueryHandler<ListSavedQueriesQuery, IReadOnlyList<SavedQueryRecord>>, ListSavedQueriesHandler>();
         services.AddScoped<IQueryHandler<GetProjectRunCountsQuery, IReadOnlyDictionary<string, int>>, GetProjectRunCountsHandler>();
         services.AddScoped<IQueryHandler<ListRecentRunReportsQuery, IReadOnlyList<RunReportView>>, ListRecentRunReportsHandler>();
@@ -170,17 +186,17 @@ public static class DependencyInjection
         services.AddScoped<OcrResultStorageService>();
         services.AddScoped<IQueryHandler<ListPendingOcrQuery, IReadOnlyList<PendingOcrArtifactView>>, ListPendingOcrHandler>();
         services.AddScoped<ICommandHandler<CompleteOcrCommand, bool>, CompleteOcrHandler>();
-        services.AddScoped<ICommandHandler<ExecuteProjectDataCommand, Ports.ProjectQueryResult>, ExecuteProjectDataHandler>();
-        services.AddScoped<IQueryHandler<ListProjectDataTablesQuery, IReadOnlyList<Ports.ProjectTableInfo>>, ListProjectDataTablesHandler>();
-        services.AddScoped<IQueryHandler<QueryProjectTablePageQuery, Ports.ProjectTablePageResult>, QueryProjectTablePageHandler>();
+        services.AddScoped<ICommandHandler<ExecuteProjectDataCommand, PlaceContext.Application.ProjectData.ProjectQueryResult>, ExecuteProjectDataHandler>();
+        services.AddScoped<IQueryHandler<ListProjectDataTablesQuery, IReadOnlyList<PlaceContext.Application.ProjectData.ProjectTableInfo>>, ListProjectDataTablesHandler>();
+        services.AddScoped<IQueryHandler<QueryProjectTablePageQuery, PlaceContext.Application.ProjectData.ProjectTablePageResult>, QueryProjectTablePageHandler>();
         services.AddScoped<ICommandHandler<CreateProjectTableCommand, bool>, CreateProjectTableHandler>();
         services.AddScoped<ICommandHandler<ImportCsvToProjectTableCommand, ImportCsvResult>, ImportCsvToProjectTableHandler>();
         services.AddScoped<ICommandHandler<MaterializeTableIndexCommand, MaterializeTableIndexResult>, MaterializeTableIndexHandler>();
         services.AddScoped<ICommandHandler<RenameProjectTableCommand, bool>, RenameProjectTableHandler>();
         services.AddScoped<ICommandHandler<DropProjectTableCommand, bool>, DropProjectTableHandler>();
         services.AddScoped<IQueryHandler<ExportProjectTableQuery, string>, ExportProjectTableHandler>();
-        services.AddScoped<IQueryHandler<ListProjectTableColumnsQuery, IReadOnlyList<Ports.ProjectColumnInfo>>, ListProjectTableColumnsHandler>();
-        services.AddScoped<IQueryHandler<ListProjectTableSchemasQuery, IReadOnlyList<Ports.ProjectTableSchema>>, ListProjectTableSchemasHandler>();
+        services.AddScoped<IQueryHandler<ListProjectTableColumnsQuery, IReadOnlyList<PlaceContext.Application.ProjectData.ProjectColumnInfo>>, ListProjectTableColumnsHandler>();
+        services.AddScoped<IQueryHandler<ListProjectTableSchemasQuery, IReadOnlyList<PlaceContext.Application.ProjectData.ProjectTableSchema>>, ListProjectTableSchemasHandler>();
         services.AddScoped<ICommandHandler<AddProjectTableColumnCommand, bool>, AddProjectTableColumnHandler>();
         services.AddScoped<ICommandHandler<DropProjectTableColumnCommand, bool>, DropProjectTableColumnHandler>();
         services.AddScoped<ICommandHandler<GenerateProjectChartCommand, string>, GenerateProjectChartHandler>();
@@ -200,20 +216,20 @@ public static class DependencyInjection
         services.AddScoped<ICommandHandler<DeleteRoleCommand, bool>, DeleteRoleHandler>();
 
         // Cluster page: node inventory + promote-to-master + join material (Tailscale fleet).
-        services.AddScoped<IQueryHandler<PlaceContext.Application.Cluster.GetClusterInfoQuery, Ports.ClusterInfo>,
+        services.AddScoped<IQueryHandler<PlaceContext.Application.Cluster.GetClusterInfoQuery, PlaceContext.Application.Cluster.ClusterInfo>,
             PlaceContext.Application.Cluster.GetClusterInfoHandler>();
-        services.AddScoped<ICommandHandler<PlaceContext.Application.Cluster.PromoteNodeToMasterCommand, Ports.PromoteMasterResult>,
+        services.AddScoped<ICommandHandler<PlaceContext.Application.Cluster.PromoteNodeToMasterCommand, PlaceContext.Application.Cluster.PromoteMasterResult>,
             PlaceContext.Application.Cluster.PromoteNodeToMasterHandler>();
-        services.AddScoped<IQueryHandler<PlaceContext.Application.Cluster.GetClusterJoinMaterialQuery, Ports.ClusterJoinMaterial?>,
+        services.AddScoped<IQueryHandler<PlaceContext.Application.Cluster.GetClusterJoinMaterialQuery, PlaceContext.Application.Cluster.ClusterJoinMaterial?>,
             PlaceContext.Application.Cluster.GetClusterJoinMaterialHandler>();
         services.AddScoped<ICommandHandler<PlaceContext.Application.Cluster.LaunchClusterAgentCommand, PlaceContext.Application.Cluster.LaunchAgentResult>,
             PlaceContext.Application.Cluster.LaunchClusterAgentHandler>();
         services.AddScoped<ICommandHandler<PlaceContext.Application.Cluster.CreateAgentJoinTokenCommand, string>,
             PlaceContext.Application.Cluster.CreateAgentJoinTokenHandler>();
-        services.AddScoped<IQueryHandler<GetJobTelemetrySnapshotQuery, Ports.JobTelemetrySnapshot>, GetJobTelemetrySnapshotHandler>();
-        services.AddScoped<IQueryHandler<ListRecentJobRunTelemetryQuery, IReadOnlyList<Ports.JobRunTelemetry>>, ListRecentJobRunTelemetryHandler>();
-        services.AddScoped<IQueryHandler<ListJobRunTelemetryQuery, IReadOnlyList<Ports.JobRunTelemetry>>, ListJobRunTelemetryHandler>();
-        services.AddScoped<IQueryHandler<ListRecentChainRunTelemetryQuery, IReadOnlyList<Ports.ChainRunTelemetry>>, ListRecentChainRunTelemetryHandler>();
+        services.AddScoped<IQueryHandler<GetJobTelemetrySnapshotQuery, PlaceContext.Application.Observability.JobTelemetrySnapshot>, GetJobTelemetrySnapshotHandler>();
+        services.AddScoped<IQueryHandler<ListRecentJobRunTelemetryQuery, IReadOnlyList<PlaceContext.Application.Observability.JobRunTelemetry>>, ListRecentJobRunTelemetryHandler>();
+        services.AddScoped<IQueryHandler<ListJobRunTelemetryQuery, IReadOnlyList<PlaceContext.Application.Observability.JobRunTelemetry>>, ListJobRunTelemetryHandler>();
+        services.AddScoped<IQueryHandler<ListRecentChainRunTelemetryQuery, IReadOnlyList<PlaceContext.Application.Observability.ChainRunTelemetry>>, ListRecentChainRunTelemetryHandler>();
         services.AddScoped<IQueryHandler<ListRecentChainRunsQuery, IReadOnlyList<ChainRunReportView>>, ListRecentChainRunsHandler>();
 
         return services;

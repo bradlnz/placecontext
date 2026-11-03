@@ -1,7 +1,6 @@
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -9,10 +8,19 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed partial class EntityBrowseViewModel
 {
     // ── Graph ─────────────────────────────────────────────────────────────────────────────────
-    public GraphVizView? BrainGraph { get; private set; }
+    public GraphVizView? BrainGraph
+    {
+        get; private set;
+    }
     public Dictionary<string, string> NodeUrls { get; } = new();
-    public string? FocusKey { get; set; }
-    public bool ShowGraph { get; set; }
+    public string? FocusKey
+    {
+        get; set;
+    }
+    public bool ShowGraph
+    {
+        get; set;
+    }
 
     // ── Insights ──────────────────────────────────────────────────────────────────────────────
     public sealed record Insight(
@@ -28,7 +36,9 @@ public sealed partial class EntityBrowseViewModel
     private async Task LoadLinkedArtifactsAsync(IReadOnlyList<string?> row)
     {
         if (Entity is null || Rows is null)
+        {
             return;
+        }
         var cols = Rows.Columns.ToList();
         var keys = new List<string>();
         if (LabelCol() is { } label)
@@ -37,7 +47,9 @@ public sealed partial class EntityBrowseViewModel
                 string.Equals(c, label, StringComparison.OrdinalIgnoreCase)
             );
             if (li >= 0 && li < row.Count && row[li] is { Length: > 2 } lv)
+            {
                 keys.Add(lv);
+            }
         }
         foreach (var rel in Entity.Relations)
         {
@@ -45,7 +57,9 @@ public sealed partial class EntityBrowseViewModel
                 string.Equals(c, rel.Column, StringComparison.OrdinalIgnoreCase)
             );
             if (ci >= 0 && ci < row.Count && row[ci] is { Length: > 2 } cv)
+            {
                 keys.Add(cv);
+            }
         }
 
         var runIds = new HashSet<Guid>();
@@ -54,7 +68,9 @@ public sealed partial class EntityBrowseViewModel
             try
             {
                 foreach (var id in await _svc.ListTaggedRunsAsync(Entity.Id, key))
+                {
                     runIds.Add(id);
+                }
             }
             catch { }
         }
@@ -65,7 +81,9 @@ public sealed partial class EntityBrowseViewModel
             {
                 var hits = await _svc.ListProjectArtifactsAsync(ProjectId, take: 20, search: key);
                 foreach (var art in hits)
+                {
                     runIds.Add(art.RunId);
+                }
             }
             catch { }
         }
@@ -99,20 +117,25 @@ public sealed partial class EntityBrowseViewModel
         var version = _loadVersion;
         Insights.Clear();
         if (Entity is null)
+        {
             return;
+        }
         var table = Entity.TableName.Replace("\"", "");
         try
         {
             var columns = await _svc.ListProjectTableColumnsAsync(ProjectId, Entity.TableName);
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             Insights.Add(
-                new Insight(
-                    $"{Entity.Name} total",
-                    (Page?.TotalCount ?? 0).ToString("N0"),
-                    Page is { TotalCountIsExact: false } ? "records (at least)" : "records",
-                    Array.Empty<(string, string, int)>()
-                )
-            );
+                            new Insight(
+                                $"{Entity.Name} total",
+                                (Page?.TotalCount ?? 0).ToString("N0"),
+                                Page is { TotalCountIsExact: false } ? "records (at least)" : "records",
+                                Array.Empty<(string, string, int)>()
+                            )
+                        );
 
             foreach (var col in columns.Where(c => IsNumeric(c.Type)).Take(3))
             {
@@ -120,16 +143,21 @@ public sealed partial class EntityBrowseViewModel
                     ProjectId,
                     $"SELECT round(avg(\"{col.Name}\")::numeric, 1), min(\"{col.Name}\"), max(\"{col.Name}\") FROM \"{table}\""
                 );
-                if (version != _loadVersion) return;
+                if (version != _loadVersion)
+                {
+                    return;
+                }
                 if (r.Rows.Count == 1 && r.Rows[0][0] is { } avg)
+                {
                     Insights.Add(
-                        new Insight(
-                            $"avg {col.Name}",
-                            avg,
-                            $"range {r.Rows[0][1]} – {r.Rows[0][2]}",
-                            Array.Empty<(string, string, int)>()
-                        )
-                    );
+                                        new Insight(
+                                            $"avg {col.Name}",
+                                            avg,
+                                            $"range {r.Rows[0][1]} – {r.Rows[0][2]}",
+                                            Array.Empty<(string, string, int)>()
+                                        )
+                                    );
+                }
             }
 
             var keyCols = Entity
@@ -150,9 +178,14 @@ public sealed partial class EntityBrowseViewModel
                     ProjectId,
                     $"SELECT \"{col}\"::text, count(*) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
                 );
-                if (version != _loadVersion) return;
+                if (version != _loadVersion)
+                {
+                    return;
+                }
                 if (r.Rows.Count == 0)
+                {
                     continue;
+                }
                 var max = r.Rows.Max(x => long.TryParse(x[1], out var n) ? n : 0);
                 var bars = r
                     .Rows.Select(x =>
@@ -176,7 +209,9 @@ public sealed partial class EntityBrowseViewModel
         var version = _loadVersion;
         BrainGraph = null;
         if (Entity is null || Rows is null || Rows.Rows.Count == 0)
+        {
             return;
+        }
         try
         {
             const int maxRecords = 12;
@@ -207,13 +242,19 @@ public sealed partial class EntityBrowseViewModel
                     string.Equals(c, rel.Column, StringComparison.OrdinalIgnoreCase)
                 );
                 if (ci >= 0)
+                {
                     keyColsList.Add(ci);
+                }
             }
             for (var i = 0; i < Math.Min(maxRecords, sourceRows.Count); i++)
             {
                 foreach (var ci in keyColsList.Distinct())
+                {
                     if (ci < sourceRows[i].Count && sourceRows[i][ci] is { Length: > 2 } v)
+                    {
                         keyToRecord.TryAdd(v, i);
+                    }
+                }
             }
 
             var relatedNodes = new List<(string Entity, string Label)>();
@@ -224,7 +265,9 @@ public sealed partial class EntityBrowseViewModel
                     string.Equals(e.Name, rel.TargetEntity, StringComparison.OrdinalIgnoreCase)
                 );
                 if (target is null)
+                {
                     continue;
+                }
                 var tLabel = target.LabelColumn ?? rel.TargetColumn;
                 try
                 {
@@ -232,49 +275,72 @@ public sealed partial class EntityBrowseViewModel
                         ProjectId,
                         $"SELECT a.\"{rel.Column}\"::text, b.\"{tLabel.Replace("\"", "")}\"::text FROM \"{Entity.TableName.Replace("\"", "")}\" a JOIN \"{target.TableName.Replace("\"", "")}\" b ON a.\"{rel.Column}\"::text = b.\"{rel.TargetColumn.Replace("\"", "")}\"::text LIMIT 40"
                     );
-                    if (version != _loadVersion) return;
+                    if (version != _loadVersion)
+                    {
+                        return;
+                    }
                     foreach (var row in join.Rows)
                     {
                         if (row.Count < 2 || row[0] is not { } k || row[1] is not { } lbl)
+                        {
                             continue;
+                        }
                         if (!keyToRecord.TryGetValue(k, out var recIdx))
+                        {
                             continue;
+                        }
                         var ni = relatedNodes.FindIndex(n =>
-                            n.Entity == target.Name && n.Label == lbl
-                        );
+                                                    n.Entity == target.Name && n.Label == lbl
+                                                );
                         if (ni < 0)
                         {
                             relatedNodes.Add((target.Name, lbl));
                             ni = relatedNodes.Count - 1;
                         }
                         if (relatedNodes.Count > maxRecords)
+                        {
                             break;
+                        }
                         if (!relEdges.Contains((recIdx, ni)))
+                        {
                             relEdges.Add((recIdx, ni));
+                        }
                     }
                 }
                 catch { }
-                if (version != _loadVersion) return;
+                if (version != _loadVersion)
+                {
+                    return;
+                }
             }
 
             var pairs = await _svc.ListEntityTagPairsAsync(Entity.Id);
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             var runNodes = new List<Guid>();
             var runEdges = new List<(int Record, int Run)>();
             foreach (var pair in pairs)
             {
                 if (!keyToRecord.TryGetValue(pair.Key, out var recIdx))
+                {
                     continue;
+                }
                 var ri = runNodes.IndexOf(pair.RunId);
                 if (ri < 0)
                 {
                     if (runNodes.Count >= 8)
+                    {
                         continue;
+                    }
                     runNodes.Add(pair.RunId);
                     ri = runNodes.Count - 1;
                 }
                 if (!runEdges.Contains((recIdx, ri)))
+                {
                     runEdges.Add((recIdx, ri));
+                }
             }
 
             // Fallback: for any visible record key that entity tags didn't link to a run, search
@@ -286,11 +352,16 @@ public sealed partial class EntityBrowseViewModel
                 try
                 {
                     var hits = await _svc.ListProjectArtifactsAsync(ProjectId, take: 20, search: key);
-                    if (version != _loadVersion) return;
+                    if (version != _loadVersion)
+                    {
+                        return;
+                    }
                     foreach (var art in hits.OrderByDescending(a => a.CreatedAt))
                     {
                         if (runNodes.Count >= 8)
+                        {
                             break;
+                        }
                         var ri = runNodes.IndexOf(art.RunId);
                         if (ri < 0)
                         {
@@ -298,13 +369,20 @@ public sealed partial class EntityBrowseViewModel
                             ri = runNodes.Count - 1;
                         }
                         if (!runEdges.Contains((keyToRecord[key], ri)))
+                        {
                             runEdges.Add((keyToRecord[key], ri));
+                        }
                     }
                 }
                 catch { }
-                if (version != _loadVersion) return;
+                if (version != _loadVersion)
+                {
+                    return;
+                }
                 if (runNodes.Count >= 8)
+                {
                     break;
+                }
             }
 
             var allArts = new List<(int Run, RunArtifactLinkView Art)>();
@@ -313,10 +391,15 @@ public sealed partial class EntityBrowseViewModel
                 try
                 {
                     foreach (var a in await _svc.ListRunArtifactsAsync(runNodes[ri]))
+                    {
                         allArts.Add((ri, a));
+                    }
                 }
                 catch { }
-                if (version != _loadVersion) return;
+                if (version != _loadVersion)
+                {
+                    return;
+                }
             }
             var artNodes = allArts
                 .GroupBy(x => (x.Art.Kind, x.Art.Title))
@@ -355,15 +438,17 @@ public sealed partial class EntityBrowseViewModel
         }
 
         for (var i = 0; i < records.Count; i++)
+        {
             nodes.Add(
-                new GraphNodeView(
-                    $"rec:{i}",
-                    records[i] ?? "—",
-                    0,
-                    IsGod: true,
-                    Content: $"{Entity?.Name} record"
-                )
-            );
+                        new GraphNodeView(
+                            $"rec:{i}",
+                            records[i] ?? "—",
+                            0,
+                            IsGod: true,
+                            Content: $"{Entity?.Name} record"
+                        )
+                    );
+        }
         NodeUrls.Clear();
         for (var i = 0; i < related.Count; i++)
         {
@@ -422,12 +507,17 @@ public sealed partial class EntityBrowseViewModel
         }
 
         foreach (var (rec, rel) in relEdges)
+        {
             Link($"rec:{rec}", $"rel:{rel}");
+        }
         foreach (var (rec, run) in runEdges)
+        {
             Link($"rec:{rec}", $"run:{run}");
+        }
         for (var i = 0; i < arts.Count; i++)
+        {
             Link($"run:{arts[i].Run}", $"art:{i}");
-
+        }
         nodes = nodes.Select(n => n with { Degree = degree.GetValueOrDefault(n.Id) }).ToList();
         return new GraphVizView(ProjectId, nodes.Count, links.Count, nodes, links);
     }

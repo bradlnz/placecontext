@@ -126,7 +126,7 @@
                                     <span class="node-copy"><strong>Send SMS</strong><small>@sms.Recipient</small></span>
                                 </button>
                             }
-                            else if (stage.Action is QemuChainActionView vm)
+                            else if (stage.Action is VirtualMachineChainActionView vm)
                             {
                                 <button class="job-path" disabled="@ReadOnly" title="Edit QEMU environment" @onclick="@(() => OnEditQemuAction.InvokeAsync(stageIndex))">
                                     <span class="job-icon"><AppIcon Kind="vm" /></span>
@@ -156,6 +156,7 @@
                                     else { <span class="job-name" title="@job.JobName">@job.JobName</span> }
                                     @if (!ReadOnly)
                                     {
+                                    <JobCodeLink Job="@Jobs.FirstOrDefault(candidate => candidate.Id == job.JobId)" />
                                     <button class="path-remove" title="Remove path"
                                             @onclick="@(() => OnRemovePath.InvokeAsync((stageIndex, branchIndex)))"><AppIcon Kind="close" /></button>
                                     }
@@ -207,7 +208,7 @@
                             <div class="canvas-stage false-route">
                                 @if ((stage.ElseBranch ?? condition.ElseBranch) is { Count: > 0 } other)
                                 {
-                                    <WorkflowBranchPreview OnOpenJob="OnOpenJob" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{stageIndex}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+                                    <WorkflowBranchPreview Jobs="@(ReadOnly ? Array.Empty<JobView>() : Jobs)" OnOpenJob="OnOpenJob" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{stageIndex}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
                                 }
                                 else
                                 {

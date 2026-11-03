@@ -1,6 +1,8 @@
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Networking;
+using PlaceContext.Application.Organization;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
@@ -61,13 +63,24 @@ public class BackupTests
         Assert.Single(manifest.NetworkAssignments);
         var target = new Ctx();
         target.Networks.FailAssignment = failAssignment;
-        if (failAssignment) await Assert.ThrowsAsync<InvalidOperationException>(() => target.Importer().HandleAsync(new ImportManifestCommand(manifest)));
-        else await target.Importer().HandleAsync(new ImportManifestCommand(manifest));
+        async Task AssertImportAsync()
+        {
+            if (failAssignment)
+            {
+                await Assert.ThrowsAsync<InvalidOperationException>(() => target.Importer().HandleAsync(new ImportManifestCommand(manifest)));
+                return;
+            }
+            await target.Importer().HandleAsync(new ImportManifestCommand(manifest));
+        }
+        await AssertImportAsync();
         var targetProject = Assert.Single(await target.Projects.ListAsync());
         var targetJob = Assert.Single(await target.Jobs.ListForProjectAsync(targetProject.Id.Value));
         Assert.False(targetJob.AllowNetworkEgress);
-        if (failAssignment) Assert.Empty(target.Networks.Assignments);
-        else
+        if (failAssignment)
+        {
+            Assert.Empty(target.Networks.Assignments);
+            return;
+        }
         {
             var restored = Assert.Single(target.Networks.Networks);
             Assert.NotEqual(network.Id, restored.Id);
@@ -207,7 +220,7 @@ public class BackupTests
                     "{{client.email}}", "{{client.name}}", "Your report", "Hello {{client.name}}")),
             ChainStage.ForAction(new LoopChainAction(LoopChainAction.HumanType, "Review the draft", "human_review", LoopChainAction.YesNoResponse)),
             ChainStage.ForAction(new LoopChainAction(LoopChainAction.AgentType, "Check the sources", "agent_review", agentProvider: LoopChainAction.JevAgent)),
-            ChainStage.ForAction(new QemuChainAction("browser", "cat", "vm_result", 2048, 2, 600, true, loginProfileId: Guid.NewGuid())),
+            ChainStage.ForAction(new VirtualMachineChainAction("browser", "cat", "vm_result", 2048, 2, 600, true, loginProfileId: Guid.NewGuid())),
         }, T0.AddMinutes(1));
 
         var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
@@ -234,7 +247,7 @@ public class BackupTests
         Assert.Equal("Check the sources", agent.Instructions);
         Assert.Equal("agent_review", agent.ResponseField);
         Assert.Equal(LoopChainAction.JevAgent, agent.AgentProvider);
-        var vm = Assert.IsType<QemuChainAction>(imported.Stages[4].Action);
+        var vm = Assert.IsType<VirtualMachineChainAction>(imported.Stages[4].Action);
         Assert.Equal("browser", vm.ImageProfile);
         Assert.Equal("cat", vm.Command);
         Assert.Equal("vm_result", vm.OutputField);

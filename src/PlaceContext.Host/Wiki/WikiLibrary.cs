@@ -36,8 +36,9 @@ public static class WikiLibrary
         foreach (var resource in asm.GetManifestResourceNames())
         {
             if (!resource.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+            {
                 continue;
-
+            }
             var slug = SlugFromResource(resource);
             var markdown = ReadResource(asm, resource);
             var (title, summary) = ParseHeader(markdown, slug);
@@ -87,7 +88,11 @@ public static class WikiLibrary
         for (; i < lines.Length; i++)
         {
             var line = lines[i].Trim().Trim('*', '_').Trim();
-            if (line.Length > 0) { summary = line; break; }
+            if (line.Length > 0)
+            {
+                summary = line;
+                break;
+            }
         }
         return (title, summary);
     }

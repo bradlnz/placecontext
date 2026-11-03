@@ -1,10 +1,9 @@
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using PlaceContext.Application.Ports;
 using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tests.AgentWorkflows;
 using PlaceContext.Infrastructure.Scheduling;
+using PlaceContext.Infrastructure.Tests.AgentWorkflows;
 using PlaceContext.TestSupport;
 
 namespace PlaceContext.Infrastructure.Tests.Billing;
@@ -16,7 +15,10 @@ public sealed class ManagedJobSubmissionPostgresTests
     {
         var schema = "managed_job_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(
-            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES")) { SearchPath = schema }.ConnectionString;
+            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES"))
+        {
+            SearchPath = schema
+        }.ConnectionString;
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await using (var setup = new NpgsqlCommand($"""
@@ -24,7 +26,9 @@ public sealed class ManagedJobSubmissionPostgresTests
             CREATE TABLE jobs ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "ProjectId" uuid NOT NULL);
             CREATE TABLE job_runs ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "Status" text NOT NULL);
             """, conn))
+        {
             await setup.ExecuteNonQueryAsync();
+        }
         try
         {
             var tenant = new FakeCurrentTenant(Guid.NewGuid());
@@ -66,11 +70,11 @@ public sealed class ManagedJobSubmissionPostgresTests
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"INSERT INTO job_runs VALUES ({runId}, {tenant.TenantId}, {"Succeeded"})");
             Assert.Equal("Succeeded", (await queue.GetAsync(projectId, jobId, receipt.TrackingId))!.Status);
-            Assert.Equal(1, await RpcJobSubmissionWorker.ReconcileFinishedAsync(db));
+            Assert.Equal(1, await RpcJobSubmissionBackgroundService.ReconcileFinishedAsync(db));
             Assert.Equal("Succeeded", await db.Database
                 .SqlQueryRaw<string>("SELECT \"Status\" AS \"Value\" FROM rpc_job_submissions")
                 .SingleAsync());
-            Assert.Equal(0, await RpcJobSubmissionWorker.ReconcileFinishedAsync(db));
+            Assert.Equal(0, await RpcJobSubmissionBackgroundService.ReconcileFinishedAsync(db));
             Assert.Equal(1L, await db.Database
                 .SqlQueryRaw<long>("SELECT count(*) AS \"Value\" FROM rpc_job_submissions")
                 .SingleAsync());

@@ -26,37 +26,66 @@ public sealed class DataEntity
         UpdatedAt = updatedAt;
     }
 
-    public Guid Id { get; }
-    public Guid ProjectId { get; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
 
     /// <summary>The business name — also the menu label (e.g. "Sites").</summary>
-    public string Name { get; private set; }
+    public string Name
+    {
+        get; private set;
+    }
 
     /// <summary>The table or view in the project database holding this entity's records.</summary>
-    public string TableName { get; private set; }
+    public string TableName
+    {
+        get; private set;
+    }
 
     /// <summary>The column whose value labels a record in lists/detail. Null = first column.</summary>
-    public string? LabelColumn { get; private set; }
+    public string? LabelColumn
+    {
+        get; private set;
+    }
 
     /// <summary>How records relate to other entities (this column ↔ that entity's column).</summary>
-    public IReadOnlyList<EntityRelation> Relations { get; private set; }
+    public IReadOnlyList<EntityRelation> Relations
+    {
+        get; private set;
+    }
 
     /// <summary>
     /// Extra literal keys this entity maps against, beyond its own column values — so a job output
     /// (or document) that merely mentions one of these tags links itself to the entity. Normalised:
     /// trimmed, de-duplicated case-insensitively, empties dropped.
     /// </summary>
-    public IReadOnlyList<string> Tags { get; private set; }
+    public IReadOnlyList<string> Tags
+    {
+        get; private set;
+    }
 
-    public DateTimeOffset CreatedAt { get; }
-    public DateTimeOffset UpdatedAt { get; private set; }
+    public DateTimeOffset CreatedAt
+    {
+        get;
+    }
+    public DateTimeOffset UpdatedAt
+    {
+        get; private set;
+    }
 
     public static DataEntity Create(Guid projectId, string name, string tableName, string? labelColumn,
         IReadOnlyList<EntityRelation> relations, DateTimeOffset createdAt,
         IReadOnlyList<string>? tags = null)
     {
         if (projectId == Guid.Empty)
+        {
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
+        }
         Validate(name, tableName);
         return new DataEntity(Guid.NewGuid(), projectId, name.Trim(), tableName.Trim(), Trim(labelColumn),
             relations, NormalizeTags(tags), createdAt, createdAt);
@@ -91,9 +120,13 @@ public sealed class DataEntity
     private static void Validate(string name, string tableName)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("An entity needs a name.", nameof(name));
+        }
         if (string.IsNullOrWhiteSpace(tableName))
+        {
             throw new ArgumentException("An entity needs a source table or view.", nameof(tableName));
+        }
     }
 
     private static string? Trim(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

@@ -1,0 +1,1 @@
+Does the screenshot clearly show offer.price_aud as the CURRENT public single-pack AUD selling price of the main product? Reject unit prices, was prices, member-only/multibuy prices and other products.

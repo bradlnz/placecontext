@@ -13,11 +13,17 @@ public sealed record DataFieldMapping(string SourcePath, string Column, string T
     public DataFieldMapping ThrowIfInvalid()
     {
         if (string.IsNullOrWhiteSpace(SourcePath))
+        {
             throw new ArgumentException("A field mapping needs a source path.");
+        }
         if (string.IsNullOrWhiteSpace(Column))
+        {
             throw new ArgumentException("A field mapping needs a target column.");
+        }
         if (string.IsNullOrWhiteSpace(Type))
+        {
             throw new ArgumentException("A field mapping needs a column type.");
+        }
         return this;
     }
 }

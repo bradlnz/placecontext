@@ -1,4 +1,4 @@
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Skills;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Infrastructure.Skills;

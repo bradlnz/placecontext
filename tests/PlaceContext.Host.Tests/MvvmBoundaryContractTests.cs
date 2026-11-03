@@ -26,7 +26,7 @@ public sealed class MvvmBoundaryContractTests
     [
         "Components/Shared/AppIcon.razor",
         "Components/Shared/DataTabs.razor",
-        "Components/Shared/OpenSearchDataValue.razor",
+        "Components/Shared/SearchDataValue.razor",
         "Components/Shared/Skeleton.razor",
     ];
 
@@ -147,7 +147,9 @@ public sealed class MvvmBoundaryContractTests
         {
             var host = Path.Combine(directory.FullName, "src", "PlaceContext.Host");
             if (Directory.Exists(host))
+            {
                 return host;
+            }
             directory = directory.Parent;
         }
 

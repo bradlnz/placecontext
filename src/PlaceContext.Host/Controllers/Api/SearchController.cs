@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application;
 using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers.Api;
@@ -46,12 +47,26 @@ public sealed class SearchController : ControllerBase
 
         var term = q?.Trim() ?? "";
         if (term.Length < 2)
-            return BadRequest(new { error = "q must contain at least 2 characters." });
+        {
+            return BadRequest(new
+            {
+                error = "q must contain at least 2 characters."
+            });
+        }
         if (term.Length > 200)
-            return BadRequest(new { error = "q must be 200 characters or fewer." });
+        {
+            return BadRequest(new
+            {
+                error = "q must be 200 characters or fewer."
+            });
+        }
         if (limit is < 1 or > 100)
-            return BadRequest(new { error = "limit must be between 1 and 100." });
-
+        {
+            return BadRequest(new
+            {
+                error = "limit must be between 1 and 100."
+            });
+        }
         var projectId = _project.ProjectId!.Value;
         var results = await _svc.SearchAsync(
             term, projectId, SearchCandidateLimit, HttpContext.RequestAborted);

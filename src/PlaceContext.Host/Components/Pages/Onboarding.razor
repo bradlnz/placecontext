@@ -1,194 +1,108 @@
+@using PlaceContext.Application.Access
 @page "/onboarding"
-@attribute [Authorize(Policy = Permission.ProjectsView)]
-@using PlaceContext.Host.Components.ViewModels
+@attribute [Authorize(Policy = Permission.SettingsManage)]
 @inject OnboardingViewModel Vm
 @implements IDisposable
 
-<PageTitle>placecontext — Setup guide</PageTitle>
+<PageTitle>PlaceContext — Cluster setup</PageTitle>
 
 <main class="setup-guide">
     <header class="guide-head">
-        <div class="guide-kicker">FIRST LOGIN SETUP</div>
-        <h1>Bring your data into PlaceContext</h1>
-        <p>Choose how this workspace will access data, then decide whether search needs OpenSearch.</p>
+        <div class="guide-kicker">WORKSPACE SETUP</div>
+        <h1>Choose where your jobs run</h1>
+        <p>Set up cloud or local workers, check your cluster, then run your first job.</p>
     </header>
 
     <ol class="guide-steps" aria-label="Setup progress">
-        <li class="@(Vm.Step == SetupGuideStep.DataSource ? "active" : Vm.Step > SetupGuideStep.DataSource ? "done" : null)">
-            <span>1</span>Data source
-        </li>
-        <li class="@(Vm.Step == SetupGuideStep.OpenSearch ? "active" : Vm.Step > SetupGuideStep.OpenSearch ? "done" : null)">
-            <span>2</span>OpenSearch
-        </li>
-        <li class="@(Vm.Step == SetupGuideStep.Ready ? "active" : null)">
-            <span>3</span>Ready
-        </li>
+        <li class="@(Vm.Step == SetupGuideStep.Location ? "active" : "done")"><span>1</span>Execution location</li>
+        <li class="@(Vm.Step == SetupGuideStep.Cluster ? "active" : null)"><span>2</span>Cluster setup</li>
     </ol>
 
-    @if (Vm.Loading)
-    {
-        <section class="dccard guide-card"><Skeleton Kind="list" Rows="4" /></section>
-    }
-    else if (Vm.Error is not null)
-    {
-        <section class="dccard guide-card guide-error">
-            <h2>We couldn't inspect this workspace</h2>
-            <p>@Vm.Error</p>
-            <button class="dcbtn primary" @onclick="Vm.LoadAsync">Try again</button>
-        </section>
-    }
-    else if (Vm.Step == SetupGuideStep.DataSource)
+    @if (Vm.Step == SetupGuideStep.Location)
     {
         <section class="dccard guide-card">
             <div class="guide-section-head">
                 <div>
-                    <div class="guide-number">STEP 1</div>
-                    <h2>Choose a data source</h2>
-                    <p>Start with any supported source. You can add more later.</p>
+                    <h2>Cloud or local?</h2>
+                    <p>Choose a setup path for the machines that execute your jobs. The portal can be hosted separately.</p>
                 </div>
-                @if (Vm.Projects.Count > 1)
-                {
-                    <label class="project-choice">
-                        Project
-                        <select class="dcinput" value="@Vm.ProjectId" @onchange="Vm.ProjectChangedAsync">
-                            @foreach (var project in Vm.Projects)
-                            {
-                                <option value="@project.Id">@project.Name</option>
-                            }
-                        </select>
-                    </label>
-                }
             </div>
-
-            @if (Vm.Projects.Count == 0)
-            {
-                <div class="guide-notice">Create a project before connecting a project data source.</div>
-            }
-
-            <div class="source-grid">
-                @foreach (var source in OnboardingViewModel.DataSourceOptions)
-                {
-                    var selected = Vm.SelectedDataSource == source.Key;
-                    <button type="button" class="source-card @(selected ? "selected" : null)"
-                            aria-pressed="@selected" @onclick="() => Vm.SelectDataSource(source.Key)">
-                        <span class="source-mark">@OnboardingViewModel.SourceMark(source.Key)</span>
-                        <span class="source-copy">
-                            <strong>@source.Title</strong>
-                            <small>@source.Description</small>
-                        </span>
-                        <span class="source-check"><AppIcon Kind="@(selected ? "check" : "arrow-right")" /></span>
-                    </button>
-                }
+            <div class="choice-list">
+                <button type="button" class="choice-row @(Vm.IsCloud ? "selected" : null)"
+                        aria-pressed="@Vm.IsCloud" @onclick="() => Vm.SelectLocation(ExecutionLocation.Cloud)">
+                    <span class="choice-radio" aria-hidden="true"></span>
+                    <span><strong>Cloud</strong><small>Use managed execution or workers deployed on your cloud infrastructure.</small></span>
+                </button>
+                <button type="button" class="choice-row @(Vm.IsLocal ? "selected" : null)"
+                        aria-pressed="@Vm.IsLocal" @onclick="() => Vm.SelectLocation(ExecutionLocation.Local)">
+                    <span class="choice-radio" aria-hidden="true"></span>
+                    <span><strong>Local</strong><small>Run jobs on your own computers, servers or on-premises virtual machines.</small></span>
+                </button>
             </div>
-
             <div class="guide-actions">
                 <button class="dcbtn quiet" @onclick="Vm.SkipGuide">Set up later</button>
-                <button class="dcbtn primary" disabled="@(!Vm.CanContinue)" @onclick="Vm.ContinueToOpenSearch">
-                    Continue
-                </button>
+                <button class="dcbtn primary" disabled="@(!Vm.CanContinue)" @onclick="Vm.Continue">Continue</button>
             </div>
         </section>
     }
-    else if (Vm.Step == SetupGuideStep.OpenSearch)
+    @if (Vm.Step == SetupGuideStep.Cluster)
     {
         <section class="dccard guide-card">
-            <div class="guide-section-head">
-                <div>
-                    <div class="guide-number">STEP 2</div>
-                    <h2>Do you need OpenSearch?</h2>
-                    <p>It is optional. Add it for document search, field discovery, aggregations, and search dashboards.</p>
-                </div>
-            </div>
-
-            @if (Vm.HasConfiguredDataSource)
+            <div class="guide-section-head"><div><h2>@Vm.LocationLabel execution</h2>
+                <p>Connect the workers that will run your jobs and verify they are ready.</p></div></div>
+            @if (Vm.Loading)
             {
-                <div class="detected-box">
-                    <strong>Data source already enabled for @Vm.ProjectName</strong>
-                    <span>@string.Join(" · ", Vm.DetectedSources)</span>
-                </div>
+                <Skeleton Kind="list" Rows="2" />
             }
-
-            @if (Vm.OpenSearchConfigured)
+            @if (Vm.Error is not null)
             {
-                <div class="guide-notice success">
-                    <span class="status-dot"></span>
-                    OpenSearch is already configured. You can keep it or change the project connection later.
-                </div>
+                <div class="guide-notice" role="alert">@Vm.Error</div>
             }
-
-            <div class="choice-list">
-                <button type="button" class="choice-row @(Vm.OpenSearchChoice == OnboardingViewModel.ExistingOpenSearch ? "selected" : null)"
-                        @onclick="() => Vm.SelectOpenSearch(OnboardingViewModel.ExistingOpenSearch)">
-                    <span class="choice-radio"></span>
-                    <span><strong>@(Vm.OpenSearchConfigured ? "Use the configured OpenSearch" : "I already have OpenSearch")</strong>
-                        <small>@(Vm.OpenSearchConfigured ? "Keep using the detected workspace or project endpoint." : "Connect an existing OpenSearch or Elasticsearch endpoint securely.")</small></span>
-                </button>
-                <button type="button" class="choice-row @(Vm.OpenSearchChoice == OnboardingViewModel.InstallOpenSearch ? "selected" : null)"
-                        @onclick="() => Vm.SelectOpenSearch(OnboardingViewModel.InstallOpenSearch)">
-                    <span class="choice-radio"></span>
-                    <span><strong>I need to install OpenSearch</strong>
-                        <small>Open the operator guide for deployment, access controls, and PlaceContext configuration.</small></span>
-                </button>
-                <button type="button" class="choice-row @(Vm.OpenSearchChoice == OnboardingViewModel.SkipOpenSearch ? "selected" : null)"
-                        @onclick="() => Vm.SelectOpenSearch(OnboardingViewModel.SkipOpenSearch)">
-                    <span class="choice-radio"></span>
-                    <span><strong>Not now</strong>
-                        <small>Use PostgreSQL, files, MCP, and jobs without a search service. Add OpenSearch later.</small></span>
-                </button>
-            </div>
-
-            <div class="guide-actions">
-                @if (!Vm.HasConfiguredDataSource)
+            @if (!Vm.Loading)
+            {
+                <div class="detected-box"><strong>Current cluster</strong><span>@Vm.ClusterSummary</span></div>
+                <button class="dcbtn" @onclick="Vm.LoadAsync">Refresh cluster</button>
+            }
+            @if (Vm.IsLocal)
+            {
+                <ol class="setup-checklist">
+                    <li>Install a local cluster, or open Cluster and use <strong>Add node</strong> to join your own machines.</li>
+                    <li>Configure job placement on those workers. A cloud-hosted portal can still use local workers.</li>
+                    <li>Run a small job and confirm its worker, logs and output before adding production workloads.</li>
+                </ol>
+            }
+            @if (Vm.IsCloud)
+            {
+                <ol class="setup-checklist">
+                    <li>Use your managed execution cluster, or deploy cloud workers and join them from <strong>Add node</strong>.</li>
+                    <li>Check worker readiness and configure job placement on the intended cloud machines.</li>
+                    <li>Run a small job and confirm its worker, logs and output.</li>
+                </ol>
+            }
+            <p class="guide-notice">This guide does not move workloads. Job placement is controlled by the cluster deployment.
+                <a href="/wiki/cluster-and-nodes#job-placement">Configure job placement</a></p>
+            <div class="guide-links">
+                <a class="dcbtn" href="@Vm.SetupUrl">Installation instructions</a>
+                @if (Vm.ManagedHosting)
                 {
-                    <button class="dcbtn quiet" @onclick="Vm.Back">Back</button>
+                    <a class="dcbtn" href="@Vm.BillingUrl">Manage workspace plan</a>
+                    <p>A managed workspace requires an active subscription, including when you connect your own workers.</p>
                 }
-                else
-                {
-                    <button class="dcbtn quiet" @onclick="Vm.SkipGuide">Exit guide</button>
-                }
-                <button class="dcbtn primary" disabled="@(!Vm.CanFinish)" @onclick="Vm.Finish">Continue</button>
             </div>
-        </section>
-    }
-    else
-    {
-        <section class="dccard guide-card ready-card">
-            <div class="ready-mark"><AppIcon Kind="check" /></div>
-            <div class="guide-number">SETUP READY</div>
-            <h2>Your next step is ready</h2>
-            @if (Vm.OpenSearchChoice == OnboardingViewModel.InstallOpenSearch)
-            {
-                <p>Use the OpenSearch operator guide to deploy it safely, then return to Connections to add the endpoint.</p>
-            }
-            else if (Vm.OpenSearchChoice == OnboardingViewModel.ExistingOpenSearch && !Vm.OpenSearchConfigured)
-            {
-                <p>Add the existing endpoint to <strong>@Vm.ProjectName</strong>. Credentials remain server-side in the encrypted project Vault.</p>
-            }
-            else if (Vm.SelectedOption is { } source)
-            {
-                <p>Continue to @source.ActionLabel.ToLowerInvariant() for <strong>@Vm.ProjectName</strong>.</p>
-            }
-            else
-            {
-                <p>Your existing data source is ready. Continue to the workspace dashboard.</p>
-            }
-
-            <div class="ready-summary">
-                <div><span>Data source</span><strong>@(Vm.SelectedOption?.Title ?? string.Join(", ", Vm.DetectedSources))</strong></div>
-                <div><span>OpenSearch</span><strong>@Vm.OpenSearchSummary</strong></div>
-            </div>
-
             <div class="guide-actions">
                 <button class="dcbtn quiet" @onclick="Vm.Back">Back</button>
-                <button class="dcbtn primary" @onclick="Vm.OpenNextStep">@Vm.NextLabel</button>
+                <button class="dcbtn primary" @onclick="Vm.OpenCluster">Open cluster settings</button>
             </div>
         </section>
     }
 </main>
 
 @code {
-    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
-    protected override async Task OnInitializedAsync() => await Vm.LoadAsync();
+    [SupplyParameterFromQuery(Name = "start")]
+    public string? StartPlan { get; set; }
 
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override void OnParametersSet() => Vm.SetParameters(StartPlan);
+    protected override Task OnInitializedAsync() => Vm.LoadAsync();
     public void Dispose() => Vm.Detach();
 }

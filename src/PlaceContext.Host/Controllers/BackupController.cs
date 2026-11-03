@@ -1,12 +1,11 @@
-using System.Text;
 using System.Text.Json;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
+using PlaceContext.Application.Backup;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application;
 using PlaceContext.Host.Auth;
-using PlaceContext.Host.Backup;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -56,7 +55,10 @@ public sealed class BackupController : ControllerBase
         }
         catch (JsonException ex)
         {
-            return BadRequest(new { error = $"Invalid manifest JSON: {ex.Message}" });
+            return BadRequest(new
+            {
+                error = $"Invalid manifest JSON: {ex.Message}"
+            });
         }
 
         try
@@ -66,7 +68,10 @@ public sealed class BackupController : ControllerBase
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
         }
     }
 }

@@ -2,7 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Host.Controllers;
 
 namespace PlaceContext.Host.Tests;
@@ -86,7 +86,10 @@ public sealed class SharedArtifactsControllerTests
 
     private sealed class StubStore(SharedArtifact? artifact) : IObjectStore
     {
-        public int OpenCount { get; private set; }
+        public int OpenCount
+        {
+            get; private set;
+        }
         public bool IsEnabled => true;
         public string ReportsBucket => "reports";
         public string DepsBucket => "deps";

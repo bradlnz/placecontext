@@ -1,5 +1,5 @@
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -7,12 +7,27 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed class SecretsViewModel(PlaceContextService service, PortalUiState ui) : PageViewModel
 {
     public const string PageTitle = "Vault";
-    public Guid ProjectId { get; set; }
-    public IReadOnlyList<ProjectSecretView>? Secrets { get; private set; }
+    public Guid ProjectId
+    {
+        get; set;
+    }
+    public IReadOnlyList<ProjectSecretView>? Secrets
+    {
+        get; private set;
+    }
     public bool Loading { get; private set; } = true;
-    public bool Busy { get; private set; }
-    public string? Message { get; private set; }
-    public string? AddError { get; private set; }
+    public bool Busy
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
+    public string? AddError
+    {
+        get; private set;
+    }
     public string NewName { get; set; } = "";
     public string NewValue { get; set; } = "";
 

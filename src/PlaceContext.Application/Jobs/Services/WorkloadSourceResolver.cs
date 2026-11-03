@@ -29,17 +29,20 @@ internal static class WorkloadSourceResolver
         var hasCode = !string.IsNullOrWhiteSpace(runtimeId) || !string.IsNullOrWhiteSpace(source) || hasFiles;
 
         if (hasImage && hasCode)
+        {
             throw new ArgumentException(
-                $"{parameterContext}: provide either Image or (RuntimeId + code), not both.");
-
+                        $"{parameterContext}: provide either Image or (RuntimeId + code), not both.");
+        }
         if (hasImage)
+        {
             return new WorkloadSource.ImageWorkload(image!);
-
+        }
         if (hasCode)
         {
             if (string.IsNullOrWhiteSpace(runtimeId))
+            {
                 throw new ArgumentException($"{parameterContext}: RuntimeId is required for code workloads.");
-
+            }
             if (hasFiles)
             {
                 var codeFiles = files!.Select(f => new CodeFile(f.Path, f.Content)).ToList();
@@ -47,7 +50,9 @@ internal static class WorkloadSourceResolver
             }
 
             if (string.IsNullOrWhiteSpace(source))
+            {
                 throw new ArgumentException($"{parameterContext}: Source (or Files) is required for code workloads.");
+            }
             return new WorkloadSource.CodeWorkload(runtimeId!, source!, entrypoint);
         }
 
@@ -65,7 +70,9 @@ internal static class WorkloadSourceResolver
     {
         var result = Resolve(image, runtimeId, source, entrypoint, files, parameterContext);
         if (result is null)
+        {
             throw new ArgumentException($"{parameterContext}: either Image or (RuntimeId + code) must be provided.");
+        }
         return result;
     }
 }

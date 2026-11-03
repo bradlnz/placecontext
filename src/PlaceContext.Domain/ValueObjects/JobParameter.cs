@@ -12,7 +12,9 @@ public sealed record JobParameter
         string type = "text", IReadOnlyList<string>? options = null)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("Parameter name must not be empty.", nameof(name));
+        }
         Name = name.Trim();
         Label = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
         Required = required;
@@ -30,18 +32,33 @@ public sealed record JobParameter
     }
 
     /// <summary>Field key used in the assembled payload JSON, e.g. "customerEmail".</summary>
-    public string Name { get; }
+    public string Name
+    {
+        get;
+    }
 
     /// <summary>Optional human label shown in the prompt; falls back to <see cref="Name"/>.</summary>
-    public string? Label { get; }
+    public string? Label
+    {
+        get;
+    }
 
     /// <summary>Whether a value must be supplied before the job can run.</summary>
-    public bool Required { get; }
+    public bool Required
+    {
+        get;
+    }
 
     /// <summary>Input kind rendered in run forms: "text" | "number" | "date" | "datetime-local" |
     /// "time" | "select" | "checkbox" | "file".</summary>
-    public string Type { get; }
+    public string Type
+    {
+        get;
+    }
 
     /// <summary>Select choices, or accepted MIME/extension filters for a file input.</summary>
-    public IReadOnlyList<string> Options { get; }
+    public IReadOnlyList<string> Options
+    {
+        get;
+    }
 }

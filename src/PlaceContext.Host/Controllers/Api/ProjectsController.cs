@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PlaceContext.Application.Access;
 using PlaceContext.Application;
-using PlaceContext.Application.Ports;
 using PlaceContext.Host.Api;
 using PlaceContext.Host.Auth;
 
@@ -57,10 +57,17 @@ public sealed class ProjectsController : ControllerBase
     public async Task<ActionResult<ProjectResponse>> Create([FromBody] CreateProjectRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Path))
-            return BadRequest(new { error = "path is required." });
-
+        {
+            return BadRequest(new
+            {
+                error = "path is required."
+            });
+        }
         var project = await _svc.CreateProjectAsync(request.Path, request.Name, HttpContext.RequestAborted);
         var response = ProjectApiMapper.ToResponse(project);
-        return CreatedAtRoute("GetProjectById", new { id = response.Id }, response);
+        return CreatedAtRoute("GetProjectById", new
+        {
+            id = response.Id
+        }, response);
     }
 }

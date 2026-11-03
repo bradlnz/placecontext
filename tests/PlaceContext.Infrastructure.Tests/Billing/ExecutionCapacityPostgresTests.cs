@@ -17,11 +17,16 @@ public sealed class ExecutionCapacityPostgresTests
     {
         var schema = "capacity_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(
-            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES")) { SearchPath = schema }.ConnectionString;
+            Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES"))
+        {
+            SearchPath = schema
+        }.ConnectionString;
         await using var conn = new NpgsqlConnection(cs);
         await conn.OpenAsync();
         await using (var cmd = new NpgsqlCommand($"CREATE SCHEMA \"{schema}\"", conn))
+        {
             await cmd.ExecuteNonQueryAsync();
+        }
         try
         {
             var tenantId = Guid.NewGuid();
@@ -30,11 +35,19 @@ public sealed class ExecutionCapacityPostgresTests
             await using (var db = new AppDbContext(opts, owner))
             {
                 await db.Database.MigrateAsync();
-                db.Tenants.Add(new TenantRow { Id = tenantId, Slug = schema, Name = schema,
-                    CreatedAt = DateTimeOffset.UtcNow });
+                db.Tenants.Add(new TenantRow
+                {
+                    Id = tenantId,
+                    Slug = schema,
+                    Name = schema,
+                    CreatedAt = DateTimeOffset.UtcNow
+                });
                 await db.SaveChangesAsync();
-                db.TenantRunPlans.Add(new TenantRunPlanRow {
-                    TenantId = tenantId, Plan = RunPlans.Basic, Status = "active",
+                db.TenantRunPlans.Add(new TenantRunPlanRow
+                {
+                    TenantId = tenantId,
+                    Plan = RunPlans.Basic,
+                    Status = "active",
                     PeriodStart = DateTimeOffset.UtcNow.AddHours(-1),
                     PeriodEnd = DateTimeOffset.UtcNow.AddDays(7)
                 });
@@ -49,7 +62,7 @@ public sealed class ExecutionCapacityPostgresTests
                 await context.Database.OpenConnectionAsync(ct);
                 return await new DbExecutionCapacity(context, owner,
                     Options.Create(new RunBillingDeploymentOptions { ManagedHosting = true }),
-                    Options.Create(new StripeRunBillingOptions()),
+                    Options.Create(new PaymentBillingOptions()),
                     NullLogger<DbExecutionCapacity>.Instance)
                     .AcquireAsync(id, "workflow", ct);
             }
@@ -61,8 +74,10 @@ public sealed class ExecutionCapacityPostgresTests
             await first.DisposeAsync();
             await using var replacement = await Acquire(Guid.NewGuid());
             await using (var verify = new AppDbContext(opts, owner))
+            {
                 Assert.Equal(2L, await verify.Database.SqlQueryRaw<long>(
-                    "SELECT COUNT(*) AS \"Value\" FROM tenant_execution_leases").SingleAsync());
+                                "SELECT COUNT(*) AS \"Value\" FROM tenant_execution_leases").SingleAsync());
+            }
         }
         finally
         {

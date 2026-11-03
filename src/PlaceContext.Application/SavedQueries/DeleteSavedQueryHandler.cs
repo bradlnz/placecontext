@@ -1,6 +1,5 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.SavedQueries;
 namespace PlaceContext.Application.Features;
 
 public sealed class DeleteSavedQueryHandler

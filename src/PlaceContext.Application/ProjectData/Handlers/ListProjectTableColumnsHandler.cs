@@ -1,5 +1,5 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -8,7 +8,11 @@ public sealed class ListProjectTableColumnsHandler : IQueryHandler<ListProjectTa
 {
     private readonly IProjectRepository _projects;
     private readonly IProjectDataStore _store;
-    public ListProjectTableColumnsHandler(IProjectRepository projects, IProjectDataStore store) { _projects = projects; _store = store; }
+    public ListProjectTableColumnsHandler(IProjectRepository projects, IProjectDataStore store)
+    {
+        _projects = projects;
+        _store = store;
+    }
 
     public async Task<IReadOnlyList<ProjectColumnInfo>> HandleAsync(ListProjectTableColumnsQuery q, CancellationToken ct = default)
     {

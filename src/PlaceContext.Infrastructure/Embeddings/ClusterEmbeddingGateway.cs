@@ -1,8 +1,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using PlaceContext.Application.Ports;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using PlaceContext.Application.Search;
 
 namespace PlaceContext.Infrastructure.Embeddings;
 
@@ -38,20 +38,30 @@ public sealed class ClusterEmbeddingGateway : IEmbeddingGateway
     }
 
     public bool IsEnabled => !string.IsNullOrWhiteSpace(_endpoint);
-    public int Dimensions { get; }
+    public int Dimensions
+    {
+        get;
+    }
 
     public async Task<IReadOnlyList<float[]>> EmbedAsync(IReadOnlyList<string> texts, CancellationToken ct = default)
     {
-        if (!IsEnabled || texts.Count == 0) return Array.Empty<float[]>();
-
+        if (!IsEnabled || texts.Count == 0)
+        {
+            return Array.Empty<float[]>();
+        }
         var input = texts.Select(t => t.Length > MaxTextChars ? t[..MaxTextChars] : t).ToList();
         var client = _http.CreateClient();
         if (!string.IsNullOrWhiteSpace(_apiToken))
+        {
             client.DefaultRequestHeaders.TryAddWithoutValidation(
-                "X-PlaceContext-AI-Token", _apiToken);
+                        "X-PlaceContext-AI-Token", _apiToken);
+        }
         client.Timeout = TimeSpan.FromMinutes(2);
 
-        using var resp = await client.PostAsJsonAsync($"{_endpoint}/embeddings", new { input }, ct);
+        using var resp = await client.PostAsJsonAsync($"{_endpoint}/embeddings", new
+        {
+            input
+        }, ct);
         resp.EnsureSuccessStatusCode();
 
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
@@ -61,9 +71,10 @@ public sealed class ClusterEmbeddingGateway : IEmbeddingGateway
             .ToList();
 
         if (root.TryGetProperty("dimensions", out var dims) && dims.GetInt32() != Dimensions)
+        {
             _log.LogWarning("Cluster embeddings are {Actual}-dimensional but PlaceContext:ClusterChat:EmbeddingDimensions is {Configured} — pgvector inserts will fail until they match.",
-                dims.GetInt32(), Dimensions);
-
+                        dims.GetInt32(), Dimensions);
+        }
         return vectors;
     }
 }

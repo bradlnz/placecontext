@@ -3,8 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Secrets;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Persistence;
@@ -21,7 +23,9 @@ public sealed class ChainInputResumeTests
         public PostgresFactAttribute()
         {
             if (Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES") is null)
+            {
                 Skip = "Set PLACECONTEXT_TEST_POSTGRES to an isolated test database.";
+            }
         }
     }
 
@@ -30,7 +34,9 @@ public sealed class ChainInputResumeTests
     {
         var schema = "input_test_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES"))
-            { SearchPath = schema }.ConnectionString;
+        {
+            SearchPath = schema
+        }.ConnectionString;
         await using var connection = new NpgsqlConnection(cs);
         await connection.OpenAsync();
         await using (var setup = new NpgsqlCommand($"""
@@ -41,7 +47,10 @@ public sealed class ChainInputResumeTests
               "StartedAt" timestamptz NOT NULL, "FinishedAt" timestamptz, "ResumeAt" timestamptz,
               "ResumeStageIndex" integer, "ContinuationClaimedBy" text, "ContinuationClaimedAt" timestamptz,
               "ContinuationOverrides" text, "InputRequest" text);
-            """, connection)) await setup.ExecuteNonQueryAsync();
+            """, connection))
+        {
+            await setup.ExecuteNonQueryAsync();
+        }
         var tenant = new FakeCurrentTenant(Guid.NewGuid());
         var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(cs).Options;
         var encryptor = new FakeDataEncryptor();
@@ -112,9 +121,9 @@ public sealed class ChainInputResumeTests
             }
             await using var services = new ServiceCollection()
                 .AddScoped(_ => new AppDbContext(options, new CurrentTenant())).BuildServiceProvider();
-            using var worker = new ChainContinuationWorker(services.GetRequiredService<IServiceScopeFactory>(),
-                NullLogger<ChainContinuationWorker>.Instance);
-            var claim = typeof(ChainContinuationWorker).GetMethod("ClaimAsync",
+            using var worker = new ChainContinuationBackgroundService(services.GetRequiredService<IServiceScopeFactory>(),
+                NullLogger<ChainContinuationBackgroundService>.Instance);
+            var claim = typeof(ChainContinuationBackgroundService).GetMethod("ClaimAsync",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
             await (Task)claim.Invoke(worker, new object[] { CancellationToken.None })!;
             await using (var claimedDb = new AppDbContext(options, tenant))
@@ -123,7 +132,7 @@ public sealed class ChainInputResumeTests
                 Assert.NotNull(claimed.ContinuationClaimedAt);
                 Assert.NotNull(claimed.ContinuationClaimedBy);
             }
-            var release = typeof(ChainContinuationWorker).GetMethod("ReleaseAsync",
+            var release = typeof(ChainContinuationBackgroundService).GetMethod("ReleaseAsync",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
             foreach (var (before, after) in new[] { ("Running", "Waiting"), ("Waiting", "Waiting"),
                 ("AwaitingInput", "AwaitingInput"), ("Cancelled", "Cancelled"), ("Succeeded", "Succeeded") })

@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
 using PlaceContext.Host.Controllers.Api;
 
 namespace PlaceContext.Host.Tests;
@@ -26,7 +26,10 @@ public sealed class ManagedWorkflowQueueContractTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "PlaceContext.slnx"))) return dir.FullName;
+            if (File.Exists(Path.Combine(dir.FullName, "PlaceContext.slnx")))
+            {
+                return dir.FullName;
+            }
             dir = dir.Parent;
         }
         throw new DirectoryNotFoundException("PlaceContext root not found.");

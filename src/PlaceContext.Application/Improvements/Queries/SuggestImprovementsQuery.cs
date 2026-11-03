@@ -1,7 +1,6 @@
 using System.Text;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 

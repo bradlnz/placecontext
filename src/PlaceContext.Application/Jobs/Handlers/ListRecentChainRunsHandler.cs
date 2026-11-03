@@ -19,7 +19,10 @@ public sealed class ListRecentChainRunsHandler : IQueryHandler<ListRecentChainRu
     {
         var runs = await _runs.ListRecentAsync(query.Take, ct);
 
-        if (runs.Count == 0) return [];
+        if (runs.Count == 0)
+        {
+            return [];
+        }
         var projectNames = await _projects.GetNamesAsync(runs.Select(r => r.ProjectId).Distinct().ToArray(), ct);
 
         return runs

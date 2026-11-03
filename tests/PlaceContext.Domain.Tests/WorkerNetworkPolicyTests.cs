@@ -32,7 +32,11 @@ public sealed class WorkerNetworkPolicyTests
     public void Rules_validate_direction_protocol_and_port_ranges(string direction, string protocol, string cidr, int start, int end, bool valid)
     {
         var rule = new NetworkRule(direction, protocol, cidr, start, end);
-        if (valid) rule.Validate();
-        else Assert.Throws<ArgumentException>(rule.Validate);
+        if (valid)
+        {
+            rule.Validate();
+            return;
+        }
+        Assert.Throws<ArgumentException>(rule.Validate);
     }
 }

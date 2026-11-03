@@ -1,9 +1,19 @@
-using PlaceContext.Host.Branding;
+using PlaceContext.Application.Dtos;
+using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Tests;
 
 public sealed class BrandingThemeTests
 {
+    [Fact]
+    public void Branding_css_keeps_untrusted_values_inside_a_bounded_color_value()
+    {
+        var css = new TenantBranding(BgColor: "#123;\"}\\\n" + new string('a', 100)).CssOverrides();
+
+        Assert.Equal("--tenant-bg:#123" + new string('a', 36) + ";", css);
+        Assert.Equal("", new TenantBranding().CssOverrides());
+    }
+
     [Fact]
     public void Branding_emits_theme_inputs_instead_of_overriding_active_palette_variables()
     {

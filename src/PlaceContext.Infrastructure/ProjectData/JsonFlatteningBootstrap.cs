@@ -3,9 +3,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using PlaceContext.Application.Shared;
 using NpgsqlTypes;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Shared;
 
 namespace PlaceContext.Infrastructure.ProjectData;
 
@@ -40,7 +40,9 @@ public static class JsonFlatteningBootstrap
             cmd.CommandText = "SELECT nspname FROM pg_namespace WHERE nspname LIKE 'proj_%' ORDER BY 1";
             await using var r = await cmd.ExecuteReaderAsync(ct);
             while (await r.ReadAsync(ct))
+            {
                 schemas.Add(r.GetString(0));
+            }
         }
 
         var total = 0;
@@ -60,7 +62,9 @@ public static class JsonFlatteningBootstrap
                 cmd.Parameters.AddWithValue("s", schema);
                 await using var r = await cmd.ExecuteReaderAsync(ct);
                 while (await r.ReadAsync(ct))
+                {
                     tables.Add(r.GetString(0));
+                }
             }
 
             foreach (var table in tables)
@@ -82,7 +86,9 @@ public static class JsonFlatteningBootstrap
                     cmd.Parameters.AddWithValue("t", table);
                     await using var r = await cmd.ExecuteReaderAsync(ct);
                     while (await r.ReadAsync(ct))
+                    {
                         jsonColumns.Add(r.GetString(0));
+                    }
                 }
 
                 foreach (var column in jsonColumns)
@@ -100,9 +106,11 @@ public static class JsonFlatteningBootstrap
         }
 
         if (total > 0)
+        {
             log.LogInformation("Data-map flattening: backfilled {Count} row(s) into flattened columns.", total);
-        else
-            log.LogInformation("Data-map flattening: nothing to backfill (no JSON blobs found, or already flattened).");
+            return;
+        }
+        log.LogInformation("Data-map flattening: nothing to backfill (no JSON blobs found, or already flattened).");
     }
 
     /// <summary>
@@ -141,19 +149,27 @@ public static class JsonFlatteningBootstrap
                     foreach (var leaf in JsonFlattener.Flatten(doc.RootElement))
                     {
                         var col = JsonFlattener.ColumnName(column, leaf.Path);
-                        if (!leafKinds.ContainsKey(col)) leafOrder.Add(col);
+                        if (!leafKinds.ContainsKey(col))
+                        {
+                            leafOrder.Add(col);
+                        }
                         leafKinds[col] = JsonFlattener.MergeKind(
-                            leafKinds.TryGetValue(col, out var k) ? k : null, leaf.Value);
+                                                    leafKinds.TryGetValue(col, out var k) ? k : null, leaf.Value);
                     }
                 }
             }
-            if (!found) break;
+            if (!found)
+            {
+                break;
+            }
         }
 
         // A leaf named like the source column itself (an empty-object root) can't shadow the blob.
         var leaves = leafOrder.Where(c => !string.Equals(c, column, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (leaves.Count == 0) return 0;
-
+        if (leaves.Count == 0)
+        {
+            return 0;
+        }
         // Columns that already exist keep their actual type for the update casts; new ones get the
         // inferred type. (A leaf landing on an existing column writes into it, best-effort.)
         var existing = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -171,7 +187,9 @@ public static class JsonFlatteningBootstrap
             cmd.Parameters.AddWithValue("t", table);
             await using var r = await cmd.ExecuteReaderAsync(ct);
             while (await r.ReadAsync(ct))
+            {
                 existing[r.GetString(0)] = r.GetString(1);
+            }
         }
 
         var adds = leaves.Where(c => !existing.ContainsKey(c))
@@ -212,7 +230,9 @@ public static class JsonFlatteningBootstrap
                 sel.Parameters.AddWithValue("n", BatchSize);
                 await using var r = await sel.ExecuteReaderAsync(ct);
                 while (await r.ReadAsync(ct))
+                {
                     batch.Add((r.GetString(0), r.GetString(1)));
+                }
             }
 
             if (batch.Count == 0)
@@ -230,18 +250,29 @@ public static class JsonFlatteningBootstrap
                 foreach (var leaf in JsonFlattener.Flatten(doc.RootElement))
                 {
                     var col = JsonFlattener.ColumnName(column, leaf.Path);
-                    if (!castType.TryGetValue(col, out var type)) continue; // the shadowing leaf — skip
+                    if (!castType.TryGetValue(col, out var type))
+                    {
+                        continue; // the shadowing leaf — skip
+                    }
                     var text = JsonFlattener.ValueText(leaf.Value);
-                    if (text is null) continue; // absent/JSON-null keys leave the column NULL
+                    if (text is null)
+                    {
+                        continue; // absent/JSON-null keys leave the column NULL
+                    }
                     sets.Add($"{QuoteIdent(col)} = @p{values.Count}::{type}");
                     values.Add(($"p{values.Count}", type, text));
                 }
-                if (sets.Count == 0) continue;
+                if (sets.Count == 0)
+                {
+                    continue;
+                }
                 await using var upd = conn.CreateCommand();
                 upd.Transaction = tx;
                 upd.CommandText = $"UPDATE {qTable} SET {string.Join(", ", sets)} WHERE ctid = @ctid::tid";
                 foreach (var (param, _, text) in values)
+                {
                     upd.Parameters.Add(new NpgsqlParameter(param, NpgsqlDbType.Text) { Value = text });
+                }
                 upd.Parameters.AddWithValue("ctid", ctid);
                 await upd.ExecuteNonQueryAsync(ct);
                 updated++;

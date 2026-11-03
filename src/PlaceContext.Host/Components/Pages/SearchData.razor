@@ -1,0 +1,423 @@
+@using PlaceContext.Application.Access
+@inject SearchDataViewModel Vm
+@using PlaceContext.Host.Components.ViewModels
+@page "/project/{ProjectId:guid}/data-search"
+@attribute [Authorize(Policy = Permission.DataRead)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+
+<PageTitle>PlaceContext — Data Search</PageTitle>
+
+<div class="search-page">
+    <DataTabs ProjectId="Vm.ProjectId" Active="@DataSection.Search" />
+
+    @if (!Vm.InitialLoadComplete || Vm.Loading)
+    {
+        <div class="data-search-skeleton" aria-busy="true" aria-label="Loading data search">
+            <Skeleton Kind="text" Rows="2" />
+            <Skeleton Kind="card-grid" Cards="4" />
+            <Skeleton Kind="text" Rows="3" />
+            <Skeleton Kind="table" Rows="6" />
+        </div>
+    }
+    else
+    {
+
+    <header class="page-head">
+        <div>
+            <h2>Data Search</h2>
+            <p>Search OpenSearch documents, explore fields, and turn aggregations into reusable charts.</p>
+        </div>
+        <div class="head-actions">
+            @if (Vm.CanSync)
+            {
+                <button class="dcbtn" disabled="@Vm.Syncing" @onclick="Vm.TriggerSyncAsync">
+                    @(Vm.Syncing ? "Starting sync…" : "Sync now")
+                </button>
+            }
+            <span class="proxy-chip"><i></i> server proxy</span>
+        </div>
+    </header>
+
+    @if (Vm.SyncMessage is not null)
+    {
+        <div class="dchint">@Vm.SyncMessage</div>
+    }
+
+    @if (Vm.Error is not null)
+    {
+        <div class="connection-error">
+            <strong>OpenSearch unavailable</strong>
+            <span>@Vm.Error</span>
+            <small>Add <code>OPENSEARCH_URL</code>, <code>OPENSEARCH_USERNAME</code>,
+                <code>OPENSEARCH_PASSWORD</code>, and optionally <code>OPENSEARCH_INDEX</code>
+                in this project's Vault. Jobs receive the same values as environment variables and
+                must have network egress enabled to reach OpenSearch.</small>
+        </div>
+    }
+
+    @if (Vm.Dashboards.Count > 0)
+    {
+        <section class="dashboard-section">
+            <div class="section-head">
+                <div><strong>Dashboard</strong><span>@Vm.Dashboards.Count saved chart@(Vm.Dashboards.Count == 1 ? "" : "s")</span></div>
+            </div>
+            <div class="dashboard-grid">
+                @foreach (var dashboard in Vm.Dashboards)
+                {
+                    <article class="dccard dashboard-card">
+                        <header>
+                            <div>
+                                <strong>@dashboard.Name</strong>
+                                <span>@dashboard.IndexPattern · @dashboard.MetricType by @dashboard.BucketField</span>
+                            </div>
+                            <div class="card-actions">
+                                <button title="Open in builder" @onclick="@(() => Vm.LoadDashboardAsync(dashboard))"><AppIcon Kind="edit" /></button>
+                                <button title="Duplicate dashboard" disabled="@(Vm.Replicating == dashboard.Id)"
+                                        @onclick="@(() => Vm.DuplicateDashboardAsync(dashboard))">⧉</button>
+                                <button title="Refresh chart" disabled="@(Vm.Refreshing == dashboard.Id)"
+                                        @onclick="@(() => Vm.RefreshDashboardAsync(dashboard))"><AppIcon Kind="refresh" /></button>
+                                <button title="Delete chart" class="delete"
+                                        @onclick="@(() => Vm.DeleteDashboardAsync(dashboard.Id))"><AppIcon Kind="close" /></button>
+                            </div>
+                        </header>
+                        <div class="saved-chart">
+                            <canvas id="@Vm.CanvasIdFor(dashboard.Id)"></canvas>
+                        </div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
+
+    @if (Vm.Indices.Count > 0)
+    {
+        <section class="index-section">
+            <div class="section-head">
+                <div><strong>Indexes</strong><span>@Vm.Indices.Count available</span></div>
+                <span class="last-updated" title="@Vm.LastUpdatedTitle">
+                    Last updated: @Vm.LastUpdatedLabel
+                </span>
+            </div>
+            <div class="index-grid">
+                @foreach (var index in Vm.Indices)
+                {
+                    <button type="button"
+                            class="dccard index-card @(index.Name == Vm.IndexPattern ? "selected" : "")"
+                            @onclick="@(() => Vm.SelectIndexAsync(index))">
+                        <code>@index.Name</code>
+                        <span><strong>@Vm.Presentation.Number(index.DocumentCount)</strong> documents</span>
+                        <small>@(index.StoreSize ?? "size unavailable")</small>
+                    </button>
+                }
+            </div>
+        </section>
+    }
+
+    @if (Vm.Fields.Count > 0)
+    {
+        <section class="generated-section">
+            <div class="section-head generated-head">
+                <div>
+                    <strong>Generated insights</strong>
+                    <span>@(Vm.GeneratingCharts ? "analysing fields…" : $"{Vm.GeneratedCharts.Count} charts from {Vm.IndexPattern}")</span>
+                </div>
+                <button class="dcbtn" disabled="@(Vm.GeneratingCharts || Vm.Loading)" @onclick="Vm.GenerateChartsAsync">
+                    @(Vm.GeneratingCharts ? "Generating…" : Vm.ChartsRequested ? "Regenerate charts" : "Generate charts")
+                </button>
+            </div>
+            @if (Vm.GeneratingCharts)
+            {
+                <div class="generated-loading dccard">Finding useful date, category, and numeric fields…</div>
+            }
+            else if (!Vm.ChartsRequested)
+            {
+                <div class="generated-loading dccard">Generate charts to explore this index.</div>
+            }
+            else if (Vm.GeneratedCharts.Count == 0)
+            {
+                <div class="generated-loading dccard">No chartable values were found in this index for the current query.</div>
+            }
+            else
+            {
+                <div class="dashboard-grid">
+                    @foreach (var chart in Vm.GeneratedCharts)
+                    {
+                        <article class="dccard dashboard-card generated-card">
+                            <header>
+                                <div>
+                                    <strong>@chart.Title</strong>
+                                    <span>@chart.Subtitle</span>
+                                </div>
+                            </header>
+                            <div class="saved-chart">
+                                <canvas id="@SearchDataViewModel.GeneratedCanvasId(chart.Id)"></canvas>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    }
+
+    <section class="dccard search-builder">
+        <div class="query-row">
+            <label class="index-field">
+                <span>Index</span>
+                <input class="dcinput" list="opensearch-indices" @bind="Vm.IndexPattern" />
+                <datalist id="opensearch-indices">
+                    @foreach (var index in Vm.Indices)
+                    {
+                        <option value="@index.Name">@index.DocumentCount documents</option>
+                    }
+                </datalist>
+            </label>
+            <label class="query-field">
+                <span>Query</span>
+                <input class="dcinput" @bind="Vm.QueryText"
+                       @onkeydown="Vm.OnQueryKeyDown"
+                       placeholder="Search words or phrases across all fields" />
+            </label>
+            <button class="dcbtn fields-button" disabled="@Vm.Loading" @onclick="Vm.LoadFieldsAsync">Fields</button>
+            <button class="dcbtn primary search-button" disabled="@Vm.Searching" @onclick="Vm.SearchAsync">
+                @(Vm.Searching ? "Searching…" : "Search")
+            </button>
+        </div>
+        <div class="query-help">
+            Free-text searches run across all searchable fields. Blank searches match all documents. Results are capped at 100 per page.
+        </div>
+
+        <div class="chart-controls">
+            <label>
+                <span>Group by</span>
+                <select class="dcinput" @bind="Vm.BucketField" @bind:after="Vm.BucketChanged">
+                    <option value="">No chart</option>
+                    @foreach (var field in Vm.AggregatableFields)
+                    {
+                        <option value="@field.Name">@field.Name <text>(@field.Type)</text></option>
+                    }
+                </select>
+            </label>
+            @if (!string.IsNullOrWhiteSpace(Vm.BucketField))
+            {
+                <label>
+                    <span>Chart</span>
+                    <select class="dcinput" @bind="Vm.ChartType">
+                        <option value="bar">Bar</option>
+                        <option value="line">Line</option>
+                        <option value="pie">Pie</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Metric</span>
+                    <select class="dcinput" @bind="Vm.MetricType">
+                        <option value="count">Document count</option>
+                        <option value="sum">Sum</option>
+                        <option value="avg">Average</option>
+                        <option value="min">Minimum</option>
+                        <option value="max">Maximum</option>
+                    </select>
+                </label>
+                @if (Vm.RequiresMetricField)
+                {
+                    <label class="metric-field">
+                        <span>Numeric field</span>
+                        <select class="dcinput" @bind="Vm.MetricField">
+                            @foreach (var field in Vm.NumericFields)
+                            {
+                                <option value="@field.Name">@field.Name</option>
+                            }
+                        </select>
+                    </label>
+                }
+                @if (Vm.UsesDateBuckets)
+                {
+                    <label>
+                        <span>Interval</span>
+                        <select class="dcinput" @bind="Vm.DateInterval">
+                            <option value="hour">Hour</option>
+                            <option value="day">Day</option>
+                            <option value="week">Week</option>
+                            <option value="month">Month</option>
+                        </select>
+                    </label>
+                }
+            }
+        </div>
+    </section>
+
+    @if (Vm.Result is not null)
+    {
+        <div class="result-summary">
+            <span><strong>@Vm.Presentation.Number(Vm.Result.Total)</strong> documents</span>
+            <span>@Vm.Result.TookMs ms</span>
+            <span>page @Vm.Page</span>
+        </div>
+
+        @if (Vm.Result.ChartSpecJson is not null)
+        {
+            <section class="dccard chart-preview">
+                <header>
+                    <div>
+                        <strong>Chart preview</strong>
+                        <span>@Vm.MetricType by @Vm.BucketField</span>
+                    </div>
+                    <div class="save-chart">
+                        <input class="dcinput" @bind="Vm.DashboardName" placeholder="Dashboard chart name" />
+                        <button class="dcbtn primary" disabled="@Vm.SavingDashboard" @onclick="Vm.SaveDashboardAsync">
+                            @(Vm.SavingDashboard ? "Saving…" : Vm.EditingDashboardId is null ? "Save chart" : "Update chart")
+                        </button>
+                    </div>
+                </header>
+                <div class="preview-canvas">
+                    <canvas id="@SearchDataViewModel.PreviewCanvasId"></canvas>
+                </div>
+            </section>
+        }
+
+    <section class="dccard results-card">
+        @if (Vm.Result.Hits.Count == 0)
+        {
+            <div class="no-results">No documents matched this query.</div>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>_index</th>
+                            <th>_id</th>
+                            @foreach (var column in Vm.VisibleColumns)
+                            {
+                                <th>@column</th>
+                            }
+                            <th class="actions-column">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var hit in Vm.Result.Hits)
+                        {
+                            <tr class="@(hit.Id == Vm.RequestedDocument ? "linked-document" : null)">
+                                <td><code>@hit.Index</code></td>
+                                <td><code>@hit.Id</code></td>
+                                @foreach (var column in Vm.VisibleColumns)
+                                {
+                                    <td title="@SearchDataViewModel.Value(hit, column)">@SearchDataViewModel.ShortValue(SearchDataViewModel.Value(hit, column))</td>
+                                }
+                                <td class="actions-cell">
+                                    <button class="dcbtn action-btn"
+                                            @onclick="@(() => Vm.OpenRecordPanelAsync(hit))">
+                                        Inspect
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <footer class="pager">
+                <button class="dcbtn" disabled="@(Vm.Page <= 1 || Vm.Searching)" @onclick="Vm.PreviousPageAsync"><AppIcon Kind="arrow-left" /> Previous</button>
+                <span>Page @Vm.Page</span>
+                <button class="dcbtn" disabled="@(Vm.Result.Hits.Count < Vm.PageSize || Vm.Searching)" @onclick="Vm.NextPageAsync">Next <AppIcon Kind="arrow-right" /></button>
+            </footer>
+        }
+    </section>
+
+    @if (Vm.RecordPanelOpen && Vm.SelectedRecord is not null)
+    {
+        <aside class="record-sidepanel">
+            <header class="record-sidepanel-head">
+                <div class="record-sidepanel-title">
+                    <strong>Record details</strong>
+                    <span>@Vm.SelectedRecord.Index</span>
+                </div>
+                <button aria-label="Close" class="dcbtn close-panel" @onclick="Vm.CloseRecordPanelAsync"><AppIcon Kind="close" /></button>
+            </header>
+            <div class="record-sidepanel-body">
+                <section>
+                    <h4>Record</h4>
+                    <dl class="record-kv">
+                        <div>
+                            <dt>_index</dt>
+                            <dd><code>@Vm.SelectedRecord.Index</code></dd>
+                        </div>
+                        <div>
+                            <dt>_id</dt>
+                            <dd><code>@Vm.SelectedRecord.Id</code></dd>
+                        </div>
+                        @foreach (var field in Vm.SelectedRecord.Fields.OrderBy(field => field.Key))
+                        {
+                            <div>
+                                <dt>@field.Key</dt>
+                                <dd title="@field.Value">@SearchDataViewModel.ShortValue(field.Value)</dd>
+                            </div>
+                        }
+                    </dl>
+                </section>
+                <section>
+                    <h4>Linked records</h4>
+                    @if (Vm.LinkedRecords.Count == 0)
+                    {
+                        <div class="record-empty">No obvious linked records on this page.</div>
+                    }
+                    else
+                    {
+                        <ul class="linked-record-list">
+                            @foreach (var linked in Vm.LinkedRecords)
+                            {
+                                <li>
+                                    <button class="dcbtn linked-record-btn" @onclick="@(() => Vm.OpenRecordPanelAsync(linked))">
+                                        <span class="linked-id">@linked.Id</span>
+                                        <span class="linked-index">@linked.Index</span>
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+                <section>
+                    <h4>Graph</h4>
+                    @if (Vm.SelectedRecordGraphSpec is null)
+                    {
+                        <div class="record-empty">No graph available for this record.</div>
+                    }
+                    else
+                    {
+                        <div class="record-chart">
+                            <canvas id="@SearchDataViewModel.RecordPanelCanvasId"></canvas>
+                        </div>
+                    }
+                </section>
+            </div>
+        </aside>
+    }
+    }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Guid ProjectId { get; set; }
+    [Parameter]
+    public string? RequestedIndex { get; set; }
+    [Parameter]
+    public string? RequestedQuery { get; set; }
+    [Parameter]
+    public string? RequestedDocument { get; set; }
+
+    protected override Task OnInitializedAsync()
+        => Vm.AttachAndInitializeAsync(() => InvokeAsync(StateHasChanged));
+
+    protected override Task OnParametersSetAsync()
+    {
+        Vm.ProjectId = ProjectId;
+        Vm.RequestedIndex = RequestedIndex;
+        Vm.RequestedQuery = RequestedQuery;
+        Vm.RequestedDocument = RequestedDocument;
+        return Vm.SetParametersAsync();
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync(firstRender);
+
+    public void Dispose() => Vm.Detach();
+}

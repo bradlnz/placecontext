@@ -1,7 +1,7 @@
+using System.Text.Json;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
-using System.Text.Json;
 
 namespace PlaceContext.Application.Features;
 
@@ -91,14 +91,16 @@ internal static class JobViewMapper
     private static string? GoalFromInputPayload(string? payload)
     {
         if (string.IsNullOrWhiteSpace(payload))
+        {
             return null;
-
+        }
         try
         {
             using var document = JsonDocument.Parse(payload);
             if (!document.RootElement.TryGetProperty("goal", out var goalElement))
+            {
                 return null;
-
+            }
             var goal = goalElement.ValueKind == JsonValueKind.String
                 ? goalElement.GetString()
                 : goalElement.ToString();

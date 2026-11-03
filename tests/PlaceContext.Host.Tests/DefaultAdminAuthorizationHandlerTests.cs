@@ -2,7 +2,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Host.Auth;
 using PlaceContext.Infrastructure.Persistence;
 
@@ -22,6 +23,7 @@ public sealed class DefaultAdminAuthorizationHandlerTests
         // so an inline Guid would give the handler's isolated scope its own empty InMemory database.
         var dbName = Guid.NewGuid().ToString("N");
         services.AddDbContext<AppDbContext>(o => o.UseInMemoryDatabase(dbName));
+        services.AddScoped<IWorkspaceAdministratorReader, PlaceContext.Infrastructure.Auth.EfWorkspaceAdministratorReader>();
         var provider = services.BuildServiceProvider();
         var db = provider.GetRequiredService<AppDbContext>();
         return (
@@ -34,11 +36,12 @@ public sealed class DefaultAdminAuthorizationHandlerTests
 
     private static async Task<bool> Succeeds(
         DefaultAdminAuthorizationHandler handler,
-        ClaimsPrincipal user
+        ClaimsPrincipal user,
+        bool includeOwners = false
     )
     {
         var context = new AuthorizationHandlerContext(
-            new[] { new DefaultAdminRequirement() },
+            new[] { new DefaultAdminRequirement(includeOwners) },
             user,
             resource: null
         );
@@ -108,6 +111,26 @@ public sealed class DefaultAdminAuthorizationHandlerTests
         row.IsExternalAdmin = false;
         await db.SaveChangesAsync();
         Assert.False(await Succeeds(handler, Principal(id)));
+    }
+
+    [Fact]
+    public async Task Database_access_accepts_persisted_owners_and_super_admins_but_not_ordinary_admins()
+    {
+        var (handler, db) = NewHandler();
+        var id = await AddUser(db, isDefaultAdmin: false);
+        Assert.True(await Succeeds(handler, Principal(id), includeOwners: true));
+        Assert.False(await Succeeds(handler, Principal(id, Guid.NewGuid()), includeOwners: true));
+        var row = await db.Users.SingleAsync(user => user.Id == id);
+        row.Role = "Admin";
+        await db.SaveChangesAsync();
+        Assert.False(await Succeeds(handler, Principal(id), includeOwners: true));
+        row.IsExternalAdmin = true;
+        await db.SaveChangesAsync();
+        Assert.True(await Succeeds(handler, Principal(id), includeOwners: true));
+        row.IsExternalAdmin = false;
+        await db.SaveChangesAsync();
+        Assert.False(await Succeeds(handler, Principal(id), includeOwners: true));
+        Assert.False(await Succeeds(handler, Principal(Guid.NewGuid()), includeOwners: true));
     }
 
     [Fact]

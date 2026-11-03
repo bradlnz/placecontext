@@ -1,7 +1,10 @@
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Build;
+using PlaceContext.Application.Communications;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Workload.VirtualMachines;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -23,12 +26,12 @@ public class JobChainTests
         await jobs.AddAsync(next);
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(ProjectId, "vm", null,
-            [ChainStage.ForAction(new QemuChainAction("linux", "cat")), ChainStage.Of(next.Id)], T0);
+            [ChainStage.ForAction(new VirtualMachineChainAction("linux", "cat")), ChainStage.Of(next.Id)], T0);
         await chains.AddAsync(chain);
         var dispatcher = new FakeRunDispatcher();
         dispatcher.Results[next.Id] = Run(next.Id, "Succeeded");
-        var qemu = new FakeQemuRunner(exitCode);
-        var replay = new FakeQemuReplayStore();
+        var qemu = new FakeVirtualMachineRunner(exitCode);
+        var replay = new FakeVirtualMachineReplayStore();
         var handler = new RunJobChainHandler(chains, jobs, new InMemoryChainRunRepository(), new RecordingUnitOfWork(),
             new FakeClock(T0), new FakeJobRunner(dispatcher), permissions: new FakePermissionService(allowed), qemu: qemu, qemuReplay: replay);
         var result = await handler.HandleAsync(new RunJobChainCommand(chain.Id, "{\"order\":42}"));
@@ -50,17 +53,20 @@ public class JobChainTests
         }
     }
 
-    private sealed class FakeQemuRunner(int exitCode) : IQemuEnvironmentRunner
+    private sealed class FakeVirtualMachineRunner(int exitCode) : IVirtualMachineEnvironmentRunner
     {
         public bool Called;
-        public async Task<QemuEnvironmentResult> RunAsync(QemuChainAction action, string? input, CancellationToken ct,
-            Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null, QemuRunContext? context = null)
+        public async Task<VirtualMachineEnvironmentResult> RunAsync(VirtualMachineChainAction action, string? input, CancellationToken ct,
+            Func<VirtualMachineReplayCapture, CancellationToken, Task>? recordFrame = null, VirtualMachineRunContext? context = null)
         {
             Called = true;
             Assert.Equal("{\"order\":42}", input);
-            if (recordFrame is not null) await recordFrame(new(new(0, 0, T0, "Desktop ready", null, true), "screen"u8.ToArray()), ct);
-            return new QemuEnvironmentResult(exitCode, "guest output", "", AgentSteps: 3,
-                Activity: [new("guest_shell", "Opened the browser", 0)]);
+            if (recordFrame is not null)
+            {
+                await recordFrame(new(new(0, 0, T0, "Desktop ready", null, true), "screen"u8.ToArray()), ct);
+            }
+            return new VirtualMachineEnvironmentResult(exitCode, "guest output", "", AgentSteps: 3,
+                            Activity: [new("guest_shell", "Opened the browser", 0)]);
         }
     }
 
@@ -72,12 +78,12 @@ public class JobChainTests
         var next = MakeJob("after-vm");
         await jobs.AddAsync(next);
         var chain = JobChain.Create(ProjectId, "cancel-vm", null,
-            [ChainStage.ForAction(new QemuChainAction("linux", "sleep 120")), ChainStage.Of(next.Id)], T0);
+            [ChainStage.ForAction(new VirtualMachineChainAction("linux", "sleep 120")), ChainStage.Of(next.Id)], T0);
         await chains.AddAsync(chain);
         var runs = new InMemoryChainRunRepository();
         var dispatcher = new FakeRunDispatcher();
-        var guest = new WaitingQemuRunner();
-        var replay = new FakeQemuReplayStore();
+        var guest = new WaitingVirtualMachineRunner();
+        var replay = new FakeVirtualMachineReplayStore();
         var handler = new RunJobChainHandler(chains, jobs, runs, new RecordingUnitOfWork(), new FakeClock(T0),
             new FakeJobRunner(dispatcher), permissions: new FakePermissionService(true), qemu: guest, qemuReplay: replay);
         var runId = Guid.NewGuid();
@@ -91,17 +97,26 @@ public class JobChainTests
         Assert.Empty(dispatcher.DispatchedJobIds);
     }
 
-    private sealed class WaitingQemuRunner : IQemuEnvironmentRunner
+    private sealed class WaitingVirtualMachineRunner : IVirtualMachineEnvironmentRunner
     {
         public TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool Stopped;
-        public async Task<QemuEnvironmentResult> RunAsync(QemuChainAction action, string? input, CancellationToken ct,
-            Func<QemuReplayCapture, CancellationToken, Task>? recordFrame = null, QemuRunContext? context = null)
+        public async Task<VirtualMachineEnvironmentResult> RunAsync(VirtualMachineChainAction action, string? input, CancellationToken ct,
+            Func<VirtualMachineReplayCapture, CancellationToken, Task>? recordFrame = null, VirtualMachineRunContext? context = null)
         {
-            if (recordFrame is not null) await recordFrame(new(new(0, 0, T0, "Desktop ready", null, true), "screen"u8.ToArray()), ct);
+            if (recordFrame is not null)
+            {
+                await recordFrame(new(new(0, 0, T0, "Desktop ready", null, true), "screen"u8.ToArray()), ct);
+            }
             Started.SetResult();
-            try { await Task.Delay(Timeout.Infinite, ct); }
-            finally { Stopped = true; }
+            try
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            finally
+            {
+                Stopped = true;
+            }
             return new(0, "", "");
         }
     }
@@ -112,7 +127,7 @@ public class JobChainTests
     private static RunJobChainHandler RunHandler(InMemoryJobChainRepository chains, InMemoryJobRepository jobs,
         FakeRunDispatcher dispatcher, InMemoryChainRunRepository? runs = null,
         IClientCommunicationSender? communications = null,
-        IPermissionService? permissions = null, IChainQuestionGenerator? questions = null, IJevReviewer? jev = null)
+        IPermissionService? permissions = null, IChainQuestionGenerator? questions = null, IOutcomeReviewer? jev = null)
         => new(chains, jobs, runs ?? new InMemoryChainRunRepository(),
             new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(dispatcher),
             communications: communications, permissions: permissions, questions: questions, jev: jev);
@@ -135,7 +150,10 @@ public class JobChainTests
         var first = MakeJob("first");
         var foreign = MakeJob("foreign", Guid.NewGuid());
         await jobs.AddAsync(first);
-        if (!missing) await jobs.AddAsync(foreign);
+        if (!missing)
+        {
+            await jobs.AddAsync(foreign);
+        }
         var uow = new RecordingUnitOfWork();
         var handler = new CreateJobChainHandler(new InMemoryJobChainRepository(), jobs, uow, new FakeClock(T0));
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(new CreateJobChainCommand(
@@ -150,8 +168,10 @@ public class JobChainTests
     public async Task Create_persists_the_chain_and_resolves_step_names()
     {
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("extract"); var b = MakeJob("report");
-        await jobs.AddAsync(a); await jobs.AddAsync(b);
+        var a = MakeJob("extract");
+        var b = MakeJob("report");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b);
         var chains = new InMemoryJobChainRepository();
         var handler = new CreateJobChainHandler(chains, jobs, new RecordingUnitOfWork(), new FakeClock(T0));
 
@@ -226,8 +246,10 @@ public class JobChainTests
     public async Task Run_threads_each_steps_output_into_the_next_step()
     {
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("extract"); var b = MakeJob("report");
-        await jobs.AddAsync(a); await jobs.AddAsync(b);
+        var a = MakeJob("extract");
+        var b = MakeJob("report");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b);
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(ProjectId, "pipeline", null, new[] { a.Id, b.Id }, T0);
         await chains.AddAsync(chain);
@@ -257,8 +279,12 @@ public class JobChainTests
     public async Task Run_stops_at_the_first_failed_step()
     {
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("a"); var b = MakeJob("b"); var c = MakeJob("c");
-        await jobs.AddAsync(a); await jobs.AddAsync(b); await jobs.AddAsync(c);
+        var a = MakeJob("a");
+        var b = MakeJob("b");
+        var c = MakeJob("c");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b);
+        await jobs.AddAsync(c);
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(ProjectId, "pipeline", null, new[] { a.Id, b.Id, c.Id }, T0);
         await chains.AddAsync(chain);
@@ -284,8 +310,12 @@ public class JobChainTests
     public async Task Run_prefers_the_reduce_artifact_and_wraps_multiple_shards_as_a_json_array()
     {
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("map-reduce"); var b = MakeJob("fanout"); var c = MakeJob("sink");
-        await jobs.AddAsync(a); await jobs.AddAsync(b); await jobs.AddAsync(c);
+        var a = MakeJob("map-reduce");
+        var b = MakeJob("fanout");
+        var c = MakeJob("sink");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b);
+        await jobs.AddAsync(c);
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(ProjectId, "pipeline", null, new[] { a.Id, b.Id, c.Id }, T0);
         await chains.AddAsync(chain);
@@ -314,8 +344,10 @@ public class JobChainTests
     public async Task Run_honors_a_preallocated_chain_run_id_and_preallocates_each_steps_run_id()
     {
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("extract"); var b = MakeJob("report");
-        await jobs.AddAsync(a); await jobs.AddAsync(b);
+        var a = MakeJob("extract");
+        var b = MakeJob("report");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b);
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(ProjectId, "pipeline", null, new[] { a.Id, b.Id }, T0);
         await chains.AddAsync(chain);
@@ -552,9 +584,15 @@ public class JobChainTests
     {
         public string EmailProvider => "Postmark";
         public string SmsProvider => "Twilio";
-        public Exception? Failure { get; init; }
+        public Exception? Failure
+        {
+            get; init;
+        }
         public List<(string Recipient, string RecipientName, string Subject, string Body,
-            IReadOnlyList<ClientEmailAttachment> Attachments)> Emails { get; } = new();
+            IReadOnlyList<ClientEmailAttachment> Attachments)> Emails
+        {
+            get;
+        } = new();
         public List<(string Recipient, string Body)> SmsMessages { get; } = new();
 
         public Task<ClientCommsCapabilities> GetCapabilitiesAsync(CancellationToken ct = default)
@@ -564,9 +602,12 @@ public class JobChainTests
             string subject, string body, CancellationToken ct = default,
             IReadOnlyList<ClientEmailAttachment>? attachments = null)
         {
-            if (Failure is not null) throw Failure;
+            if (Failure is not null)
+            {
+                throw Failure;
+            }
             Emails.Add((recipient, recipientName, subject, body,
-                attachments ?? Array.Empty<ClientEmailAttachment>()));
+                            attachments ?? Array.Empty<ClientEmailAttachment>()));
             return Task.FromResult(new ClientMessageDelivery("Postmark", "message-123"));
         }
 
@@ -578,7 +619,10 @@ public class JobChainTests
         public Task<ClientMessageDelivery> SendSmsAsync(
             string recipient, string body, CancellationToken ct = default)
         {
-            if (Failure is not null) throw Failure;
+            if (Failure is not null)
+            {
+                throw Failure;
+            }
             SmsMessages.Add((recipient, body));
             return Task.FromResult(new ClientMessageDelivery("Twilio", "sms-123"));
         }
@@ -612,8 +656,14 @@ public class JobChainTests
     public async Task Run_dispatches_a_fan_out_stages_branches_concurrently()
     {
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("a"); var b1 = MakeJob("b1"); var b2 = MakeJob("b2"); var join = MakeJob("join");
-        await jobs.AddAsync(a); await jobs.AddAsync(b1); await jobs.AddAsync(b2); await jobs.AddAsync(join);
+        var a = MakeJob("a");
+        var b1 = MakeJob("b1");
+        var b2 = MakeJob("b2");
+        var join = MakeJob("join");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b1);
+        await jobs.AddAsync(b2);
+        await jobs.AddAsync(join);
         var chains = new InMemoryJobChainRepository();
         var chain = FanOutJoinChain(a.Id, b1.Id, b2.Id, join.Id);
         await chains.AddAsync(chain);
@@ -642,7 +692,10 @@ public class JobChainTests
         var branchJobs = Enumerable.Range(0, 8).Select(i => MakeJob($"b{i}")).ToList();
         var join = MakeJob("join");
         await jobs.AddAsync(a);
-        foreach (var b in branchJobs) await jobs.AddAsync(b);
+        foreach (var b in branchJobs)
+        {
+            await jobs.AddAsync(b);
+        }
         await jobs.AddAsync(join);
 
         var chains = new InMemoryJobChainRepository();
@@ -668,8 +721,14 @@ public class JobChainTests
     public async Task Run_threads_every_branchs_output_into_the_join()
     {
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("a"); var b1 = MakeJob("b1"); var b2 = MakeJob("b2"); var join = MakeJob("join");
-        await jobs.AddAsync(a); await jobs.AddAsync(b1); await jobs.AddAsync(b2); await jobs.AddAsync(join);
+        var a = MakeJob("a");
+        var b1 = MakeJob("b1");
+        var b2 = MakeJob("b2");
+        var join = MakeJob("join");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b1);
+        await jobs.AddAsync(b2);
+        await jobs.AddAsync(join);
         var chains = new InMemoryJobChainRepository();
         var chain = FanOutJoinChain(a.Id, b1.Id, b2.Id, join.Id);
         await chains.AddAsync(chain);
@@ -699,8 +758,14 @@ public class JobChainTests
     public async Task Run_any_branch_failure_fails_the_chain_and_skips_the_join()
     {
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("a"); var b1 = MakeJob("b1"); var b2 = MakeJob("b2"); var join = MakeJob("join");
-        await jobs.AddAsync(a); await jobs.AddAsync(b1); await jobs.AddAsync(b2); await jobs.AddAsync(join);
+        var a = MakeJob("a");
+        var b1 = MakeJob("b1");
+        var b2 = MakeJob("b2");
+        var join = MakeJob("join");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b1);
+        await jobs.AddAsync(b2);
+        await jobs.AddAsync(join);
         var chains = new InMemoryJobChainRepository();
         var chain = FanOutJoinChain(a.Id, b1.Id, b2.Id, join.Id);
         await chains.AddAsync(chain);
@@ -729,8 +794,14 @@ public class JobChainTests
     public async Task Run_a_partial_branch_downgrades_the_chain_but_the_join_still_runs()
     {
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("a"); var b1 = MakeJob("b1"); var b2 = MakeJob("b2"); var join = MakeJob("join");
-        await jobs.AddAsync(a); await jobs.AddAsync(b1); await jobs.AddAsync(b2); await jobs.AddAsync(join);
+        var a = MakeJob("a");
+        var b1 = MakeJob("b1");
+        var b2 = MakeJob("b2");
+        var join = MakeJob("join");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b1);
+        await jobs.AddAsync(b2);
+        await jobs.AddAsync(join);
         var chains = new InMemoryJobChainRepository();
         var chain = FanOutJoinChain(a.Id, b1.Id, b2.Id, join.Id);
         await chains.AddAsync(chain);
@@ -754,8 +825,10 @@ public class JobChainTests
         // A chain authored via the flat (pre-fan-out) API is indistinguishable at run time from one
         // built out of explicit size-1 stages — the backward-compatibility guarantee.
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("extract"); var b = MakeJob("report");
-        await jobs.AddAsync(a); await jobs.AddAsync(b);
+        var a = MakeJob("extract");
+        var b = MakeJob("report");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b);
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(ProjectId, "pipeline", null, new[] { a.Id, b.Id }, T0);
         await chains.AddAsync(chain);
@@ -776,8 +849,10 @@ public class JobChainTests
     public async Task Run_falls_back_to_named_artifacts_when_stdout_is_null()
     {
         var jobs = new InMemoryJobRepository();
-        var a = MakeJob("extract"); var b = MakeJob("report");
-        await jobs.AddAsync(a); await jobs.AddAsync(b);
+        var a = MakeJob("extract");
+        var b = MakeJob("report");
+        await jobs.AddAsync(a);
+        await jobs.AddAsync(b);
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(ProjectId, "pipeline", null, new[] { a.Id, b.Id }, T0);
         await chains.AddAsync(chain);
@@ -827,7 +902,10 @@ public class JobChainTests
             parameters: new[] { new JobParameter("funding_inputs.client_cash", type: "number"),
                 new JobParameter("funding_inputs.purchase_price", type: "number") });
         var renderer = MakeJob("renderer");
-        foreach (var job in new[] { first, funding, renderer }) await jobs.AddAsync(job);
+        foreach (var job in new[] { first, funding, renderer })
+        {
+            await jobs.AddAsync(job);
+        }
         var chain = JobChain.Create(ProjectId, "report", null, new[] { first.Id, funding.Id, renderer.Id }, T0);
         var chains = new InMemoryJobChainRepository();
         await chains.AddAsync(chain);
@@ -906,8 +984,10 @@ public class JobChainTests
             var missing = $"{{\"{index}\":{{}}}}";
             Assert.Throws<ArgumentException>(() => ChainInputPayload.Apply(request, missing, null, stored.FinalOutput));
             foreach (var invalid in new[] { "null", "42", "{}", "\" \"" })
+            {
                 Assert.Throws<ArgumentException>(() => ChainInputPayload.Apply(request,
-                    $"{{\"{index}\":{{\"review\":{invalid}}}}}", null, stored.FinalOutput));
+                                $"{{\"{index}\":{{\"review\":{invalid}}}}}", null, stored.FinalOutput));
+            }
             var response = responseType == LoopChainAction.YesNoResponse ? System.Text.Json.JsonSerializer.Serialize(answer) : $"\"response {index}\"";
             var values = $"{{\"{index}\":{{\"review\":{response}}}}}";
             var overrides = ChainInputPayload.Apply(request, values, stored.ContinuationOverridesJson, stored.FinalOutput);
@@ -915,7 +995,11 @@ public class JobChainTests
             var reloaded = ChainRun.Rehydrate(stored.Id, stored.ChainId, stored.ProjectId, stored.ChainName,
                 ChainRunStatus.Waiting, stored.Steps, stored.FinalOutput, stored.StartedAt, null,
                 T0, index, System.Text.Json.JsonSerializer.Serialize(overrides),
-                System.Text.Json.JsonSerializer.Serialize(request with { SubmittedBy = Guid.NewGuid(), SubmittedValues = values }));
+                System.Text.Json.JsonSerializer.Serialize(request with
+                {
+                    SubmittedBy = Guid.NewGuid(),
+                    SubmittedValues = values
+                }));
             await runs.UpdateAsync(reloaded);
             paused = await handler.HandleAsync(new RunJobChainCommand(chain.Id, ChainRunId: stored.Id,
                 StepPayloadOverrides: overrides, ResumeFromStageIndex: index));
@@ -931,8 +1015,16 @@ public class JobChainTests
         Assert.Equal(new[] { first.Id, last.Id }, dispatcher.DispatchedJobIds);
         using var output = System.Text.Json.JsonDocument.Parse(dispatcher.Payloads[1]!);
         Assert.Equal(42, output.RootElement.GetProperty("draft").GetInt32());
-        if (responseType == LoopChainAction.YesNoResponse) Assert.Equal(answer, output.RootElement.GetProperty("review").GetBoolean());
-        else Assert.Equal("response 2", output.RootElement.GetProperty("review").GetString());
+        void AssertResponse()
+        {
+            if (responseType == LoopChainAction.YesNoResponse)
+            {
+                Assert.Equal(answer, output.RootElement.GetProperty("review").GetBoolean());
+                return;
+            }
+            Assert.Equal("response 2", output.RootElement.GetProperty("review").GetString());
+        }
+        AssertResponse();
         Assert.All(paused.Steps, step => Assert.Equal("Succeeded", step.Status));
         Assert.Equal(2, questions.Outputs.Count);
     }
@@ -969,8 +1061,10 @@ public class JobChainTests
     public async Task Jev_verifies_previous_output_and_explicit_gate_controls_following_jobs(double probability, bool shouldPublish)
     {
         var jobs = new InMemoryJobRepository();
-        var prepare = MakeJob("prepare"); var publish = MakeJob("publish");
-        await jobs.AddAsync(prepare); await jobs.AddAsync(publish);
+        var prepare = MakeJob("prepare");
+        var publish = MakeJob("publish");
+        await jobs.AddAsync(prepare);
+        await jobs.AddAsync(publish);
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(ProjectId, "Jev review", null,
         [
@@ -982,7 +1076,7 @@ public class JobChainTests
         var dispatcher = new FakeRunDispatcher();
         dispatcher.Results[prepare.Id] = Run(prepare.Id, "Succeeded", shardArtifacts: ["{\"total\":42}"]);
         dispatcher.Results[publish.Id] = Run(publish.Id, "Succeeded");
-        var reviewer = new FakeJevReviewer(probability);
+        var reviewer = new FakeOutcomeReviewer(probability);
         var runs = new InMemoryChainRunRepository();
         var result = await RunHandler(chains, jobs, dispatcher, runs, questions: new ValidationQuestions(), jev: reviewer)
             .HandleAsync(new RunJobChainCommand(chain.Id));
@@ -999,8 +1093,8 @@ public class JobChainTests
             Assert.Equal(42, output.RootElement.GetProperty("total").GetInt32());
             Assert.Equal(probability, output.RootElement.GetProperty("review").GetProperty("noul").GetDouble());
             Assert.Equal("jev-test", output.RootElement.GetProperty("review").GetProperty("model").GetString());
+            return;
         }
-        else
         {
             using var output = System.Text.Json.JsonDocument.Parse((await runs.GetByIdAsync(result.Id))!.FinalOutput!);
             Assert.Equal(probability, output.RootElement.GetProperty("review").GetProperty("noul").GetDouble());
@@ -1013,7 +1107,8 @@ public class JobChainTests
     public async Task Jev_failure_or_missing_adapter_stops_before_following_jobs(bool configured)
     {
         var jobs = new InMemoryJobRepository();
-        var publish = MakeJob("publish"); await jobs.AddAsync(publish);
+        var publish = MakeJob("publish");
+        await jobs.AddAsync(publish);
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(ProjectId, "Jev review", null,
         [
@@ -1022,7 +1117,7 @@ public class JobChainTests
         ], T0);
         await chains.AddAsync(chain);
         var dispatcher = new FakeRunDispatcher();
-        var result = await RunHandler(chains, jobs, dispatcher, jev: configured ? new FakeJevReviewer(fail: true) : null)
+        var result = await RunHandler(chains, jobs, dispatcher, jev: configured ? new FakeOutcomeReviewer(fail: true) : null)
             .HandleAsync(new RunJobChainCommand(chain.Id));
         Assert.Equal("Failed", result.Status);
         Assert.Null(result.InputRequest);
@@ -1035,7 +1130,10 @@ public class JobChainTests
         public List<string?> Outputs { get; } = [];
         public Task<string> GenerateAsync(LoopChainAction action, string? output, CancellationToken ct)
         {
-            if (fail) throw new InvalidOperationException("Model unavailable");
+            if (fail)
+            {
+                throw new InvalidOperationException("Model unavailable");
+            }
             Outputs.Add(output);
             return Task.FromResult($"Validate: {action.Instructions}?");
         }
@@ -1079,7 +1177,10 @@ public class JobChainTests
         public List<string?> Payloads { get; } = new();
         public List<Guid?> RunIds { get; } = new();
         public List<Guid> DispatchedJobIds { get; } = new();
-        public int MaxObservedConcurrency { get; private set; }
+        public int MaxObservedConcurrency
+        {
+            get; private set;
+        }
 
         public async Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
         {
@@ -1092,12 +1193,24 @@ public class JobChainTests
             }
 
             var active = Interlocked.Increment(ref _active);
-            lock (_gate) { if (active > MaxObservedConcurrency) MaxObservedConcurrency = active; }
+            lock (_gate)
+            {
+                if (active > MaxObservedConcurrency)
+                {
+                    MaxObservedConcurrency = active;
+                }
+            }
             try
             {
-                if (Delays.TryGetValue(run.JobId, out var delay)) await Task.Delay(delay, ct);
+                if (Delays.TryGetValue(run.JobId, out var delay))
+                {
+                    await Task.Delay(delay, ct);
+                }
                 JobRunDetailView result;
-                lock (_gate) result = Results[run.JobId];
+                lock (_gate)
+                {
+                    result = Results[run.JobId];
+                }
                 return (TResult)(object)result;
             }
             finally

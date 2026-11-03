@@ -38,7 +38,9 @@ public sealed class DataMapListContractTests
         while (directory is not null)
         {
             if (Directory.Exists(Path.Combine(directory.FullName, "src", "PlaceContext.Host")))
+            {
                 return directory.FullName;
+            }
             directory = directory.Parent;
         }
 

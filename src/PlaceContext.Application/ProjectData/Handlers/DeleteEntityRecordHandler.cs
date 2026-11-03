@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.ProjectData;
 namespace PlaceContext.Application.Features;
 
 public sealed class DeleteEntityRecordHandler : ICommandHandler<DeleteEntityRecordCommand, int>
@@ -22,7 +21,9 @@ public sealed class DeleteEntityRecordHandler : ICommandHandler<DeleteEntityReco
     {
         var affected = await _store.DeleteRowsAsync(command.ProjectId, command.TableName, command.Keys, ct);
         if (affected > 0)
+        {
             await RecordLinkHook.RefreshAsync(_links, command.ProjectId, command.TableName, _log, ct);
+        }
         return affected;
     }
 }

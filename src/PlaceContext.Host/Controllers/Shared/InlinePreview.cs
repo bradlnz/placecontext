@@ -58,12 +58,30 @@ internal static class InlinePreview
     /// </summary>
     public static bool CanPreviewInline(string contentType)
     {
-        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) return true;
-        if (contentType.StartsWith("application/pdf", StringComparison.OrdinalIgnoreCase)) return true;
-        if (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)) return true;
-        if (contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)) return true;
-        if (contentType.Contains("json", StringComparison.OrdinalIgnoreCase)) return true;
-        if (contentType.Contains("svg", StringComparison.OrdinalIgnoreCase)) return true;
+        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (contentType.StartsWith("application/pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (contentType.Contains("json", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (contentType.Contains("svg", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
         return false;
     }
 }

@@ -51,7 +51,10 @@ public sealed class ArtifactDownloadViewModelTests
             Assert.Equal("pcdata.downloadStream", name);
             Filename = Assert.IsType<string>(args![0]);
             Stream = Assert.IsType<DotNetStreamReference>(args[1]).Stream;
-            if (Fail) throw new JSException("Failed");
+            if (Fail)
+            {
+                throw new JSException("Failed");
+            }
             using var copy = new MemoryStream();
             await Stream.CopyToAsync(copy, ct);
             Bytes = copy.ToArray();

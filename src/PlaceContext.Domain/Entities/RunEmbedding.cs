@@ -19,24 +19,51 @@ public sealed class RunEmbedding
         CreatedAt = createdAt;
     }
 
-    public Guid Id { get; }
-    public Guid JobRunId { get; }
-    public Guid JobId { get; }
-    public Guid ProjectId { get; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid JobRunId
+    {
+        get;
+    }
+    public Guid JobId
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
 
     /// <summary>The text that was embedded (the organized run output, possibly truncated).</summary>
-    public string Text { get; }
+    public string Text
+    {
+        get;
+    }
 
     /// <summary>The embedding vector.</summary>
-    public float[] Vector { get; }
+    public float[] Vector
+    {
+        get;
+    }
 
-    public DateTimeOffset CreatedAt { get; }
+    public DateTimeOffset CreatedAt
+    {
+        get;
+    }
 
     public static RunEmbedding Create(
         Guid jobRunId, Guid jobId, Guid projectId, string text, float[] vector, DateTimeOffset createdAt)
     {
-        if (jobRunId == Guid.Empty) throw new ArgumentException("JobRunId must not be empty.", nameof(jobRunId));
-        if (vector is null || vector.Length == 0) throw new ArgumentException("Vector must not be empty.", nameof(vector));
+        if (jobRunId == Guid.Empty)
+        {
+            throw new ArgumentException("JobRunId must not be empty.", nameof(jobRunId));
+        }
+        if (vector is null || vector.Length == 0)
+        {
+            throw new ArgumentException("Vector must not be empty.", nameof(vector));
+        }
         return new RunEmbedding(Guid.NewGuid(), jobRunId, jobId, projectId, text ?? "", vector, createdAt);
     }
 

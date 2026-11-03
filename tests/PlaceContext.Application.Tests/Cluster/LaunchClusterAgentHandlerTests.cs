@@ -1,5 +1,6 @@
 using PlaceContext.Application.Cluster;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Networking;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Tests.Cluster;
@@ -140,9 +141,12 @@ public sealed class LaunchClusterAgentHandlerTests
             : ciphertext;
     }
 
-    private sealed class FakeMinter : ITailscaleKeyMinter
+    private sealed class FakeMinter : IPrivateNetworkKeyMinter
     {
-        public string? Key { get; set; }
+        public string? Key
+        {
+            get; set;
+        }
         public List<(string ClientId, string ClientSecret, string Tags)> Calls { get; } = new();
 
         public Task<string?> MintEphemeralAgentKeyAsync(string clientId, string clientSecret, string tags, CancellationToken ct = default)
@@ -154,8 +158,14 @@ public sealed class LaunchClusterAgentHandlerTests
 
     private sealed class FakeAdmin : IClusterAdminPort
     {
-        public ClusterJoinMaterial? JoinResult { get; set; }
-        public string? LastOverrideKey { get; private set; }
+        public ClusterJoinMaterial? JoinResult
+        {
+            get; set;
+        }
+        public string? LastOverrideKey
+        {
+            get; private set;
+        }
 
         public Task<PromoteMasterResult> PromoteToMasterAsync(string nodeName, CancellationToken ct = default)
             => Task.FromResult(new PromoteMasterResult(nodeName, true, "ok"));

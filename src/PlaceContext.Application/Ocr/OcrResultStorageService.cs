@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 
@@ -43,8 +43,10 @@ public sealed class OcrResultStorageService
         string markdown,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(markdown)) return;
-
+        if (string.IsNullOrWhiteSpace(markdown))
+        {
+            return;
+        }
         var row = new string?[]
         {
             _clock.UtcNow.ToString("O"),

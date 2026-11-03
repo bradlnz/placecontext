@@ -1,12 +1,13 @@
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.Components;
+using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 using PlaceContext.Host;
-using PlaceContext.Host.Branding;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class BrandingSettingsViewModel(
-    BrandingService branding,
+    PlaceContextService service,
     PortalUiState ui,
     NavigationManager navigation
 ) : PageViewModel
@@ -15,18 +16,27 @@ public sealed class BrandingSettingsViewModel(
     public const string PageRoute = "/settings/branding";
     public const string SavedMessage = "Saved — reloading…";
     public string Name { get; set; } = "";
-    public string? Logo { get; private set; }
+    public string? Logo
+    {
+        get; private set;
+    }
     public string Background { get; set; } = "#0a0c0e";
     public string Panel { get; set; } = "#0d1013";
     public string Text { get; set; } = "#e6edf3";
     public string Accent { get; set; } = "#43d675";
-    public bool Busy { get; private set; }
-    public string? Message { get; private set; }
+    public bool Busy
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
 
     public async Task LoadAsync()
     {
         ui.Set("Branding", "whitelabel the portal for this workspace");
-        var value = await branding.GetAsync();
+        var value = await service.GetTenantBrandingAsync();
         Name = value.ProductName ?? "";
         Logo = value.LogoDataUri;
         Background = value.BgColor ?? Background;
@@ -64,7 +74,7 @@ public sealed class BrandingSettingsViewModel(
         NotifyStateChanged();
         try
         {
-            await branding.SetAsync(
+            await service.SetTenantBrandingAsync(
                 new TenantBranding(
                     string.IsNullOrWhiteSpace(Name) ? null : Name.Trim(),
                     Logo,
@@ -94,7 +104,7 @@ public sealed class BrandingSettingsViewModel(
         NotifyStateChanged();
         try
         {
-            await branding.SetAsync(new TenantBranding());
+            await service.SetTenantBrandingAsync(new TenantBranding());
             navigation.NavigateTo(PageRoute, forceLoad: true);
         }
         catch (Exception ex)

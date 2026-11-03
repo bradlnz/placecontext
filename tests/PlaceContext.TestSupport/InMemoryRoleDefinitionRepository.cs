@@ -1,5 +1,4 @@
 using PlaceContext.Application.Access;
-using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.TestSupport;
@@ -37,7 +36,13 @@ public sealed class InMemoryRoleDefinitionRepository : IRoleDefinitionRepository
     public Task SetPermissionsAsync(Guid id, IReadOnlyList<string> permissions, CancellationToken ct = default)
     {
         var index = _roles.FindIndex(r => r.Id == id);
-        if (index >= 0) _roles[index] = _roles[index] with { Permissions = permissions.ToList() };
+        if (index >= 0)
+        {
+            _roles[index] = _roles[index] with
+            {
+                Permissions = permissions.ToList()
+            };
+        }
         return Task.CompletedTask;
     }
 

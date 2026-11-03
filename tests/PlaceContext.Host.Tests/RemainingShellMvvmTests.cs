@@ -50,7 +50,7 @@ public sealed class RemainingShellMvvmTests
     [Fact]
     public void Param_input_catalog_and_value_forwarding_are_typed()
     {
-        var vm = new ParamInputViewModel(null!, null!);
+        var vm = new ParamInputViewModel(null!);
         vm.SetParameters(
             new JobParameterDto("count", "Count", true, "number", null),
             Guid.Empty,
@@ -130,7 +130,9 @@ public sealed class RemainingShellMvvmTests
     private static void RegisterViewModels(IServiceCollection services)
     {
         foreach (var type in ComponentViewModelTypes)
+        {
             services.AddTransient(type);
+        }
         services.AddScoped<MainLayoutViewModel>();
         services.AddScoped<SettingsLayoutViewModel>();
     }
@@ -142,7 +144,9 @@ public sealed class RemainingShellMvvmTests
         {
             var host = Path.Combine(directory.FullName, "src", "PlaceContext.Host");
             if (Directory.Exists(host))
+            {
                 return File.ReadAllText(Path.Combine(host, relativePath));
+            }
             directory = directory.Parent;
         }
         throw new DirectoryNotFoundException("Repository root not found.");

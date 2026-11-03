@@ -1,10 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application;
+using PlaceContext.Application.Auth;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application;
 using PlaceContext.Domain.ValueObjects;
-using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Startup;
 
@@ -26,12 +27,15 @@ public static class DefaultWorkspaceBootstrap
         // operator or an implicit default tenant, even in a Development sandbox.
         // Verified signup is its only public tenant-creation path.
         if (configuration.GetValue<bool>("PlaceContext:SaaS:ManagedHosting"))
+        {
             return;
+        }
         var enabled = configuration.GetValue<bool?>("PlaceContext:Bootstrap:Enabled")
-            ?? environment.IsDevelopment();
+                    ?? environment.IsDevelopment();
         if (!enabled)
+        {
             return;
-
+        }
         await using var scope = services.CreateAsyncScope();
         var provider = scope.ServiceProvider;
         var tenant = await provider.GetRequiredService<ITenantStore>().GetOrCreateAsync("default", ct);
@@ -53,8 +57,9 @@ public static class DefaultWorkspaceBootstrap
                 ct);
 
             if (configuration.GetValue("PlaceContext:Bootstrap:SeedDemoData", true))
+            {
                 await SeedDemoDataAsync(app, project.Id, ct);
-
+            }
             logger.LogInformation(
                 "Default workspace ready: tenant {TenantId}, administrator {UserId}, project {ProjectId}.",
                 tenant.Id,
@@ -81,7 +86,9 @@ public static class DefaultWorkspaceBootstrap
     {
         var existing = await app.ListProjectSecretsAsync(projectId, ct);
         if (!existing.Any(item => item.Name == "REPORT_SIGNING_KEY"))
+        {
             await app.AddProjectSecretAsync(projectId, "REPORT_SIGNING_KEY", "local-demo-report-signing-key", ct);
+        }
     }
 
     private static async Task<IReadOnlyList<Guid>> SeedMcpConnectionsAsync(
@@ -97,15 +104,17 @@ public static class DefaultWorkspaceBootstrap
                  })
         {
             if (connections.Any(item => item.Name == definition.Name))
+            {
                 continue;
+            }
             connections.Add(await app.CreateMcpConnectionAsync(
-                new CreateMcpConnectionCommand(
-                    projectId,
-                    definition.Name,
-                    "http",
-                    EndpointUrl: definition.Endpoint,
-                    AuthType: "none"),
-                ct));
+                            new CreateMcpConnectionCommand(
+                                projectId,
+                                definition.Name,
+                                "http",
+                                EndpointUrl: definition.Endpoint,
+                                AuthType: "none"),
+                            ct));
         }
 
         return connections.Select(item => item.Id).ToArray();
@@ -128,8 +137,9 @@ public static class DefaultWorkspaceBootstrap
             string? returnFileName = null)
         {
             if (jobs.ContainsKey(name))
+            {
                 return;
-
+            }
             jobs[name] = await app.CreateJobAsync(new CreateJobCommand(
                 projectId,
                 name,
@@ -265,8 +275,9 @@ public static class DefaultWorkspaceBootstrap
         var existing = (await app.ListJobChainsAsync(projectId, ct)).FirstOrDefault(item =>
             item.Name == "Customer health pipeline");
         if (existing is not null)
+        {
             return existing;
-
+        }
         var ingest = jobs["Ingest customer activity"].Id;
         var score = jobs["Score account health"].Id;
         var digest = jobs["Prepare success digest"].Id;

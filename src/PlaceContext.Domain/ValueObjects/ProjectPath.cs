@@ -7,20 +7,25 @@ namespace PlaceContext.Domain.ValueObjects;
 /// </summary>
 public sealed record ProjectPath
 {
-    public string Value { get; }
+    public string Value
+    {
+        get;
+    }
 
     private ProjectPath(string value) => Value = value;
 
     public static ProjectPath From(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
+        {
             throw new ArgumentException("ProjectPath must not be empty.", nameof(value));
-
+        }
         var normalized = value.Trim().Replace('\\', '/').TrimEnd('/');
 
         if (!normalized.StartsWith('/') && !IsWindowsRooted(normalized))
+        {
             throw new ArgumentException($"ProjectPath must be absolute: '{value}'.", nameof(value));
-
+        }
         return new ProjectPath(normalized);
     }
 

@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Communications;
 using PlaceContext.Host.Auth;
-using PlaceContext.Infrastructure.Comms;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -11,11 +10,11 @@ namespace PlaceContext.Host.Controllers;
 public sealed class CommunicationProvidersController : ControllerBase
 {
     private readonly CommunicationProviderService _providers;
-    private readonly DatabaseCommunicationSender _sender;
+    private readonly ICommunicationTestSender _sender;
 
     public CommunicationProvidersController(
         CommunicationProviderService providers,
-        DatabaseCommunicationSender sender)
+        ICommunicationTestSender sender)
         => (_providers, _sender) = (providers, sender);
 
     [HttpGet]
@@ -35,8 +34,20 @@ public sealed class CommunicationProvidersController : ControllerBase
         {
             return Ok(await _providers.CreateAsync(request, ct));
         }
-        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
-        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
     }
 
     [HttpPut("{id:guid}")]
@@ -49,8 +60,20 @@ public sealed class CommunicationProvidersController : ControllerBase
         {
             return Ok(await _providers.UpdateAsync(id, request, ct));
         }
-        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
-        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
     }
 
     [HttpDelete("{id:guid}")]
@@ -61,7 +84,13 @@ public sealed class CommunicationProvidersController : ControllerBase
             await _providers.DeleteAsync(id, ct);
             return NoContent();
         }
-        catch (InvalidOperationException ex) { return NotFound(new { error = ex.Message }); }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new
+            {
+                error = ex.Message
+            });
+        }
     }
 
     [HttpPost("{id:guid}/default")]
@@ -71,7 +100,13 @@ public sealed class CommunicationProvidersController : ControllerBase
         {
             return Ok(await _providers.SetDefaultAsync(id, ct));
         }
-        catch (InvalidOperationException ex) { return NotFound(new { error = ex.Message }); }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new
+            {
+                error = ex.Message
+            });
+        }
     }
 
     [HttpPost("{id:guid}/two-factor")]
@@ -84,7 +119,13 @@ public sealed class CommunicationProvidersController : ControllerBase
         {
             return Ok(await _providers.SetTwoFactorAsync(id, request.Enabled, ct));
         }
-        catch (InvalidOperationException ex) { return NotFound(new { error = ex.Message }); }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new
+            {
+                error = ex.Message
+            });
+        }
     }
 
     [HttpPost("{id:guid}/test")]
@@ -96,10 +137,26 @@ public sealed class CommunicationProvidersController : ControllerBase
         try
         {
             var delivery = await _sender.SendTestAsync(id, request.Recipient, ct);
-            return Ok(new { delivery.Provider, delivery.ExternalId });
+            return Ok(new
+            {
+                delivery.Provider,
+                delivery.ExternalId
+            });
         }
-        catch (ArgumentException ex) { return BadRequest(new { error = ex.Message }); }
-        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new
+            {
+                error = ex.Message
+            });
+        }
     }
 
     public sealed record SetTwoFactorRequest(bool Enabled);

@@ -1,7 +1,5 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
-using PlaceContext.Application.Ports;
-
+using System.Text.Json;
 namespace PlaceContext.Application.Features;
 
 /// <summary>One named series of a chart spec.</summary>

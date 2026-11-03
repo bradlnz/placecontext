@@ -31,7 +31,9 @@ public static class WorkflowReadiness
             {
                 stageCount++;
                 if (stage.Jobs.Count == 0 && stage.Action is null)
+                {
                     findings.Add(new("error", "Empty workflow step", "Every stage needs a job or executable action."));
+                }
                 foreach (var step in stage.Jobs)
                 {
                     if (!catalog.TryGetValue(step.JobId, out var job))
@@ -39,36 +41,52 @@ public static class WorkflowReadiness
                         findings.Add(new("error", "Unresolved job", "A workflow step points to a missing or inaccessible job."));
                         continue;
                     }
-                    if (!checkedJobs.Add(job.Id)) continue;
+                    if (!checkedJobs.Add(job.Id))
+                    {
+                        continue;
+                    }
                     if (job.MapSourceKind == "image" && string.IsNullOrWhiteSpace(job.MapImage)
-                        || job.MapSourceKind == "code"
-                            && string.IsNullOrWhiteSpace(job.MapSource)
-                            && job.MapFiles.Count == 0
-                        || job.MapSourceKind is not ("image" or "code"))
+                                            || job.MapSourceKind == "code"
+                                                && string.IsNullOrWhiteSpace(job.MapSource)
+                                                && job.MapFiles.Count == 0
+                                            || job.MapSourceKind is not ("image" or "code"))
+                    {
                         findings.Add(new("error", "Job has no executable source",
-                            $"Configure the workload source for {job.Name} before running."));
+                                                $"Configure the workload source for {job.Name} before running."));
+                    }
                     if (job.MapSourceKind == "code" && string.IsNullOrWhiteSpace(job.MapRuntimeId))
+                    {
                         findings.Add(new("error", "Job runtime is missing",
-                            $"Choose a runtime for {job.Name}."));
+                                                $"Choose a runtime for {job.Name}."));
+                    }
                     if (job.Parameters.Any(p => p.Required))
+                    {
                         findings.Add(new("info", "Job requests input",
-                            $"{job.Name} declares required parameters; the run may pause to collect them."));
+                                                $"{job.Name} declares required parameters; the run may pause to collect them."));
+                    }
                     if (job.McpConnectionIds.Count > 0)
+                    {
                         findings.Add(new("info", "Connection permissions need checking",
-                            $"{job.Name} uses MCP connections. Confirm authorisation and availability before publishing."));
+                                                $"{job.Name} uses MCP connections. Confirm authorisation and availability before publishing."));
+                    }
                     if (job.AllowNetworkEgress)
+                    {
                         findings.Add(new("info", "Job uses network access",
-                            $"{job.Name} can access external services. Review source and credential scopes."));
+                                                $"{job.Name} can access external services. Review source and credential scopes."));
+                    }
                 }
 
                 if (stage.Action is LoopChainActionView loop
                     && loop.Kind == "humanInput")
+                {
                     humanGateSeen = true;
+                }
                 if ((stage.Action is SendEmailChainActionView or SendSmsChainActionView)
-                    && !humanGateSeen)
+                                    && !humanGateSeen)
+                {
                     findings.Add(new("warning", "External action without earlier human step",
-                        "Check whether this notification or delivery action requires a human approval gate."));
-
+                                        "Check whether this notification or delivery action requires a human approval gate."));
+                }
                 if (stage.ElseBranch is { Count: > 0 } elseBranch)
                 {
                     // A human gate in a conditional branch must not mark the opposite
@@ -78,20 +96,16 @@ public static class WorkflowReadiness
             }
         }
 
-        if (stages.Count == 0)
-            findings.Add(new("error", "No workflow steps", "Add at least one job or action."));
-        else
+        void CheckStages()
+        {
+            if (stages.Count == 0)
+            {
+                findings.Add(new("error", "No workflow steps", "Add at least one job or action."));
+                return;
+            }
             Walk(stages, 0, false);
+        }
+        CheckStages();
         return new(checkedJobs.Count, stageCount, findings);
     }
-}
-
-public sealed record WorkflowReadinessFinding(string Severity, string Title, string Detail);
-
-public sealed record WorkflowReadinessReport(
-    int UniqueJobCount, int StageCount, IReadOnlyList<WorkflowReadinessFinding> Findings)
-{
-    public bool Ready => Findings.All(f => f.Severity != "error");
-    public int ErrorCount => Findings.Count(f => f.Severity == "error");
-    public int WarningCount => Findings.Count(f => f.Severity == "warning");
 }

@@ -1,6 +1,7 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Projects;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -53,8 +54,9 @@ public sealed class RecordActivityHandler : ICommandHandler<RecordActivityComman
         var message = $"{command.CommitMessage}\n\nPlaceContext-Change: {record.Id}";
         var sha = await _git.CommitScopedAsync(project.Path, command.TouchedFiles, message, author, ct);
         if (sha is not null)
+        {
             record.AttachCommit(sha);
-
+        }
         await _ledgers.SaveAsync(ledger, ct);
         await _uow.SaveChangesAsync(ct);
 

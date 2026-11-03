@@ -34,13 +34,21 @@ public static class PasswordPolicy
     {
         password ??= string.Empty;
         if (password.Length < MinLength)
+        {
             return $"Choose a password of at least {MinLength} characters.";
+        }
         if (Common.Contains(password.Trim()))
+        {
             return "That password is too common — choose something less guessable.";
+        }
         if (IsLowVariety(password))
+        {
             return "Choose a password that isn't just a repeated or sequential pattern.";
+        }
         if (confirm is not null && !string.Equals(password, confirm, StringComparison.Ordinal))
+        {
             return "Passwords do not match.";
+        }
         return null;
     }
 
@@ -50,8 +58,9 @@ public static class PasswordPolicy
     private static bool IsLowVariety(string password)
     {
         if (password.Distinct().Count() <= 3)
+        {
             return true;
-
+        }
         var sequential = true;
         for (var i = 1; i < password.Length; i++)
         {

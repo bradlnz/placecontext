@@ -1,0 +1,1 @@
+Does the screenshot provide evidence that the requested task is complete, including an explicitly allowed unavailable/blocked inspection outcome? A proposal or transcribed claim alone is not evidence.

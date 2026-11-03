@@ -1,5 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Observability;
 
 namespace PlaceContext.Application.Features;
 

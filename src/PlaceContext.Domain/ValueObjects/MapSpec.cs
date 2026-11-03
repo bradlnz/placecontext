@@ -24,16 +24,25 @@ public sealed class MapSpec
     }
 
     /// <summary>How to run each shard — either a pre-built image or inline source code.</summary>
-    public WorkloadSource Source { get; }
+    public WorkloadSource Source
+    {
+        get;
+    }
 
     /// <summary>
     /// Ordered list of opaque JSON strings — one per shard. Each is written to the container's STDIN.
     /// The count determines the number of shards.
     /// </summary>
-    public IReadOnlyList<string> InputPayloads { get; }
+    public IReadOnlyList<string> InputPayloads
+    {
+        get;
+    }
 
     /// <summary>Environment variable key/value pairs injected into each shard container.</summary>
-    public IReadOnlyDictionary<string, string> Env { get; }
+    public IReadOnlyDictionary<string, string> Env
+    {
+        get;
+    }
 
     /// <summary>Number of shards this spec will produce.</summary>
     public int ShardCount => InputPayloads.Count;

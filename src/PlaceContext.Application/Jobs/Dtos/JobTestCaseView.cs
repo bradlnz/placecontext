@@ -1,14 +1,5 @@
 namespace PlaceContext.Application.Dtos;
 
-/// <summary>The assertion applied to a job's primary output after a successful run.</summary>
-public enum JobTestAssertionType
-{
-    Succeeds,
-    OutputEquals,
-    OutputContains,
-    JsonSubset,
-}
-
 /// <summary>A persisted unit-test-style case for a job definition.</summary>
 public sealed record JobTestCaseView(
     Guid Id,

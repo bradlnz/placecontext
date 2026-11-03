@@ -20,26 +20,46 @@ public sealed class EventOccurrence
         OccurredAt = occurredAt;
     }
 
-    public Guid Id { get; }
+    public Guid Id
+    {
+        get;
+    }
 
     /// <summary>The event name (a user-defined or built-in event).</summary>
-    public string Name { get; }
+    public string Name
+    {
+        get;
+    }
 
-    public EventSource Source { get; }
+    public EventSource Source
+    {
+        get;
+    }
 
     /// <summary>The project this event concerns, when applicable; null for workspace-wide events.</summary>
-    public Guid? ProjectId { get; }
+    public Guid? ProjectId
+    {
+        get;
+    }
 
     /// <summary>Optional opaque payload (typically JSON). Never interpreted by the domain.</summary>
-    public string? Payload { get; }
+    public string? Payload
+    {
+        get;
+    }
 
-    public DateTimeOffset OccurredAt { get; }
+    public DateTimeOffset OccurredAt
+    {
+        get;
+    }
 
     /// <summary>Records a user-emitted event occurrence.</summary>
     public static EventOccurrence Emit(string name, Guid? projectId, string? payload, DateTimeOffset now)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("Event name must not be empty.", nameof(name));
+        }
         return new EventOccurrence(Guid.NewGuid(), name.Trim(), EventSource.User, projectId, payload, now);
     }
 
@@ -47,7 +67,9 @@ public sealed class EventOccurrence
     public static EventOccurrence Raise(string name, Guid? projectId, string? payload, DateTimeOffset now)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("Event name must not be empty.", nameof(name));
+        }
         return new EventOccurrence(Guid.NewGuid(), name.Trim(), EventSource.Domain, projectId, payload, now);
     }
 

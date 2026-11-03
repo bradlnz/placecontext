@@ -61,75 +61,132 @@ public sealed class Job
     /// <summary>Hard ceiling for a per-job timeout (1 hour) — guards against runaway containers.</summary>
     public const int MaxTimeoutSeconds = 3600;
 
-    public Guid Id { get; }
-    public Guid ProjectId { get; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
 
     /// <summary>Human-readable name for this job definition (unique within a project).</summary>
-    public string Name { get; private set; }
+    public string Name
+    {
+        get; private set;
+    }
 
     /// <summary>Optional freetext description of what this job does.</summary>
-    public string? Description { get; private set; }
+    public string? Description
+    {
+        get; private set;
+    }
 
     /// <summary>Specification for the map (sharding) phase — one container per shard.</summary>
-    public MapSpec MapSpec { get; private set; }
+    public MapSpec MapSpec
+    {
+        get; private set;
+    }
 
     /// <summary>Optional reduce step that runs after all shards complete. Null = no reduce.</summary>
-    public ReduceSpec? ReduceSpec { get; private set; }
+    public ReduceSpec? ReduceSpec
+    {
+        get; private set;
+    }
 
     /// <summary>Max number of map-shard containers to run concurrently. Must be >= 1.</summary>
-    public int ConcurrencyLimit { get; private set; }
+    public int ConcurrencyLimit
+    {
+        get; private set;
+    }
 
     /// <summary>Policy mapping raw container exit codes to shard outcomes.</summary>
-    public ExitCodePolicy ExitCodePolicy { get; private set; }
+    public ExitCodePolicy ExitCodePolicy
+    {
+        get; private set;
+    }
 
     /// <summary>
     /// When true, containers for this job are allowed outbound network access (Docker bridge).
     /// When false (default), <c>--network none</c> is applied. Opt-in per job — not enabled by default.
     /// </summary>
-    public bool AllowNetworkEgress { get; private set; }
+    public bool AllowNetworkEgress
+    {
+        get; private set;
+    }
 
     /// <summary>
     /// When true, the job can be executed through the public API endpoint.
     /// By default, jobs are not API-callable.
     /// </summary>
-    public bool AllowApiInvocation { get; private set; }
+    public bool AllowApiInvocation
+    {
+        get; private set;
+    }
 
     /// <summary>
     /// Per-container wall-clock timeout in seconds. A container exceeding this is killed and the shard
     /// fails. Defaults to <see cref="DefaultTimeoutSeconds"/>; raise it for long-running jobs.
     /// </summary>
-    public int TimeoutSeconds { get; private set; }
+    public int TimeoutSeconds
+    {
+        get; private set;
+    }
 
     /// <summary>Declared input fields this job needs before it can run. Empty = no prompt.</summary>
-    public IReadOnlyList<JobParameter> Parameters { get; private set; }
+    public IReadOnlyList<JobParameter> Parameters
+    {
+        get; private set;
+    }
 
     /// <summary>
     /// Actions run after a successful/finished run to turn its artifacts into stored outputs (HTML
     /// report, chart, CSV, raw bundle) surfaced as links. Empty = no post-processing. Best-effort.
     /// </summary>
-    public IReadOnlyList<PostJobActionKind> PostJobActions { get; private set; }
+    public IReadOnlyList<PostJobActionKind> PostJobActions
+    {
+        get; private set;
+    }
 
     /// <summary>
     /// The declared type of this job's primary return. Every job has one (default
     /// <see cref="JobReturnType.Json"/>), and it determines the artifact generated for every run —
     /// a run always yields at least one stored artifact of this shape.
     /// </summary>
-    public JobReturnType ReturnType { get; private set; }
+    public JobReturnType ReturnType
+    {
+        get; private set;
+    }
 
     /// <summary>For file return types (Pdf/Image/Video): the expected /out file name. Null = the
     /// first file matching the type's extensions.</summary>
-    public string? ReturnFileName { get; private set; }
+    public string? ReturnFileName
+    {
+        get; private set;
+    }
 
     /// <summary>Maximum number of automatic retry attempts when a run fails. 0 = no retries.</summary>
-    public int RetryCount { get; private set; }
+    public int RetryCount
+    {
+        get; private set;
+    }
 
     /// <summary>Fixed delay in seconds between automatic retry attempts.</summary>
-    public int RetryDelaySeconds { get; private set; }
+    public int RetryDelaySeconds
+    {
+        get; private set;
+    }
 
     public IReadOnlyList<Guid> McpConnectionIds { get; private set; } = Array.Empty<Guid>();
 
-    public DateTimeOffset CreatedAt { get; }
-    public DateTimeOffset UpdatedAt { get; private set; }
+    public DateTimeOffset CreatedAt
+    {
+        get;
+    }
+    public DateTimeOffset UpdatedAt
+    {
+        get; private set;
+    }
 
     /// <summary>Whether this job has a reduce step.</summary>
     public bool HasReduceStep => ReduceSpec is not null;
@@ -161,20 +218,31 @@ public sealed class Job
         bool allowApiInvocation = false)
     {
         if (projectId == Guid.Empty)
+        {
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
+        }
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("Job name must not be empty.", nameof(name));
+        }
         ArgumentNullException.ThrowIfNull(mapSpec);
         ArgumentNullException.ThrowIfNull(exitCodePolicy);
         if (concurrencyLimit < 1)
+        {
             throw new ArgumentOutOfRangeException(nameof(concurrencyLimit), "Concurrency limit must be >= 1.");
+        }
         if (mapSpec.InputPayloads.Count == 0)
+        {
             throw new ArgumentException("A job must have at least one shard (input payload).", nameof(mapSpec));
+        }
         if (retryCount < 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(retryCount), "Retry count must be >= 0.");
+        }
         if (retryDelaySeconds < 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(retryDelaySeconds), "Retry delay must be >= 0.");
-
+        }
         return new Job(
             Guid.NewGuid(), projectId, name.Trim(), description?.Trim(),
             mapSpec, reduceSpec, concurrencyLimit, exitCodePolicy,
@@ -245,18 +313,27 @@ public sealed class Job
         bool allowApiInvocation = false)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("Job name must not be empty.", nameof(name));
+        }
         ArgumentNullException.ThrowIfNull(mapSpec);
         ArgumentNullException.ThrowIfNull(exitCodePolicy);
         if (concurrencyLimit < 1)
+        {
             throw new ArgumentOutOfRangeException(nameof(concurrencyLimit), "Concurrency limit must be >= 1.");
+        }
         if (mapSpec.InputPayloads.Count == 0)
+        {
             throw new ArgumentException("A job must have at least one shard (input payload).", nameof(mapSpec));
+        }
         if (retryCount < 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(retryCount), "Retry count must be >= 0.");
+        }
         if (retryDelaySeconds < 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(retryDelaySeconds), "Retry delay must be >= 0.");
-
+        }
         Name = name.Trim();
         Description = description?.Trim();
         MapSpec = mapSpec;
@@ -266,13 +343,22 @@ public sealed class Job
         AllowNetworkEgress = allowNetworkEgress;
         AllowApiInvocation = allowApiInvocation;
         TimeoutSeconds = NormalizeTimeout(timeoutSeconds);
-        if (parameters is not null) Parameters = parameters;
-        if (postJobActions is not null) PostJobActions = DistinctActions(postJobActions);
+        if (parameters is not null)
+        {
+            Parameters = parameters;
+        }
+        if (postJobActions is not null)
+        {
+            PostJobActions = DistinctActions(postJobActions);
+        }
         ReturnType = returnType;
         ReturnFileName = string.IsNullOrWhiteSpace(returnFileName) ? null : returnFileName.Trim();
         RetryCount = retryCount;
         RetryDelaySeconds = retryDelaySeconds;
-        if (mcpConnectionIds is not null) McpConnectionIds = mcpConnectionIds;
+        if (mcpConnectionIds is not null)
+        {
+            McpConnectionIds = mcpConnectionIds;
+        }
         UpdatedAt = updatedAt;
     }
 

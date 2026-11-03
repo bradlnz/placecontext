@@ -73,12 +73,18 @@ public static partial class JobTestFramework
     {
         foreach (var output in outputs.Reverse())
         {
-            if (string.IsNullOrWhiteSpace(output)) continue;
+            if (string.IsNullOrWhiteSpace(output))
+            {
+                continue;
+            }
             var index = output.LastIndexOf(ResultPrefix, StringComparison.Ordinal);
-            if (index < 0) continue;
+            if (index < 0)
+            {
+                continue;
+            }
             var json = output[(index + ResultPrefix.Length)..]
-                .Split('\n', 2)[0]
-                .TrimEnd('\r');
+                            .Split('\n', 2)[0]
+                            .TrimEnd('\r');
             try
             {
                 return JsonSerializer.Deserialize<List<JobTestMethodResult>>(json,

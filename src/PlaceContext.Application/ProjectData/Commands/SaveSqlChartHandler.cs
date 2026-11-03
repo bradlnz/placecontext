@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -28,10 +29,13 @@ public sealed class SaveSqlChartHandler : ICommandHandler<SaveSqlChartCommand, P
     {
         var name = command.Name.Trim();
         if (name.Length is 0 or > 80)
+        {
             throw new ArgumentException("Give the chart a name (max 80 chars).");
+        }
         if (string.IsNullOrWhiteSpace(command.Sql))
+        {
             throw new ArgumentException("A SQL query is required.");
-
+        }
         // Isolated by construction: ExecuteAsync runs as the project role in the project schema.
         var result = await _store.ExecuteAsync(command.ProjectId, command.Sql, ct);
         var spec = ChartSpec.FromSample(name, result)
@@ -43,7 +47,9 @@ public sealed class SaveSqlChartHandler : ICommandHandler<SaveSqlChartCommand, P
         // a chart from bar to pie is a re-save with the same SQL and a different type.
         var chartType = (command.ChartType ?? "bar").Trim().ToLowerInvariant();
         if (chartType is not ("bar" or "line" or "pie"))
+        {
             throw new ArgumentException("Chart type must be bar, line, or pie.");
+        }
         var node = JsonNode.Parse(spec.ToJson())!;
         node["type"] = chartType;
         node["sql"] = command.Sql;

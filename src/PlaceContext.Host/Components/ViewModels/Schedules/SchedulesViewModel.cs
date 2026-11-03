@@ -1,19 +1,10 @@
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Host.Components.ViewModels;
-
-public enum ScheduleFrequency
-{
-    Hour,
-    Day,
-    Weekday,
-    Week,
-    Month,
-}
 
 public sealed class SchedulesViewModel : PageViewModel
 {
@@ -44,36 +35,81 @@ public sealed class SchedulesViewModel : PageViewModel
         _tenant = tenant;
     }
 
-    public static IReadOnlyList<TriggerKind> EditableTriggerKinds { get; } =
+    public static IReadOnlyList<TriggerKind> EditableTriggerKinds
+    {
+        get;
+    } =
     [TriggerKind.Schedule, TriggerKind.Event];
 
-    public IReadOnlyList<TriggerView>? Triggers { get; private set; }
-    public IReadOnlyList<JobView>? Jobs { get; private set; }
-    public IReadOnlyList<EventTypeView>? EventTypes { get; private set; }
+    public IReadOnlyList<TriggerView>? Triggers
+    {
+        get; private set;
+    }
+    public IReadOnlyList<JobView>? Jobs
+    {
+        get; private set;
+    }
+    public IReadOnlyList<EventTypeView>? EventTypes
+    {
+        get; private set;
+    }
 
-    public string? Message { get; private set; }
-    public string? Error { get; private set; }
-    public bool Busy { get; private set; }
+    public string? Message
+    {
+        get; private set;
+    }
+    public string? Error
+    {
+        get; private set;
+    }
+    public bool Busy
+    {
+        get; private set;
+    }
     public string TimeZoneId => _tenant.TimeZoneId;
 
-    public Guid NewJobId { get; set; }
+    public Guid NewJobId
+    {
+        get; set;
+    }
     public string NewName { get; set; } = string.Empty;
     public TriggerKind NewKind { get; set; } = TriggerKind.Schedule;
     public string NewCron { get; set; } = Cron.Default;
     public string NewEvent { get; set; } = string.Empty;
 
-    public bool AdvancedCron { get; set; }
+    public bool AdvancedCron
+    {
+        get; set;
+    }
     public ScheduleFrequency Frequency { get; set; } = ScheduleFrequency.Day;
     public int Weekday { get; set; } = (int)DayOfWeek.Monday;
     public int Day { get; set; } = 1;
     public TimeOnly Time { get; set; } = new(9, 0);
 
-    public Guid? EditingId { get; private set; }
-    public string? EditName { get; set; }
-    public string? EditCron { get; set; }
-    public string? EditEvent { get; set; }
-    public string? EditError { get; private set; }
-    public bool EditingBusy { get; private set; }
+    public Guid? EditingId
+    {
+        get; private set;
+    }
+    public string? EditName
+    {
+        get; set;
+    }
+    public string? EditCron
+    {
+        get; set;
+    }
+    public string? EditEvent
+    {
+        get; set;
+    }
+    public string? EditError
+    {
+        get; private set;
+    }
+    public bool EditingBusy
+    {
+        get; private set;
+    }
 
     public async Task LoadAsync(Guid projectId)
     {

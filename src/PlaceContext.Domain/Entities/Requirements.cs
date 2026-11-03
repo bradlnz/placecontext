@@ -20,10 +20,22 @@ public sealed class Requirements
     }
 
     /// <summary>The project these requirements belong to, or <c>null</c> for the global document.</summary>
-    public ProjectId? ProjectId { get; }
-    public string Markdown { get; private set; }
-    public DateTimeOffset CreatedAt { get; }
-    public DateTimeOffset UpdatedAt { get; private set; }
+    public ProjectId? ProjectId
+    {
+        get;
+    }
+    public string Markdown
+    {
+        get; private set;
+    }
+    public DateTimeOffset CreatedAt
+    {
+        get;
+    }
+    public DateTimeOffset UpdatedAt
+    {
+        get; private set;
+    }
 
     public bool IsGlobal => ProjectId is null;
     public bool IsEmpty => string.IsNullOrWhiteSpace(Markdown);

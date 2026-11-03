@@ -44,13 +44,19 @@ internal static class LlmHtml
         if (head >= 0)
         {
             var gt = html.IndexOf('>', head);
-            if (gt >= 0) return html[..(gt + 1)] + ChartThemeCss + html[(gt + 1)..];
+            if (gt >= 0)
+            {
+                return html[..(gt + 1)] + ChartThemeCss + html[(gt + 1)..];
+            }
         }
         var htmlTag = html.IndexOf("<html", StringComparison.OrdinalIgnoreCase);
         if (htmlTag >= 0)
         {
             var gt = html.IndexOf('>', htmlTag);
-            if (gt >= 0) return html[..(gt + 1)] + "<head>" + ChartThemeCss + "</head>" + html[(gt + 1)..];
+            if (gt >= 0)
+            {
+                return html[..(gt + 1)] + "<head>" + ChartThemeCss + "</head>" + html[(gt + 1)..];
+            }
         }
         return ChartThemeCss + html;
     }
@@ -80,12 +86,19 @@ internal static class LlmHtml
 
         var lower = s.ToLowerInvariant();
         var start = lower.IndexOf("<!doctype", StringComparison.Ordinal);
-        if (start < 0) start = lower.IndexOf("<html", StringComparison.Ordinal);
-        if (start > 0) s = s[start..];
-
+        if (start < 0)
+        {
+            start = lower.IndexOf("<html", StringComparison.Ordinal);
+        }
+        if (start > 0)
+        {
+            s = s[start..];
+        }
         var end = s.ToLowerInvariant().LastIndexOf("</html>", StringComparison.Ordinal);
-        if (end >= 0) s = s[..(end + "</html>".Length)];
-
+        if (end >= 0)
+        {
+            s = s[..(end + "</html>".Length)];
+        }
         return s.Trim();
     }
 

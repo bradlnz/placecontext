@@ -28,13 +28,34 @@ public sealed class Project
         LastGraph = lastGraph;
     }
 
-    public ProjectId Id { get; }
-    public ProjectName Name { get; private set; }
-    public ProjectPath Path { get; }
-    public ProjectStatus Status { get; private set; }
-    public DateTimeOffset DiscoveredAt { get; }
-    public DateTimeOffset? RegisteredAt { get; private set; }
-    public GraphSnapshotRef? LastGraph { get; private set; }
+    public ProjectId Id
+    {
+        get;
+    }
+    public ProjectName Name
+    {
+        get; private set;
+    }
+    public ProjectPath Path
+    {
+        get;
+    }
+    public ProjectStatus Status
+    {
+        get; private set;
+    }
+    public DateTimeOffset DiscoveredAt
+    {
+        get;
+    }
+    public DateTimeOffset? RegisteredAt
+    {
+        get; private set;
+    }
+    public GraphSnapshotRef? LastGraph
+    {
+        get; private set;
+    }
 
     public bool IsGraphified => LastGraph is not null;
 
@@ -64,10 +85,13 @@ public sealed class Project
     public void Register(DateTimeOffset registeredAt)
     {
         if (Status == ProjectStatus.Archived)
+        {
             throw new InvalidOperationException("Cannot register an archived project.");
+        }
         if (Status != ProjectStatus.Discovered)
+        {
             return; // idempotent: already registered/graphified
-
+        }
         Status = ProjectStatus.Registered;
         RegisteredAt = registeredAt;
     }
@@ -84,10 +108,13 @@ public sealed class Project
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         if (Status is ProjectStatus.Discovered)
+        {
             throw new InvalidOperationException("Register the project before building its graph.");
+        }
         if (Status == ProjectStatus.Archived)
+        {
             throw new InvalidOperationException("Cannot build the graph of an archived project.");
-
+        }
         LastGraph = snapshot;
         Status = ProjectStatus.Graphified;
     }

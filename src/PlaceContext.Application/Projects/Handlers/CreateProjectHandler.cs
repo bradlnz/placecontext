@@ -1,6 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -25,8 +25,9 @@ public sealed class CreateProjectHandler : ICommandHandler<CreateProjectCommand,
         var path = ProjectPath.From(command.Path);
         var existing = await _projects.GetByPathAsync(path, ct);
         if (existing is not null)
+        {
             return ViewMapper.ToSummary(existing);
-
+        }
         var name = string.IsNullOrWhiteSpace(command.Name)
             ? command.Path.TrimEnd('/').Split('/').LastOrDefault() ?? command.Path
             : command.Name;

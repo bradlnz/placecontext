@@ -1,6 +1,5 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.ProjectData;
 namespace PlaceContext.Application.Features;
 
 public sealed class SaveProjectViewHandler : ICommandHandler<SaveProjectViewCommand, bool>
@@ -22,15 +21,23 @@ public sealed class SaveProjectViewHandler : ICommandHandler<SaveProjectViewComm
     {
         var trimmed = (sql ?? "").Trim().TrimEnd(';').Trim();
         if (trimmed.Length == 0)
+        {
             throw new ArgumentException("A SELECT statement is required.");
+        }
         if (trimmed.Contains(';'))
+        {
             throw new ArgumentException("Only a single statement is allowed — remove the semicolons.");
+        }
         if (!trimmed.StartsWith("select", StringComparison.OrdinalIgnoreCase))
+        {
             throw new ArgumentException("Only SELECT statements are allowed here.");
+        }
         if (System.Text.RegularExpressions.Regex.IsMatch(trimmed,
-                @"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|vacuum|call|do|comment|reindex|cluster|refresh|listen|notify|prepare|deallocate|import|merge)\b",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                        @"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|copy|vacuum|call|do|comment|reindex|cluster|refresh|listen|notify|prepare|deallocate|import|merge)\b",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
             throw new ArgumentException("Only read-only SELECT statements are allowed — write/DDL keywords are rejected.");
+        }
         return trimmed;
     }
 
@@ -40,7 +47,9 @@ public sealed class SaveProjectViewHandler : ICommandHandler<SaveProjectViewComm
     {
         var n = (name ?? "").Trim();
         if (!System.Text.RegularExpressions.Regex.IsMatch(n, @"^[A-Za-z_][A-Za-z0-9_]{0,62}$"))
+        {
             throw new ArgumentException("View names use letters, digits and underscores (max 63, no leading digit).");
+        }
         ProjectDataReservedNames.EnsureAllowed(n, "view name");
         return n;
     }

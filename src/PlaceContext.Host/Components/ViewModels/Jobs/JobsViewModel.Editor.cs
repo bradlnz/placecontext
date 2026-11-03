@@ -1,29 +1,46 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class JobsViewModel
 {
     // ── Editor state ──────────────────────────────────────────────────────────────────────────
-    public bool ShowEditor { get; private set; }
-    public bool Saving { get; private set; }
-    public Guid? EditJobId { get; private set; }
-    public string? EditorError { get; private set; }
+    public bool ShowEditor
+    {
+        get; private set;
+    }
+    public bool Saving
+    {
+        get; private set;
+    }
+    public Guid? EditJobId
+    {
+        get; private set;
+    }
+    public string? EditorError
+    {
+        get; private set;
+    }
     public string EditorTab { get; set; } = "details";
-    public Guid? SelectedTriggerId { get; set; }
+    public Guid? SelectedTriggerId
+    {
+        get; set;
+    }
 
     // ── Source editor (Monaco) ────────────────────────────────────────────────────────────────
     public const string SourceEditorId = "pcjobs-source-editor";
     public bool SourceMonaco { get; private set; } = true;
-    public bool SourceMonacoReady { get; private set; }
+    public bool SourceMonacoReady
+    {
+        get; private set;
+    }
     public string SourceEditorLanguage => EditorLanguageCatalog.ForPath(CurrentEntrypoint);
 
     public void ResetSourceEditor()
@@ -35,14 +52,16 @@ public sealed partial class JobsViewModel
     public async Task AfterRenderAsync()
     {
         if ((ShowEditor || ShowTemplateModal) && !_editorMetadataLoaded && !_editorMetadataLoading)
+        {
             await LoadEditorMetadataAsync();
+        }
         if (
-            ShowEditor
-            && EditJobId is null
-            && EdMapSourceKind == "code"
-            && SourceMonaco
-            && !SourceMonacoReady
-        )
+                    ShowEditor
+                    && EditJobId is null
+                    && EdMapSourceKind == "code"
+                    && SourceMonaco
+                    && !SourceMonacoReady
+                )
         {
             SourceMonacoReady = true;
             try
@@ -56,14 +75,18 @@ public sealed partial class JobsViewModel
                         "vs-dark"
                     )
                 )
+                {
                     SourceMonaco = false;
+                }
             }
             catch
             {
                 SourceMonaco = false;
             }
             if (!SourceMonaco)
+            {
                 NotifyStateChanged();
+            }
         }
     }
 
@@ -79,18 +102,27 @@ public sealed partial class JobsViewModel
             var secrets = await _svc.ListProjectSecretsAsync(projectId);
             var events = await _svc.ListEventTypesAsync();
             var connections = await _svc.ListMcpConnectionsAsync(projectId);
-            if (projectId != ProjectId) return;
+            if (projectId != ProjectId)
+            {
+                return;
+            }
             VaultSecrets = secrets;
             EventTypes = events;
             ProjectMcpConnections = connections;
         }
         catch (Exception ex)
         {
-            if (projectId == ProjectId) Message = ex.Message;
+            if (projectId == ProjectId)
+            {
+                Message = ex.Message;
+            }
         }
         finally
         {
-            if (projectId == ProjectId) _editorMetadataLoaded = true;
+            if (projectId == ProjectId)
+            {
+                _editorMetadataLoaded = true;
+            }
             _editorMetadataLoading = false;
             NotifyStateChanged();
         }
@@ -104,19 +136,27 @@ public sealed partial class JobsViewModel
     public async Task OnSourceRuntimeChangedAsync(string runtime)
     {
         if (_appliedTemplate is not null && !_appliedTemplate.SourcesByRuntime.ContainsKey(runtime))
-            return;
-
-        await SyncSourceEditorAsync();
-        if (_appliedTemplate is not null)
         {
-            _templateDrafts[EdMapRuntimeId] = new CodeFileDto(CurrentEntrypoint, EdMapSource);
-            var draft = _templateDrafts.GetValueOrDefault(runtime)
-                ?? new CodeFileDto(DefaultEntrypointFor(runtime), _appliedTemplate.SourcesByRuntime[runtime]);
-            EdMapSource = draft.Content;
-            EdMapEntrypoint = draft.Path;
+            return;
         }
-        else if (EdMapEntrypoint == DefaultEntrypointFor(EdMapRuntimeId))
-            EdMapEntrypoint = DefaultEntrypointFor(runtime);
+        await SyncSourceEditorAsync();
+        void ApplyRuntime()
+        {
+            if (_appliedTemplate is not null)
+            {
+                _templateDrafts[EdMapRuntimeId] = new CodeFileDto(CurrentEntrypoint, EdMapSource);
+                var draft = _templateDrafts.GetValueOrDefault(runtime)
+                    ?? new CodeFileDto(DefaultEntrypointFor(runtime), _appliedTemplate.SourcesByRuntime[runtime]);
+                EdMapSource = draft.Content;
+                EdMapEntrypoint = draft.Path;
+                return;
+            }
+            if (EdMapEntrypoint == DefaultEntrypointFor(EdMapRuntimeId))
+            {
+                EdMapEntrypoint = DefaultEntrypointFor(runtime);
+            }
+        }
+        ApplyRuntime();
         EdMapRuntimeId = runtime;
 
         if (SourceMonaco && SourceMonacoReady)
@@ -141,12 +181,16 @@ public sealed partial class JobsViewModel
     private async Task SyncSourceEditorAsync()
     {
         if (!SourceMonaco || !SourceMonacoReady)
+        {
             return;
+        }
         try
         {
             var value = await _js.InvokeAsync<string>("pcmonaco.getValue", SourceEditorId);
             if (value is not null)
+            {
                 EdMapSource = value;
+            }
         }
         catch
         {
@@ -155,8 +199,14 @@ public sealed partial class JobsViewModel
     }
 
     // ── Template modal state ──────────────────────────────────────────────────────────────────
-    public bool ShowTemplateModal { get; private set; }
-    public JobTemplate? SelectedTemplate { get; private set; }
+    public bool ShowTemplateModal
+    {
+        get; private set;
+    }
+    public JobTemplate? SelectedTemplate
+    {
+        get; private set;
+    }
     public string TemplateFilter { get; set; } = "";
     public string SelectedTemplateRuntime { get; set; } = "node";
     public IReadOnlyList<JobTemplate> FilteredTemplates =>
@@ -189,14 +239,32 @@ public sealed partial class JobsViewModel
     public int EdConcurrency { get; set; } = 1;
     public string EdSuccessCodesRaw { get; set; } = "0";
     public string EdPartialCodesRaw { get; set; } = "";
-    public bool EdAllowNetworkEgress { get; set; }
-    public bool EdAllowApiInvocation { get; set; }
-    public int EdRetryCount { get; set; }
-    public int EdRetryDelaySeconds { get; set; }
+    public bool EdAllowNetworkEgress
+    {
+        get; set;
+    }
+    public bool EdAllowApiInvocation
+    {
+        get; set;
+    }
+    public int EdRetryCount
+    {
+        get; set;
+    }
+    public int EdRetryDelaySeconds
+    {
+        get; set;
+    }
     public List<ParamEdit> EdParams { get; } = new();
-    public List<PlaceContext.Domain.ValueObjects.PostJobActionKind> EdPostJobActions { get; } =
+    public List<PlaceContext.Domain.ValueObjects.PostJobActionKind> EdPostJobActions
+    {
+        get;
+    } =
         new();
-    public PlaceContext.Domain.ValueObjects.JobReturnType EdReturnType { get; set; } =
+    public PlaceContext.Domain.ValueObjects.JobReturnType EdReturnType
+    {
+        get; set;
+    } =
         PlaceContext.Domain.ValueObjects.JobReturnType.Json;
     public string EdReturnFileName { get; set; } = "";
 
@@ -306,15 +374,18 @@ public sealed partial class JobsViewModel
         // placeholder code in a different language (especially validation gates).
         if (template.SourcesByRuntime.Count > 0
             && !template.SourcesByRuntime.ContainsKey(SelectedTemplateRuntime))
+        {
             SelectedTemplateRuntime = template.MapRuntimeId ?? template.SourcesByRuntime.Keys.First();
+        }
         NotifyStateChanged();
     }
 
     public void ApplySelectedTemplate()
     {
         if (SelectedTemplate is not { } template)
+        {
             return;
-
+        }
         NewJob();
         _appliedTemplate = template;
         EdName = template.Name;
@@ -378,7 +449,9 @@ public sealed partial class JobsViewModel
         EdReturnFileName = job.ReturnFileName ?? "";
         EdMcpConnectionIds.Clear();
         foreach (var id in job.McpConnectionIds)
+        {
             EdMcpConnectionIds.Add(id.ToString());
+        }
         EditorError = null;
         EditorTab = "details";
         SelectedTriggerId = null;
@@ -391,7 +464,10 @@ public sealed partial class JobsViewModel
     {
         ResetPaneState();
         var uri = _navigation.GetUriWithQueryParameters(new Dictionary<string, object?> { ["job"] = null, ["tab"] = null });
-        if (uri != _navigation.Uri) _navigation.NavigateTo(uri, replace: true);
+        if (uri != _navigation.Uri)
+        {
+            _navigation.NavigateTo(uri, replace: true);
+        }
         NotifyStateChanged();
     }
 
@@ -400,7 +476,9 @@ public sealed partial class JobsViewModel
         CloseRunDetail();
         EditorTab = tab;
         if (tab == "triggers")
+        {
             SelectedTriggerId = null;
+        }
         NotifyStateChanged();
     }
 
@@ -410,17 +488,22 @@ public sealed partial class JobsViewModel
 
     public void SwitchPayloadMode(string mode)
     {
-        if (mode == "form")
+        void ApplyPayloadMode()
         {
-            var first = EdInputPayloadsRaw
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .FirstOrDefault();
-            EdPayloadForm = JsonPayloadHelper.FlattenScalars(first);
+            if (mode == "form")
+            {
+                var first = EdInputPayloadsRaw
+                    .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .FirstOrDefault();
+                EdPayloadForm = JsonPayloadHelper.FlattenScalars(first);
+                return;
+            }
+            if (EdPayloadMode == "form")
+            {
+                ComposePayloadFromForm();
+            }
         }
-        else if (EdPayloadMode == "form")
-        {
-            ComposePayloadFromForm();
-        }
+        ApplyPayloadMode();
         EdPayloadMode = mode;
         NotifyStateChanged();
     }
@@ -442,13 +525,19 @@ public sealed partial class JobsViewModel
         bool on
     )
     {
-        if (on)
+        void ApplyReduction()
         {
-            if (!EdPostJobActions.Contains(kind))
-                EdPostJobActions.Add(kind);
-        }
-        else
+            if (on)
+            {
+                if (!EdPostJobActions.Contains(kind))
+                {
+                    EdPostJobActions.Add(kind);
+                }
+                return;
+            }
             EdPostJobActions.Remove(kind);
+        }
+        ApplyReduction();
         NotifyStateChanged();
     }
 
@@ -483,7 +572,9 @@ public sealed partial class JobsViewModel
         {
             var eq = line.IndexOf('=');
             if (eq > 0)
+            {
                 env[line[..eq].Trim()] = line[(eq + 1)..];
+            }
         }
 
         var successCodes = ParseInts(EdSuccessCodesRaw, out var sucErr);
@@ -507,105 +598,108 @@ public sealed partial class JobsViewModel
         NotifyStateChanged();
         try
         {
-            if (EditJobId.HasValue)
+            async Task SaveJobAsync()
             {
-                IReadOnlyList<CodeFileDto>? mapFiles = null;
-                if (EdMapSourceKind == "code" && EdMapFiles.Count > 1)
+                if (EditJobId.HasValue)
                 {
-                    var entry = !string.IsNullOrWhiteSpace(EdMapEntrypoint)
-                        ? EdMapEntrypoint
-                        : DefaultEntrypointFor(EdMapRuntimeId);
-                    mapFiles = EdMapFiles
-                        .Select(f => f.Path == entry ? f with { Content = EdMapSource } : f)
-                        .ToList();
+                    IReadOnlyList<CodeFileDto>? mapFiles = null;
+                    if (EdMapSourceKind == "code" && EdMapFiles.Count > 1)
+                    {
+                        var entry = !string.IsNullOrWhiteSpace(EdMapEntrypoint)
+                            ? EdMapEntrypoint
+                            : DefaultEntrypointFor(EdMapRuntimeId);
+                        mapFiles = EdMapFiles
+                            .Select(f => f.Path == entry ? f with { Content = EdMapSource } : f)
+                            .ToList();
+                    }
+
+                    var mcpIds = EdMcpConnectionIds.Select(id => Guid.Parse(id)).ToList();
+
+                    var cmd = new UpdateJobCommand(
+                        JobId: EditJobId.Value,
+                        Name: EdName.Trim(),
+                        Description: string.IsNullOrWhiteSpace(EdDescription)
+                            ? null
+                            : EdDescription.Trim(),
+                        MapImage: EdMapSourceKind == "image" ? EdMapImage : null,
+                        MapRuntimeId: EdMapSourceKind == "code" ? EdMapRuntimeId : null,
+                        MapSource: EdMapSourceKind == "code" && mapFiles is null ? EdMapSource : null,
+                        MapFiles: mapFiles,
+                        MapEntrypoint: EdMapSourceKind == "code"
+                        && !string.IsNullOrWhiteSpace(EdMapEntrypoint)
+                            ? EdMapEntrypoint
+                            : null,
+                        InputPayloads: payloads,
+                        MapEnv: env,
+                        ReduceImage: null,
+                        ReduceRuntimeId: null,
+                        ReduceSource: null,
+                        ReduceEntrypoint: null,
+                        ReduceEnv: null,
+                        ConcurrencyLimit: EdConcurrency,
+                        SuccessExitCodes: successCodes,
+                        PartialExitCodes: partialCodes,
+                        AllowNetworkEgress: EdAllowNetworkEgress,
+                        AllowApiInvocation: EdAllowApiInvocation,
+                        Parameters: parameters,
+                        PostJobActions: EdPostJobActions.ToList(),
+                        ReturnType: EdReturnType,
+                        ReturnFileName: string.IsNullOrWhiteSpace(EdReturnFileName)
+                            ? null
+                            : EdReturnFileName.Trim(),
+                        RetryCount: EdRetryCount,
+                        RetryDelaySeconds: EdRetryDelaySeconds,
+                        McpConnectionIds: mcpIds
+                    );
+
+                    await _svc.UpdateJobAsync(cmd);
+                    Message = $"Job '{EdName.Trim()}' updated.";
+                    return;
                 }
+                {
+                    var mcpIds = EdMcpConnectionIds.Select(id => Guid.Parse(id)).ToList();
 
-                var mcpIds = EdMcpConnectionIds.Select(id => Guid.Parse(id)).ToList();
+                    var cmd = new CreateJobCommand(
+                        ProjectId: ProjectId,
+                        Name: EdName.Trim(),
+                        Description: string.IsNullOrWhiteSpace(EdDescription)
+                            ? null
+                            : EdDescription.Trim(),
+                        MapImage: EdMapSourceKind == "image" ? EdMapImage : null,
+                        MapRuntimeId: EdMapSourceKind == "code" ? EdMapRuntimeId : null,
+                        MapSource: EdMapSourceKind == "code" ? EdMapSource : null,
+                        MapEntrypoint: EdMapSourceKind == "code"
+                        && !string.IsNullOrWhiteSpace(EdMapEntrypoint)
+                            ? EdMapEntrypoint
+                            : null,
+                        InputPayloads: payloads,
+                        MapEnv: env,
+                        ReduceImage: null,
+                        ReduceRuntimeId: null,
+                        ReduceSource: null,
+                        ReduceEntrypoint: null,
+                        ReduceEnv: null,
+                        ConcurrencyLimit: EdConcurrency,
+                        SuccessExitCodes: successCodes,
+                        PartialExitCodes: partialCodes,
+                        AllowNetworkEgress: EdAllowNetworkEgress,
+                        AllowApiInvocation: EdAllowApiInvocation,
+                        Parameters: parameters,
+                        PostJobActions: EdPostJobActions.ToList(),
+                        ReturnType: EdReturnType,
+                        ReturnFileName: string.IsNullOrWhiteSpace(EdReturnFileName)
+                            ? null
+                            : EdReturnFileName.Trim(),
+                        RetryCount: EdRetryCount,
+                        RetryDelaySeconds: EdRetryDelaySeconds,
+                        McpConnectionIds: mcpIds
+                    );
 
-                var cmd = new UpdateJobCommand(
-                    JobId: EditJobId.Value,
-                    Name: EdName.Trim(),
-                    Description: string.IsNullOrWhiteSpace(EdDescription)
-                        ? null
-                        : EdDescription.Trim(),
-                    MapImage: EdMapSourceKind == "image" ? EdMapImage : null,
-                    MapRuntimeId: EdMapSourceKind == "code" ? EdMapRuntimeId : null,
-                    MapSource: EdMapSourceKind == "code" && mapFiles is null ? EdMapSource : null,
-                    MapFiles: mapFiles,
-                    MapEntrypoint: EdMapSourceKind == "code"
-                    && !string.IsNullOrWhiteSpace(EdMapEntrypoint)
-                        ? EdMapEntrypoint
-                        : null,
-                    InputPayloads: payloads,
-                    MapEnv: env,
-                    ReduceImage: null,
-                    ReduceRuntimeId: null,
-                    ReduceSource: null,
-                    ReduceEntrypoint: null,
-                    ReduceEnv: null,
-                    ConcurrencyLimit: EdConcurrency,
-                    SuccessExitCodes: successCodes,
-                    PartialExitCodes: partialCodes,
-                    AllowNetworkEgress: EdAllowNetworkEgress,
-                    AllowApiInvocation: EdAllowApiInvocation,
-                    Parameters: parameters,
-                    PostJobActions: EdPostJobActions.ToList(),
-                    ReturnType: EdReturnType,
-                    ReturnFileName: string.IsNullOrWhiteSpace(EdReturnFileName)
-                        ? null
-                        : EdReturnFileName.Trim(),
-                    RetryCount: EdRetryCount,
-                    RetryDelaySeconds: EdRetryDelaySeconds,
-                    McpConnectionIds: mcpIds
-                );
-
-                await _svc.UpdateJobAsync(cmd);
-                Message = $"Job '{EdName.Trim()}' updated.";
+                    await _svc.CreateJobAsync(cmd);
+                    Message = $"Job '{EdName.Trim()}' created.";
+                }
             }
-            else
-            {
-                var mcpIds = EdMcpConnectionIds.Select(id => Guid.Parse(id)).ToList();
-
-                var cmd = new CreateJobCommand(
-                    ProjectId: ProjectId,
-                    Name: EdName.Trim(),
-                    Description: string.IsNullOrWhiteSpace(EdDescription)
-                        ? null
-                        : EdDescription.Trim(),
-                    MapImage: EdMapSourceKind == "image" ? EdMapImage : null,
-                    MapRuntimeId: EdMapSourceKind == "code" ? EdMapRuntimeId : null,
-                    MapSource: EdMapSourceKind == "code" ? EdMapSource : null,
-                    MapEntrypoint: EdMapSourceKind == "code"
-                    && !string.IsNullOrWhiteSpace(EdMapEntrypoint)
-                        ? EdMapEntrypoint
-                        : null,
-                    InputPayloads: payloads,
-                    MapEnv: env,
-                    ReduceImage: null,
-                    ReduceRuntimeId: null,
-                    ReduceSource: null,
-                    ReduceEntrypoint: null,
-                    ReduceEnv: null,
-                    ConcurrencyLimit: EdConcurrency,
-                    SuccessExitCodes: successCodes,
-                    PartialExitCodes: partialCodes,
-                    AllowNetworkEgress: EdAllowNetworkEgress,
-                    AllowApiInvocation: EdAllowApiInvocation,
-                    Parameters: parameters,
-                    PostJobActions: EdPostJobActions.ToList(),
-                    ReturnType: EdReturnType,
-                    ReturnFileName: string.IsNullOrWhiteSpace(EdReturnFileName)
-                        ? null
-                        : EdReturnFileName.Trim(),
-                    RetryCount: EdRetryCount,
-                    RetryDelaySeconds: EdRetryDelaySeconds,
-                    McpConnectionIds: mcpIds
-                );
-
-                await _svc.CreateJobAsync(cmd);
-                Message = $"Job '{EdName.Trim()}' created.";
-            }
-
+            await SaveJobAsync();
             Jobs = await _svc.ListJobsAsync(ProjectId);
             ShowEditor = false;
         }
@@ -628,7 +722,9 @@ public sealed partial class JobsViewModel
             Jobs = await _svc.ListJobsAsync(ProjectId);
             ConfirmDeleteId = null;
             if (EditJobId == jobId)
+            {
                 CloseEditor();
+            }
             Message = "Job deleted.";
         }
         catch (Exception ex)

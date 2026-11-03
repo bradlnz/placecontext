@@ -25,9 +25,21 @@ public sealed class EventsViewModelTests
             $"{{\"runId\":\"{runId}\",\"status\":\"Succeeded\"}}", DateTimeOffset.UtcNow, 0);
         Assert.Equal(runId, EventsViewModel.OriginRunId(item));
         Assert.Equal("Succeeded", EventsViewModel.Outcome(item));
-        Assert.Null(EventsViewModel.OriginRunId(item with { Source = "User" }));
-        Assert.Null(EventsViewModel.OriginRunId(item with { Payload = "{broken" }));
-        Assert.Null(EventsViewModel.OriginRunId(item with { Payload = "[]" }));
-        Assert.Null(EventsViewModel.OriginRunId(item with { Payload = "{\"runId\":\"javascript:bad\"}" }));
+        Assert.Null(EventsViewModel.OriginRunId(item with
+        {
+            Source = "User"
+        }));
+        Assert.Null(EventsViewModel.OriginRunId(item with
+        {
+            Payload = "{broken"
+        }));
+        Assert.Null(EventsViewModel.OriginRunId(item with
+        {
+            Payload = "[]"
+        }));
+        Assert.Null(EventsViewModel.OriginRunId(item with
+        {
+            Payload = "{\"runId\":\"javascript:bad\"}"
+        }));
     }
 }

@@ -1,6 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Membership;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;

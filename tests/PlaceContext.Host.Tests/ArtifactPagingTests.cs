@@ -17,11 +17,17 @@ public sealed class ArtifactPagingTests
         var otherProject = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         for (var index = 0; index < 8; index++)
+        {
             db.RunArtifacts.Add(new RunArtifactLinkRow
             {
-                Id = Guid.NewGuid(), TenantId = tenant.TenantId, ProjectId = index < 6 ? project : otherProject,
-                CreatedAt = now, Kind = "HtmlReport", Title = $"file {index}"
+                Id = Guid.NewGuid(),
+                TenantId = tenant.TenantId,
+                ProjectId = index < 6 ? project : otherProject,
+                CreatedAt = now,
+                Kind = "HtmlReport",
+                Title = $"file {index}"
             });
+        }
         await db.SaveChangesAsync();
         var repository = new EfRunArtifactLinkRepository(db);
         var handler = new ListProjectArtifactsHandler(repository);

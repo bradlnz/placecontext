@@ -1,7 +1,8 @@
-using PlaceContext.Application.Ports;
-using PlaceContext.Application.Shared;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Tenancy;
 
 namespace PlaceContext.Infrastructure.Persistence;
 
@@ -17,11 +18,14 @@ namespace PlaceContext.Infrastructure.Persistence;
 public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyContext
 {
     private readonly ICurrentTenant _tenant;
-    internal DbContextOptions<AppDbContext> ContextOptions { get; }
+    internal DbContextOptions<AppDbContext> ContextOptions
+    {
+        get;
+    }
     public DbSet<PendingWorkspaceSignupRow> PendingWorkspaceSignups => Set<PendingWorkspaceSignupRow>();
     public DbSet<TenantRunPlanRow> TenantRunPlans => Set<TenantRunPlanRow>();
     public DbSet<BillableRunRow> BillableRuns => Set<BillableRunRow>();
-    public DbSet<StripeBillingEventRow> StripeBillingEvents => Set<StripeBillingEventRow>();
+    public DbSet<PaymentBillingEventRow> StripeBillingEvents => Set<PaymentBillingEventRow>();
     public DbSet<ManagedOAuthConnectionRow> ManagedOAuthConnections => Set<ManagedOAuthConnectionRow>();
     public DbSet<ManagedOAuthStateRow> ManagedOAuthStates => Set<ManagedOAuthStateRow>();
     public DbSet<AgentSubscriptionRow> AgentSubscriptions => Set<AgentSubscriptionRow>();
@@ -54,7 +58,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<JobRow> Jobs => Set<JobRow>();
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
     public DbSet<JobTestCaseRow> JobTestCases => Set<JobTestCaseRow>();
-    public DbSet<OpenSearchDashboardRow> OpenSearchDashboards => Set<OpenSearchDashboardRow>();
+    public DbSet<SearchDashboardRow> OpenSearchDashboards => Set<SearchDashboardRow>();
     public DbSet<SavedQueryRow> SavedQueries => Set<SavedQueryRow>();
     public DbSet<CommunicationProviderRow> CommunicationProviders => Set<CommunicationProviderRow>();
     public DbSet<RunArtifactLinkRow> RunArtifacts => Set<RunArtifactLinkRow>();
@@ -94,14 +98,23 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         var tenantId = _tenant.TenantId;
         foreach (var entry in ChangeTracker.Entries<ITenantOwned>())
         {
-            if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted)) continue;
+            if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted))
+            {
+                continue;
+            }
             if (!_tenant.IsResolved || tenantId == Guid.Empty)
+            {
                 throw new UnauthorizedAccessException("A resolved tenant is required to write tenant data.");
+            }
             if (entry.State == EntityState.Added && entry.Entity.TenantId == Guid.Empty)
+            {
                 entry.Entity.TenantId = tenantId;
+            }
             if (entry.Entity.TenantId != tenantId || (entry.State != EntityState.Added
-                && entry.Property(nameof(ITenantOwned.TenantId)).OriginalValue is Guid original && original != tenantId))
+                            && entry.Property(nameof(ITenantOwned.TenantId)).OriginalValue is Guid original && original != tenantId))
+            {
                 throw new UnauthorizedAccessException("Tenant ownership cannot be changed or crossed.");
+            }
         }
     }
 
@@ -132,7 +145,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.TenantId, x.PeriodStart }).HasDatabaseName("ix_billable_runs_period");
             e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
-        b.Entity<StripeBillingEventRow>(e =>
+        b.Entity<PaymentBillingEventRow>(e =>
         {
             e.ToTable("stripe_billing_events");
             e.HasKey(x => x.EventId);
@@ -170,6 +183,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => new { x.TenantId, x.ProjectId, x.StartedAt });
             e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
+        // Preserve the retired feature's schema so future migrations do not drop saved dashboards.
         b.Entity<PersonalDashboardRow>(e =>
         {
             e.ToTable("personal_dashboards");
@@ -366,7 +380,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        b.Entity<OpenSearchDashboardRow>(e =>
+        b.Entity<SearchDashboardRow>(e =>
         {
             e.ToTable("opensearch_dashboards");
             e.HasKey(x => x.Id);
@@ -586,6 +600,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
 
         // Include ownership in UPDATE/DELETE predicates, including detached entities attached by ID.
         foreach (var entity in b.Model.GetEntityTypes().Where(e => typeof(ITenantOwned).IsAssignableFrom(e.ClrType)))
+        {
             b.Entity(entity.ClrType).Property(nameof(ITenantOwned.TenantId)).IsConcurrencyToken();
+        }
     }
 }

@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Application.Tenancy;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -21,8 +20,14 @@ public sealed class LocalitySettingsViewModel(
     }
 
     public string TimeZoneId { get; set; } = "UTC";
-    public bool Busy { get; private set; }
-    public string? Message { get; private set; }
+    public bool Busy
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
 
     public void Initialize()
     {

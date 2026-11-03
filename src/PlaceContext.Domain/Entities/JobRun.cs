@@ -39,26 +39,56 @@ public sealed class JobRun
         OriginalRunId = originalRunId;
     }
 
-    public Guid Id { get; }
-    public Guid JobId { get; }
-    public Guid ProjectId { get; }
-    public JobRunStatus Status { get; private set; }
-    public DateTimeOffset StartedAt { get; }
-    public DateTimeOffset? FinishedAt { get; private set; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid JobId
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
+    public JobRunStatus Status
+    {
+        get; private set;
+    }
+    public DateTimeOffset StartedAt
+    {
+        get;
+    }
+    public DateTimeOffset? FinishedAt
+    {
+        get; private set;
+    }
     public IReadOnlyList<ShardResult> ShardResults => _shardResults;
-    public ReduceResult? ReduceResult { get; private set; }
+    public ReduceResult? ReduceResult
+    {
+        get; private set;
+    }
 
     /// <summary>
     /// Snapshot of the workload spec as it was at run-start.
     /// Guarantees run-history reproducibility even when the parent Job is later edited.
     /// </summary>
-    public WorkloadSnapshot Snapshot { get; }
+    public WorkloadSnapshot Snapshot
+    {
+        get;
+    }
 
     /// <summary>1-based attempt number for this run. Retries increment this value.</summary>
-    public int AttemptNumber { get; private set; }
+    public int AttemptNumber
+    {
+        get; private set;
+    }
 
     /// <summary>Id of the first run in this retry chain. Null for the first attempt.</summary>
-    public Guid? OriginalRunId { get; private set; }
+    public Guid? OriginalRunId
+    {
+        get; private set;
+    }
 
     /// <summary>Factory: creates a new run in the Running state, snapshotting the current job spec.
     /// Callers may pre-allocate <paramref name="id"/> so the run is addressable (progress
@@ -67,13 +97,21 @@ public sealed class JobRun
         Guid? id = null, int attemptNumber = 1, Guid? originalRunId = null)
     {
         if (jobId == Guid.Empty)
+        {
             throw new ArgumentException("JobId must not be empty.", nameof(jobId));
+        }
         if (projectId == Guid.Empty)
+        {
             throw new ArgumentException("ProjectId must not be empty.", nameof(projectId));
+        }
         if (id == Guid.Empty)
+        {
             throw new ArgumentException("A pre-allocated run id must not be empty.", nameof(id));
+        }
         if (attemptNumber < 1)
+        {
             throw new ArgumentOutOfRangeException(nameof(attemptNumber), "Attempt number must be >= 1.");
+        }
         ArgumentNullException.ThrowIfNull(snapshot);
 
         return new JobRun(id ?? Guid.NewGuid(), jobId, projectId, JobRunStatus.Running, startedAt, null, null, snapshot,
@@ -91,8 +129,9 @@ public sealed class JobRun
         DateTimeOffset finishedAt)
     {
         if (Status != JobRunStatus.Running)
+        {
             throw new InvalidOperationException($"Cannot complete a run that is in status {Status}.");
-
+        }
         _shardResults.Clear();
         _shardResults.AddRange(shardResults);
         ReduceResult = reduceResult;
@@ -130,7 +169,10 @@ public sealed class JobRun
     /// </summary>
     public void Cancel(DateTimeOffset finishedAt)
     {
-        if (Status != JobRunStatus.Running) return;
+        if (Status != JobRunStatus.Running)
+        {
+            return;
+        }
         FinishedAt = finishedAt;
         Status = JobRunStatus.Cancelled;
     }
@@ -141,15 +183,18 @@ public sealed class JobRun
     {
         // Any hard failure (shard or reduce) dominates.
         if (shardResults.Any(s => s.Outcome == WorkloadOutcome.Failed))
+        {
             return JobRunStatus.Failed;
-
+        }
         if (reduceResult is { Succeeded: false })
+        {
             return JobRunStatus.Failed;
-
+        }
         // If all shards succeeded but some are partial, the run is partial.
         if (shardResults.Any(s => s.Outcome == WorkloadOutcome.Partial))
+        {
             return JobRunStatus.Partial;
-
+        }
         return JobRunStatus.Succeeded;
     }
 }

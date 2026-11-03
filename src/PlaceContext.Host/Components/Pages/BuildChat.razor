@@ -1,9 +1,10 @@
+@using PlaceContext.Application.Access
 @page "/project/{ProjectId:guid}/dashboard"
 @attribute [Authorize(Policy = Permission.ProjectsView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IAsyncDisposable
 @inject BuildChatViewModel Vm
-@using PlaceContext.Host.Build
+@using PlaceContext.Application.Build
 
 <PageTitle>PlaceContext — Dashboard</PageTitle>
 <div id="@Vm.ViewId" class="build-chat @(Vm.ShowHistory ? "history-open" : "") @(Vm.WorkspaceVisible ? "conversation-active" : "") @(Vm.WorkspaceOpen ? "workspace-preview-open" : "")">

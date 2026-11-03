@@ -1,3 +1,4 @@
+using PlaceContext.Application.Networking;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Dtos;
@@ -26,6 +27,6 @@ public sealed record BackupManifest(
 {
     /// <summary>Schema version this build writes and can read. Bump when a manifest shape changes.</summary>
     public const int CurrentSchemaVersion = 3;
-    public IReadOnlyList<PlaceContext.Application.Ports.WorkerNetwork> WorkerNetworks { get; init; } = [];
-    public IReadOnlyList<PlaceContext.Application.Ports.JobNetworkAssignment> NetworkAssignments { get; init; } = [];
+    public IReadOnlyList<PlaceContext.Application.Networking.WorkerNetwork> WorkerNetworks { get; init; } = [];
+    public IReadOnlyList<PlaceContext.Application.Networking.JobNetworkAssignment> NetworkAssignments { get; init; } = [];
 }

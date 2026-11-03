@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.DataLinks;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
@@ -50,7 +51,10 @@ public sealed class RecordLinkService
             try
             {
                 var found = await ScanTableAsync(projectId, table.Name, entities, ct);
-                if (found is null) continue; // no identity columns — nothing to index here
+                if (found is null)
+                {
+                    continue; // no identity columns — nothing to index here
+                }
                 links.AddRange(found);
                 scanned++;
             }
@@ -110,12 +114,16 @@ public sealed class RecordLinkService
     public async Task<IReadOnlyList<string>> FindDuplicatesAsync(Guid projectId, string table,
         IReadOnlyList<IReadOnlyDictionary<string, string?>> newRows, int sample = 5, CancellationToken ct = default)
     {
-        if (newRows.Count == 0) return Array.Empty<string>();
-
+        if (newRows.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
         var columns = await _store.ListColumnsAsync(projectId, table, ct);
         var identity = columns.Where(c => LinkValues.IsIdentityColumn(c.Name)).Select(c => c.Name).ToList();
-        if (identity.Count == 0) return Array.Empty<string>();
-
+        if (identity.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
         var entities = await EntitiesAsync(projectId, ct);
         var keyColumns = RowKeyColumns(table, columns, entities);
         var selected = identity.Concat(keyColumns).Distinct().ToList();
@@ -126,8 +134,10 @@ public sealed class RecordLinkService
             .SelectMany(row => RowOccurrences(selected, identity, keyColumns, row))
             .GroupBy(o => (o.Column, o.Normalized))
             .ToDictionary(g => g.Key, g => g.First().RowKey);
-        if (holders.Count == 0) return Array.Empty<string>();
-
+        if (holders.Count == 0)
+        {
+            return Array.Empty<string>();
+        }
         return newRows
             .SelectMany(row => identity
                 .Select(col => (Column: col, Display: GetIgnoreCase(row, col)?.Trim()))
@@ -148,8 +158,10 @@ public sealed class RecordLinkService
     {
         var columns = await _store.ListColumnsAsync(projectId, table, ct);
         var identity = columns.Where(c => LinkValues.IsIdentityColumn(c.Name)).Select(c => c.Name).ToList();
-        if (identity.Count == 0) return null;
-
+        if (identity.Count == 0)
+        {
+            return null;
+        }
         var keyColumns = RowKeyColumns(table, columns, entities);
         var selected = identity.Concat(keyColumns).Distinct().ToList();
         var result = await _store.ExecuteAsync(projectId, SelectSql(table, selected), ct);
@@ -186,7 +198,9 @@ public sealed class RecordLinkService
     {
         var entity = entities.FirstOrDefault(e => string.Equals(e.TableName, table, StringComparison.OrdinalIgnoreCase));
         if (entity?.LabelColumn is { Length: > 0 } label && columns.Any(c => c.Name == label))
+        {
             return new[] { label };
+        }
         return columns.Where(IsTextColumn).Take(3).Select(c => c.Name).ToList();
     }
 
@@ -198,8 +212,14 @@ public sealed class RecordLinkService
     // Label hints are a nicety, never a requirement — a failing entity repo must not stop a scan.
     private async Task<IReadOnlyList<DataEntity>> EntitiesAsync(Guid projectId, CancellationToken ct)
     {
-        try { return await _entities.ListForProjectAsync(projectId, ct); }
-        catch { return Array.Empty<DataEntity>(); }
+        try
+        {
+            return await _entities.ListForProjectAsync(projectId, ct);
+        }
+        catch
+        {
+            return Array.Empty<DataEntity>();
+        }
     }
 
     private static string SelectSql(string table, IReadOnlyList<string> columns)

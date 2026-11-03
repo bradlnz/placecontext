@@ -40,7 +40,9 @@ public abstract class PageViewModel
     {
         var callback = _stateHasChanged;
         if (callback is null)
+        {
             return;
+        }
         _ = SafeNotifyAsync(callback);
     }
 

@@ -1,13 +1,19 @@
 using System.Diagnostics;
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 using System.Text;
-using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Billing;
 using PlaceContext.Application.Connections;
+using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application.Networking;
 using PlaceContext.Application.Observability;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Search;
+using PlaceContext.Application.Secrets;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Workload;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -47,7 +53,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IMcpConnectionRepository? _mcpRepo;
     private readonly IDataEncryptor? _encryptor;
     private readonly IObjectStore? _objectStore;
-    private readonly IOpenSearchConnectionResolver? _openSearchConnections;
+    private readonly ISearchConnectionResolver? _openSearchConnections;
     private readonly IWorkerNetworkService? _networks;
     private readonly IJobRunHeartbeat? _heartbeat;
     private readonly IRunAllowance? _allowance;
@@ -77,7 +83,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         IMcpConnectionRepository? mcpRepo = null,
         IDataEncryptor? encryptor = null,
         IObjectStore? objectStore = null,
-        IOpenSearchConnectionResolver? openSearchConnections = null,
+        ISearchConnectionResolver? openSearchConnections = null,
         IWorkerNetworkService? networks = null,
         IJobRunHeartbeat? heartbeat = null,
         IRunAllowance? allowance = null,
@@ -118,14 +124,17 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         // reservation, while workflow child jobs are charged to their parent workflow.
         var billingRunId = command.OriginalRunId ?? command.RunId ?? Guid.NewGuid();
         if (!command.IsWorkflowStep && _allowance is not null)
+        {
             await _allowance.ReserveAsync(job.ProjectId, billingRunId, "job", ct);
-        // Workflow child jobs share the parent workflow's held concurrency lease.
+        }        // Workflow child jobs share the parent workflow's held concurrency lease.
         await using var capacityLease = !command.IsWorkflowStep && _capacity is not null
             ? await _capacity.AcquireAsync(billingRunId, "job", ct) : null;
         using var linkedCapacity = capacityLease is null ? null
             : CancellationTokenSource.CreateLinkedTokenSource(ct, capacityLease.LostToken);
-        if (linkedCapacity is not null) ct = linkedCapacity.Token;
-
+        if (linkedCapacity is not null)
+        {
+            ct = linkedCapacity.Token;
+        }
         // OpenTelemetry: one span (and a started/completed metric pair) per run — the realtime,
         // exportable view into the jobs pipeline. Inert unless the Host wired an exporter.
         using var runSpan = JobTelemetry.Activity.StartActivity("job.run", ActivityKind.Internal);
@@ -144,7 +153,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         {
             var merged = new Dictionary<string, string>(_runSecrets);
             foreach (var (name, value) in await _openSearchConnections.GetJobEnvironmentAsync(job.ProjectId, ct))
+            {
                 merged[name] = value;
+            }
             _runSecrets = merged;
         }
 
@@ -157,30 +168,36 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         ReduceSpec? effectiveReduce;
         int concurrency;
         bool allowEgress;
-        if (command.ReplayOfRunId is { } replayId)
+        async Task<(MapSpec, ReduceSpec?, int, bool)> CreateRunAsync()
         {
-            var prior = await _runs.GetByIdAsync(replayId, ct)
-                ?? throw new InvalidOperationException($"Run {replayId} not found — cannot replay.");
-            var s = prior.Snapshot;
-            effectiveMap = new MapSpec(s.MapSource, s.InputPayloads, s.MapEnv);
-            effectiveReduce = s.ReduceSource is not null
-                ? new ReduceSpec(s.ReduceSource, s.ReduceEnv ?? new Dictionary<string, string>())
-                : null;
-            concurrency = s.ConcurrencyLimit;
-            allowEgress = s.AllowNetworkEgress;
-        }
-        else
-        {
+            MapSpec resolvedEffectiveMap;
+            ReduceSpec? resolvedEffectiveReduce;
+            int resolvedConcurrency;
+            bool resolvedAllowEgress;
+            if (command.ReplayOfRunId is { } replayId)
+            {
+                var prior = await _runs.GetByIdAsync(replayId, ct)
+                    ?? throw new InvalidOperationException($"Run {replayId} not found — cannot replay.");
+                var s = prior.Snapshot;
+                resolvedEffectiveMap = new MapSpec(s.MapSource, s.InputPayloads, s.MapEnv);
+                resolvedEffectiveReduce = s.ReduceSource is not null
+                    ? new ReduceSpec(s.ReduceSource, s.ReduceEnv ?? new Dictionary<string, string>())
+                    : null;
+                resolvedConcurrency = s.ConcurrencyLimit;
+                resolvedAllowEgress = s.AllowNetworkEgress;
+                return (resolvedEffectiveMap, resolvedEffectiveReduce, resolvedConcurrency, resolvedAllowEgress);
+            }
             // An input override (modal-collected parameters or event-injected fields) replaces the
             // stored shard payloads with a single shard carrying the supplied payload.
-            effectiveMap = command.InputPayload is { } p
+            resolvedEffectiveMap = command.InputPayload is { } p
                 ? new MapSpec(job.MapSpec.Source, new[] { p }, job.MapSpec.Env)
                 : job.MapSpec;
-            effectiveReduce = job.ReduceSpec;
-            concurrency = job.ConcurrencyLimit;
-            allowEgress = job.AllowNetworkEgress;
+            resolvedEffectiveReduce = job.ReduceSpec;
+            resolvedConcurrency = job.ConcurrencyLimit;
+            resolvedAllowEgress = job.AllowNetworkEgress;
+            return (resolvedEffectiveMap, resolvedEffectiveReduce, resolvedConcurrency, resolvedAllowEgress);
         }
-
+        (effectiveMap, effectiveReduce, concurrency, allowEgress) = await CreateRunAsync();
         // Explicit job opt-in to the project-scoped Microsoft Graph connection.
         // The real bearer token is injected as a transient sandbox env variable only,
         // never written to the persisted job source, env configuration or run snapshot.
@@ -188,9 +205,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             && string.Equals(useGraph, "true", StringComparison.OrdinalIgnoreCase))
         {
             if (!allowEgress)
+            {
                 throw new InvalidOperationException("Microsoft Graph jobs require outbound network access.");
+            }
             if (_managedOAuth is null)
+            {
                 throw new InvalidOperationException("Managed Microsoft Graph connections are unavailable.");
+            }
             var graphToken = await _managedOAuth.ResolveForJobAsync(job.ProjectId, ct);
             var merged = new Dictionary<string, string>(_mcpEnv)
             {
@@ -222,7 +243,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
                 using var establish = CancellationTokenSource.CreateLinkedTokenSource(execution.Token);
                 establish.CancelAfter(TimeSpan.FromSeconds(IJobRunHeartbeat.IntervalSeconds));
                 if (!await _heartbeat.PulseAsync(run.Id, establish.Token))
+                {
                     throw new InvalidOperationException("Job keep-alive could not be established.");
+                }
                 heartbeat = MaintainPulseAsync();
             }
 
@@ -233,7 +256,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             execution.Token.ThrowIfCancellationRequested();
 
             var latest = await _runs.GetByIdAsync(run.Id, execution.Token);
-            if (latest is { Status: not JobRunStatus.Running }) return JobViewMapper.ToDetailView(latest);
+            if (latest is { Status: not JobRunStatus.Running })
+            {
+                return JobViewMapper.ToDetailView(latest);
+            }
             finishedAt = _clock.UtcNow;
             run.Complete(shardResults, reduceResult, finishedAt);
             await _runs.UpdateAsync(run, execution.Token);
@@ -244,12 +270,23 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             // Cancellation and runner faults must not leave a durable Running record behind.
             using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var latest = await _runs.GetByIdAsync(run.Id, cleanup.Token);
-            if (latest is { Status: not JobRunStatus.Running }) return JobViewMapper.ToDetailView(latest);
+            if (latest is { Status: not JobRunStatus.Running })
+            {
+                return JobViewMapper.ToDetailView(latest);
+            }
             if (latest is not null)
             {
-                if (ct.IsCancellationRequested) latest.Cancel(_clock.UtcNow);
-                else latest.Complete([new ShardResult(0, -1, WorkloadOutcome.Failed, null,
+                void CompleteCancellation()
+                {
+                    if (ct.IsCancellationRequested)
+                    {
+                        latest.Cancel(_clock.UtcNow);
+                        return;
+                    }
+                    latest.Complete([new ShardResult(0, -1, WorkloadOutcome.Failed, null,
                     pulseError is null ? ex.Message : "Job keep-alive lost: " + pulseError.Message)], null, _clock.UtcNow);
+                }
+                CompleteCancellation();
                 await _runs.UpdateAsync(latest, cleanup.Token);
                 await _uow.SaveChangesAsync(cleanup.Token);
             }
@@ -271,7 +308,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
                     using var pulse = CancellationTokenSource.CreateLinkedTokenSource(pulseStop.Token);
                     pulse.CancelAfter(TimeSpan.FromSeconds(IJobRunHeartbeat.IntervalSeconds));
                     if (!await _heartbeat!.PulseAsync(run.Id, pulse.Token))
+                    {
                         throw new InvalidOperationException("Run was cancelled or its keep-alive expired.");
+                    }
                 }
             }
             catch (OperationCanceledException) when (pulseStop.IsCancellationRequested) { }
@@ -296,25 +335,31 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         // Best-effort — never fails the run.
         if (_postActions is not null)
         {
-            try { await _postActions.RunAsync(job, run, ct); }
+            try
+            {
+                await _postActions.RunAsync(job, run, ct);
+            }
             catch { /* isolated inside the service too; belt-and-suspenders */ }
         }
 
         // The run's results also land in the project's own database: appended to the read-only
         // job_run_data table so they can be queried and charted from the Data tab. Best-effort.
         if (_runData is not null)
+        {
             await _runData.RecordAsync(job, run, ct);
-
+        }
         // The project's data map: mappings declared for this job extract records from the run's
         // primary artifact and append them to their target tables. Best-effort.
         if (_dataMappings is not null)
+        {
             await _dataMappings.IngestAsync(job, run, ct);
-
+        }
         // The relation tree: values in this run's output that match entity keys (a site's address,
         // say) persist run ⇄ entity tags, linking the job and its artifacts to those records.
         if (_entityTags is not null)
+        {
             await _entityTags.TagRunAsync(job, run, ct);
-
+        }
         // Embed a summary of the run for search/the dependency graph. Best-effort — isolated so it
         // can't fail or stall the run.
         try
@@ -372,7 +417,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             var request = BuildRequest(map.Source, resolvedPayload, MergeMcpEnv(MergeSecrets(map.Env)),
                 Array.Empty<(string, string)>(), correlationId, allowEgress, job.TimeoutSeconds);
 
-            var result = await _runner.RunAsync(request with { Network = _network }, ct);
+            var result = await _runner.RunAsync(request with
+            {
+                Network = _network
+            }, ct);
             var outcome = job.ExitCodePolicy.Classify(result.ExitCode);
             var log = CombineLog(result.Stdout, result.Stderr);
 
@@ -402,10 +450,18 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         string payload, Guid projectId, int timeoutSeconds, CancellationToken ct)
     {
         JsonNode? root;
-        try { root = JsonNode.Parse(payload); }
-        catch (JsonException) { return payload; }
-        if (root is null) return payload;
-
+        try
+        {
+            root = JsonNode.Parse(payload);
+        }
+        catch (JsonException)
+        {
+            return payload;
+        }
+        if (root is null)
+        {
+            return payload;
+        }
         var changed = await ResolveFileInputsNodeAsync(root, projectId, timeoutSeconds, ct);
         return changed ? root.ToJsonString() : payload;
     }
@@ -424,19 +480,22 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
             try
             {
                 if (_objectStore is null || !_objectStore.IsEnabled)
+                {
                     return SetFileError(file, "File storage is not configured.");
-
+                }
                 var bucket = file["bucket"]?.GetValue<string>();
                 var key = file["key"]?.GetValue<string>();
                 var allowedPrefix = $"job-inputs/{projectId:N}/";
                 if (!string.Equals(bucket, _objectStore.ReportsBucket, StringComparison.Ordinal)
                     || string.IsNullOrWhiteSpace(key)
                     || !key.StartsWith(allowedPrefix, StringComparison.Ordinal))
+                {
                     return SetFileError(file, "The uploaded file reference is invalid for this project.");
-
+                }
                 if (!await _objectStore.ExistsAsync(bucket!, key!, ct))
+                {
                     return SetFileError(file, "The uploaded file is no longer available.");
-
+                }
                 var ttl = TimeSpan.FromSeconds(Math.Max(3600, timeoutSeconds + 900));
                 file["download_url"] = await _objectStore.PresignDownloadAsync(bucket!, key!, ttl, ct);
                 file["resolved_by_devcontext"] = true;
@@ -449,16 +508,25 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         }
 
         var changed = false;
-        if (node is JsonObject container)
+        async Task AppendOutputAsync()
         {
-            foreach (var child in container.Select(pair => pair.Value).Where(value => value is not null).ToList())
-                changed |= await ResolveFileInputsNodeAsync(child!, projectId, timeoutSeconds, ct);
+            if (node is JsonObject container)
+            {
+                foreach (var child in container.Select(pair => pair.Value).Where(value => value is not null).ToList())
+                {
+                    changed |= await ResolveFileInputsNodeAsync(child!, projectId, timeoutSeconds, ct);
+                }
+                return;
+            }
+            if (node is JsonArray array)
+            {
+                foreach (var child in array.Where(value => value is not null).ToList())
+                {
+                    changed |= await ResolveFileInputsNodeAsync(child!, projectId, timeoutSeconds, ct);
+                }
+            }
         }
-        else if (node is JsonArray array)
-        {
-            foreach (var child in array.Where(value => value is not null).ToList())
-                changed |= await ResolveFileInputsNodeAsync(child!, projectId, timeoutSeconds, ct);
-        }
+        await AppendOutputAsync();
         return changed;
     }
 
@@ -488,7 +556,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         var request = BuildRequest(reduceSpec.Source, "{}", MergeMcpEnv(MergeSecrets(reduceSpec.Env)),
             artifactMounts, correlationId, allowEgress, job.TimeoutSeconds);
 
-        var result = await _runner.RunAsync(request with { Network = _network }, ct);
+        var result = await _runner.RunAsync(request with
+        {
+            Network = _network
+        }, ct);
         var succeeded = job.ExitCodePolicy.SuccessCodes.Contains(result.ExitCode);
         var log = CombineLog(result.Stdout, result.Stderr);
 
@@ -546,12 +617,19 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     // Decrypt the project's vault secrets for run-time env injection. Empty when the vault isn't wired.
     private async Task<IReadOnlyDictionary<string, string>> LoadSecretsAsync(Guid projectId, CancellationToken ct)
     {
-        if (_secretRepo is null || _secretProtector is null) return new Dictionary<string, string>();
+        if (_secretRepo is null || _secretProtector is null)
+        {
+            return new Dictionary<string, string>();
+        }
         var ciphers = await _secretRepo.GetCiphersAsync(projectId, ct);
         var plain = new Dictionary<string, string>(ciphers.Count);
         foreach (var (name, cipher) in ciphers)
         {
-            try { plain[name] = _secretProtector.Unprotect(cipher); } catch { /* skip un-decryptable */ }
+            try
+            {
+                plain[name] = _secretProtector.Unprotect(cipher);
+            }
+            catch { /* skip un-decryptable */ }
         }
         return plain;
     }
@@ -559,18 +637,30 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     // Vault secrets form the base env; the job's own env overrides on key collision.
     private IReadOnlyDictionary<string, string> MergeSecrets(IReadOnlyDictionary<string, string> env)
     {
-        if (_runSecrets.Count == 0) return env;
+        if (_runSecrets.Count == 0)
+        {
+            return env;
+        }
         var merged = new Dictionary<string, string>(_runSecrets);
-        foreach (var (k, v) in env) merged[k] = v;
+        foreach (var (k, v) in env)
+        {
+            merged[k] = v;
+        }
         return merged;
     }
 
     // MCP connection tokens are injected on top of the merged env.
     private IReadOnlyDictionary<string, string> MergeMcpEnv(IReadOnlyDictionary<string, string> env)
     {
-        if (_mcpEnv.Count == 0) return env;
+        if (_mcpEnv.Count == 0)
+        {
+            return env;
+        }
         var merged = new Dictionary<string, string>(env);
-        foreach (var (k, v) in _mcpEnv) merged[k] = v;
+        foreach (var (k, v) in _mcpEnv)
+        {
+            merged[k] = v;
+        }
         return merged;
     }
 
@@ -578,8 +668,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private async Task<IReadOnlyDictionary<string, string>> LoadMcpEnvAsync(IReadOnlyList<Guid> mcpConnectionIds, CancellationToken ct)
     {
         if (_mcpRepo is null || _encryptor is null || mcpConnectionIds.Count == 0)
+        {
             return new Dictionary<string, string>();
-
+        }
         var env = new Dictionary<string, string>();
         var connections = new List<(string Name, string Url, string Token)>();
         var purpose = "mcp.oauth.tokens";
@@ -587,8 +678,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         foreach (var connId in mcpConnectionIds)
         {
             var conn = await _mcpRepo.GetByIdAsync(connId, ct);
-            if (conn is null) continue;
-
+            if (conn is null)
+            {
+                continue;
+            }
             var token = conn.AuthType == "oauth"
                 ? (_encryptor.Unprotect(conn.OAuthAccessToken, purpose) ?? "")
                 : conn.AuthToken ?? "";
@@ -623,11 +716,9 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
                 sb.AppendLine("```json");
                 sb.AppendLine(truncated);
                 sb.AppendLine("```");
+                continue;
             }
-            else
-            {
-                sb.AppendLine("_(no artifact)_");
-            }
+            sb.AppendLine("_(no artifact)_");
         }
 
         if (run.ReduceResult is { } reduce)
@@ -687,8 +778,10 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     {
         var named = MapArtifacts(files);
         var embedded = EmbeddedArtifacts.Extract(primaryArtifact);
-        if (embedded.Count == 0) return named;
-
+        if (embedded.Count == 0)
+        {
+            return named;
+        }
         var seen = named.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         return named.Concat(embedded.Where(e => seen.Add(e.Name))).ToList();
     }
@@ -696,9 +789,17 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private static string? CombineLog(string stdout, string stderr)
     {
         if (string.IsNullOrWhiteSpace(stdout) && string.IsNullOrWhiteSpace(stderr))
+        {
             return null;
-        if (string.IsNullOrWhiteSpace(stderr)) return stdout;
-        if (string.IsNullOrWhiteSpace(stdout)) return stderr;
+        }
+        if (string.IsNullOrWhiteSpace(stderr))
+        {
+            return stdout;
+        }
+        if (string.IsNullOrWhiteSpace(stdout))
+        {
+            return stderr;
+        }
         return stdout + "\n--- stderr ---\n" + stderr;
     }
 }

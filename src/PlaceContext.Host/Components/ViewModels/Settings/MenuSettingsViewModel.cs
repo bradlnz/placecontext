@@ -1,4 +1,4 @@
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Organization;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -10,7 +10,10 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
         public string Id { get; init; } = "";
         public string DefaultLabel { get; init; } = "";
         public string Label { get; set; } = "";
-        public int Order { get; set; }
+        public int Order
+        {
+            get; set;
+        }
         public bool Visible { get; set; } = true;
         public string Section { get; set; } = "";
     }
@@ -43,8 +46,14 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
     };
 
     public List<Row> Workspace { get; private set; } = [];
-    public bool Saving { get; private set; }
-    public string? Message { get; private set; }
+    public bool Saving
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
 
     public async Task LoadAsync()
     {
@@ -58,7 +67,9 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
     {
         var target = index + delta;
         if (target < 0 || target >= Workspace.Count)
+        {
             return;
+        }
         (Workspace[index], Workspace[target]) = (Workspace[target], Workspace[index]);
         Renumber(Workspace);
         NotifyStateChanged();
@@ -134,6 +145,8 @@ public sealed class MenuSettingsViewModel(IMenuConfigService menu, PortalUiState
     private static void Renumber(List<Row> rows)
     {
         for (var i = 0; i < rows.Count; i++)
+        {
             rows[i].Order = i * 10;
+        }
     }
 }

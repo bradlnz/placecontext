@@ -1,23 +1,39 @@
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application;
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class DataMapViewModel
 {
     // ── Editor state ──────────────────────────────────────────────────────────────────────────
-    public bool ShowEditor { get; private set; }
-    public bool Saving { get; private set; }
-    public bool Suggesting { get; private set; }
-    public Guid? EditId { get; private set; }
-    public Guid EdJobId { get; set; }
+    public bool ShowEditor
+    {
+        get; private set;
+    }
+    public bool Saving
+    {
+        get; private set;
+    }
+    public bool Suggesting
+    {
+        get; private set;
+    }
+    public Guid? EditId
+    {
+        get; private set;
+    }
+    public Guid EdJobId
+    {
+        get; set;
+    }
     public string EdTable { get; set; } = "";
     public string EdRowsPath { get; set; } = "";
     public bool EdEnabled { get; set; } = true;
-    public string? EditorError { get; private set; }
+    public string? EditorError
+    {
+        get; private set;
+    }
     public List<FieldEdit> EdFields { get; } = new();
 
     // ── Editor ────────────────────────────────────────────────────────────────────────────────
@@ -30,14 +46,16 @@ public sealed partial class DataMapViewModel
         EdEnabled = m?.Enabled ?? true;
         EdFields.Clear();
         if (m is not null)
+        {
             EdFields.AddRange(
-                m.Fields.Select(f => new FieldEdit
-                {
-                    SourcePath = f.SourcePath,
-                    Column = f.Column,
-                    Type = f.Type,
-                })
-            );
+                        m.Fields.Select(f => new FieldEdit
+                        {
+                            SourcePath = f.SourcePath,
+                            Column = f.Column,
+                            Type = f.Type,
+                        })
+                    );
+        }
         EditorError = null;
         ShowEditor = true;
         NotifyStateChanged();
@@ -132,7 +150,9 @@ public sealed partial class DataMapViewModel
     public async Task DeleteMappingAsync()
     {
         if (EditId is not { } id)
+        {
             return;
+        }
         Saving = true;
         try
         {
@@ -154,7 +174,9 @@ public sealed partial class DataMapViewModel
     public async Task SuggestFieldsAsync()
     {
         if (EdJobId == Guid.Empty)
+        {
             return;
+        }
         Suggesting = true;
         EditorError = null;
         try
@@ -183,7 +205,8 @@ public sealed partial class DataMapViewModel
             using var doc = System.Text.Json.JsonDocument.Parse(artifact);
             var el = doc.RootElement;
 
-            if (!string.IsNullOrWhiteSpace(EdRowsPath))
+            var hasRowsPath = !string.IsNullOrWhiteSpace(EdRowsPath);
+            if (hasRowsPath)
             {
                 foreach (
                     var seg in EdRowsPath.Split(
@@ -202,7 +225,7 @@ public sealed partial class DataMapViewModel
                     }
                 }
             }
-            else if (el.ValueKind == System.Text.Json.JsonValueKind.Object)
+            if (!hasRowsPath && el.ValueKind == System.Text.Json.JsonValueKind.Object)
             {
                 var firstArray = el.EnumerateObject()
                     .FirstOrDefault(p => p.Value.ValueKind == System.Text.Json.JsonValueKind.Array);
@@ -225,14 +248,16 @@ public sealed partial class DataMapViewModel
 
             EdFields.Clear();
             foreach (var p in sample.EnumerateObject())
+            {
                 EdFields.Add(
-                    new FieldEdit
-                    {
-                        SourcePath = p.Name,
-                        Column = Sanitize(p.Name),
-                        Type = InferType(p.Value),
-                    }
-                );
+                                new FieldEdit
+                                {
+                                    SourcePath = p.Name,
+                                    Column = Sanitize(p.Name),
+                                    Type = InferType(p.Value),
+                                }
+                            );
+            }
         }
         catch (Exception ex)
         {

@@ -1,11 +1,11 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Access;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;

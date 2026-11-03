@@ -21,19 +21,30 @@ public sealed class ChainStage
     public ChainStage(IEnumerable<Guid> jobIds, ChainGate? gate = null,
         IReadOnlyList<ChainStage>? elseBranch = null, ChainAction? action = null)
     {
-        if (jobIds is null) throw new ArgumentNullException(nameof(jobIds));
+        if (jobIds is null)
+        {
+            throw new ArgumentNullException(nameof(jobIds));
+        }
         _jobIds = jobIds.ToList();
         if (_jobIds.Count == 0 && action is null)
+        {
             throw new ArgumentException("A chain stage needs at least one job or an action.", nameof(jobIds));
+        }
         if (_jobIds.Count > 0 && action is not null)
+        {
             throw new ArgumentException("A chain stage cannot mix jobs and an action.", nameof(action));
+        }
         if (_jobIds.Any(id => id == Guid.Empty))
+        {
             throw new ArgumentException("Chain stage jobs must be real job ids.", nameof(jobIds));
+        }
         _elseBranch = elseBranch?.ToList();
         // shortcut: durable input resumes top-level stages; add a branch cursor before allowing nested hand-offs.
         if ((_elseBranch ?? []).Concat((gate as ConditionGate)?.ElseBranch ?? [])
             .Any(stage => stage.Action is LoopChainAction))
+        {
             throw new ArgumentException("Human and agent steps must be top-level stages. Use a condition gate on the step instead.");
+        }
         Gate = gate;
         Action = action;
     }
@@ -45,13 +56,19 @@ public sealed class ChainStage
     public bool IsParallel => _jobIds.Count > 1;
 
     /// <summary>A typed non-job action for this stage, mutually exclusive with <see cref="JobIds"/>.</summary>
-    public ChainAction? Action { get; }
+    public ChainAction? Action
+    {
+        get;
+    }
 
     /// <summary>Number of run-history entries this stage creates.</summary>
     public int ExecutionCount => Action is null ? _jobIds.Count : 1;
 
     /// <summary>Optional flow-control gate executed before this stage's jobs.</summary>
-    public ChainGate? Gate { get; }
+    public ChainGate? Gate
+    {
+        get;
+    }
 
     /// <summary>
     /// Optional alternative stages that run instead of this stage when a <see cref="ConditionGate"/>

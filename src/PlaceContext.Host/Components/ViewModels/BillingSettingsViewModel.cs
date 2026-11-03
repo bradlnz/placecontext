@@ -4,36 +4,100 @@ using PlaceContext.Application.Billing;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-/// <summary>Admin-only subscription view. Reads consumption from the durable run ledger;
-/// checkout and portal navigation use Stripe-hosted pages.</summary>
 public sealed class BillingSettingsViewModel(
     IRunAllowance allowance, IRunBillingPortal portal, NavigationManager navigation,
-    IOptions<StripeRunBillingOptions> settings, PortalUiState ui) : PageViewModel
+    PortalUiState ui, IOptions<RunBillingDeploymentOptions> deployment) : PageViewModel
 {
     public RunAllowanceSnapshot? Current { get; private set; }
     public string? Error { get; private set; }
     public bool Busy { get; private set; }
-
-    public Uri? EnterpriseSalesUrl
+    public string? StartPlan { get; private set; }
+    public bool Welcome { get; private set; }
+    public string? CheckoutNotice { get; private set; }
+    public bool ManagedHosting => deployment.Value.ManagedHosting;
+    public bool HasActiveSubscription => Current is { Plan: not RunPlans.Developer, Status: "active" or "trialing" };
+    public bool CanManage => Current?.HasBillingAccount == true;
+    public bool CanChoosePlan => ManagedHosting && Current is not null && !HasActiveSubscription && !Busy;
+    public bool SubscriptionRequired => Current?.Status == "self_hosted_only";
+    public bool RunsUnavailable => Current is { CanRun: false };
+    public string SelectedPlanName => StartPlan is null ? "" : RunPlans.NameFor(StartPlan);
+    public string PlanName => SubscriptionRequired ? "Subscription required" : RunPlans.NameFor(Current?.Plan ?? RunPlans.Developer);
+    public string StatusLabel => Current?.Status switch
     {
-        get
+        "active" => "Active",
+        "trialing" => "Trial",
+        "past_due" => "Payment overdue",
+        "canceled" => "Canceled",
+        "unpaid" => "Unpaid",
+        "self_hosted_only" => "Choose a managed plan",
+        "configuration_required" => "Configuration required",
+        "incomplete" or "incomplete_expired" => "Payment incomplete",
+        _ => "Unavailable",
+    };
+    public string UsageLabel => $"{Current?.UsedRuns ?? 0:N0} top-level starts";
+    public string PeriodLabel => Current is { } plan
+        ? $"{plan.PeriodStart:yyyy-MM-dd} to {plan.PeriodEnd:yyyy-MM-dd} (UTC)"
+        : "Unavailable";
+    public string StartRateLabel => Current?.StartsPerMinute is { } rate
+        ? $"Up to {rate:N0} workflow/job starts per minute"
+        : "No application-imposed start pacing";
+    public Uri? EnterpriseSalesUrl => portal.EnterpriseSalesUrl;
+
+    public void SetParameters(string? startPlan, string? welcome, string? checkout)
+    {
+        StartPlan = startPlan is RunPlans.Basic or RunPlans.Standard ? startPlan : null;
+        Welcome = welcome == "1";
+        CheckoutNotice = checkout switch
         {
-            return Uri.TryCreate(settings.Value.EnterpriseSalesUrl, UriKind.Absolute, out var url)
-                && url.Scheme == Uri.UriSchemeHttps ? url : null;
-        }
+            "success" => "Checkout returned successfully. Your plan updates after payment confirmation; refresh if it is still pending.",
+            "cancel" => "Checkout was canceled. No plan change has been confirmed.",
+            _ => null,
+        };
     }
 
     public async Task LoadAsync()
     {
-        ui.Set("Billing", "Run allowances and subscription");
+        if (Busy)
+        {
+            return;
+        }
+        ui.Set("Billing & usage", "Workspace subscription, payments and usage");
         Busy = true;
-        try { Current = await allowance.GetAsync(); Error = null; }
-        catch { Error = "Could not load billing information."; }
-        finally { Busy = false; NotifyStateChanged(); }
+        Error = null;
+        Current = null;
+        NotifyStateChanged();
+        try
+        {
+            Current = await allowance.GetAsync();
+        }
+        catch
+        {
+            Error = "Could not load billing information. Try refreshing.";
+        }
+        finally
+        {
+            Busy = false;
+            NotifyStateChanged();
+        }
     }
 
-    public Task CheckoutAsync(string plan) => NavigateAsync(() => portal.CheckoutAsync(plan, Origin()));
-    public Task ManageAsync() => NavigateAsync(() => portal.PortalAsync(Origin()));
+    public Task CheckoutAsync(string plan)
+    {
+        if (!CanChoosePlan || plan is not (RunPlans.Basic or RunPlans.Standard))
+        {
+            return Task.CompletedTask;
+        }
+        return NavigateAsync(() => portal.CheckoutAsync(plan, Origin()));
+    }
+
+    public Task ManageAsync()
+    {
+        if (!CanManage)
+        {
+            return Task.CompletedTask;
+        }
+        return NavigateAsync(() => portal.PortalAsync(Origin()));
+    }
 
     private Uri Origin()
     {
@@ -43,10 +107,25 @@ public sealed class BillingSettingsViewModel(
 
     private async Task NavigateAsync(Func<Task<Uri>> start)
     {
-        if (Busy) return;
-        Busy = true; Error = null; NotifyStateChanged();
-        try { navigation.NavigateTo((await start()).ToString(), forceLoad: true); }
-        catch (Exception ex) { Error = ex.Message; }
-        finally { Busy = false; NotifyStateChanged(); }
+        if (Busy)
+        {
+            return;
+        }
+        Busy = true;
+        Error = null;
+        NotifyStateChanged();
+        try
+        {
+            navigation.NavigateTo((await start()).ToString(), forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Busy = false;
+            NotifyStateChanged();
+        }
     }
 }

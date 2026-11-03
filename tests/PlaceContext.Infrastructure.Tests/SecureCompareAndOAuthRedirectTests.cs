@@ -1,3 +1,4 @@
+using PlaceContext.Application.Auth;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
 
@@ -27,12 +28,12 @@ public class SecureCompareAndOAuthRedirectTests
     [InlineData("javascript:alert(1)", false)]
     [InlineData("", false)]
     public void Safe_redirect_uri_rules(string uri, bool expected)
-        => Assert.Equal(expected, EfOAuthClientStore.IsSafeRedirectUri(uri));
+        => Assert.Equal(expected, PlaceContext.Application.Auth.OAuthRedirectPolicy.IsSafeRedirectUri(uri));
 
     [Theory]
     [InlineData("http://localhost:3/x", true)]
     [InlineData("https://127.0.0.1/x", true)]
     [InlineData("https://app.example.com/cb", false)]
     public void Loopback_only_self_heal_rules(string uri, bool expected)
-        => Assert.Equal(expected, EfOAuthClientStore.IsLoopbackRedirectUri(uri));
+        => Assert.Equal(expected, PlaceContext.Application.Auth.OAuthRedirectPolicy.IsLoopbackRedirectUri(uri));
 }

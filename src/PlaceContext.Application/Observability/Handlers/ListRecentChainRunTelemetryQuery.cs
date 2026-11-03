@@ -1,6 +1,4 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Application.Observability;
 
 /// <summary>The most recent chain-run traces across the workspace, newest first — the Cluster/

@@ -1,10 +1,12 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
-using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Features;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application;
 using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers.Api;
@@ -47,7 +49,10 @@ public sealed class EntitiesController : ControllerBase
     [Authorize(Policy = Permission.DataRead)]
     public async Task<ActionResult<IReadOnlyList<EntityApiResponse>>> ListEntities()
     {
-        if (RequireProject() is { } err) return err;
+        if (RequireProject() is { } err)
+        {
+            return err;
+        }
         var entities = await _svc.ListDataEntitiesAsync(_project.ProjectId!.Value, HttpContext.RequestAborted);
         return Ok(entities.Select(EntityApiMapper.ToResponse).ToList());
     }
@@ -65,12 +70,21 @@ public sealed class EntitiesController : ControllerBase
         [FromQuery] int pageSize = 50)
     {
         if (ProjectDataReservedNames.IsReserved(entityName) || !EntityNameRe.IsMatch(entityName))
+        {
             return NotFound();
-        if (RequireProject() is { } err) return err;
-
+        }
+        if (RequireProject() is { } err)
+        {
+            return err;
+        }
         var entity = await FindEntityByNameAsync(entityName);
-        if (entity is null) return NotFound(new { error = $"Unknown entity '{entityName}' in this project." });
-
+        if (entity is null)
+        {
+            return NotFound(new
+            {
+                error = $"Unknown entity '{entityName}' in this project."
+            });
+        }
         var result = await _svc.QueryProjectTablePageAsync(
             entity.ProjectId, entity.TableName, search, page, pageSize, ct: HttpContext.RequestAborted);
 
@@ -89,18 +103,36 @@ public sealed class EntitiesController : ControllerBase
         [FromBody] RunJobRequest? request = null)
     {
         if (ProjectDataReservedNames.IsReserved(entityName) || !EntityNameRe.IsMatch(entityName))
+        {
             return NotFound();
-        if (RequireProject() is { } err) return err;
-
+        }
+        if (RequireProject() is { } err)
+        {
+            return err;
+        }
         var entity = await FindEntityByNameAsync(entityName);
-        if (entity is null) return NotFound(new { error = $"Unknown entity '{entityName}' in this project." });
-
+        if (entity is null)
+        {
+            return NotFound(new
+            {
+                error = $"Unknown entity '{entityName}' in this project."
+            });
+        }
         var job = await _svc.GetJobAsync(jobId, HttpContext.RequestAborted);
         if (job is null || job.ProjectId != entity.ProjectId)
-            return NotFound(new { error = $"No job '{jobId}' for project '{entityName}'." });
+        {
+            return NotFound(new
+            {
+                error = $"No job '{jobId}' for project '{entityName}'."
+            });
+        }
         if (!job.AllowApiInvocation)
-            return StatusCode(403, new { error = $"Job '{job.Name}' is not enabled for API invocation." });
-
+        {
+            return StatusCode(403, new
+            {
+                error = $"Job '{job.Name}' is not enabled for API invocation."
+            });
+        }
         var result = await _svc.RunJobAsync(jobId, request?.InputPayload, request?.RunId, HttpContext.RequestAborted);
         return Ok(result);
     }
@@ -116,14 +148,28 @@ public sealed class EntitiesController : ControllerBase
         [FromBody] RunJobRequest? request = null)
     {
         if (ProjectDataReservedNames.IsReserved(jobName) || !EntityNameRe.IsMatch(jobName))
+        {
             return NotFound();
-        if (RequireProject() is { } err) return err;
-
+        }
+        if (RequireProject() is { } err)
+        {
+            return err;
+        }
         var job = await FindJobByNameAsync(jobName, _project.ProjectId!.Value);
-        if (job is null) return NotFound(new { error = $"No job '{jobName}' for this project." });
+        if (job is null)
+        {
+            return NotFound(new
+            {
+                error = $"No job '{jobName}' for this project."
+            });
+        }
         if (!job.AllowApiInvocation)
-            return StatusCode(403, new { error = $"Job '{job.Name}' is not enabled for API invocation." });
-
+        {
+            return StatusCode(403, new
+            {
+                error = $"Job '{job.Name}' is not enabled for API invocation."
+            });
+        }
         var result = await _svc.RunJobAsync(job.Id, request?.InputPayload, request?.RunId, HttpContext.RequestAborted);
         return Ok(result);
     }
@@ -136,12 +182,21 @@ public sealed class EntitiesController : ControllerBase
     public async Task<IActionResult> GetByKey(string entityName, string key)
     {
         if (ProjectDataReservedNames.IsReserved(entityName) || !EntityNameRe.IsMatch(entityName))
+        {
             return NotFound();
-        if (RequireProject() is { } err) return err;
-
+        }
+        if (RequireProject() is { } err)
+        {
+            return err;
+        }
         var entity = await FindEntityByNameAsync(entityName);
-        if (entity is null) return NotFound(new { error = $"Unknown entity '{entityName}' in this project." });
-
+        if (entity is null)
+        {
+            return NotFound(new
+            {
+                error = $"Unknown entity '{entityName}' in this project."
+            });
+        }
         // Pull a page filtered by the key via the store's search (ILIKE across columns), then
         // narrow to an exact match on the label/first column client-side. Good enough for keys that
         // are unique-ish; avoids building ad-hoc SQL with untrusted identifiers beyond the table name.
@@ -156,8 +211,12 @@ public sealed class EntitiesController : ControllerBase
             .ToList();
 
         if (matches.Count == 0)
-            return NotFound(new { error = $"No '{entity.Name}' row with key '{key}'." });
-
+        {
+            return NotFound(new
+            {
+                error = $"No '{entity.Name}' row with key '{key}'."
+            });
+        }
         return Ok(new EntityRecordsResponse(
             entity.Id, entity.Name, entity.TableName,
             result.Columns.ToList(), matches, matches.Count, 1, matches.Count));
@@ -165,7 +224,10 @@ public sealed class EntitiesController : ControllerBase
 
     private ActionResult? RequireProject()
     {
-        if (_project.IsResolved) return null;
+        if (_project.IsResolved)
+        {
+            return null;
+        }
         return BadRequest(new
         {
             error = "No project resolved. Pass X-Project-Id (GUID) or X-Project (name) on the request.",
@@ -190,17 +252,35 @@ public sealed class EntitiesController : ControllerBase
     /// </summary>
     public static bool EntityNameMatches(DataEntityView e, string entityName)
     {
-        if (string.Equals(e.Name, entityName, StringComparison.OrdinalIgnoreCase)) return true;
-        if (string.Equals(e.TableName, entityName, StringComparison.OrdinalIgnoreCase)) return true;
-        if (string.Equals(ProjectDataReservedNames.Slug(e.Name), entityName, StringComparison.OrdinalIgnoreCase)) return true;
-        if (string.Equals(ProjectDataReservedNames.Slug(e.TableName), entityName, StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(e.Name, entityName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (string.Equals(e.TableName, entityName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (string.Equals(ProjectDataReservedNames.Slug(e.Name), entityName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (string.Equals(ProjectDataReservedNames.Slug(e.TableName), entityName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
         return false;
     }
 
     public static bool JobNameMatches(JobView job, string jobName)
     {
-        if (string.Equals(job.Name, jobName, StringComparison.OrdinalIgnoreCase)) return true;
-        if (string.Equals(ProjectDataReservedNames.Slug(job.Name), jobName, StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(job.Name, jobName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (string.Equals(ProjectDataReservedNames.Slug(job.Name), jobName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
         return false;
     }
 
@@ -208,12 +288,19 @@ public sealed class EntitiesController : ControllerBase
 
     private static int ResolveLabelIndex(DataEntityView entity, IReadOnlyList<string> columns)
     {
-        if (columns.Count == 0) return -1;
+        if (columns.Count == 0)
+        {
+            return -1;
+        }
         if (!string.IsNullOrWhiteSpace(entity.LabelColumn))
         {
             for (var i = 0; i < columns.Count; i++)
+            {
                 if (string.Equals(columns[i], entity.LabelColumn, StringComparison.OrdinalIgnoreCase))
+                {
                     return i;
+                }
+            }
         }
         return 0;
     }

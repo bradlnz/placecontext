@@ -32,8 +32,12 @@ public sealed class TokenCostCalculator
     {
         var m = (model ?? string.Empty).ToLowerInvariant();
         foreach (var (family, rate) in _rates)
+        {
             if (m.Contains(family, StringComparison.Ordinal))
+            {
                 return rate;
+            }
+        }
         return _fallback;
     }
 

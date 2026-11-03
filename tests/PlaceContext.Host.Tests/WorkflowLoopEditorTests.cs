@@ -1,4 +1,5 @@
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Workload.VirtualMachines;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.ViewModels;
 
@@ -17,7 +18,7 @@ public class WorkflowLoopEditorTests
         vm.SaveLoopAction();
         Assert.Null(vm.LoopError);
         var stages = vm.BuildCanvasStageViews();
-        var toolStage = PlaceContext.Host.Build.WorkflowStage.FromView(Assert.Single(stages));
+        var toolStage = PlaceContext.Application.Build.WorkflowStage.FromView(Assert.Single(stages));
         Assert.Equal(LoopChainAction.JevAgent, Assert.IsType<LoopChainAction>(toolStage.ToStage().Action).AgentProvider);
         var reopened = new JobChainsViewModel(null!, null!, null!, null!, null!);
         await reopened.OpenChainEditorAsync(new JobChainView(Guid.NewGuid(), Guid.NewGuid(), "Verify", null, stages, DateTimeOffset.UtcNow));
@@ -38,7 +39,7 @@ public class WorkflowLoopEditorTests
         vm.SaveQemuAction();
         Assert.NotNull(vm.QemuError);
         Assert.Empty(vm.EdStages);
-        vm.QemuImageProfile = "browser";
+        vm.VirtualMachineImageProfile = "browser";
         vm.QemuCommand = "Open the browser and report its page title.";
         vm.QemuMemoryMb = 2048;
         vm.QemuAllowNetwork = true;
@@ -48,7 +49,7 @@ public class WorkflowLoopEditorTests
         await reopened.OpenChainEditorAsync(new JobChainView(Guid.NewGuid(), Guid.NewGuid(), "VM task", null, vm.BuildCanvasStageViews(), DateTimeOffset.UtcNow));
         Assert.True(reopened.IsDetailsTab);
         reopened.EditQemuAction(0);
-        Assert.Equal("browser", reopened.QemuImageProfile);
+        Assert.Equal("browser", reopened.VirtualMachineImageProfile);
         Assert.Equal("Open the browser and report its page title.", reopened.QemuCommand);
         Assert.Equal(2048, reopened.QemuMemoryMb);
         Assert.True(reopened.QemuAllowNetwork);

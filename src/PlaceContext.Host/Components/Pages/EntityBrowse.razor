@@ -1,9 +1,9 @@
+@using PlaceContext.Application.Access
 @page "/project/{ProjectId:guid}/entity/{EntityName}"
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @attribute [Authorize(Policy = Permission.DataRead)]
 @implements IDisposable
 @using PlaceContext.Application.Features
-@using PlaceContext.Application.Ports
 @using PlaceContext.Host.Components.ViewModels
 @using PlaceContext.Host.Components.ViewModels.Helpers
 @inject EntityBrowseViewModel Vm
@@ -239,7 +239,7 @@
                                     {
                                         var cell = i < row.Count ? row[i] : null;
                                         <td class="data-cell" style="color:@Vm.CellColor(pg.Columns[i]); font-weight:@Vm.CellWeight(pg.Columns[i])">
-                                            <OpenSearchDataValue ProjectId="ProjectId" Column="@pg.Columns[i]" Value="@cell" />
+                                            <SearchDataValue ProjectId="ProjectId" Column="@pg.Columns[i]" Value="@cell" />
                                         </td>
                                     }
                                 </tr>
@@ -340,7 +340,7 @@
                         <dt class="field-dt">@Vm.Rows.Columns[i]</dt>
                         var cell = i < Vm.Open.Count ? Vm.Open[i] : null;
                         <dd class="field-dd">
-                            <OpenSearchDataValue ProjectId="ProjectId" Column="@Vm.Rows.Columns[i]" Value="@cell" />
+                            <SearchDataValue ProjectId="ProjectId" Column="@Vm.Rows.Columns[i]" Value="@cell" />
                         </dd>
                     }
                 </dl>

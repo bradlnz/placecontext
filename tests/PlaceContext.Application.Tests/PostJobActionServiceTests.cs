@@ -1,6 +1,7 @@
 using System.Text;
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -360,8 +361,10 @@ public class PostJobActionServiceTests
         {
             IEnumerable<RunArtifactLink> q = Links.Where(l => l.ProjectId == projectId);
             if (!string.IsNullOrWhiteSpace(search))
+            {
                 q = q.Where(l => l.Title.Contains(search, StringComparison.OrdinalIgnoreCase)
-                              || l.Kind.ToString().Contains(search, StringComparison.OrdinalIgnoreCase));
+                                          || l.Kind.ToString().Contains(search, StringComparison.OrdinalIgnoreCase));
+            }
             return Task.FromResult<IReadOnlyList<RunArtifactLink>>(q.Take(take).ToList());
         }
         public Task<IReadOnlyList<RunArtifactLink>> ListPendingOcrAsync(int take, CancellationToken ct = default)

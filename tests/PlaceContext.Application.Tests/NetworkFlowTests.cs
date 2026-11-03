@@ -1,6 +1,8 @@
 using System.Text.Json;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Networking;
+using PlaceContext.Application.Workload;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
 
@@ -75,7 +77,12 @@ public sealed class NetworkFlowTests
     public async Task Live_test_uses_the_saved_policy_and_reports_the_observation(string status)
     {
         var (service, runner, network) = Setup();
-        runner.EnqueueResult(new(0, JsonSerializer.Serialize(new { status, sourceAddress = "10.20.0.2", elapsedMs = 12.3 }), "", ""));
+        runner.EnqueueResult(new(0, JsonSerializer.Serialize(new
+        {
+            status,
+            sourceAddress = "10.20.0.2",
+            elapsedMs = 12.3
+        }), "", ""));
         var result = await service.CheckAsync(network.ProjectId, network.Id, network.Groups[0].Id, "egress", "TCP", "10.20.0.10", 443, true);
         Assert.Equal(status, result.Status);
         Assert.Equal(12.3, result.ElapsedMs);

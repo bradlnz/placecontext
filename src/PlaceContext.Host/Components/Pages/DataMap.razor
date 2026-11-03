@@ -1,3 +1,5 @@
+@using PlaceContext.Application.Access
+@using PlaceContext.Application.ProjectData
 @page "/project/{ProjectId:guid}/datamap"
 @attribute [Authorize(Policy = Permission.DataRead)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
@@ -155,7 +157,7 @@ else
                     <label>Target table <span class="req">*</span></label>
                     <input class="dcinput" @bind="Vm.EdTable" list="pc-datamap-tables" placeholder="listings" />
                     <datalist id="pc-datamap-tables">
-                        @foreach (var t in Vm.Tables ?? Array.Empty<PlaceContext.Application.Ports.ProjectTableInfo>())
+                        @foreach (var t in Vm.Tables ?? Array.Empty<PlaceContext.Application.ProjectData.ProjectTableInfo>())
                         {
                             <option value="@t.Name" />
                         }

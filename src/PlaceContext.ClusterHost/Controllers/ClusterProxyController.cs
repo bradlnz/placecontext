@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PlaceContext.Application.Cluster;
 
 namespace PlaceContext.ClusterHost;
 
@@ -15,14 +16,14 @@ public sealed class ClusterProxyController : ControllerBase
     private const int MaxEmbeddingInputs = 32;
     private const int MaxEmbeddingChars = 4_000;
 
-    private readonly ClusterPipeline _pipeline;
-    private readonly ClusterProxyService _svc;
+    private readonly IClusterInference _pipeline;
+    private readonly IClusterHealth _svc;
     private readonly ClusterProxyOptions _opts;
     private readonly ILogger<ClusterProxyController> _log;
 
     public ClusterProxyController(
-        ClusterPipeline pipeline,
-        ClusterProxyService svc,
+        IClusterInference pipeline,
+        IClusterHealth svc,
         Microsoft.Extensions.Options.IOptions<ClusterProxyOptions> opts,
         ILogger<ClusterProxyController> log)
     {
@@ -37,15 +38,25 @@ public sealed class ClusterProxyController : ControllerBase
     public IActionResult Health()
     {
         var healthy = _svc.HealthyEndpoints;
-        return Ok(new { status = healthy.Count > 0 ? "ok" : "no_shards", healthy = healthy.Count, total = _opts.ShardEndpoints.Count, model = _opts.Model });
+        return Ok(new
+        {
+            status = healthy.Count > 0 ? "ok" : "no_shards",
+            healthy = healthy.Count,
+            total = _opts.ShardEndpoints.Count,
+            model = _opts.Model
+        });
     }
 
     [HttpPost("chat")]
     public async Task<IActionResult> Chat([FromBody] ClusterChatRequest req)
     {
         if (Validate(req) is { } error)
-            return BadRequest(new { error });
-
+        {
+            return BadRequest(new
+            {
+                error
+            });
+        }
         try
         {
             var text = await _pipeline.GenerateAsync(req, HttpContext.RequestAborted);
@@ -61,7 +72,10 @@ public sealed class ClusterProxyController : ControllerBase
         catch (Exception ex)
         {
             _log.LogError(ex, "Pipeline chat failed");
-            return StatusCode(502, new { error = "The cluster chat request failed." });
+            return StatusCode(502, new
+            {
+                error = "The cluster chat request failed."
+            });
         }
     }
 
@@ -80,12 +94,19 @@ public sealed class ClusterProxyController : ControllerBase
         try
         {
             var vectors = await _pipeline.EmbedAsync(req.Input, HttpContext.RequestAborted);
-            return Ok(new { vectors, dimensions = vectors.Count > 0 ? vectors[0].Length : 0 });
+            return Ok(new
+            {
+                vectors,
+                dimensions = vectors.Count > 0 ? vectors[0].Length : 0
+            });
         }
         catch (Exception ex)
         {
             _log.LogError(ex, "Pipeline embeddings failed");
-            return StatusCode(502, new { error = "The cluster embedding request failed." });
+            return StatusCode(502, new
+            {
+                error = "The cluster embedding request failed."
+            });
         }
     }
 
@@ -95,7 +116,10 @@ public sealed class ClusterProxyController : ControllerBase
         if (Validate(req) is { } validationError)
         {
             Response.StatusCode = StatusCodes.Status400BadRequest;
-            await Response.WriteAsJsonAsync(new { error = validationError }, HttpContext.RequestAborted);
+            await Response.WriteAsJsonAsync(new
+            {
+                error = validationError
+            }, HttpContext.RequestAborted);
             return;
         }
 
@@ -106,7 +130,10 @@ public sealed class ClusterProxyController : ControllerBase
         {
             await foreach (var token in _pipeline.GenerateStreamAsync(req, HttpContext.RequestAborted))
             {
-                var chunk = new { choices = new[] { new { delta = new { content = token }, finish_reason = (string?)null } } };
+                var chunk = new
+                {
+                    choices = new[] { new { delta = new { content = token }, finish_reason = (string?)null } }
+                };
                 await Response.WriteAsync($"data: {JsonSerializer.Serialize(chunk)}\n\n", HttpContext.RequestAborted);
                 await Response.Body.FlushAsync(HttpContext.RequestAborted);
             }
@@ -118,7 +145,10 @@ public sealed class ClusterProxyController : ControllerBase
             _log.LogError(ex, "Pipeline stream failed");
             try
             {
-                var error = JsonSerializer.Serialize(new { error = "The cluster streaming request failed." });
+                var error = JsonSerializer.Serialize(new
+                {
+                    error = "The cluster streaming request failed."
+                });
                 await Response.WriteAsync($"data: {error}\n\ndata: [DONE]\n\n");
             }
             catch { }
@@ -128,22 +158,32 @@ public sealed class ClusterProxyController : ControllerBase
     private static string? Validate(ClusterChatRequest req)
     {
         if (req.Messages.Count is 0 or > MaxMessages)
+        {
             return $"messages must contain 1-{MaxMessages} entries.";
+        }
         if (req.Messages.Any(message =>
-                message.Role is not ("system" or "user" or "assistant")
-                || string.IsNullOrWhiteSpace(message.Content)
-                || message.Content.Length > MaxMessageChars))
+                        message.Role is not ("system" or "user" or "assistant")
+                        || string.IsNullOrWhiteSpace(message.Content)
+                        || message.Content.Length > MaxMessageChars))
         {
             return $"Each message must use a supported role and contain at most {MaxMessageChars} characters.";
         }
         if (req.Messages.Sum(message => (long)message.Content.Length) > MaxPromptChars)
+        {
             return $"The combined message content must not exceed {MaxPromptChars} characters.";
+        }
         if (req.MaxTokens is < 1 or > MaxTokens)
+        {
             return $"max_tokens must be between 1 and {MaxTokens}.";
+        }
         if (req.Temperature is < 0 or > 2)
+        {
             return "temperature must be between 0 and 2.";
+        }
         if (req.TopP is <= 0 or > 1)
+        {
             return "top_p must be greater than 0 and at most 1.";
+        }
         return null;
     }
 }

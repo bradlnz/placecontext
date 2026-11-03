@@ -1,4 +1,6 @@
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Networking;
+using PlaceContext.Application.Workload;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
 using Xunit;
@@ -24,7 +26,7 @@ public class NetworkEgressTests
             new ReduceSpec("reducer", new Dictionary<string, string>()), 1, ExitCodePolicy.Default, T0);
         await jobs.AddAsync(job);
         var group = new NetworkSecurityGroup(Guid.NewGuid(), "Isolated", []);
-        var network = new PlaceContext.Application.Ports.WorkerNetwork(Guid.NewGuid(), job.ProjectId, "Workers", "10.20.0.0/24", [group]);
+        var network = new PlaceContext.Application.Networking.WorkerNetwork(Guid.NewGuid(), job.ProjectId, "Workers", "10.20.0.0/24", [group]);
         await networks.SaveAsync(network);
         await networks.AssignAsync(job.ProjectId, job.Id, network.Id, group.Id);
         var handler = new RunJobHandler(jobs, runs, runner, new RecordingUnitOfWork(), new FakeClock(T0), networks: networks);

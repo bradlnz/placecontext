@@ -1,36 +1,61 @@
-using PlaceContext.Domain.ValueObjects;
 using System.Text.Json;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application;
+using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class JobChainsViewModel
 {
     // ── Pipeline runs state ───────────────────────────────────────────────────────────────────
-    public IReadOnlyList<ChainRunView>? ChainRuns { get; private set; }
-    public ChainRunView? OpenRun { get; private set; }
-    public JobRunDetailView? StepRunDetail { get; private set; }
-    public Guid? SelectedStepRunId { get; private set; }
-    public DateTimeOffset? LiveOutputUpdatedAt { get; private set; }
-    public string? LiveOutputText { get; private set; }
-    public string? StepOutputError { get; private set; }
+    public IReadOnlyList<ChainRunView>? ChainRuns
+    {
+        get; private set;
+    }
+    public ChainRunView? OpenRun
+    {
+        get; private set;
+    }
+    public JobRunDetailView? StepRunDetail
+    {
+        get; private set;
+    }
+    public Guid? SelectedStepRunId
+    {
+        get; private set;
+    }
+    public DateTimeOffset? LiveOutputUpdatedAt
+    {
+        get; private set;
+    }
+    public string? LiveOutputText
+    {
+        get; private set;
+    }
+    public string? StepOutputError
+    {
+        get; private set;
+    }
     public IReadOnlyList<(string Path, string Value)> ContextRows =>
         FlattenContext(OpenRun?.FinalOutput);
-    public bool FollowNewest { get; set; }
+    public bool FollowNewest
+    {
+        get; set;
+    }
     private CancellationTokenSource? _pollCts;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
 
     private static IReadOnlyList<(string Path, string Value)> FlattenContext(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
+        {
             return Array.Empty<(string, string)>();
+        }
         try
         {
             using var doc = JsonDocument.Parse(json);
@@ -53,11 +78,13 @@ public sealed partial class JobChainsViewModel
         if (node.ValueKind == JsonValueKind.Object)
         {
             foreach (var property in node.EnumerateObject())
+            {
                 Flatten(
-                    property.Value,
-                    string.IsNullOrEmpty(path) ? property.Name : $"{path}.{property.Name}",
-                    rows
-                );
+                                property.Value,
+                                string.IsNullOrEmpty(path) ? property.Name : $"{path}.{property.Name}",
+                                rows
+                            );
+            }
             return;
         }
         if (node.ValueKind == JsonValueKind.Array)
@@ -69,7 +96,10 @@ public sealed partial class JobChainsViewModel
     }
 
     // ── Run-input prompt state ────────────────────────────────────────────────────────────────
-    public JobChainView? RunPromptChain { get; private set; }
+    public JobChainView? RunPromptChain
+    {
+        get; private set;
+    }
     public List<(int Index, JobView Job)> RunPromptSteps { get; } = new();
     public Dictionary<string, string> RunArgs => _runPrompt.Args;
     public string? RunPromptError => _runPrompt.Error;
@@ -77,14 +107,24 @@ public sealed partial class JobChainsViewModel
 
     private readonly ParameterPromptState _resumePrompt = new();
     private Guid? _resumeRequestId;
-    public string? ResumeError { get; private set; }
-    public bool Resuming { get; private set; }
-    public bool? PendingHumanAnswer { get; private set; }
+    public string? ResumeError
+    {
+        get; private set;
+    }
+    public bool Resuming
+    {
+        get; private set;
+    }
+    public bool? PendingHumanAnswer
+    {
+        get; private set;
+    }
     private Guid? _pendingHumanRunId;
     private Guid? _pendingHumanRequestId;
     public bool HumanConfirmationCurrent => PendingHumanAnswer is not null
-        && OpenRun?.Id == _pendingHumanRunId
-        && OpenRun.InputRequest is { } request
+        && OpenRun is { } currentRun
+        && currentRun.Id == _pendingHumanRunId
+        && currentRun.InputRequest is { } request
         && request.Id == _pendingHumanRequestId
         && request.SubmittedValues is null
         && request.Kind == LoopChainAction.HumanType
@@ -100,7 +140,9 @@ public sealed partial class JobChainsViewModel
     {
         if (Resuming || _submissions is null || OpenRun is not { } run || !NeedsHumanInput(run)
             || run.InputRequest is not { ResponseType: LoopChainAction.YesNoResponse, SubmittedValues: null } request)
+        {
             return;
+        }
         PendingHumanAnswer = answer;
         _pendingHumanRunId = run.Id;
         _pendingHumanRequestId = request.Id;
@@ -109,16 +151,25 @@ public sealed partial class JobChainsViewModel
 
     public void CancelHumanAnswer()
     {
-        if (Resuming) return;
+        if (Resuming)
+        {
+            return;
+        }
         ClearHumanConfirmation();
         NotifyStateChanged();
     }
 
     public async Task ConfirmHumanAnswerAsync()
     {
-        if (!HumanConfirmationCurrent || PendingHumanAnswer is not { } answer || Resuming) return;
+        if (!HumanConfirmationCurrent || PendingHumanAnswer is not { } answer || Resuming)
+        {
+            return;
+        }
         await ResumeWithInputsCoreAsync(answer);
-        if (ResumeError is null) ClearHumanConfirmation();
+        if (ResumeError is null)
+        {
+            ClearHumanConfirmation();
+        }
         NotifyStateChanged();
     }
 
@@ -137,8 +188,12 @@ public sealed partial class JobChainsViewModel
             _resumeRequestId = OpenRun?.InputRequest?.Id;
             ResumeError = null;
             foreach (var step in OpenRun?.InputRequest?.Steps ?? [])
+            {
                 foreach (var field in step.Parameters)
+                {
                     _resumePrompt.Set(ArgKey(step.Index, field.Name), step.Values?.GetValueOrDefault(field.Name)?.ToString() ?? "");
+                }
+            }
         }
         return _resumePrompt.Get(ArgKey(index, name));
     }
@@ -150,23 +205,35 @@ public sealed partial class JobChainsViewModel
 
     private async Task ResumeWithInputsCoreAsync(bool? answer)
     {
-        if (OpenRun?.InputRequest is not { } request || _submissions is null || Resuming) return;
+        if (OpenRun?.InputRequest is not { } request || _submissions is null || Resuming)
+        {
+            return;
+        }
         Resuming = true;
         ResumeError = null;
         try
         {
             if (request.ResponseType == LoopChainAction.YesNoResponse && answer is null)
+            {
                 throw new ArgumentException("Choose Yes or No to continue.");
+            }
             var values = request.Steps.ToDictionary(step => step.Index.ToString(), step =>
-                request.ResponseType == LoopChainAction.YesNoResponse
-                    ? JsonSerializer.SerializeToElement(step.Parameters.ToDictionary(field => field.Name, _ => answer!.Value))
-                    : JsonSerializer.Deserialize<JsonElement>(ParameterPromptState.ToJsonPayload(step.Parameters,
-                        name => GetResumeArg(step.Index, name))));
+                            request.ResponseType == LoopChainAction.YesNoResponse
+                                ? JsonSerializer.SerializeToElement(step.Parameters.ToDictionary(field => field.Name, _ => answer!.Value))
+                                : JsonSerializer.Deserialize<JsonElement>(ParameterPromptState.ToJsonPayload(step.Parameters,
+                                    name => GetResumeArg(step.Index, name))));
             await _submissions.ResumeAsync(OpenRun.Id, request.Id, JsonSerializer.Serialize(values));
             await RefreshRunsAsync(OpenRun.ChainId);
         }
-        catch (Exception ex) { ResumeError = ex.Message; }
-        finally { Resuming = false; NotifyStateChanged(); }
+        catch (Exception ex)
+        {
+            ResumeError = ex.Message;
+        }
+        finally
+        {
+            Resuming = false;
+            NotifyStateChanged();
+        }
     }
 
     // ── Run workflow ─────────────────────────────────────────────────────────────────────────────
@@ -191,8 +258,9 @@ public sealed partial class JobChainsViewModel
     public async Task SubmitRunPromptAsync()
     {
         if (RunPromptChain is null)
+        {
             return;
-
+        }
         if (!_runPrompt.ValidateChainStepParameters(RunPromptSteps))
         {
             NotifyStateChanged();
@@ -230,10 +298,12 @@ public sealed partial class JobChainsViewModel
             try
             {
                 if (_submissions is null)
+                {
                     throw new InvalidOperationException("Managed workflow submissions are not configured.");
+                }
                 var receipt = await _submissions.EnqueueAsync(ProjectId, chain.Id, payload,
-                    idempotencyKey: "portal:" + chainRunId.ToString("N"),
-                    stepPayloadOverrides: stepOverrides);
+                                    idempotencyKey: "portal:" + chainRunId.ToString("N"),
+                                    stepPayloadOverrides: stepOverrides);
                 chainRunId = receipt.ChainRunId;
                 _pendingSubmissionId = receipt.TrackingId;
             }
@@ -244,7 +314,7 @@ public sealed partial class JobChainsViewModel
                 return;
             }
         }
-        else
+        if (!_managedHosting)
         {
             var err = _ops.TryRun(
                 ProjectId,
@@ -293,7 +363,9 @@ public sealed partial class JobChainsViewModel
             await _svc.CancelChainRunAsync(chainRunId);
             Message = "Workflow run cancellation requested.";
             if (OpenRun?.Id == chainRunId && OpenRun is { } run)
+            {
                 await RefreshRunsAsync(run.ChainId);
+            }
         }
         catch (Exception ex)
         {
@@ -309,7 +381,9 @@ public sealed partial class JobChainsViewModel
             await _svc.CancelJobRunAsync(runId);
             StepRunDetail = null;
             if (OpenRun is { } run)
+            {
                 await RefreshRunsAsync(run.ChainId);
+            }
             Message = "Step run cancellation requested.";
         }
         catch (Exception ex)
@@ -325,7 +399,9 @@ public sealed partial class JobChainsViewModel
         EditorTab = "runs";
         StepRunDetail = null;
         if (EditChainId is { } chainId)
+        {
             await RefreshRunsAsync(chainId);
+        }
     }
 
     public async Task OpenChainRunAsync(ChainRunView run)
@@ -339,7 +415,9 @@ public sealed partial class JobChainsViewModel
         LiveOutputText = null;
         await RefreshStepOutputAsync(run);
         if (!IsTerminal(run.Status))
+        {
             StartPolling(run.ChainId);
+        }
         NotifyStateChanged();
     }
 
@@ -366,13 +444,14 @@ public sealed partial class JobChainsViewModel
             if (step.RunId is { } rid)
             {
                 var detail = await _svc.GetJobRunAsync(rid);
-                if (SelectedStepRunId != rid) return;
+                if (SelectedStepRunId != rid)
+                {
+                    return;
+                }
                 StepRunDetail = detail;
                 UpdateLiveOutput(rid);
                 LiveOutputUpdatedAt = DateTimeOffset.UtcNow;
             }
-            else
-                StepRunDetail = null;
         }
         catch
         {
@@ -389,7 +468,10 @@ public sealed partial class JobChainsViewModel
     {
         var step = Guid.TryParse(runId, out var id)
             ? OpenRun?.Steps.FirstOrDefault(step => step.RunId == id) : null;
-        if (step is not null) return OpenStepRunAsync(step);
+        if (step is not null)
+        {
+            return OpenStepRunAsync(step);
+        }
         CloseStepRun();
         return Task.CompletedTask;
     }
@@ -409,56 +491,74 @@ public sealed partial class JobChainsViewModel
         await _refreshLock.WaitAsync();
         try
         {
-            if (version != _pageVersion || EditChainId != chainId) return;
+            if (version != _pageVersion || EditChainId != chainId)
+            {
+                return;
+            }
             var runs = await _svc.ListChainRunsAsync(chainId);
-            if (version != _pageVersion || EditChainId != chainId) return;
+            if (version != _pageVersion || EditChainId != chainId)
+            {
+                return;
+            }
             ChainRuns = runs;
             if (PendingHumanAnswer is not null && !HumanConfirmationCurrent)
+            {
                 ClearHumanConfirmation();
-
+            }
             var targetId = pendingChainRunId ?? PendingChainRunId;
-            if (targetId is { } pending)
+            async Task SelectRunAsync()
             {
-                // If the pending run has appeared, open it and start/continue polling.
-                if (ChainRuns.FirstOrDefault(r => r.Id == pending) is { } pendingRun)
+                if (targetId is { } pending)
                 {
-                    OpenRun = pendingRun;
-                    _pendingSubmissionId = null;
-                    FollowNewest = true;
-                    await RefreshStepOutputAsync(pendingRun);
-                    if (IsTerminal(pendingRun.Status))
+                    async Task SelectPendingRunAsync()
                     {
-                        PendingChainRunId = null;
-                        PendingChainId = null;
+                        if (ChainRuns.FirstOrDefault(r => r.Id == pending) is { } pendingRun)
+                        {
+                            OpenRun = pendingRun;
+                            _pendingSubmissionId = null;
+                            FollowNewest = true;
+                            await RefreshStepOutputAsync(pendingRun);
+                            if (IsTerminal(pendingRun.Status))
+                            {
+                                PendingChainRunId = null;
+                                PendingChainId = null;
+                            }
+                            return;
+                        }
+                        if (_pendingSubmissionId is { } receiptId && _submissions is not null)
+                        {
+                            var receipt = await _submissions.GetAsync(receiptId);
+                            if (receipt is null || receipt.Status is "Failed" or "Expired" or "Cancelled")
+                            {
+                                Message = receipt?.Error ?? "This queued workflow could not be started.";
+                                PendingChainRunId = null;
+                                PendingChainId = null;
+                                _pendingSubmissionId = null;
+                            }
+                        }
                     }
-                }
-                else if (_pendingSubmissionId is { } receiptId && _submissions is not null)
-                {
-                    var receipt = await _submissions.GetAsync(receiptId);
-                    if (receipt is null || receipt.Status is "Failed" or "Expired" or "Cancelled")
+                    await SelectPendingRunAsync();                    // Keep polling until a queued run appears or the submission fails.
+                    if (PendingChainRunId is not null)
                     {
-                        Message = receipt?.Error ?? "This queued workflow could not be started.";
-                        PendingChainRunId = null;
-                        PendingChainId = null;
-                        _pendingSubmissionId = null;
-                    }
-                }
-                // Keep polling until a queued run appears or the submission fails.
-                if (PendingChainRunId is not null)
-                    StartPolling(chainId);
-            }
-            else if (OpenRun is { } current)
-            {
-                var updated = ChainRuns.FirstOrDefault(r => r.Id == current.Id);
-                if (updated is not null)
-                {
-                    OpenRun = updated;
-                    await RefreshStepOutputAsync(updated);
-                    if (!IsTerminal(updated.Status))
                         StartPolling(chainId);
+                    }
+                    return;
+                }
+                if (OpenRun is { } current)
+                {
+                    var updated = ChainRuns.FirstOrDefault(r => r.Id == current.Id);
+                    if (updated is not null)
+                    {
+                        OpenRun = updated;
+                        await RefreshStepOutputAsync(updated);
+                        if (!IsTerminal(updated.Status))
+                        {
+                            StartPolling(chainId);
+                        }
+                    }
                 }
             }
-
+            await SelectRunAsync();
             // If the pending run is terminal and no longer needed, clear it.
             if (
                 PendingChainRunId is { } stillPending
@@ -508,7 +608,10 @@ public sealed partial class JobChainsViewModel
         try
         {
             var detail = await _svc.GetJobRunAsync(runId.Value);
-            if (SelectedStepRunId != runId || OpenRun?.Id != run.Id) return;
+            if (SelectedStepRunId != runId || OpenRun?.Id != run.Id)
+            {
+                return;
+            }
             StepRunDetail = detail;
             StepOutputError = null;
             UpdateLiveOutput(runId.Value);
@@ -517,7 +620,9 @@ public sealed partial class JobChainsViewModel
         {
             // Keep the last good output visible through a transient refresh failure.
             if (SelectedStepRunId == runId)
+            {
                 StepOutputError = "Log refresh failed. Showing the last available output; retrying while the run is active.";
+            }
         }
     }
 
@@ -531,7 +636,9 @@ public sealed partial class JobChainsViewModel
     private void StartPolling(Guid chainId)
     {
         if (_pollCts is not null)
+        {
             return;
+        }
         _pollCts = new CancellationTokenSource();
         var ct = _pollCts.Token;
         _ = Task.Run(
@@ -541,8 +648,9 @@ public sealed partial class JobChainsViewModel
                 {
                     await Task.Delay(1000, ct).ConfigureAwait(false);
                     if (ct.IsCancellationRequested)
+                    {
                         break;
-
+                    }
                     try
                     {
                         await RefreshRunsAsync(chainId);
@@ -551,7 +659,9 @@ public sealed partial class JobChainsViewModel
                             && OpenRun is { } open
                             && IsTerminal(open.Status)
                         )
+                        {
                             break;
+                        }
                     }
                     catch { }
                 }

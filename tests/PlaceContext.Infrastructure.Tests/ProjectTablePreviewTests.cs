@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Npgsql;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Infrastructure.ProjectData;
 
 namespace PlaceContext.Infrastructure.Tests;
@@ -12,7 +12,9 @@ public sealed class ProjectTablePreviewTests
     {
         var schema = "preview_test_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_POSTGRES"))
-            { SearchPath = schema }.ConnectionString;
+        {
+            SearchPath = schema
+        }.ConnectionString;
         await using var connection = new NpgsqlConnection(cs);
         await connection.OpenAsync();
         await using var setup = new NpgsqlCommand($"""
@@ -24,7 +26,7 @@ public sealed class ProjectTablePreviewTests
         await setup.ExecuteNonQueryAsync();
         try
         {
-            var store = new NpgsqlProjectDataStore(new ConfigurationBuilder().Build(), new ExternalDatabase(cs));
+            var store = new SqlProjectDataStore(new ConfigurationBuilder().Build(), new ExternalDatabase(cs));
             var project = Guid.NewGuid();
             var schemas = await store.ListTableSchemasAsync(project);
             Assert.Equal(2, schemas.Count);

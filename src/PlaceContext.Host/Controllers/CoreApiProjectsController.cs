@@ -36,8 +36,12 @@ public sealed class CoreApiProjectsController : ControllerBase
     {
         var project = await _resource.GetProjectAsync(projectId, HttpContext.RequestAborted);
         if (project is null)
-            return NotFound(new { error = "Project not found." });
-
+        {
+            return NotFound(new
+            {
+                error = "Project not found."
+            });
+        }
         return Ok(CoreApiMapper.ToResponse(project));
     }
 
@@ -46,9 +50,16 @@ public sealed class CoreApiProjectsController : ControllerBase
     public async Task<ActionResult<CoreProjectResponse>> CreateProject([FromBody] CoreCreateProjectRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Path))
-            return BadRequest(new { error = "path is required." });
-
+        {
+            return BadRequest(new
+            {
+                error = "path is required."
+            });
+        }
         var project = await _svc.CreateProjectAsync(request.Path, request.Name, HttpContext.RequestAborted);
-        return CreatedAtAction(nameof(GetProject), new { projectId = project.Id }, CoreApiMapper.ToResponse(project));
+        return CreatedAtAction(nameof(GetProject), new
+        {
+            projectId = project.Id
+        }, CoreApiMapper.ToResponse(project));
     }
 }

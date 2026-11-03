@@ -1,6 +1,7 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Secrets;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -18,7 +19,10 @@ public sealed class AddProjectSecretHandler : ICommandHandler<AddProjectSecretCo
     public async Task<ProjectSecretView> HandleAsync(AddProjectSecretCommand c, CancellationToken ct = default)
     {
         var name = (c.Name ?? "").Trim();
-        if (name.Length == 0) throw new InvalidOperationException("Secret name is required.");
+        if (name.Length == 0)
+        {
+            throw new InvalidOperationException("Secret name is required.");
+        }
         var now = _clock.UtcNow;
         await _secrets.AddAsync(c.ProjectId, name, _protector.Protect(c.Value ?? ""), now, ct);
         await _uow.SaveChangesAsync(ct);

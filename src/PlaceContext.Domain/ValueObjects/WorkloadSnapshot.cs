@@ -22,8 +22,9 @@ public sealed class WorkloadSnapshot
         ArgumentNullException.ThrowIfNull(inputPayloads);
         ArgumentNullException.ThrowIfNull(mapEnv);
         if (concurrencyLimit < 1)
+        {
             throw new ArgumentOutOfRangeException(nameof(concurrencyLimit));
-
+        }
         MapSource = mapSource;
         InputPayloads = inputPayloads;
         MapEnv = mapEnv;
@@ -35,26 +36,50 @@ public sealed class WorkloadSnapshot
     }
 
     /// <summary>The workload source (image or code) that was run for each map shard.</summary>
-    public WorkloadSource MapSource { get; }
+    public WorkloadSource MapSource
+    {
+        get;
+    }
 
     /// <summary>Opaque JSON payloads — one per shard — as they were at run-start.</summary>
-    public IReadOnlyList<string> InputPayloads { get; }
+    public IReadOnlyList<string> InputPayloads
+    {
+        get;
+    }
 
     /// <summary>Environment variables injected into each map shard container.</summary>
-    public IReadOnlyDictionary<string, string> MapEnv { get; }
+    public IReadOnlyDictionary<string, string> MapEnv
+    {
+        get;
+    }
 
     /// <summary>Workload source for the reduce step; null = no reduce step ran.</summary>
-    public WorkloadSource? ReduceSource { get; }
+    public WorkloadSource? ReduceSource
+    {
+        get;
+    }
 
     /// <summary>Environment variables injected into the reduce container; null = no reduce step.</summary>
-    public IReadOnlyDictionary<string, string>? ReduceEnv { get; }
+    public IReadOnlyDictionary<string, string>? ReduceEnv
+    {
+        get;
+    }
 
     /// <summary>Max concurrent map shards as configured at run-start.</summary>
-    public int ConcurrencyLimit { get; }
+    public int ConcurrencyLimit
+    {
+        get;
+    }
 
     /// <summary>Whether outbound network access was permitted for this run's containers.</summary>
-    public bool AllowNetworkEgress { get; }
-    public WorkerNetworkPolicy? Network { get; }
+    public bool AllowNetworkEgress
+    {
+        get;
+    }
+    public WorkerNetworkPolicy? Network
+    {
+        get;
+    }
 
     /// <summary>Factory: snapshot from a job's current specs.</summary>
     public static WorkloadSnapshot From(

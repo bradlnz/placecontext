@@ -1,5 +1,4 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Workload;
 namespace PlaceContext.TestSupport;
 
 /// <summary>
@@ -24,7 +23,9 @@ public sealed class FakeWorkloadRunner : IWorkloadRunner
     public void EnqueueSuccessResults(int count, string artifact = "{}")
     {
         for (var i = 0; i < count; i++)
+        {
             _canned.Enqueue(new WorkloadRunResult(0, artifact, "stdout", ""));
+        }
     }
 
     /// <summary>Convenience: enqueue a failed result (exit 1, no artifact).</summary>
@@ -36,7 +37,10 @@ public sealed class FakeWorkloadRunner : IWorkloadRunner
         => _canned.Enqueue(new WorkloadRunResult(exitCode, artifact, "partial stdout", ""));
 
     /// <summary>Best-effort no-op — tests that verify cancellation track it here.</summary>
-    public int CancelCallCount { get; private set; }
+    public int CancelCallCount
+    {
+        get; private set;
+    }
     public List<string> CancelledCorrelationIds { get; } = new();
 
     public Task CancelAsync(string correlationId, CancellationToken ct = default)
@@ -51,8 +55,9 @@ public sealed class FakeWorkloadRunner : IWorkloadRunner
         ReceivedRequests.Add(request);
 
         if (_canned.TryDequeue(out var result))
+        {
             return Task.FromResult(result);
-
+        }
         // Default: success with minimal artifact.
         return Task.FromResult(new WorkloadRunResult(0, "{}", "stdout", ""));
     }

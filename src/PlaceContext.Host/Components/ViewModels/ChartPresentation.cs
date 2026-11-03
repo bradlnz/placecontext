@@ -13,7 +13,9 @@ internal static class ChartPresentation
     public static string Duration(DateTimeOffset start, DateTimeOffset? finish)
     {
         if (finish is not { } end)
+        {
             return "—";
+        }
         var span = end - start;
         return span.TotalSeconds < 60
             ? $"{(int)span.TotalSeconds}s"

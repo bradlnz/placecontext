@@ -1,7 +1,10 @@
-using System.Net;
 using System.Net.Sockets;
+using System.Net;
 using System.Text.Json;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Networking;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Workload;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
@@ -13,12 +16,18 @@ public sealed class NetworkFlowService(IWorkerNetworkService networks, IPermissi
         string direction, string protocol, string address, int port, bool live, CancellationToken ct = default)
     {
         if (!tenant.IsResolved || !await permissions.HasAsync(Permission.SettingsManage, ct))
+        {
             throw new UnauthorizedAccessException("Network administration permission is required.");
+        }
         var ip = ValidateAddress(address);
         if (direction is not ("ingress" or "egress") || protocol is not ("TCP" or "UDP") || port is < 1 or > 65535)
+        {
             throw new ArgumentException("Choose a direction, TCP or UDP, and a port between 1 and 65535.");
+        }
         if (live && (direction != "egress" || protocol != "TCP"))
+        {
             throw new ArgumentException("Live tests support outbound TCP connections. Use Check rules for inbound or UDP traffic.");
+        }
         var state = await networks.LoadAsync(projectId, ct);
         var network = state.Networks.SingleOrDefault(item => item.Id == networkId)
             ?? throw new ArgumentException("Choose a VPC in this project.");
@@ -30,18 +39,31 @@ public sealed class NetworkFlowService(IWorkerNetworkService networks, IPermissi
             direction, protocol, address, port, matches, "Rules checked",
             matches.Length > 0 ? "A saved rule allows this flow. Routing and destination reachability have not been tested."
                 : "No saved rule allows this flow. New connections should be blocked.", null, DateTimeOffset.UtcNow);
-        if (!live) return result;
-
+        if (!live)
+        {
+            return result;
+        }
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(TimeSpan.FromSeconds(120));
-        var request = new WorkloadRunRequest(null, JsonSerializer.Serialize(new { address, port }),
+        var request = new WorkloadRunRequest(null, JsonSerializer.Serialize(new
+        {
+            address,
+            port
+        }),
             new Dictionary<string, string>(), [], "netprobe-" + Guid.NewGuid().ToString("N"),
             [("probe.py", ProbeScript)], "python", "probe.py", AllowNetworkEgress: false, TimeoutSeconds: 90,
             Network: new(tenant.TenantId, network.Id, network.Cidr, group));
         try
         {
             var run = await runner.RunAsync(request, deadline.Token);
-            if (run.ExitCode != 0) return result with { Status = "Test could not run", Message = Limit(string.IsNullOrWhiteSpace(run.Stderr) ? run.Stdout : run.Stderr) };
+            if (run.ExitCode != 0)
+            {
+                return result with
+                {
+                    Status = "Test could not run",
+                    Message = Limit(string.IsNullOrWhiteSpace(run.Stderr) ? run.Stdout : run.Stderr)
+                };
+            }
             using var output = JsonDocument.Parse(run.Artifact ?? run.Stdout);
             var root = output.RootElement;
             var status = root.GetProperty("status").GetString();
@@ -54,13 +76,31 @@ public sealed class NetworkFlowService(IWorkerNetworkService networks, IPermissi
                 "Unreachable" => "The worker could not reach the destination. Check its route, gateway, and destination availability.",
                 _ => throw new InvalidOperationException("The worker returned an invalid probe result."),
             };
-            return result with { Status = status!, Message = message, ElapsedMs = root.GetProperty("elapsedMs").GetDouble(),
-                SourceAddress = root.TryGetProperty("sourceAddress", out var source) ? source.GetString() : null, CheckedAt = DateTimeOffset.UtcNow };
+            return result with
+            {
+                Status = status!,
+                Message = message,
+                ElapsedMs = root.GetProperty("elapsedMs").GetDouble(),
+                SourceAddress = root.TryGetProperty("sourceAddress", out var source) ? source.GetString() : null,
+                CheckedAt = DateTimeOffset.UtcNow
+            };
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        { return result with { Status = "Test could not run", Message = "The worker test exceeded its two-minute startup and execution limit." }; }
+        {
+            return result with
+            {
+                Status = "Test could not run",
+                Message = "The worker test exceeded its two-minute startup and execution limit."
+            };
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
-        { return result with { Status = "Test could not run", Message = Limit(ex.Message) }; }
+        {
+            return result with
+            {
+                Status = "Test could not run",
+                Message = Limit(ex.Message)
+            };
+        }
     }
 
     public static IPAddress ValidateAddress(string address)
@@ -68,7 +108,9 @@ public sealed class NetworkFlowService(IWorkerNetworkService networks, IPermissi
         if (!IPAddress.TryParse(address, out var ip) || ip.AddressFamily != AddressFamily.InterNetwork || ip.ToString() != address
             || IPAddress.IsLoopback(ip) || ip.GetAddressBytes()[0] is 0 or >= 224
             || (ip.GetAddressBytes()[0] == 169 && ip.GetAddressBytes()[1] == 254))
+        {
             throw new ArgumentException("Enter a unicast IPv4 address, such as 10.20.0.10. Hostnames, loopback, and link-local addresses are not supported.");
+        }
         return ip;
     }
 

@@ -198,7 +198,7 @@ public sealed class TargetShellMvvmMigrationTests
     [Fact]
     public void Param_input_view_model_preserves_file_marker_display_and_accept_catalog()
     {
-        var vm = new ParamInputViewModel(null!, null!);
+        var vm = new ParamInputViewModel(null!);
         var parameter = new JobParameterDto(
             "attachment",
             "Attachment",
@@ -221,7 +221,9 @@ public sealed class TargetShellMvvmMigrationTests
         {
             var host = Path.Combine(directory.FullName, "src", "PlaceContext.Host");
             if (Directory.Exists(host))
+            {
                 return File.ReadAllText(Path.Combine(host, relativePath));
+            }
             directory = directory.Parent;
         }
 

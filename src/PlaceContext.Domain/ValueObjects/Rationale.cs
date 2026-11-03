@@ -10,7 +10,10 @@ public sealed record Rationale
     /// <summary>Sentinel for "no rationale recorded" — drives an process-risk signal.</summary>
     public static readonly Rationale None = new(string.Empty);
 
-    public string Value { get; }
+    public string Value
+    {
+        get;
+    }
 
     private Rationale(string value) => Value = value;
 
@@ -19,8 +22,9 @@ public sealed record Rationale
     public static Rationale Of(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
+        {
             throw new ArgumentException("A present Rationale must not be blank; use Rationale.None.", nameof(value));
-
+        }
         return new Rationale(value.Trim());
     }
 

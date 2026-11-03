@@ -1,0 +1,1 @@
+Do recent actions show repeated failure or no progress? Initial actions or waiting briefly for page loading are not stuck.

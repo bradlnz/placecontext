@@ -39,7 +39,9 @@ public sealed class ScopedStatusModeStringContractTests
         {
             var path = Path.Combine(directory.FullName, "src", "PlaceContext.Host", relativePath);
             if (File.Exists(path))
+            {
                 return File.ReadAllText(path);
+            }
             directory = directory.Parent;
         }
 

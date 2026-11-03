@@ -1,8 +1,8 @@
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Application.Shared;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -10,7 +10,10 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed partial class EntityBrowseViewModel
 {
     // ── Records tab ───────────────────────────────────────────────────────────────────────────
-    public ProjectTablePageResult? Page { get; private set; }
+    public ProjectTablePageResult? Page
+    {
+        get; private set;
+    }
     private List<IReadOnlyList<string?>>? _pageRowsCache;
     public List<IReadOnlyList<string?>> PageRows =>
         _pageRowsCache ??= Page?.Rows.ToList() ?? new();
@@ -29,7 +32,9 @@ public sealed partial class EntityBrowseViewModel
     public async Task LoadRecordsPageAsync()
     {
         if (Entity is null)
+        {
             return;
+        }
         var version = ++_recordsVersion;
         var loadVersion = _loadVersion;
         try
@@ -42,14 +47,20 @@ public sealed partial class EntityBrowseViewModel
                 RecordsPageSize,
                 includeTotalCount: false
             );
-            if (version != _recordsVersion || loadVersion != _loadVersion) return;
+            if (version != _recordsVersion || loadVersion != _loadVersion)
+            {
+                return;
+            }
             Page = page;
             _pageRowsCache = null;
             Rows = new(Page.Columns, Page.Rows, 0, Page.TotalCount > Page.Rows.Count);
         }
         catch (Exception ex)
         {
-            if (version == _recordsVersion && loadVersion == _loadVersion) Error = ex.Message;
+            if (version == _recordsVersion && loadVersion == _loadVersion)
+            {
+                Error = ex.Message;
+            }
         }
         NotifyStateChanged();
     }
@@ -57,10 +68,14 @@ public sealed partial class EntityBrowseViewModel
     public async Task GoToPageAsync(int page)
     {
         if (Page is null)
+        {
             return;
+        }
         var target = Math.Clamp(page, 1, TotalPages(Page));
         if (target == PageNum)
+        {
             return;
+        }
         PageNum = target;
         await LoadRecordsPageAsync();
     }
@@ -84,7 +99,9 @@ public sealed partial class EntityBrowseViewModel
             return;
         }
         if (cts.IsCancellationRequested)
+        {
             return;
+        }
         await LoadRecordsPageAsync();
         NotifyStateChanged();
     }
@@ -99,7 +116,9 @@ public sealed partial class EntityBrowseViewModel
     public string? LabelCol()
     {
         if (Rows is null)
+        {
             return Entity?.LabelColumn;
+        }
         var cols = Rows.Columns;
         if (
             Entity?.LabelColumn is { Length: > 0 } configured
@@ -108,7 +127,9 @@ public sealed partial class EntityBrowseViewModel
             )
                 is { } exact
         )
+        {
             return exact;
+        }
         for (var i = 0; i < cols.Count; i++)
         {
             var c = cols[i];
@@ -117,10 +138,14 @@ public sealed partial class EntityBrowseViewModel
                 || c.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(c, "ingested_at", StringComparison.OrdinalIgnoreCase)
             )
+            {
                 continue;
+            }
             var v = Rows.Rows.FirstOrDefault() is { } first && i < first.Count ? first[i] : null;
             if (v is null || double.TryParse(v, out _))
+            {
                 continue;
+            }
             return c;
         }
         return cols.FirstOrDefault();
@@ -129,7 +154,9 @@ public sealed partial class EntityBrowseViewModel
     public string RecordLabel(IReadOnlyList<string?> row)
     {
         if (Rows is null)
+        {
             return Entity?.Name ?? "";
+        }
         var idx = LabelCol() is { } c ? Rows.Columns.ToList().IndexOf(c) : 0;
         return (idx >= 0 && idx < row.Count ? row[idx] : null) ?? Entity?.Name ?? "";
     }
@@ -152,7 +179,9 @@ public sealed partial class EntityBrowseViewModel
                 string.Equals(c, label, StringComparison.OrdinalIgnoreCase)
             );
             if (li >= 0 && li < row.Count && !string.IsNullOrEmpty(row[li]))
+            {
                 return row[li]!;
+            }
         }
         var values = columns
             .Where(c =>
@@ -184,7 +213,9 @@ public sealed partial class EntityBrowseViewModel
         RunArtifacts.Clear();
         ShowGraph = true;
         if (Entity is null || Rows is null)
+        {
             return;
+        }
         await LoadLinkedArtifactsAsync(row);
         await LoadAutoLinksAsync(row);
         foreach (var rel in Entity.Relations)
@@ -196,7 +227,9 @@ public sealed partial class EntityBrowseViewModel
                 .Columns.ToList()
                 .FindIndex(c => string.Equals(c, rel.Column, StringComparison.OrdinalIgnoreCase));
             if (target is null || colIdx < 0 || colIdx >= row.Count || row[colIdx] is not { } value)
+            {
                 continue;
+            }
             try
             {
                 var related = await _svc.ExecuteProjectDataAsync(
@@ -213,13 +246,17 @@ public sealed partial class EntityBrowseViewModel
     private async Task LoadAutoLinksAsync(IReadOnlyList<string?> row)
     {
         if (Entity is null || Rows is null)
+        {
             return;
+        }
         try
         {
             var columns = await _svc.ListProjectTableColumnsAsync(ProjectId, Entity.TableName);
             var rowKey = ComputeRowKey(Entity.TableName, row, Rows.Columns, AllEntities, columns);
             if (string.IsNullOrEmpty(rowKey))
+            {
                 return;
+            }
             AutoLinks = await _svc.RelatedRecordLinksAsync(ProjectId, Entity.TableName, rowKey);
         }
         catch { }
@@ -241,7 +278,9 @@ public sealed partial class EntityBrowseViewModel
     public async Task StartEditAsync()
     {
         if (Entity is null)
+        {
             return;
+        }
         Creating = false;
         Editing = true;
         EditError = null;
@@ -260,27 +299,37 @@ public sealed partial class EntityBrowseViewModel
             KeySnapshot[FormColumns[i].Name] = v;
         }
         var label = LabelCol();
-        if (label is not null && KeySnapshot.ContainsKey(label))
-            KeySnapshot = new Dictionary<string, string?>(StringComparer.Ordinal)
-            {
-                [label] = KeySnapshot[label],
-            };
-        else
+        void ResolveRecord()
         {
-            var kept = KeySnapshot
-                .Where(kv => !string.IsNullOrEmpty(kv.Value))
-                .Take(3)
-                .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
-            if (kept.Count > 0)
-                KeySnapshot = kept;
+            if (label is not null && KeySnapshot.ContainsKey(label))
+            {
+                KeySnapshot = new Dictionary<string, string?>(StringComparer.Ordinal)
+                {
+                    [label] = KeySnapshot[label],
+                };
+                return;
+            }
+            {
+                var kept = KeySnapshot
+                    .Where(kv => !string.IsNullOrEmpty(kv.Value))
+                    .Take(3)
+                    .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+                if (kept.Count > 0)
+                {
+                    KeySnapshot = kept;
+                }
+            }
         }
+        ResolveRecord();
         NotifyStateChanged();
     }
 
     public async Task StartCreateAsync()
     {
         if (Entity is null)
+        {
             return;
+        }
         Creating = true;
         Editing = true;
         Open = null;
@@ -288,14 +337,16 @@ public sealed partial class EntityBrowseViewModel
         var columnInfos = await _svc.ListProjectTableColumnsAsync(ProjectId, Entity.TableName);
         FormColumns = columnInfos.Select(c => new FormColumn(c.Name, c.Type)).ToList();
         if (FormColumns.Count == 0 && Page is { Columns.Count: > 0 })
+        {
             FormColumns = Page
-                .Columns.Select(c => new FormColumn(c, DataColumnTypes.Text))
-                .ToList();
+                        .Columns.Select(c => new FormColumn(c, DataColumnTypes.Text))
+                        .ToList();
+        }
         FormValues = FormColumns.ToDictionary(
-            c => c.Name,
-            _ => (string?)null,
-            StringComparer.Ordinal
-        );
+                    c => c.Name,
+                    _ => (string?)null,
+                    StringComparer.Ordinal
+                );
         KeySnapshot.Clear();
         NotifyStateChanged();
     }
@@ -303,27 +354,30 @@ public sealed partial class EntityBrowseViewModel
     public async Task SaveRecordAsync()
     {
         if (Entity is null || FormValues.Count == 0)
+        {
             return;
+        }
         Saving = true;
         EditError = null;
         WarnMessage = null;
         try
         {
-            if (Creating)
+            async Task SaveRecordAsync()
             {
-                var created = await _svc.CreateEntityRecordAsync(
-                    ProjectId,
-                    Entity.TableName,
-                    FormValues
-                );
-                WarnMessage =
-                    created.DuplicateWarnings.Count > 0
-                        ? "Created — possible duplicate(s): "
-                            + string.Join("; ", created.DuplicateWarnings)
-                        : null;
-            }
-            else
-            {
+                if (Creating)
+                {
+                    var created = await _svc.CreateEntityRecordAsync(
+                        ProjectId,
+                        Entity.TableName,
+                        FormValues
+                    );
+                    WarnMessage =
+                        created.DuplicateWarnings.Count > 0
+                            ? "Created — possible duplicate(s): "
+                                + string.Join("; ", created.DuplicateWarnings)
+                            : null;
+                    return;
+                }
                 await _svc.UpdateEntityRecordAsync(
                     ProjectId,
                     Entity.TableName,
@@ -331,6 +385,7 @@ public sealed partial class EntityBrowseViewModel
                     FormValues
                 );
             }
+            await SaveRecordAsync();
             CloseRecordPanel();
             await ReloadPageAsync();
         }
@@ -348,7 +403,9 @@ public sealed partial class EntityBrowseViewModel
     public async Task DeleteOpenAsync()
     {
         if (Entity is null || Open is null || Rows is null)
+        {
             return;
+        }
         await StartEditAsync();
         Editing = false;
         try
@@ -368,7 +425,10 @@ public sealed partial class EntityBrowseViewModel
     {
         BrainGraph = null;
         await LoadRecordsPageAsync();
-        if (IsGraphTab) await SelectGraph();
+        if (IsGraphTab)
+        {
+            await SelectGraph();
+        }
     }
 
     // ── Record link graph (SVG) ──────────────────────────────────────────────────────────────

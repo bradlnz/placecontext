@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using PlaceContext.Application.Auth;
 using PlaceContext.Application;
-using PlaceContext.Infrastructure.Security;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -34,15 +34,22 @@ public sealed class IngestController : ControllerBase
     public async Task<IActionResult> Ingest(string eventName, Guid? projectId)
     {
         if (string.IsNullOrWhiteSpace(eventName) || eventName.Length > 200)
-            return BadRequest(new { error = "Event name is required and must not exceed 200 characters." });
+        {
+            return BadRequest(new
+            {
+                error = "Event name is required and must not exceed 200 characters."
+            });
+        }
         var configuredKey = _config["PlaceContext:Ingest:Key"];
         if (string.IsNullOrWhiteSpace(configuredKey))
+        {
             return StatusCode(StatusCodes.Status404NotFound);
-
+        }
         var presented = PresentedKey(Request);
         if (!SecureCompare.Equals(presented, configuredKey))
+        {
             return Unauthorized();
-
+        }
         string? payload = null;
         if (Request.ContentLength is > 0)
         {
@@ -51,7 +58,12 @@ public sealed class IngestController : ControllerBase
         }
 
         var result = await _svc.EmitEventAsync(eventName, projectId, payload, HttpContext.RequestAborted);
-        return Ok(new { result.Name, result.TriggeredRuns, result.OccurredAt });
+        return Ok(new
+        {
+            result.Name,
+            result.TriggeredRuns,
+            result.OccurredAt
+        });
     }
 
     /// <summary>Accept the purpose-built header plus the two authentication shapes used by the
@@ -60,10 +72,13 @@ public sealed class IngestController : ControllerBase
     {
         var key = request.Headers["X-Ingest-Key"].ToString();
         if (string.IsNullOrWhiteSpace(key))
+        {
             key = request.Headers["X-Api-Key"].ToString();
+        }
         if (!string.IsNullOrWhiteSpace(key))
+        {
             return key.Trim();
-
+        }
         var authorization = request.Headers.Authorization.ToString();
         const string bearer = "Bearer ";
         return authorization.StartsWith(bearer, StringComparison.OrdinalIgnoreCase)

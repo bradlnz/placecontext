@@ -1,7 +1,8 @@
-using System.Text;
 using System.Text.Json;
+using System.Text;
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -85,7 +86,9 @@ public sealed class ProjectChartService
         // Build the spec from the data itself; a table with nothing chartable stores a themed HTML
         // table so the tab always renders something.
         if (ChartSpec.FromSample(tableName, result) is { } fallback)
+        {
             return fallback.ToJson();
+        }
         return LlmHtml.StyleChart(FallbackTable(tableName, result));
     }
 
@@ -95,12 +98,18 @@ public sealed class ProjectChartService
         var sb = new StringBuilder("<html><head></head><body>");
         sb.Append("<h1>").Append(Escape(tableName)).Append("</h1>");
         sb.Append("<p>Nothing chartable in this table — here is the sampled data itself.</p><table><thead><tr>");
-        foreach (var col in result.Columns) sb.Append("<th>").Append(Escape(col)).Append("</th>");
+        foreach (var col in result.Columns)
+        {
+            sb.Append("<th>").Append(Escape(col)).Append("</th>");
+        }
         sb.Append("</tr></thead><tbody>");
         foreach (var row in result.Rows.Take(50))
         {
             sb.Append("<tr>");
-            foreach (var cell in row) sb.Append("<td>").Append(Escape(cell ?? "∅")).Append("</td>");
+            foreach (var cell in row)
+            {
+                sb.Append("<td>").Append(Escape(cell ?? "∅")).Append("</td>");
+            }
             sb.Append("</tr>");
         }
         sb.Append("</tbody></table></body></html>");

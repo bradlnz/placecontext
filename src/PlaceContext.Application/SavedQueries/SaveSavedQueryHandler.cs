@@ -1,6 +1,6 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.SavedQueries;
+using PlaceContext.Application.Shared;
 namespace PlaceContext.Application.Features;
 
 public sealed class SaveSavedQueryHandler
@@ -16,10 +16,13 @@ public sealed class SaveSavedQueryHandler
         SaveSavedQueryCommand command, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(command.Name))
+        {
             throw new ArgumentException("Query name is required.", nameof(command));
+        }
         if (string.IsNullOrWhiteSpace(command.Sql))
+        {
             throw new ArgumentException("Query SQL is required.", nameof(command));
-
+        }
         var name = command.Name.Trim();
         var existing = await _store.FindByNameAsync(command.ProjectId, name, ct);
         var now = _clock.UtcNow;

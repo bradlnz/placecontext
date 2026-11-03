@@ -1,9 +1,9 @@
 using System.Diagnostics;
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Jobs;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -23,7 +23,10 @@ public sealed class GetJobTestCaseHandler
         GetJobTestCaseQuery query, CancellationToken ct = default)
     {
         var test = await _tests.GetAsync(query.TestId, ct);
-        if (test is null) return null;
+        if (test is null)
+        {
+            return null;
+        }
         var job = await _jobs.GetByIdAsync(test.JobId, ct);
         return SaveJobTestCaseHandler.ToView(test, job?.Name ?? "Deleted job");
     }

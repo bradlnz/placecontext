@@ -1,8 +1,8 @@
 using System.Globalization;
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application;
 using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -19,18 +19,42 @@ public sealed class JobTestsViewModel : PageViewModel
         NavigationManager navigation
     ) => (_service, _ui, _navigation) = (service, ui, navigation);
 
-    public Guid ProjectId { get; private set; }
+    public Guid ProjectId
+    {
+        get; private set;
+    }
     public IReadOnlyList<JobView> Jobs { get; private set; } = Array.Empty<JobView>();
     public List<JobTestCaseView> Tests { get; } = new();
     public HashSet<Guid> Running { get; } = new();
     public bool Loading { get; private set; } = true;
-    public bool Editing { get; private set; }
-    public bool Saving { get; private set; }
-    public string? Message { get; private set; }
-    public bool MessageIsError { get; private set; }
-    public Guid? ConfirmDelete { get; set; }
-    public Guid? EditId { get; private set; }
-    public Guid EditJobId { get; set; }
+    public bool Editing
+    {
+        get; private set;
+    }
+    public bool Saving
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
+    public bool MessageIsError
+    {
+        get; private set;
+    }
+    public Guid? ConfirmDelete
+    {
+        get; set;
+    }
+    public Guid? EditId
+    {
+        get; private set;
+    }
+    public Guid EditJobId
+    {
+        get; set;
+    }
     public string EditName { get; set; } = "";
     public string EditInput { get; set; } = "";
     public JobTestAssertionType EditAssertion { get; set; } = JobTestAssertionType.Succeeds;
@@ -174,7 +198,9 @@ public sealed class JobTestsViewModel : PageViewModel
     public async Task RunAsync(Guid id)
     {
         if (!Running.Add(id))
+        {
             return;
+        }
         ConfirmDelete = null;
         try
         {
@@ -194,13 +220,15 @@ public sealed class JobTestsViewModel : PageViewModel
     public async Task RunAllAsync()
     {
         foreach (var test in EnabledTests)
+        {
             await RunAsync(test.Id);
+        }
         ShowMessage(
-            FailedCount == 0
-                ? $"All {EnabledTests.Sum(MethodCount)} enabled test methods passed."
-                : $"{FailedCount} test methods failed.",
-            FailedCount > 0
-        );
+                    FailedCount == 0
+                        ? $"All {EnabledTests.Sum(MethodCount)} enabled test methods passed."
+                        : $"{FailedCount} test methods failed.",
+                    FailedCount > 0
+                );
     }
 
     public async Task DeleteAsync(Guid id)
@@ -228,9 +256,11 @@ public sealed class JobTestsViewModel : PageViewModel
     {
         var index = Tests.FindIndex(test => test.Id == updated.Id);
         if (index < 0)
+        {
             Tests.Add(updated);
-        else
-            Tests[index] = updated;
+            return;
+        }
+        Tests[index] = updated;
     }
 
     private void ShowMessage(string message, bool error = false)

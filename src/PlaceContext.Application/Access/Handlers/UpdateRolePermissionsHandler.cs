@@ -1,7 +1,8 @@
 using PlaceContext.Application.Access;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Membership;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -20,7 +21,9 @@ public sealed class UpdateRolePermissionsHandler : ICommandHandler<UpdateRolePer
         var definition = await _roles.GetByIdAsync(c.RoleId, ct)
             ?? throw new InvalidOperationException("No such role in this workspace.");
         if (string.Equals(definition.Name, nameof(UserRole.Owner), StringComparison.OrdinalIgnoreCase))
+        {
             throw new InvalidOperationException("The Owner role's permissions cannot be changed.");
+        }
         var permissions = RoleDefinitionValidation.ValidatePermissions(c.Permissions);
 
         await _roles.SetPermissionsAsync(c.RoleId, permissions, ct);

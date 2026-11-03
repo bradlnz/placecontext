@@ -1,9 +1,9 @@
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -46,14 +46,29 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
         EditorId = $"pctestmonaco-{Guid.NewGuid():N}";
     }
 
-    public Guid ProjectId { get; private set; }
-    public Guid TestId { get; private set; }
-    public string EditorId { get; }
+    public Guid ProjectId
+    {
+        get; private set;
+    }
+    public Guid TestId
+    {
+        get; private set;
+    }
+    public string EditorId
+    {
+        get;
+    }
     public JobTestCaseView? Test => _test;
-    public JobTestCaseView? LastResult { get; private set; }
+    public JobTestCaseView? LastResult
+    {
+        get; private set;
+    }
     public IReadOnlyList<EditorFile> Files => _files;
     public string RuntimeId { get; private set; } = DefaultRuntime;
-    public string? Entrypoint { get; private set; }
+    public string? Entrypoint
+    {
+        get; private set;
+    }
     public string? Message => _message;
     public string DefaultEntrypoint => JobTestRuntimeCatalog.DefaultEntrypoint(RuntimeId);
     public int ActiveIndex => _active;
@@ -62,14 +77,20 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
     public bool Running => _running;
     public bool Busy => _saving || _running;
     public bool PanelOpen { get; set; } = true;
-    public bool MonacoLite { get; private set; }
+    public bool MonacoLite
+    {
+        get; private set;
+    }
     public bool AddingFile => _addingFile;
     public string NewFileName
     {
         get => _newFileName;
         set => _newFileName = value;
     }
-    public ElementReference NewFileInput { get; set; }
+    public ElementReference NewFileInput
+    {
+        get; set;
+    }
 
     public void TogglePanel() => PanelOpen = !PanelOpen;
 
@@ -104,27 +125,32 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
         try
         {
             _test = await _service.GetJobTestCaseAsync(TestId);
-            if (_test is not null && _test.ProjectId != ProjectId)
+            void ApplyTest()
             {
-                _test = null;
-            }
-            else if (_test is not null)
-            {
-                RuntimeId = _test.RuntimeId ?? DefaultRuntime;
-                Entrypoint = _test.Entrypoint;
-                _files.Clear();
-                _files.AddRange(
-                    _test.CodeFiles.Select(file => new EditorFile(file.Path, file.Content))
-                );
-                if (_files.Count == 0)
+                if (_test is not null && _test.ProjectId != ProjectId)
                 {
-                    ApplyStarter(RuntimeId);
+                    _test = null;
+                    return;
                 }
+                if (_test is not null)
+                {
+                    RuntimeId = _test.RuntimeId ?? DefaultRuntime;
+                    Entrypoint = _test.Entrypoint;
+                    _files.Clear();
+                    _files.AddRange(
+                        _test.CodeFiles.Select(file => new EditorFile(file.Path, file.Content))
+                    );
+                    if (_files.Count == 0)
+                    {
+                        ApplyStarter(RuntimeId);
+                    }
 
-                _active = Math.Max(0, _files.FindIndex(file => file.Path == Entrypoint));
-                LastResult = _test.LastStatus == NotRunStatus ? null : _test;
-                _ui.Set(_test.Name, $"test code · {RuntimeId}");
+                    _active = Math.Max(0, _files.FindIndex(file => file.Path == Entrypoint));
+                    LastResult = _test.LastStatus == NotRunStatus ? null : _test;
+                    _ui.Set(_test.Name, $"test code · {RuntimeId}");
+                }
             }
+            ApplyTest();
         }
         catch (Exception exception)
         {
@@ -198,8 +224,9 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
         if (args.Key == "Enter")
         {
             await ConfirmAddFile();
+            return;
         }
-        else if (args.Key == "Escape")
+        if (args.Key == "Escape")
         {
             _addingFile = false;
         }
@@ -310,15 +337,19 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
         var starter = JobTestRuntimeCatalog.Starter(runtime);
         _files.Clear();
         _files.Add(new EditorFile(starter.Path, starter.Content));
-        if (runtime == JobTestRuntimeCatalog.Go)
+        void ApplyTestTemplate()
         {
-            _files.Add(new EditorFile("go.mod", "module placecontext_tests\n\ngo 1.23\n"));
+            if (runtime == JobTestRuntimeCatalog.Go)
+            {
+                _files.Add(new EditorFile("go.mod", "module placecontext_tests\n\ngo 1.23\n"));
+                return;
+            }
+            if (runtime == JobTestRuntimeCatalog.Python)
+            {
+                _files.Add(new EditorFile("requirements.txt", "pytest==8.4.1\n"));
+            }
         }
-        else if (runtime == JobTestRuntimeCatalog.Python)
-        {
-            _files.Add(new EditorFile("requirements.txt", "pytest==8.4.1\n"));
-        }
-
+        ApplyTestTemplate();
         Entrypoint = starter.Path;
         _active = 0;
     }
@@ -336,17 +367,19 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
         try
         {
             await SaveCoreAsync();
-            if (run)
+            async Task SaveTestAsync()
             {
-                LastResult = await _service.RunJobTestCaseAsync(TestId);
-                _test = LastResult;
-                PanelOpen = true;
-                _message = LastResult.LastStatus;
-            }
-            else
-            {
+                if (run)
+                {
+                    LastResult = await _service.RunJobTestCaseAsync(TestId);
+                    _test = LastResult;
+                    PanelOpen = true;
+                    _message = LastResult.LastStatus;
+                    return;
+                }
                 _message = successMessage;
             }
+            await SaveTestAsync();
         }
         catch (Exception exception)
         {
@@ -432,7 +465,13 @@ public sealed class JobTestCodeEditorViewModel : PageViewModel, IAsyncDisposable
             Content = content;
         }
 
-        public string Path { get; set; }
-        public string Content { get; set; }
+        public string Path
+        {
+            get; set;
+        }
+        public string Content
+        {
+            get; set;
+        }
     }
 }

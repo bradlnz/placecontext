@@ -1,14 +1,15 @@
 using System.Text.RegularExpressions;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
-using PlaceContext.Host.Branding;
-using PlaceContext.Infrastructure.Operations;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application.Organization;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application;
+using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -86,9 +87,18 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
 
     public TenantBranding Brand { get; private set; } = new();
     public string Theme { get; private set; } = ThemeNames.Light;
-    public bool SwitcherOpen { get; private set; }
-    public bool NavOpen { get; private set; }
-    public int RunningCount { get; private set; }
+    public bool SwitcherOpen
+    {
+        get; private set;
+    }
+    public bool NavOpen
+    {
+        get; private set;
+    }
+    public int RunningCount
+    {
+        get; private set;
+    }
     public string OrganizationName =>
         string.IsNullOrEmpty(_tenant.Slug) ? "organisation" : _tenant.Slug;
     public string RootPath =>
@@ -101,10 +111,19 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public IReadOnlyList<ProjectSummaryView> Projects => _projects;
     public IEnumerable<ResolvedMenuItem> TopLevel => _menu.Where(item => item.Parent is null);
     public IReadOnlyList<string> Entities => _entities;
-    public bool SearchOpen { get; private set; }
-    public bool Searching { get; private set; }
+    public bool SearchOpen
+    {
+        get; private set;
+    }
+    public bool Searching
+    {
+        get; private set;
+    }
     public string SearchTerm { get; private set; } = string.Empty;
-    public SearchResultsView? SearchResults { get; private set; }
+    public SearchResultsView? SearchResults
+    {
+        get; private set;
+    }
     public string? SearchEmptyMessage =>
         SearchTerm.Trim().Length >= 2
             ? $"No matches for “{SearchTerm}”."
@@ -134,11 +153,13 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         _ui.OnChanged += OnUiChanged;
         _operationSubscription?.Dispose();
         if (_tenant.IsResolved)
+        {
             _operationSubscription = _operations.Subscribe(_tenant.TenantId, OnOperationsChanged, _currentUser?.UserId);
+        }
         _navigation.LocationChanged += OnLocationChanged;
         _ui.SetMainNavOpener(OpenNavigation);
-        var brandTask = InScopeAsync<BrandingService, TenantBranding>(service =>
-            service.GetAsync()
+        var brandTask = InScopeAsync<PlaceContextService, TenantBranding>(service =>
+            service.GetTenantBrandingAsync()
         );
         var projectsTask = InScopeAsync<PlaceContextService, IReadOnlyList<ProjectSummaryView>>(
             service => service.GetProjectsAsync()
@@ -158,7 +179,9 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         }
         SyncProjectFromUrl(_navigation.Uri);
         if (_ui.CurrentProjectId is null && _projects.Count > 0)
+        {
             _ui.SetProject(_projects[0].Id, _projects[0].Name);
+        }
         await ReloadMenuAsync();
         RefreshRunningCount();
     }
@@ -208,11 +231,15 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         var marker = Routes.Entity;
         var index = path.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
         if (index < 0)
+        {
             return false;
+        }
         var segment = path[(index + marker.Length)..].TrimEnd('/');
         var slash = segment.IndexOf('/');
         if (slash >= 0)
+        {
             segment = segment[..slash];
+        }
         return segment.Equals(entityName, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -220,9 +247,13 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     {
         var children = ChildrenOf(item.Id).ToList();
         if (PathMatches(item.Href))
+        {
             return true;
+        }
         if (children.Any(child => PathMatches(child.Href)))
+        {
             return true;
+        }
         return item.Kind == MenuKinds.Entities && IsOnEntityPath(GetCurrentPath());
     }
 
@@ -233,7 +264,9 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         var wasExpanded = _expanded.Contains(id);
         _expanded.Clear();
         if (!wasExpanded)
+        {
             _expanded.Add(id);
+        }
     }
 
     public void ToggleSwitcher() => SwitcherOpen = !SwitcherOpen;
@@ -243,9 +276,11 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public void ToggleNavigation()
     {
         if (_ui.HasSubNav && _ui.ToggleSubNav is not null)
+        {
             _ui.ToggleSubNav();
-        else
-            NavOpen = !NavOpen;
+            return;
+        }
+        NavOpen = !NavOpen;
     }
 
     public void OpenNavigation() => _ = InvokeOnDispatcherAsync(() => NavOpen = true);
@@ -302,12 +337,18 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
             var results = await InScopeAsync<PlaceContextService, SearchResultsView>(service =>
                 service.SearchAsync(term, _ui.CurrentProjectId, token)
             );
-            if (!token.IsCancellationRequested) SearchResults = results;
+            if (!token.IsCancellationRequested)
+            {
+                SearchResults = results;
+            }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch
         {
-            if (!token.IsCancellationRequested) SearchResults = null;
+            if (!token.IsCancellationRequested)
+            {
+                SearchResults = null;
+            }
         }
         finally
         {
@@ -322,7 +363,9 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public void HandleSearchKey(string key)
     {
         if (key == "Escape")
+        {
             CloseSearch();
+        }
     }
 
     public void GoToSearchResult(SearchHit hit)
@@ -340,11 +383,13 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public string Initials(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             return "?";
+        }
         var parts = name.Split(
-            new[] { ' ', '.', '@', '_', '-' },
-            StringSplitOptions.RemoveEmptyEntries
-        );
+                    new[] { ' ', '.', '@', '_', '-' },
+                    StringSplitOptions.RemoveEmptyEntries
+                );
         return parts.Length switch
         {
             0 => "?",
@@ -380,7 +425,9 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
                 service => service.GetWorkspaceMenuAsync(_ui.CurrentProjectId)
             );
             if (menu.Count > 0)
+            {
                 _menu = menu;
+            }
         }
         catch { }
         await ReloadEntitiesAsync();
@@ -398,7 +445,9 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
             return;
         }
         if (_entitiesFor == projectId)
+        {
             return;
+        }
         _entities = Array.Empty<string>();
         _entitiesFor = null;
         try
@@ -418,7 +467,10 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     private void ExpandActiveGroups()
     {
         var active = _menu.FirstOrDefault(item => IsGroup(item) && IsGroupActive(item));
-        if (active is null) return;
+        if (active is null)
+        {
+            return;
+        }
         _expanded.Clear();
         _expanded.Add(active.Id);
     }
@@ -430,10 +482,16 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         SyncProjectFromUrl(args.Location);
         _ = InvokeOnDispatcherAsync(async () =>
         {
-            if (_ui.CurrentProjectId != before)
-                await ReloadMenuAsync();
-            else
+            async Task RefreshWorkspaceAsync()
+            {
+                if (_ui.CurrentProjectId != before)
+                {
+                    await ReloadMenuAsync();
+                    return;
+                }
                 await ReloadEntitiesAsync();
+            }
+            await RefreshWorkspaceAsync();
             ExpandActiveGroups();
         });
     }
@@ -442,17 +500,24 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     {
         var match = ProjectIdPattern.Match(uri);
         if (!match.Success || !Guid.TryParse(match.Groups[1].Value, out var projectId))
+        {
             return;
+        }
         var project = _projects.FirstOrDefault(item => item.Id == projectId);
         if (project is not null)
+        {
             _ui.SetProject(project.Id, project.Name);
+        }
     }
 
     private void OnOperationsChanged()
     {
         var previous = RunningCount;
         RefreshRunningCount();
-        if (RunningCount != previous) NotifyStateChanged();
+        if (RunningCount != previous)
+        {
+            NotifyStateChanged();
+        }
     }
 
     private void OnUiChanged() => _ = InvokeOnDispatcherAsync(static () => { });
@@ -477,9 +542,13 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
                 var entityName = decodedPath[(markerIndex + Routes.Entity.Length)..].TrimEnd('/');
                 var slashIndex = entityName.IndexOf('/');
                 if (slashIndex >= 0)
+                {
                     entityName = entityName[..slashIndex];
+                }
                 if (!string.IsNullOrWhiteSpace(entityName))
+                {
                     return entityName;
+                }
             }
         }
 
@@ -497,12 +566,18 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     private static bool PathMatches(string path, string? href)
     {
         if (string.IsNullOrEmpty(href))
+        {
             return false;
+        }
         var target = href.TrimEnd('/');
         if (target.Length == 0)
+        {
             target = "/";
+        }
         if (path.Equals(target, StringComparison.OrdinalIgnoreCase))
+        {
             return true;
+        }
         return target != "/" && path.StartsWith(target + "/", StringComparison.OrdinalIgnoreCase);
     }
 

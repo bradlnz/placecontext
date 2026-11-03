@@ -1,14 +1,14 @@
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Auth;
 namespace PlaceContext.Host.Controllers;
 
 /// <summary>Provider-neutral OAuth 2.1/PKCE login backed by a configured identity authority.</summary>
@@ -18,18 +18,18 @@ public sealed class SsoSessionsController : ControllerBase
     private const string StateCookie = "placecontext_external_sso";
     private readonly IAuthService _auth;
     private readonly IConfiguration _configuration;
-    private readonly IHttpClientFactory _httpClients;
+    private readonly IExternalIdentityProvider _identity;
     private readonly IDataProtector _protector;
 
     public SsoSessionsController(
         IAuthService auth,
         IConfiguration configuration,
-        IHttpClientFactory httpClients,
+        IExternalIdentityProvider identity,
         IDataProtectionProvider dataProtection)
     {
         _auth = auth;
         _configuration = configuration;
-        _httpClients = httpClients;
+        _identity = identity;
         _protector = dataProtection.CreateProtector("PlaceContext.ExternalSso.State.v1");
     }
 
@@ -37,12 +37,14 @@ public sealed class SsoSessionsController : ControllerBase
     public async Task<IActionResult> New(string? returnUrl)
     {
         var options = GetOptions();
-        if (options is null) return StatusCode(503, "External sign-in is not configured.");
-
+        if (options is null)
+        {
+            return StatusCode(503, "External sign-in is not configured.");
+        }
         SsoEndpoints endpoints;
         try
         {
-            endpoints = await ResolveEndpointsAsync(options, HttpContext.RequestAborted);
+            endpoints = await _identity.ResolveEndpointsAsync(options, HttpContext.RequestAborted);
         }
         catch (HttpRequestException)
         {
@@ -87,35 +89,12 @@ public sealed class SsoSessionsController : ControllerBase
         Response.Cookies.Delete(StateCookie, new CookieOptions { Path = "/auth/sso" });
         if (options is null || loginState is null || string.IsNullOrWhiteSpace(code)
             || !SecureEquals(loginState.Nonce, state) || loginState.IssuedAt < DateTimeOffset.UtcNow.AddMinutes(-10))
+        {
             return LoginError("External sign-in expired. Please try again.");
-
+        }
         try
         {
-            var client = _httpClients.CreateClient();
-            var endpoints = await ResolveEndpointsAsync(options, HttpContext.RequestAborted);
-            using var tokenResponse = await client.PostAsync(endpoints.TokenEndpoint,
-                new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    ["grant_type"] = "authorization_code",
-                    ["code"] = code,
-                    ["client_id"] = options.ClientId,
-                    ["redirect_uri"] = options.CallbackUrl,
-                    ["code_verifier"] = loginState.Verifier,
-                }), HttpContext.RequestAborted);
-            tokenResponse.EnsureSuccessStatusCode();
-            var token = JsonSerializer.Deserialize<TokenResponse>(
-                await tokenResponse.Content.ReadAsStringAsync(HttpContext.RequestAborted));
-            if (string.IsNullOrWhiteSpace(token?.AccessToken)) throw new JsonException("Missing access token.");
-
-            using var identityRequest = new HttpRequestMessage(HttpMethod.Get, endpoints.UserInfoEndpoint);
-            identityRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
-            using var identityResponse = await client.SendAsync(identityRequest, HttpContext.RequestAborted);
-            identityResponse.EnsureSuccessStatusCode();
-            var identity = JsonSerializer.Deserialize<SsoIdentity>(
-                await identityResponse.Content.ReadAsStringAsync(HttpContext.RequestAborted));
-            if (identity is null || string.IsNullOrWhiteSpace(identity.Subject)
-                || string.IsNullOrWhiteSpace(identity.Email))
-                throw new JsonException("The identity response is incomplete.");
+            var identity = await _identity.ExchangeAsync(options, code, loginState.Verifier, HttpContext.RequestAborted);
 
             var user = await _auth.GetOrCreateExternalUserAsync(
                 identity.Email, identity.Name ?? "", ExternalRole(identity.Role), HttpContext.RequestAborted);
@@ -151,7 +130,9 @@ public sealed class SsoSessionsController : ControllerBase
             || string.IsNullOrWhiteSpace(clientId)
             || !Uri.TryCreate(callbackUrl, UriKind.Absolute, out var callbackUri)
             || callbackUri.Scheme != Uri.UriSchemeHttps)
+        {
             return null;
+        }
         var protocol = section["Protocol"]?.Trim();
         return new SsoOptions(
             baseUri,
@@ -160,41 +141,12 @@ public sealed class SsoSessionsController : ControllerBase
             string.Equals(protocol, "OpenIdConnect", StringComparison.OrdinalIgnoreCase));
     }
 
-    private async Task<SsoEndpoints> ResolveEndpointsAsync(SsoOptions options, CancellationToken ct)
-    {
-        if (!options.OpenIdConnect)
-        {
-            return new SsoEndpoints(
-                new Uri(options.BaseUri, "/oauth/authorize").ToString(),
-                new Uri(options.BaseUri, "/oauth/token").ToString(),
-                new Uri(options.BaseUri, "/oauth/userinfo").ToString(),
-                "identity");
-        }
-
-        var discoveryUrl = $"{options.BaseUri.ToString().TrimEnd('/')}/.well-known/openid-configuration";
-        using var response = await _httpClients.CreateClient().GetAsync(discoveryUrl, ct);
-        response.EnsureSuccessStatusCode();
-        var metadata = JsonSerializer.Deserialize<OpenIdMetadata>(
-            await response.Content.ReadAsStringAsync(ct));
-        if (metadata is null
-            || !IsHttpsUrl(metadata.AuthorizationEndpoint)
-            || !IsHttpsUrl(metadata.TokenEndpoint)
-            || !IsHttpsUrl(metadata.UserInfoEndpoint))
-            throw new JsonException("OIDC discovery metadata is incomplete.");
-
-        return new SsoEndpoints(
-            metadata.AuthorizationEndpoint,
-            metadata.TokenEndpoint,
-            metadata.UserInfoEndpoint,
-            "openid email profile");
-    }
-
-    private static bool IsHttpsUrl(string? value) =>
-        Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
-
     private LoginState? ReadState()
     {
-        if (!Request.Cookies.TryGetValue(StateCookie, out var protectedState)) return null;
+        if (!Request.Cookies.TryGetValue(StateCookie, out var protectedState))
+        {
+            return null;
+        }
         try
         {
             return JsonSerializer.Deserialize<LoginState>(_protector.Unprotect(protectedState));
@@ -214,7 +166,10 @@ public sealed class SsoSessionsController : ControllerBase
 
     private static bool SecureEquals(string expected, string? supplied)
     {
-        if (string.IsNullOrEmpty(supplied)) return false;
+        if (string.IsNullOrEmpty(supplied))
+        {
+            return false;
+        }
         var left = Encoding.UTF8.GetBytes(expected);
         var right = Encoding.UTF8.GetBytes(supplied);
         return left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
@@ -229,21 +184,5 @@ public sealed class SsoSessionsController : ControllerBase
         && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\")
             ? returnUrl : "/";
 
-    private sealed record SsoOptions(Uri BaseUri, string ClientId, string CallbackUrl, bool OpenIdConnect);
-    private sealed record SsoEndpoints(
-        string AuthorizationEndpoint,
-        string TokenEndpoint,
-        string UserInfoEndpoint,
-        string Scope);
-    private sealed record OpenIdMetadata(
-        [property: JsonPropertyName("authorization_endpoint")] string AuthorizationEndpoint,
-        [property: JsonPropertyName("token_endpoint")] string TokenEndpoint,
-        [property: JsonPropertyName("userinfo_endpoint")] string UserInfoEndpoint);
     private sealed record LoginState(string Nonce, string Verifier, string ReturnUrl, DateTimeOffset IssuedAt);
-    private sealed record TokenResponse([property: JsonPropertyName("access_token")] string AccessToken);
-    private sealed record SsoIdentity(
-        [property: JsonPropertyName("sub")] string Subject,
-        [property: JsonPropertyName("email")] string Email,
-        [property: JsonPropertyName("name")] string? Name,
-        [property: JsonPropertyName("role")] string? Role);
 }

@@ -20,16 +20,28 @@ public sealed class ExitCodePolicy
     }
 
     /// <summary>Exit codes that map to <see cref="WorkloadOutcome.Succeeded"/>.</summary>
-    public IReadOnlyCollection<int> SuccessCodes { get; }
+    public IReadOnlyCollection<int> SuccessCodes
+    {
+        get;
+    }
 
     /// <summary>Exit codes that map to <see cref="WorkloadOutcome.Partial"/>. May be empty.</summary>
-    public IReadOnlyCollection<int> PartialCodes { get; }
+    public IReadOnlyCollection<int> PartialCodes
+    {
+        get;
+    }
 
     /// <summary>Classifies a raw exit code into a shard outcome.</summary>
     public WorkloadOutcome Classify(int exitCode)
     {
-        if (SuccessCodes.Contains(exitCode)) return WorkloadOutcome.Succeeded;
-        if (PartialCodes.Contains(exitCode)) return WorkloadOutcome.Partial;
+        if (SuccessCodes.Contains(exitCode))
+        {
+            return WorkloadOutcome.Succeeded;
+        }
+        if (PartialCodes.Contains(exitCode))
+        {
+            return WorkloadOutcome.Partial;
+        }
         return WorkloadOutcome.Failed;
     }
 }

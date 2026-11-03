@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Components;
+using PlaceContext.Application.Operations;
 using PlaceContext.Host.Components.ViewModels;
-using PlaceContext.Infrastructure.Operations;
 using PlaceContext.TestSupport;
 
 namespace PlaceContext.Host.Tests;
@@ -11,8 +11,9 @@ public sealed class BuildNotificationTests
     public void View_navigates_to_the_exact_link_and_closes_the_notification_panel()
     {
         var navigation = new Navigation();
-        using var vm = new NotificationsViewModel(new OperationCenter(null!, null!), new FakeCurrentTenant(Guid.NewGuid()), navigation);
-        var project = Guid.NewGuid(); var conversation = Guid.NewGuid();
+        using var vm = new NotificationsViewModel(new OperationCenter(null!, default), new FakeCurrentTenant(Guid.NewGuid()), navigation);
+        var project = Guid.NewGuid();
+        var conversation = Guid.NewGuid();
         vm.Toggle();
         vm.Open($"/project/{project}/dashboard?conversation={conversation}");
         Assert.Equal($"http://localhost/project/{project}/dashboard?conversation={conversation}", navigation.Uri);

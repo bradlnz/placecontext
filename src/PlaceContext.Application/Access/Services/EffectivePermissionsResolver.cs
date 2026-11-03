@@ -1,5 +1,3 @@
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Application.Access;
 
 /// <summary>
@@ -20,10 +18,17 @@ public static class EffectivePermissionsResolver
         var effective = new HashSet<string>(roleGrants);
         foreach (var (permission, allowed) in overrides)
         {
-            if (allowed) effective.Add(permission);
-            else effective.Remove(permission); // revoke wins, regardless of the role grant
+            if (allowed)
+            {
+                effective.Add(permission);
+                continue;
+            }
+            effective.Remove(permission); // revoke wins, regardless of the role grant
         }
-        if (!isDefaultAdmin) effective.Remove(Permission.SettingsManage);
+        if (!isDefaultAdmin)
+        {
+            effective.Remove(Permission.SettingsManage);
+        }
         return effective;
     }
 

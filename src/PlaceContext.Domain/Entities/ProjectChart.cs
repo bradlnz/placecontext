@@ -17,19 +17,40 @@ public sealed class ProjectChart
         GeneratedAt = generatedAt;
     }
 
-    public Guid Id { get; }
-    public Guid ProjectId { get; }
-    public string TableName { get; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
+    public string TableName
+    {
+        get;
+    }
 
     /// <summary>The chart itself: a complete, self-contained HTML document (inline SVG, themed).</summary>
-    public string Html { get; }
+    public string Html
+    {
+        get;
+    }
 
-    public DateTimeOffset GeneratedAt { get; }
+    public DateTimeOffset GeneratedAt
+    {
+        get;
+    }
 
     public static ProjectChart Create(Guid projectId, string tableName, string html, DateTimeOffset generatedAt)
     {
-        if (string.IsNullOrWhiteSpace(tableName)) throw new ArgumentException("Table name is required.", nameof(tableName));
-        if (string.IsNullOrWhiteSpace(html)) throw new ArgumentException("Chart HTML is required.", nameof(html));
+        if (string.IsNullOrWhiteSpace(tableName))
+        {
+            throw new ArgumentException("Table name is required.", nameof(tableName));
+        }
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            throw new ArgumentException("Chart HTML is required.", nameof(html));
+        }
         return new(Guid.NewGuid(), projectId, tableName, html, generatedAt);
     }
 

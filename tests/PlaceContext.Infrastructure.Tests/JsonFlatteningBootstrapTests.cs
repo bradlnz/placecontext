@@ -70,7 +70,9 @@ public class JsonFlatteningBootstrapTests
                 cmd.Parameters.AddWithValue("s", Schema);
                 await using var r = await cmd.ExecuteReaderAsync();
                 while (await r.ReadAsync())
+                {
                     columns[r.GetString(0)] = r.GetString(1);
+                }
             }
             Assert.Equal("text", columns["meta_region"]);
             Assert.Equal("numeric", columns["meta_pop"]);
@@ -81,14 +83,18 @@ public class JsonFlatteningBootstrapTests
             var rows = new List<(string? Region, decimal? Pop, bool? Capital, string? Lat, string? Tags)>();
             await using (var cmd = new NpgsqlCommand(
                 $"""SELECT meta_region, meta_pop, meta_capital, meta_geo_lat::text, tags::text FROM "{Schema}".listings ORDER BY meta_region""", conn))
-            await using (var r = await cmd.ExecuteReaderAsync())
             {
-                while (await r.ReadAsync())
-                    rows.Add((r.IsDBNull(0) ? null : r.GetString(0),
-                        r.IsDBNull(1) ? null : r.GetDecimal(1),
-                        r.IsDBNull(2) ? null : r.GetBoolean(2),
-                        r.IsDBNull(3) ? null : r.GetString(3),
-                        r.IsDBNull(4) ? null : r.GetString(4)));
+                await using (var r = await cmd.ExecuteReaderAsync())
+                {
+                    while (await r.ReadAsync())
+                    {
+                        rows.Add((r.IsDBNull(0) ? null : r.GetString(0),
+                                            r.IsDBNull(1) ? null : r.GetDecimal(1),
+                                            r.IsDBNull(2) ? null : r.GetBoolean(2),
+                                            r.IsDBNull(3) ? null : r.GetString(3),
+                                            r.IsDBNull(4) ? null : r.GetString(4)));
+                    }
+                }
             }
             Assert.Equal(2, rows.Count);
             Assert.Equal(("NSW", null, null, null, """["c"]"""), rows[0]);

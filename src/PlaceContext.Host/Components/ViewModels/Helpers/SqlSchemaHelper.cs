@@ -48,10 +48,20 @@ public static class SqlSchemaHelper
                     {
                         var fieldInfos = await svc.ListOpenSearchFieldsAsync(projectId, i.Name);
                         foreach (var f in fieldInfos)
-                            fields.Add(new { name = f.Name, type = f.Type });
+                        {
+                            fields.Add(new
+                            {
+                                name = f.Name,
+                                type = f.Type
+                            });
+                        }
                     }
                     catch { }
-                    indexes.Add(new { name = i.Name, columns = fields });
+                    indexes.Add(new
+                    {
+                        name = i.Name,
+                        columns = fields
+                    });
                 }
             }
             catch { }
@@ -59,7 +69,11 @@ public static class SqlSchemaHelper
 
         try
         {
-            await js.InvokeVoidAsync("pcmonaco.setSqlSchema", new { tables, indexes });
+            await js.InvokeVoidAsync("pcmonaco.setSqlSchema", new
+            {
+                tables,
+                indexes
+            });
         }
         catch { }
     }

@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application;
 using PlaceContext.Domain.Mcp;
 using PlaceContext.Host;
 
@@ -15,14 +15,29 @@ public sealed class McpSettingsViewModel(
 ) : PageViewModel, IDisposable
 {
     public const string OAuthStartRoute = "/mcp-oauth/start?connectionId=";
-    public IReadOnlyList<ProjectSummaryView> Projects { get; private set; } =
+    public IReadOnlyList<ProjectSummaryView> Projects
+    {
+        get; private set;
+    } =
         Array.Empty<ProjectSummaryView>();
-    public IReadOnlyList<McpConnectionView> Connections { get; private set; } =
+    public IReadOnlyList<McpConnectionView> Connections
+    {
+        get; private set;
+    } =
         Array.Empty<McpConnectionView>();
-    public Guid? ProjectId { get; private set; }
+    public Guid? ProjectId
+    {
+        get; private set;
+    }
     public bool Loading { get; private set; } = true;
-    public bool ShowAdd { get; private set; }
-    public string? Message { get; private set; }
+    public bool ShowAdd
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
     public bool IsOAuthConnected(McpConnectionView connection) =>
         connection.LastStatus?.StartsWith("oauth:connected", StringComparison.Ordinal) == true;
 
@@ -102,17 +117,21 @@ public sealed class McpSettingsViewModel(
     public async Task AfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
+        {
             return;
+        }
         await js.InvokeVoidAsync(
-            "eval",
-            "if (!window.__settingsMcpOAuthListener) { window.__settingsMcpOAuthListener = function(e) { if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) DotNet.invokeMethodAsync('PlaceContext.Host', 'OnSettingsMcpOAuthCallback', e.data); }; window.addEventListener('message', window.__settingsMcpOAuthListener); }"
-        );
+                    "eval",
+                    "if (!window.__settingsMcpOAuthListener) { window.__settingsMcpOAuthListener = function(e) { if (e.data && e.data.startsWith && e.data.startsWith('mcp-oauth-')) DotNet.invokeMethodAsync('PlaceContext.Host', 'OnSettingsMcpOAuthCallback', e.data); }; window.addEventListener('message', window.__settingsMcpOAuthListener); }"
+                );
     }
 
     [JSInvokable]
     public async Task OAuthCallbackAsync(string message) => await LoadConnectionsAsync();
 
-    public void Dispose() { }
+    public void Dispose()
+    {
+    }
 
     private async Task LoadConnectionsAsync()
     {

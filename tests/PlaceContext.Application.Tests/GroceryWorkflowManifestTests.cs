@@ -1,7 +1,7 @@
 using System.Text.Json;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Organization;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
 
@@ -14,7 +14,9 @@ public sealed class GroceryWorkflowManifestTests
         public ManifestFactAttribute()
         {
             if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PLACECONTEXT_TEST_GROCERY_MANIFEST")))
+            {
                 Skip = "Generate the grocery demo import and set PLACECONTEXT_TEST_GROCERY_MANIFEST to its path.";
+            }
         }
     }
 
@@ -43,8 +45,8 @@ public sealed class GroceryWorkflowManifestTests
         var workflow = Assert.Single(await chains.ListForProjectAsync(project.Id.Value));
         Assert.Equal(8, workflow.Stages.Count);
         Assert.Collection(workflow.Stages.Where(stage => stage.Action is not null),
-            stage => Assert.Equal("browser", Assert.IsType<QemuChainAction>(stage.Action).OutputField),
-            stage => Assert.True(Assert.IsType<QemuChainAction>(stage.Action).AllowNetwork),
+            stage => Assert.Equal("browser", Assert.IsType<VirtualMachineChainAction>(stage.Action).OutputField),
+            stage => Assert.True(Assert.IsType<VirtualMachineChainAction>(stage.Action).AllowNetwork),
             stage => Assert.Equal("jev", Assert.IsType<LoopChainAction>(stage.Action).AgentProvider));
         var definitions = await jobs.ListForProjectAsync(project.Id.Value);
         Assert.DoesNotContain(definitions, job => job.AllowNetworkEgress);

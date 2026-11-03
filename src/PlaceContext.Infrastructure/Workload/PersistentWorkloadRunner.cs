@@ -1,10 +1,9 @@
 using System.Collections.Concurrent;
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using Microsoft.Extensions.Options;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Workload;
 namespace PlaceContext.Infrastructure.Workload;
 
 /// <summary>Routes explicitly registered native images to persistent workers; other workloads retain their sandbox runner.</summary>
@@ -21,18 +20,25 @@ public sealed class PersistentWorkloadRunner(
     {
         var inlineRust = request.CodeFiles is not null && request.RuntimeId == "rust";
         if (!inlineRust && (request.Image is null || !_options.PersistentRunnerImages.Contains(request.Image, StringComparer.Ordinal)))
+        {
             return await fallback.RunAsync(request, ct);
-
+        }
         if (request.Network is not null)
+        {
             throw new InvalidOperationException("Persistent workers cannot enforce a per-job VPC. Use a sandboxed Kubernetes workload for this job.");
-
+        }
         if ((!inlineRust && request.CodeFiles is not null) || request.ArtifactMounts.Count != 0)
+        {
             throw new InvalidOperationException("Persistent Rust jobs require inline Rust source or a registered migration image, without reduce mounts.");
+        }
         if (!request.Env.TryGetValue("OSSEN_JOB", out var stage) || string.IsNullOrWhiteSpace(stage))
+        {
             throw new InvalidOperationException("Persistent native jobs require OSSEN_JOB.");
+        }
         if (_options.PersistentRunnerUrls.Length == 0 || _options.PersistentRunnerToken.Length < 32)
+        {
             throw new InvalidOperationException("Persistent native runner endpoints and credentials are required.");
-
+        }
         var seconds = request.TimeoutSeconds is > 0 ? request.TimeoutSeconds.Value : _options.DefaultTimeoutSeconds;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(TimeSpan.FromSeconds(seconds + 5));
@@ -47,7 +53,9 @@ public sealed class PersistentWorkloadRunner(
                     deadline.Token.ThrowIfCancellationRequested();
                     var endpoint = _options.PersistentRunnerUrls[(first + offset) % _options.PersistentRunnerUrls.Length].TrimEnd('/');
                     if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+                    {
                         throw new InvalidOperationException("Invalid persistent runner endpoint.");
+                    }
                     using var message = new HttpRequestMessage(HttpMethod.Post, endpoint + "/run");
                     message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.PersistentRunnerToken);
                     message.Content = JsonContent.Create(new
@@ -104,6 +112,9 @@ public sealed class PersistentWorkloadRunner(
             catch (HttpRequestException) { }
             catch (OperationCanceledException) { }
         }));
-        if (!_active.ContainsKey(correlationId)) await fallback.CancelAsync(correlationId, ct);
+        if (!_active.ContainsKey(correlationId))
+        {
+            await fallback.CancelAsync(correlationId, ct);
+        }
     }
 }

@@ -1,5 +1,6 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -33,19 +34,23 @@ public sealed class SaveDataEntityHandler : ICommandHandler<SaveDataEntityComman
         var tags = command.Tags ?? Array.Empty<string>();
 
         DataEntity entity;
-        if (command.EntityId is { } id)
+        async Task<DataEntity> SaveEntityAsync()
         {
-            entity = await _entities.GetByIdAsync(id, ct)
-                ?? throw new InvalidOperationException($"Entity {id} not found.");
-            entity.Update(command.Name, command.TableName, command.LabelColumn, relations, _clock.UtcNow, tags);
-            await _entities.UpdateAsync(entity, ct);
-        }
-        else
-        {
-            entity = DataEntity.Create(command.ProjectId, command.Name, command.TableName,
+            DataEntity resolvedEntity;
+            if (command.EntityId is { } id)
+            {
+                resolvedEntity = await _entities.GetByIdAsync(id, ct)
+                    ?? throw new InvalidOperationException($"Entity {id} not found.");
+                resolvedEntity.Update(command.Name, command.TableName, command.LabelColumn, relations, _clock.UtcNow, tags);
+                await _entities.UpdateAsync(resolvedEntity, ct);
+                return resolvedEntity;
+            }
+            resolvedEntity = DataEntity.Create(command.ProjectId, command.Name, command.TableName,
                 command.LabelColumn, relations, _clock.UtcNow, tags);
-            await _entities.AddAsync(entity, ct);
+            await _entities.AddAsync(resolvedEntity, ct);
+            return resolvedEntity;
         }
+        entity = await SaveEntityAsync();
         await _uow.SaveChangesAsync(ct);
         return DataEntityMapper.ToView(entity);
     }

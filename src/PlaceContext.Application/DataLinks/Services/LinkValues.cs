@@ -39,26 +39,53 @@ public static class LinkValues
     /// </summary>
     public static string Normalize(string? value)
     {
-        if (string.IsNullOrWhiteSpace(value)) return "";
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "";
+        }
         var collapsed = WhitespaceRun.Replace(ZeroWidth.Replace(value, ""), " ").Trim().ToLowerInvariant();
-        if (collapsed.Length == 0) return "";
+        if (collapsed.Length == 0)
+        {
+            return "";
+        }
         return IsPhoneShaped(collapsed, minDigits: 5) && !IsoDateShape.IsMatch(collapsed)
-            ? PhoneDigits(collapsed)
-            : collapsed;
+                    ? PhoneDigits(collapsed)
+                    : collapsed;
     }
 
     /// <summary>The link kind of a column/value pair: the value's shape wins (email, then phone);
     /// otherwise the column name's allowlist (address → email → phone → name → url); else text.</summary>
     public static string Classify(string columnName, string value)
     {
-        if (EmailShape.IsMatch(value.Trim())) return EmailKind;
-        if (IsPhoneShaped(value.Trim(), minDigits: 7) && !IsoDateShape.IsMatch(value.Trim())) return PhoneKind;
+        if (EmailShape.IsMatch(value.Trim()))
+        {
+            return EmailKind;
+        }
+        if (IsPhoneShaped(value.Trim(), minDigits: 7) && !IsoDateShape.IsMatch(value.Trim()))
+        {
+            return PhoneKind;
+        }
         var tokens = Tokens(columnName);
-        if (tokens.Any(AddressTokens.Contains)) return AddressKind;
-        if (tokens.Any(EmailTokens.Contains)) return EmailKind;
-        if (tokens.Any(PhoneTokens.Contains)) return PhoneKind;
-        if (tokens.Any(NameTokens.Contains)) return NameKind;
-        if (tokens.Any(UrlTokens.Contains)) return UrlKind;
+        if (tokens.Any(AddressTokens.Contains))
+        {
+            return AddressKind;
+        }
+        if (tokens.Any(EmailTokens.Contains))
+        {
+            return EmailKind;
+        }
+        if (tokens.Any(PhoneTokens.Contains))
+        {
+            return PhoneKind;
+        }
+        if (tokens.Any(NameTokens.Contains))
+        {
+            return NameKind;
+        }
+        if (tokens.Any(UrlTokens.Contains))
+        {
+            return UrlKind;
+        }
         return TextKind;
     }
 
@@ -72,11 +99,26 @@ public static class LinkValues
     /// </summary>
     public static bool IsLinkable(string kind, string value)
     {
-        if (value.Length < 4 || value.Length > 300) return false;
-        if (value is "true" or "false") return false;
-        if (kind != PhoneKind && value.All(char.IsDigit)) return false;
-        if (Guid.TryParse(value, out _)) return false;
-        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out _)) return false;
+        if (value.Length < 4 || value.Length > 300)
+        {
+            return false;
+        }
+        if (value is "true" or "false")
+        {
+            return false;
+        }
+        if (kind != PhoneKind && value.All(char.IsDigit))
+        {
+            return false;
+        }
+        if (Guid.TryParse(value, out _))
+        {
+            return false;
+        }
+        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            return false;
+        }
         return true;
     }
 

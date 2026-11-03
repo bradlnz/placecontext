@@ -1,6 +1,5 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.ProjectData;
 namespace PlaceContext.Application.Features;
 
 /// <summary>Create a table in a project's database from a validated column spec.</summary>

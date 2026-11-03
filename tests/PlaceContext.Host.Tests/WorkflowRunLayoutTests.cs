@@ -1,10 +1,10 @@
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.Shared;
 using PlaceContext.Host.Components.ViewModels;
 
@@ -24,7 +24,10 @@ public sealed class WorkflowRunLayoutTests
     public void Appended_false_path_is_placed_before_the_join_and_keeps_recorded_names()
     {
         var run = Run(Step(0, 0, Approved, "Skipped"), Step(1, 1, Summary, "Succeeded"),
-            Step(2, 2, Rejected, "Succeeded") with { JobName = "Name at execution" });
+            Step(2, 2, Rejected, "Succeeded") with
+            {
+                JobName = "Name at execution"
+            });
         var mapped = ChainPipelineViewModel.MatchSteps(run, Layout)!;
         Assert.Equal("Skipped", Assert.Single(mapped["0"]).Status);
         Assert.Equal("Name at execution", Assert.Single(mapped["0/else/0"]).JobName);
@@ -38,7 +41,11 @@ public sealed class WorkflowRunLayoutTests
         var step = Assert.Single(ChainPipelineViewModel.MatchSteps(run, Layout)!["0/else/0"]);
         Assert.Equal("Not run", step.Status);
         Assert.Null(step.RunId);
-        var active = run with { Status = "Running", FinishedAt = null };
+        var active = run with
+        {
+            Status = "Running",
+            FinishedAt = null
+        };
         Assert.Equal("Pending", Assert.Single(ChainPipelineViewModel.MatchSteps(active, Layout)!["0/else/0"]).Status);
     }
 
@@ -48,7 +55,10 @@ public sealed class WorkflowRunLayoutTests
         var run = Run(Step(0, 0, Approved, "Skipped"), Step(1, 1, Summary, "Succeeded"), Step(2, 2, Rejected, "Succeeded"));
         Assert.Null(ChainPipelineViewModel.MatchSteps(run, Layout.Reverse().ToList()));
         var ambiguous = Layout.ToArray();
-        ambiguous[0] = ambiguous[0] with { ElseBranch = [new([new(Rejected, "One")]), new([new(Rejected, "Two")])] };
+        ambiguous[0] = ambiguous[0] with
+        {
+            ElseBranch = [new([new(Rejected, "One")]), new([new(Rejected, "Two")])]
+        };
         Assert.Null(ChainPipelineViewModel.MatchSteps(run, ambiguous));
     }
 
@@ -63,8 +73,15 @@ public sealed class WorkflowRunLayoutTests
             new([new(Approved, "Repeat"), new(Summary, "Parallel")]),
         ];
         var run = Run(Step(0, 0, Approved, "Skipped"), Step(1, 1, Approved, "Succeeded"),
-            Step(2, 1, Summary, "Failed") with { BranchIndex = 1 },
-            Step(3, 2, Guid.Empty, "Failed") with { ActionType = email.Type, Error = "Delivery failed" });
+            Step(2, 1, Summary, "Failed") with
+            {
+                BranchIndex = 1
+            },
+            Step(3, 2, Guid.Empty, "Failed") with
+            {
+                ActionType = email.Type,
+                Error = "Delivery failed"
+            });
         var mapped = ChainPipelineViewModel.MatchSteps(run, layout)!;
         Assert.Equal(2, mapped["1"].Count);
         Assert.Equal("Delivery failed", Assert.Single(mapped["0/else/0/else/0"]).Error);
@@ -76,9 +93,16 @@ public sealed class WorkflowRunLayoutTests
     {
         var dispatcher = new DelayedDispatcher();
         var vm = new ChainPipelineViewModel(new PlaceContextService(dispatcher, null!, null!, null!));
-        var run = Run(Step(0, 0, Approved, "Running"), Step(1, 1, Summary, "Pending")) with { FinishedAt = null };
+        var run = Run(Step(0, 0, Approved, "Running"), Step(1, 1, Summary, "Pending")) with
+        {
+            FinishedAt = null
+        };
         var loading = vm.LoadAsync(run);
-        var completed = run with { Steps = [Step(0, 0, Approved, "Succeeded"), Step(1, 1, Summary, "Succeeded")], FinishedAt = Started.AddSeconds(10) };
+        var completed = run with
+        {
+            Steps = [Step(0, 0, Approved, "Succeeded"), Step(1, 1, Summary, "Succeeded")],
+            FinishedAt = Started.AddSeconds(10)
+        };
         await vm.LoadAsync(completed);
         dispatcher.Result.SetResult([new(run.ChainId, run.ProjectId, "Demo", null, Layout, Started)]);
         await loading;
@@ -94,14 +118,35 @@ public sealed class WorkflowRunLayoutTests
         var dispatcher = new DelayedDispatcher();
         var vm = new ChainPipelineViewModel(new PlaceContextService(dispatcher, null!, null!, null!));
         var run = Run(Step(0, 0, Approved, "Skipped"),
-            Step(1, 1, Summary, "Succeeded") with { StartedAt = Started.AddSeconds(5) },
-            Step(2, 1, Approved, "Failed") with { BranchIndex = 1, StartedAt = Started.AddSeconds(5), Error = "Failed job" },
-            Step(3, 2, Guid.Empty, "Succeeded") with { StartedAt = Started.AddSeconds(3), ActionType = "qemu", JobName = "QEMU environment" });
+            Step(1, 1, Summary, "Succeeded") with
+            {
+                StartedAt = Started.AddSeconds(5)
+            },
+            Step(2, 1, Approved, "Failed") with
+            {
+                BranchIndex = 1,
+                StartedAt = Started.AddSeconds(5),
+                Error = "Failed job"
+            },
+            Step(3, 2, Guid.Empty, "Succeeded") with
+            {
+                StartedAt = Started.AddSeconds(3),
+                ActionType = "qemu",
+                JobName = "QEMU environment"
+            });
         var loading = vm.LoadAsync(run);
         Assert.NotNull(vm.Layout); // The canvas is usable while the definition is loading.
-        if (definition == "unavailable") dispatcher.Result.SetException(new InvalidOperationException("Offline"));
-        else dispatcher.Result.SetResult(definition == "deleted" ? [] :
-            [new(run.ChainId, run.ProjectId, "Changed", null, Layout.Reverse().ToList(), Started)]);
+        void AssertDefinition()
+        {
+            if (definition == "unavailable")
+            {
+                dispatcher.Result.SetException(new InvalidOperationException("Offline"));
+                return;
+            }
+            dispatcher.Result.SetResult(definition == "deleted" ? [] :
+                    [new(run.ChainId, run.ProjectId, "Changed", null, Layout.Reverse().ToList(), Started)]);
+        }
+        AssertDefinition();
         await loading;
         Assert.True(vm.UsesRecordedLayout);
         Assert.Equal(3, vm.Layout!.Count);
@@ -132,7 +177,9 @@ public sealed class WorkflowRunLayoutTests
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
         {
             var result = await renderer.RenderComponentAsync<ChainPipeline>(ParameterView.FromDictionary(new Dictionary<string, object?>
-            { ["Run"] = Run(Step(0, 0, Approved, "Failed")) }));
+            {
+                ["Run"] = Run(Step(0, 0, Approved, "Failed"))
+            }));
             return result.ToHtmlString();
         });
         Assert.Contains("run-canvas", html);
@@ -147,8 +194,14 @@ public sealed class WorkflowRunLayoutTests
     public void Fallback_places_appended_branch_before_the_later_summary()
     {
         var run = Run(Step(0, 0, Approved, "Skipped"),
-            Step(1, 1, Summary, "Succeeded") with { StartedAt = Started.AddSeconds(5) },
-            Step(2, 2, Rejected, "Succeeded") with { StartedAt = Started.AddSeconds(3) });
+            Step(1, 1, Summary, "Succeeded") with
+            {
+                StartedAt = Started.AddSeconds(5)
+            },
+            Step(2, 2, Rejected, "Succeeded") with
+            {
+                StartedAt = Started.AddSeconds(3)
+            });
         Assert.Equal(new[] { Approved, Rejected, Summary }, new ChainPipelineViewModel().Stages(run).Select(group => group[0].JobId));
     }
 
@@ -156,14 +209,20 @@ public sealed class WorkflowRunLayoutTests
     public async Task Run_canvas_shows_statuses_errors_and_output_links_without_edit_controls()
     {
         var run = Run(Step(0, 0, Approved, "Skipped"), Step(1, 1, Summary, "Skipped"),
-            Step(2, 2, Rejected, "Failed") with { Error = "Provider rejected the request" });
+            Step(2, 2, Rejected, "Failed") with
+            {
+                Error = "Provider rejected the request"
+            });
         var services = new ServiceCollection().AddLogging().AddTransient<ChainCanvasViewModel>().AddTransient<ChainPipelineViewModel>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
         {
             var result = await renderer.RenderComponentAsync<ChainCanvas>(ParameterView.FromDictionary(new Dictionary<string, object?>
-            { ["Stages"] = Layout, ["RunSteps"] = ChainPipelineViewModel.MatchSteps(run, Layout) }));
+            {
+                ["Stages"] = Layout,
+                ["RunSteps"] = ChainPipelineViewModel.MatchSteps(run, Layout)
+            }));
             return result.ToHtmlString();
         });
         Assert.Contains("True", html);

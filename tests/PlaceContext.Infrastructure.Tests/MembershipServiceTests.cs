@@ -1,8 +1,9 @@
-using PlaceContext.Application.Ports;
+using Microsoft.EntityFrameworkCore;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
-using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
@@ -51,12 +52,18 @@ public class MembershipServiceTests
         var target = AddUser(db, "member@example.com", "Member");
         db.UserPermissionGrants.Add(new UserPermissionGrantRow
         {
-            Id = Guid.NewGuid(), UserId = target.Id, Permission = Permission.JobsEdit, Allowed = false,
+            Id = Guid.NewGuid(),
+            UserId = target.Id,
+            Permission = Permission.JobsEdit,
+            Allowed = false,
         });
         var other = AddUser(db, "other@example.com", "Member");
         db.UserPermissionGrants.Add(new UserPermissionGrantRow
         {
-            Id = Guid.NewGuid(), UserId = other.Id, Permission = Permission.JobsRun, Allowed = false,
+            Id = Guid.NewGuid(),
+            UserId = other.Id,
+            Permission = Permission.JobsRun,
+            Allowed = false,
         });
         await db.SaveChangesAsync();
 
@@ -226,7 +233,10 @@ public class MembershipServiceTests
     private sealed class FakeCurrentUser : ICurrentUser
     {
         public FakeCurrentUser(Guid userId) => UserId = userId;
-        public Guid UserId { get; }
+        public Guid UserId
+        {
+            get;
+        }
         public string Role => "Admin";
         public bool IsAuthenticated => true;
     }

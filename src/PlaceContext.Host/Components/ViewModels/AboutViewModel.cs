@@ -11,7 +11,10 @@ public sealed class AboutViewModel : PageViewModel
         _clock = clock ?? TimeProvider.System;
     }
 
-    public int CopyrightYear { get; private set; }
+    public int CopyrightYear
+    {
+        get; private set;
+    }
 
     public void Initialize()
     {

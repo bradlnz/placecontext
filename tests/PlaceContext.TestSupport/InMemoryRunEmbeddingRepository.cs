@@ -40,7 +40,10 @@ public sealed class InMemoryRunEmbeddingRepository : IRunEmbeddingRepository
 
     private static double Cosine(float[] a, float[] b)
     {
-        if (a.Length == 0 || b.Length == 0 || a.Length != b.Length) return 0;
+        if (a.Length == 0 || b.Length == 0 || a.Length != b.Length)
+        {
+            return 0;
+        }
         double dot = 0, na = 0, nb = 0;
         for (var i = 0; i < a.Length; i++)
         {

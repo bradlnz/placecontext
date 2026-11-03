@@ -1,8 +1,12 @@
+using PlaceContext.Application.Artifacts;
+using PlaceContext.Application.Cluster;
 using PlaceContext.Application.Cqrs;
+using PlaceContext.Application.DataLinks;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Observability;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.SavedQueries;
 namespace PlaceContext.Application;
 
 public sealed class PlaceContextService
@@ -165,43 +169,43 @@ public sealed class PlaceContextService
         UpdateJobTestCodeCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
-    public Task<IReadOnlyList<OpenSearchIndexView>> ListOpenSearchIndicesAsync(
+    public Task<IReadOnlyList<SearchIndexView>> ListOpenSearchIndicesAsync(
         Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new ListOpenSearchIndicesQuery(projectId), ct);
+        => _dispatcher.Query(new ListSearchIndicesQuery(projectId), ct);
 
-    public Task<IReadOnlyList<OpenSearchFieldView>> ListOpenSearchFieldsAsync(
+    public Task<IReadOnlyList<SearchFieldView>> ListOpenSearchFieldsAsync(
         Guid projectId, string indexPattern, CancellationToken ct = default)
-        => _dispatcher.Query(new ListOpenSearchFieldsQuery(projectId, indexPattern), ct);
+        => _dispatcher.Query(new ListSearchFieldsQuery(projectId, indexPattern), ct);
 
-    public Task<OpenSearchLastUpdatedView> GetOpenSearchLastUpdatedAsync(
+    public Task<SearchLastUpdatedView> GetOpenSearchLastUpdatedAsync(
         Guid projectId, string indexPattern, IReadOnlyList<string> candidateFields,
         CancellationToken ct = default)
-        => _dispatcher.Query(new GetOpenSearchLastUpdatedQuery(
+        => _dispatcher.Query(new GetSearchLastUpdatedQuery(
             projectId, indexPattern, candidateFields), ct);
 
-    public Task<OpenSearchSearchView> SearchOpenSearchAsync(
-        OpenSearchSearchRequest request, CancellationToken ct = default)
-        => _dispatcher.Query(new SearchOpenSearchQuery(request), ct);
+    public Task<SearchResultView> SearchOpenSearchAsync(
+        SearchResultRequest request, CancellationToken ct = default)
+        => _dispatcher.Query(new SearchDocumentsQuery(request), ct);
 
-    public Task<Ports.ProjectQueryResult> SearchOpenSearchSqlAsync(
+    public Task<PlaceContext.Application.ProjectData.ProjectQueryResult> SearchOpenSearchSqlAsync(
         Guid projectId, string sql, CancellationToken ct = default)
-        => _dispatcher.Query(new SearchOpenSearchSqlQuery(projectId, sql), ct);
+        => _dispatcher.Query(new SearchSqlDocumentsQuery(projectId, sql), ct);
 
-    public Task<OpenSearchSyncView> TriggerOpenSearchSyncAsync(
+    public Task<SearchSyncView> TriggerOpenSearchSyncAsync(
         Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Send(new TriggerOpenSearchSyncCommand(projectId), ct);
+        => _dispatcher.Send(new TriggerSearchSyncCommand(projectId), ct);
 
-    public Task<IReadOnlyList<OpenSearchDashboardView>> ListOpenSearchDashboardsAsync(
+    public Task<IReadOnlyList<SearchDashboardView>> ListOpenSearchDashboardsAsync(
         Guid projectId, CancellationToken ct = default)
-        => _dispatcher.Query(new ListOpenSearchDashboardsQuery(projectId), ct);
+        => _dispatcher.Query(new ListSearchDashboardsQuery(projectId), ct);
 
-    public Task<OpenSearchDashboardView> SaveOpenSearchDashboardAsync(
-        SaveOpenSearchDashboardCommand command, CancellationToken ct = default)
+    public Task<SearchDashboardView> SaveOpenSearchDashboardAsync(
+        SaveSearchDashboardCommand command, CancellationToken ct = default)
         => _dispatcher.Send(command, ct);
 
     public Task<bool> DeleteOpenSearchDashboardAsync(
         Guid dashboardId, CancellationToken ct = default)
-        => _dispatcher.Send(new DeleteOpenSearchDashboardCommand(dashboardId), ct);
+        => _dispatcher.Send(new DeleteSearchDashboardCommand(dashboardId), ct);
 
     public Task<IReadOnlyList<SavedQueryRecord>> ListSavedQueriesAsync(
         Guid projectId, CancellationToken ct = default)
@@ -268,6 +272,9 @@ public sealed class PlaceContextService
     public Task<bool> DeleteJobChainAsync(Guid chainId, CancellationToken ct = default)
         => _dispatcher.Send(new DeleteJobChainCommand(chainId), ct);
 
+    public Task<JobChainView?> GetJobChainAsync(Guid id, CancellationToken ct = default)
+        => _dispatcher.Query(new GetJobChainQuery(id), ct);
+
     public Task<IReadOnlyList<JobChainView>> ListJobChainsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListJobChainsQuery(projectId), ct);
 
@@ -295,23 +302,23 @@ public sealed class PlaceContextService
     public Task<IReadOnlyList<DataMappingView>> ListDataMappingsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListDataMappingsQuery(projectId), ct);
 
-    public Task<Ports.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default)
+    public Task<PlaceContext.Application.ProjectData.ProjectQueryResult> ExecuteProjectDataAsync(Guid projectId, string sql, CancellationToken ct = default)
         => _dispatcher.Send(new ExecuteProjectDataCommand(projectId, sql), ct);
 
-    public Task<IReadOnlyList<Ports.ProjectTableSchema>> ListProjectTableSchemasAsync(Guid projectId, CancellationToken ct = default)
+    public Task<IReadOnlyList<PlaceContext.Application.ProjectData.ProjectTableSchema>> ListProjectTableSchemasAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListProjectTableSchemasQuery(projectId), ct);
 
-    public Task<IReadOnlyList<Ports.ProjectTableInfo>> ListProjectDataTablesAsync(Guid projectId, CancellationToken ct = default)
+    public Task<IReadOnlyList<PlaceContext.Application.ProjectData.ProjectTableInfo>> ListProjectDataTablesAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new ListProjectDataTablesQuery(projectId), ct);
 
-    public Task<Ports.ProjectTablePageResult> QueryProjectTablePageAsync(Guid projectId, string tableName, string? search,
+    public Task<PlaceContext.Application.ProjectData.ProjectTablePageResult> QueryProjectTablePageAsync(Guid projectId, string tableName, string? search,
         int page, int pageSize, string? sortColumn = null, bool sortDescending = false, CancellationToken ct = default, bool includeTotalCount = true)
         => _dispatcher.Query(new QueryProjectTablePageQuery(projectId, tableName, search, page, pageSize, sortColumn, sortDescending, includeTotalCount), ct);
 
-    public Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns, CancellationToken ct = default)
+    public Task CreateProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<PlaceContext.Application.ProjectData.ProjectColumnSpec> columns, CancellationToken ct = default)
         => _dispatcher.Send(new CreateProjectTableCommand(projectId, tableName, columns), ct);
 
-    public Task<ImportCsvResult> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<Ports.ProjectColumnSpec> columns,
+    public Task<ImportCsvResult> ImportCsvToProjectTableAsync(Guid projectId, string tableName, IReadOnlyList<PlaceContext.Application.ProjectData.ProjectColumnSpec> columns,
         IReadOnlyList<IReadOnlyList<string?>> rows, bool createTable, CancellationToken ct = default)
         => _dispatcher.Send(new ImportCsvToProjectTableCommand(projectId, tableName, columns, rows, createTable), ct);
 
@@ -324,10 +331,10 @@ public sealed class PlaceContextService
     public Task<string> ExportProjectTableCsvAsync(Guid projectId, string tableName, CancellationToken ct = default)
         => _dispatcher.Query(new ExportProjectTableQuery(projectId, tableName), ct);
 
-    public Task<IReadOnlyList<Ports.ProjectColumnInfo>> ListProjectTableColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
+    public Task<IReadOnlyList<PlaceContext.Application.ProjectData.ProjectColumnInfo>> ListProjectTableColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
         => _dispatcher.Query(new ListProjectTableColumnsQuery(projectId, tableName), ct);
 
-    public Task AddProjectTableColumnAsync(Guid projectId, string tableName, Ports.ProjectColumnSpec column, CancellationToken ct = default)
+    public Task AddProjectTableColumnAsync(Guid projectId, string tableName, PlaceContext.Application.ProjectData.ProjectColumnSpec column, CancellationToken ct = default)
         => _dispatcher.Send(new AddProjectTableColumnCommand(projectId, tableName, column), ct);
 
     public Task DropProjectTableColumnAsync(Guid projectId, string tableName, string columnName, CancellationToken ct = default)
@@ -474,13 +481,13 @@ public sealed class PlaceContextService
 
     // ── Cluster page: node inventory + promote master + join codes ───────────────────────────────────
 
-    public Task<Ports.ClusterInfo> GetClusterInfoAsync(CancellationToken ct = default)
+    public Task<PlaceContext.Application.Cluster.ClusterInfo> GetClusterInfoAsync(CancellationToken ct = default)
         => _dispatcher.Query(new PlaceContext.Application.Cluster.GetClusterInfoQuery(), ct);
 
-    public Task<Ports.PromoteMasterResult> PromoteNodeToMasterAsync(string nodeName, CancellationToken ct = default)
+    public Task<PlaceContext.Application.Cluster.PromoteMasterResult> PromoteNodeToMasterAsync(string nodeName, CancellationToken ct = default)
         => _dispatcher.Send(new PlaceContext.Application.Cluster.PromoteNodeToMasterCommand(nodeName), ct);
 
-    public Task<Ports.ClusterJoinMaterial?> GetClusterJoinMaterialAsync(CancellationToken ct = default)
+    public Task<PlaceContext.Application.Cluster.ClusterJoinMaterial?> GetClusterJoinMaterialAsync(CancellationToken ct = default)
         => _dispatcher.Query(new PlaceContext.Application.Cluster.GetClusterJoinMaterialQuery(), ct);
 
     public Task<Cluster.LaunchAgentResult> LaunchClusterAgentAsync(CancellationToken ct = default)
@@ -489,16 +496,16 @@ public sealed class PlaceContextService
     public Task<string> CreateAgentJoinTokenAsync(CancellationToken ct = default)
         => _dispatcher.Send(new PlaceContext.Application.Cluster.CreateAgentJoinTokenCommand(), ct);
 
-    public Task<Ports.JobTelemetrySnapshot> GetJobTelemetrySnapshotAsync(CancellationToken ct = default)
+    public Task<PlaceContext.Application.Observability.JobTelemetrySnapshot> GetJobTelemetrySnapshotAsync(CancellationToken ct = default)
         => _dispatcher.Query(new Observability.GetJobTelemetrySnapshotQuery(), ct);
 
-    public Task<IReadOnlyList<Ports.JobRunTelemetry>> ListRecentJobRunTelemetryAsync(int take = 50, CancellationToken ct = default)
+    public Task<IReadOnlyList<PlaceContext.Application.Observability.JobRunTelemetry>> ListRecentJobRunTelemetryAsync(int take = 50, CancellationToken ct = default)
         => _dispatcher.Query(new Observability.ListRecentJobRunTelemetryQuery(take), ct);
 
-    public Task<IReadOnlyList<Ports.JobRunTelemetry>> ListJobRunTelemetryAsync(Guid jobId, int take = 20, CancellationToken ct = default)
+    public Task<IReadOnlyList<PlaceContext.Application.Observability.JobRunTelemetry>> ListJobRunTelemetryAsync(Guid jobId, int take = 20, CancellationToken ct = default)
         => _dispatcher.Query(new Observability.ListJobRunTelemetryQuery(jobId, take), ct);
 
-    public Task<IReadOnlyList<Ports.ChainRunTelemetry>> ListRecentChainRunTelemetryAsync(int take = 50, CancellationToken ct = default)
+    public Task<IReadOnlyList<PlaceContext.Application.Observability.ChainRunTelemetry>> ListRecentChainRunTelemetryAsync(int take = 50, CancellationToken ct = default)
         => _dispatcher.Query(new Observability.ListRecentChainRunTelemetryQuery(take), ct);
 
     public Task<Dtos.McpConnectionView> CreateMcpConnectionAsync(Features.CreateMcpConnectionCommand command, CancellationToken ct = default)
@@ -512,4 +519,9 @@ public sealed class PlaceContextService
     public Task<IReadOnlyList<Dtos.McpConnectionView>> ListMcpConnectionsAsync(Guid projectId, CancellationToken ct = default)
         => _dispatcher.Query(new Features.ListMcpConnectionsQuery(projectId), ct);
 
+    public Task<TenantBranding> GetTenantBrandingAsync(CancellationToken ct = default)
+        => _dispatcher.Query(new GetTenantBrandingQuery(), ct);
+
+    public Task<bool> SetTenantBrandingAsync(TenantBranding branding, CancellationToken ct = default)
+        => _dispatcher.Send(new SetTenantBrandingCommand(branding), ct);
 }

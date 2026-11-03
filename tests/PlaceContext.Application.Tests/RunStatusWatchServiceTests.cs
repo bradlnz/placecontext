@@ -1,5 +1,5 @@
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Jobs;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
@@ -24,7 +24,10 @@ public class RunStatusWatchServiceTests
         public FakeRunStatusNotifier Notifier { get; } = new();
         public FakeClock Clock { get; } = new(T0);
         public RunWatchState State { get; } = new();
-        public RunStatusWatchService Service { get; }
+        public RunStatusWatchService Service
+        {
+            get;
+        }
 
         public Ctx() => Service = new RunStatusWatchService(Reader, Notifier, Clock);
 

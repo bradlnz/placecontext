@@ -10,7 +10,9 @@ public static class ManagedOAuthProtocol
     public static string Challenge(string verifier)
     {
         if (string.IsNullOrWhiteSpace(verifier) || verifier.Length is < 43 or > 128)
+        {
             throw new ArgumentException("PKCE verifier must contain 43-128 characters.", nameof(verifier));
+        }
         return Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
     }
     public static string RandomState() => Base64Url(RandomNumberGenerator.GetBytes(32));

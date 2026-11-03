@@ -1,8 +1,8 @@
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Application;
-using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -21,8 +21,14 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     }
 
     // ── Parameters ────────────────────────────────────────────────────────────────────────────
-    public Guid ProjectId { get; private set; }
-    public string? Error { get; private set; }
+    public Guid ProjectId
+    {
+        get; private set;
+    }
+    public string? Error
+    {
+        get; private set;
+    }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
     public void Initialize(Guid projectId)
@@ -40,14 +46,18 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     public static bool IsJsonCell(string column, string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
+        {
             return false;
+        }
         var candidate = value.Trim();
         if (
             !column.Contains("json", StringComparison.OrdinalIgnoreCase)
             && !candidate.StartsWith('{')
             && !candidate.StartsWith('[')
         )
+        {
             return false;
+        }
         try
         {
             using var _ = System.Text.Json.JsonDocument.Parse(candidate);
@@ -64,7 +74,9 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     public async Task AfterRenderAsync()
     {
         if (ShowNewView || ShowTableModal || SqlEditorActiveTable is not null)
+        {
             _ = PushSqlSchemaAsync();
+        }
         if (ShowNewView && ViewMonaco && !ViewMonacoReady)
         {
             ViewMonacoReady = true;
@@ -79,7 +91,9 @@ public sealed partial class ProjectDataViewModel : PageViewModel
                         "vs-dark"
                     )
                 )
+                {
                     ViewMonaco = false;
+                }
             }
             catch
             {
@@ -100,7 +114,9 @@ public sealed partial class ProjectDataViewModel : PageViewModel
                         "vs-dark"
                     )
                 )
+                {
                     CloseTableModal();
+                }
             }
             catch
             {
@@ -122,7 +138,9 @@ public sealed partial class ProjectDataViewModel : PageViewModel
                         SqlEditorActiveTable
                     )
                 )
+                {
                     SqlEditorMonaco = false;
+                }
             }
             catch
             {
@@ -202,15 +220,39 @@ public sealed partial class ProjectDataViewModel : PageViewModel
 
     public const string TableModalEditorId = "pcdata-table-modal-editor";
 
-    public bool ShowTableModal { get; set; }
-    public string? ModalTableName { get; private set; }
+    public bool ShowTableModal
+    {
+        get; set;
+    }
+    public string? ModalTableName
+    {
+        get; private set;
+    }
     public string ModalSql { get; set; } = "";
-    public ProjectQueryResult? ModalResult { get; private set; }
-    public string? ModalError { get; private set; }
-    public bool ModalRunning { get; private set; }
-    public bool ModalEditorReady { get; set; }
-    public string? JsonViewerTitle { get; private set; }
-    public string? JsonViewerValue { get; private set; }
+    public ProjectQueryResult? ModalResult
+    {
+        get; private set;
+    }
+    public string? ModalError
+    {
+        get; private set;
+    }
+    public bool ModalRunning
+    {
+        get; private set;
+    }
+    public bool ModalEditorReady
+    {
+        get; set;
+    }
+    public string? JsonViewerTitle
+    {
+        get; private set;
+    }
+    public string? JsonViewerValue
+    {
+        get; private set;
+    }
 
     public void OpenJsonViewer(string column, string value)
     {
@@ -233,7 +275,10 @@ public sealed partial class ProjectDataViewModel : PageViewModel
         try
         {
             var columns = await _svc.ListProjectTableColumnsAsync(ProjectId, table);
-            if (columns.Count == 0) throw new InvalidOperationException($"Table {table} has no readable columns.");
+            if (columns.Count == 0)
+            {
+                throw new InvalidOperationException($"Table {table} has no readable columns.");
+            }
             static string Quote(string name) => "\"" + name.Replace("\"", "\"\"") + "\"";
             Error = null;
             return $"SELECT {string.Join(", ", columns.Select(column => Quote(column.Name)))} FROM {Quote(table)} LIMIT 50;";
@@ -249,7 +294,10 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     public async Task OpenTableModalAsync(string table)
     {
         var sql = await TablePreviewSqlAsync(table);
-        if (sql is null) return;
+        if (sql is null)
+        {
+            return;
+        }
         ModalTableName = table;
         ModalSql = sql;
         ModalResult = null;
@@ -296,12 +344,16 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     public string ModalResultCsvUri()
     {
         if (ModalResult is null)
+        {
             return "";
+        }
         var sb = new System.Text.StringBuilder();
         sb.AppendLine(string.Join(",", ModalResult.Columns.Select(CsvEscape)));
         foreach (var row in ModalResult.Rows)
+        {
             sb.AppendLine(string.Join(",", row.Select(v => CsvEscape(v ?? ""))));
+        }
         return "data:text/csv;charset=utf-8;base64,"
-            + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
+                    + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
     }
 }

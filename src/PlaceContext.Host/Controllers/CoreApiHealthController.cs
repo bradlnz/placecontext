@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers;

@@ -72,7 +72,11 @@ public sealed class LocalCliModelsTests
         start.ArgumentList.Add("-c");
         start.ArgumentList.Add(mode == "cancel" ? "import time; time.sleep(30)" : "import time; print('x'*2000001, flush=True); time.sleep(30)");
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(mode == "cancel" ? 1 : 10));
-        if (mode == "cancel") await Assert.ThrowsAnyAsync<OperationCanceledException>(() => LocalCliModels.RunAsync(start, "", timeout.Token));
-        else await Assert.ThrowsAsync<InvalidOperationException>(() => LocalCliModels.RunAsync(start, "", timeout.Token));
+        if (mode == "cancel")
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => LocalCliModels.RunAsync(start, "", timeout.Token));
+            return;
+        }
+        await Assert.ThrowsAsync<InvalidOperationException>(() => LocalCliModels.RunAsync(start, "", timeout.Token));
     }
 }

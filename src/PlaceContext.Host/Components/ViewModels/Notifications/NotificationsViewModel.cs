@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application.Ports;
-using PlaceContext.Infrastructure.Operations;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application.Tenancy;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -30,10 +31,19 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
         _permissions = permissions;
     }
 
-    public bool IsOpen { get; private set; }
+    public bool IsOpen
+    {
+        get; private set;
+    }
     public IReadOnlyList<PortalOperation> Operations { get; private set; } = [];
-    public int ActiveCount { get; private set; }
-    public int NeedsInputCount { get; private set; }
+    public int ActiveCount
+    {
+        get; private set;
+    }
+    public int NeedsInputCount
+    {
+        get; private set;
+    }
     public string ActiveSummary => NeedsInputCount > 0
         ? $"{NeedsInputCount} need input" + (ActiveCount > 0 ? $" · {ActiveCount} in progress" : "")
         : ActiveCount > 0 ? $"{ActiveCount} in progress" : "all quiet";
@@ -41,10 +51,13 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
     public void Initialize()
     {
         if (_initialized)
+        {
             return;
-
+        }
         if (_tenant.IsResolved)
+        {
             _operationSubscription = _operationsCenter.Subscribe(_tenant.TenantId, OnOperationsChanged, _user?.UserId);
+        }
         _initialized = true;
         Reload();
     }
@@ -59,7 +72,10 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
                 _canViewWorkflowInputs = await _permissions.HasAsync(Permission.ChainsManage)
                     && await _permissions.HasAsync(Permission.JobsRun);
             }
-            catch { _canViewWorkflowInputs = false; }
+            catch
+            {
+                _canViewWorkflowInputs = false;
+            }
         }
         Reload();
         NotifyStateChanged();
@@ -142,7 +158,10 @@ public sealed class NotificationsViewModel : PageViewModel, IComponentViewModel,
         var previous = ActiveCount;
         var previousInput = NeedsInputCount;
         Reload();
-        if (IsOpen || ActiveCount != previous || NeedsInputCount != previousInput) NotifyStateChanged();
+        if (IsOpen || ActiveCount != previous || NeedsInputCount != previousInput)
+        {
+            NotifyStateChanged();
+        }
     }
 
     private void Reload()

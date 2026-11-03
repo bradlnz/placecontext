@@ -54,7 +54,9 @@ public class RunReportTests
         var job = MakeJob("kept-job");
         await jobs.AddAsync(job);
         for (var i = 0; i < 5; i++)
+        {
             await runs.AddAsync(JobRun.Start(job.Id, job.ProjectId, T0.AddMinutes(i), Snapshot()));
+        }
         await runs.AddAsync(JobRun.Start(Guid.NewGuid(), Guid.NewGuid(), T0.AddMinutes(9), Snapshot())); // orphan
 
         var handler = new ListRecentRunReportsHandler(runs, jobs, new InMemoryProjectRepository());

@@ -15,6 +15,7 @@ public class LayerDependencyTests
     private const string Application = "PlaceContext.Application";
     private const string Infrastructure = "PlaceContext.Infrastructure";
     private const string Host = "PlaceContext.Host";
+    private const string ClusterHost = "PlaceContext.ClusterHost";
 
     private static readonly Assembly DomainAsm = typeof(Project).Assembly;
     private static readonly Assembly ApplicationAsm = Load(Application);
@@ -22,15 +23,15 @@ public class LayerDependencyTests
 
     [Fact]
     public void Domain_depends_on_nothing_outward()
-        => AssertNoDependency(DomainAsm, Application, Infrastructure, Host);
+        => AssertNoDependency(DomainAsm, Application, Infrastructure, Host, ClusterHost);
 
     [Fact]
     public void Application_does_not_depend_on_infrastructure_or_host()
-        => AssertNoDependency(ApplicationAsm, Infrastructure, Host);
+        => AssertNoDependency(ApplicationAsm, Infrastructure, Host, ClusterHost);
 
     [Fact]
     public void Infrastructure_does_not_depend_on_host()
-        => AssertNoDependency(InfrastructureAsm, Host);
+        => AssertNoDependency(InfrastructureAsm, Host, ClusterHost);
 
     [Fact]
     public void Inner_layers_are_free_of_infrastructure_concerns()
@@ -38,7 +39,9 @@ public class LayerDependencyTests
         string[] concerns =
         {
             "LibGit2Sharp", "Microsoft.Data.Sqlite", "Dapper",
-            "System.Diagnostics.Process", "Microsoft.AspNetCore"
+            "System.Diagnostics.Process", "Microsoft.AspNetCore", "Microsoft.EntityFrameworkCore",
+            "Npgsql", "System.Net.Http", "Microsoft.Extensions.Http", "AWSSDK", "KubernetesClient",
+            "StackExchange.Redis"
         };
         AssertNoDependency(DomainAsm, concerns);
         AssertNoDependency(ApplicationAsm, concerns);

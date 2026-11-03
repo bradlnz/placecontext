@@ -1,5 +1,4 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Secrets;
 namespace PlaceContext.Infrastructure.Security;
 
 /// <summary>Vault secrets: thin façade over <see cref="IDataEncryptor"/> with the vault purpose.</summary>

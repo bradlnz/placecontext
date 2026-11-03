@@ -1,6 +1,8 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Triggers;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 
@@ -30,18 +32,19 @@ public sealed class SetTriggerEnabledHandler : ICommandHandler<SetTriggerEnabled
             ?? throw new InvalidOperationException($"Trigger {command.TriggerId} not found.");
 
         var now = _clock.UtcNow;
-        if (command.Enabled)
+        void ApplyEnabledState()
         {
-            DateTimeOffset? next = trigger.Kind == TriggerKind.Schedule && trigger.CronExpression is { } cron
-                ? _cron.Next(cron, now, _tenant.TimeZoneId)
-                : null;
-            trigger.Enable(next, now);
-        }
-        else
-        {
+            if (command.Enabled)
+            {
+                DateTimeOffset? next = trigger.Kind == TriggerKind.Schedule && trigger.CronExpression is { } cron
+                    ? _cron.Next(cron, now, _tenant.TimeZoneId)
+                    : null;
+                trigger.Enable(next, now);
+                return;
+            }
             trigger.Disable(now);
         }
-
+        ApplyEnabledState();
         await _triggers.UpdateAsync(trigger, ct);
         await _uow.SaveChangesAsync(ct);
         return TriggerViewMapper.ToView(trigger);

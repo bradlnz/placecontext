@@ -1,5 +1,5 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace PlaceContext.Domain.ValueObjects;
 
@@ -33,24 +33,34 @@ public sealed record ConditionGate(string Expression, IReadOnlyList<ChainStage>?
     internal static bool EvaluateExpression(string expression, string? payload)
     {
         if (string.IsNullOrWhiteSpace(expression))
+        {
             return true;
-
+        }
         var trimmed = expression.Trim();
 
         // Literal booleans
-        if (string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase)) return true;
-        if (string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase)) return false;
-
-        if (string.IsNullOrWhiteSpace(payload)) return false;
-
+        if (string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return false;
+        }
         try
         {
             using var doc = JsonDocument.Parse(payload);
             var root = doc.RootElement;
 
             var colon = trimmed.IndexOf(':');
-            if (colon < 0) return false;
-
+            if (colon < 0)
+            {
+                return false;
+            }
             var op = trimmed[..colon].Trim().ToLowerInvariant();
             var rest = trimmed[(colon + 1)..].Trim();
 
@@ -89,14 +99,18 @@ public sealed record ConditionGate(string Expression, IReadOnlyList<ChainStage>?
     {
         // rest is "field.path:value" or "field.path" when comparing to true
         var lastColon = rest.LastIndexOf(':');
-        if (lastColon <= 0) return false;
-
+        if (lastColon <= 0)
+        {
+            return false;
+        }
         var path = rest[..lastColon].Trim();
         var expected = rest[(lastColon + 1)..].Trim();
 
         var el = ResolvePath(root, path);
-        if (el is null) return false;
-
+        if (el is null)
+        {
+            return false;
+        }
         return el.Value.ValueKind switch
         {
             JsonValueKind.String => el.Value.GetString() == expected,
@@ -110,33 +124,49 @@ public sealed record ConditionGate(string Expression, IReadOnlyList<ChainStage>?
     private static bool EvaluateCompare(JsonElement root, string rest, Func<double, double, bool> cmp)
     {
         var lastColon = rest.LastIndexOf(':');
-        if (lastColon <= 0) return false;
-
+        if (lastColon <= 0)
+        {
+            return false;
+        }
         var path = rest[..lastColon].Trim();
         if (!double.TryParse(rest[(lastColon + 1)..].Trim(), out var target))
+        {
             return false;
-
+        }
         var el = ResolvePath(root, path);
         if (el is null || el.Value.ValueKind != JsonValueKind.Number)
+        {
             return false;
-
+        }
         return cmp(el.Value.GetDouble(), target);
     }
 
-    private enum TextComparison { Contains, StartsWith, EndsWith }
+    private enum TextComparison
+    {
+        Contains, StartsWith, EndsWith
+    }
 
     private static bool EvaluateText(JsonElement root, string rest, TextComparison comparison)
     {
-        if (!TrySplitOperand(rest, out var path, out var expected)) return false;
+        if (!TrySplitOperand(rest, out var path, out var expected))
+        {
+            return false;
+        }
         var el = ResolvePath(root, path);
-        if (el is null) return false;
-
+        if (el is null)
+        {
+            return false;
+        }
         if (comparison == TextComparison.Contains && el.Value.ValueKind == JsonValueKind.Array)
+        {
             return el.Value.EnumerateArray().Any(item =>
-                string.Equals(ScalarText(item), expected, StringComparison.OrdinalIgnoreCase));
-
+                        string.Equals(ScalarText(item), expected, StringComparison.OrdinalIgnoreCase));
+        }
         var actual = ScalarText(el.Value);
-        if (actual is null) return false;
+        if (actual is null)
+        {
+            return false;
+        }
         return comparison switch
         {
             TextComparison.Contains => actual.Contains(expected, StringComparison.OrdinalIgnoreCase),
@@ -148,18 +178,27 @@ public sealed record ConditionGate(string Expression, IReadOnlyList<ChainStage>?
 
     private static bool EvaluateIn(JsonElement root, string rest)
     {
-        if (!TrySplitOperand(rest, out var path, out var values)) return false;
+        if (!TrySplitOperand(rest, out var path, out var values))
+        {
+            return false;
+        }
         var el = ResolvePath(root, path);
         var actual = el is null ? null : ScalarText(el.Value);
-        if (actual is null) return false;
+        if (actual is null)
+        {
+            return false;
+        }
         return values.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Any(candidate => string.Equals(candidate, actual, StringComparison.OrdinalIgnoreCase));
+                    .Any(candidate => string.Equals(candidate, actual, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool EvaluateEmpty(JsonElement root, string path)
     {
         var el = ResolvePath(root, path);
-        if (el is null || el.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return true;
+        if (el is null || el.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return true;
+        }
         return el.Value.ValueKind switch
         {
             JsonValueKind.String => string.IsNullOrWhiteSpace(el.Value.GetString()),
@@ -192,13 +231,22 @@ public sealed record ConditionGate(string Expression, IReadOnlyList<ChainStage>?
 
     private static JsonElement? ResolvePath(JsonElement root, string path)
     {
-        if (string.IsNullOrWhiteSpace(path)) return root;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return root;
+        }
         var parts = path.Split('.', StringSplitOptions.RemoveEmptyEntries);
         JsonElement current = root;
         for (var i = 0; i < parts.Length; i++)
         {
-            if (current.ValueKind != JsonValueKind.Object) return null;
-            if (!current.TryGetProperty(parts[i], out current)) return null;
+            if (current.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+            if (!current.TryGetProperty(parts[i], out current))
+            {
+                return null;
+            }
         }
         return current;
     }

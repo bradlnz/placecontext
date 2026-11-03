@@ -1,3 +1,4 @@
+using PlaceContext.Application.Tenancy;
 namespace PlaceContext.Host.Tests;
 
 public sealed class MvvmArchitectureTests
@@ -24,12 +25,12 @@ public sealed class MvvmArchitectureTests
 
         Assert.Contains("@inject NotificationsViewModel Vm", view, StringComparison.Ordinal);
         Assert.DoesNotContain(
-            "@inject PlaceContext.Infrastructure.Operations.OperationCenter",
+            "@inject PlaceContext.Application.Operations.OperationCenter",
             view,
             StringComparison.Ordinal
         );
         Assert.DoesNotContain(
-            "@inject PlaceContext.Application.Ports.ICurrentTenant",
+            "@inject PlaceContext.Application.Tenancy.ICurrentTenant",
             view,
             StringComparison.Ordinal
         );
@@ -48,7 +49,9 @@ public sealed class MvvmArchitectureTests
         {
             var host = Path.Combine(directory.FullName, "src", "PlaceContext.Host");
             if (Directory.Exists(host))
+            {
                 return File.ReadAllText(Path.Combine(host, relativePath));
+            }
             directory = directory.Parent;
         }
 

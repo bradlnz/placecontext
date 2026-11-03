@@ -1,15 +1,8 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
+using PlaceContext.Application.Cluster;
 using PlaceContext.Application;
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Host.Components.ViewModels;
-
-public enum WorkerTarget
-{
-    StandardWorker,
-    AiShard
-}
 
 public sealed class ClusterViewModel(
     PlaceContextService service,
@@ -20,16 +13,40 @@ public sealed class ClusterViewModel(
 {
     private const string LocalEnvironment = "Local environment";
     public bool Loading { get; private set; } = true;
-    public bool Busy { get; private set; }
-    public string? Message { get; private set; }
-    public bool MessageOk { get; private set; }
-    public IReadOnlyList<ClusterNode>? Nodes { get; private set; }
-    public ClusterInfo? Cluster { get; private set; }
-    public bool ShowAddWorkerOptions { get; private set; }
+    public bool Busy
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
+    public bool MessageOk
+    {
+        get; private set;
+    }
+    public IReadOnlyList<ClusterNode>? Nodes
+    {
+        get; private set;
+    }
+    public ClusterInfo? Cluster
+    {
+        get; private set;
+    }
+    public bool ShowAddWorkerOptions
+    {
+        get; private set;
+    }
     public WorkerTarget SelectedWorkerTarget { get; private set; } = WorkerTarget.StandardWorker;
-    public int AiShardIndex { get; private set; }
+    public int AiShardIndex
+    {
+        get; private set;
+    }
     public int AiShardCount { get; private set; } = 2;
-    public bool Copied { get; private set; }
+    public bool Copied
+    {
+        get; private set;
+    }
     public double ReadyPercent =>
         Nodes is { Count: > 0 } ? Nodes.Count(node => node.Ready) * 100d / Nodes.Count : 0;
     public string LastSyncLabel => $"Updated {Presentation.Time(DateTimeOffset.Now)}";
@@ -98,7 +115,9 @@ public sealed class ClusterViewModel(
     public async Task CopyCommandAsync()
     {
         if (JoinCommand is null)
+        {
             return;
+        }
         await js.InvokeVoidAsync("navigator.clipboard.writeText", JoinCommand);
         Copied = true;
         NotifyStateChanged();
@@ -131,7 +150,9 @@ public sealed class ClusterViewModel(
     public void SetAiShardIndex(ChangeEventArgs args)
     {
         if (int.TryParse(args.Value?.ToString(), out var index))
+        {
             AiShardIndex = Math.Clamp(index, 0, AiShardCount - 1);
+        }
         Copied = false;
         NotifyStateChanged();
     }
@@ -139,7 +160,9 @@ public sealed class ClusterViewModel(
     public void SetAiShardCount(ChangeEventArgs args)
     {
         if (int.TryParse(args.Value?.ToString(), out var count))
+        {
             AiShardCount = Math.Clamp(count, 1, 32);
+        }
         AiShardIndex = Math.Min(AiShardIndex, AiShardCount - 1);
         Copied = false;
         NotifyStateChanged();
@@ -176,14 +199,22 @@ public sealed class ClusterViewModel(
     public static string RelativeAge(DateTimeOffset? createdAt)
     {
         if (createdAt is null)
+        {
             return "Local";
+        }
         var age = DateTimeOffset.UtcNow - createdAt.Value;
         if (age.TotalMinutes < 2)
+        {
             return "Just now";
+        }
         if (age.TotalHours < 1)
+        {
             return $"{(int)age.TotalMinutes}m ago";
+        }
         if (age.TotalDays < 1)
+        {
             return $"{(int)age.TotalHours}h ago";
+        }
         return $"{(int)age.TotalDays}d ago";
     }
 }

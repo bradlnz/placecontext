@@ -4,15 +4,21 @@
 window.pcstudio = {
   splitter(handleId) {
     const handle = document.getElementById(handleId);
-    if (!handle || handle.dataset.bound === '1') return;
+    if (!handle || handle.dataset.bound === '1') {
+      return;
+    }
     handle.dataset.bound = '1';
     const column = handle.parentElement;
     const top = handle.previousElementSibling;
     const bottom = handle.nextElementSibling;
-    if (!column || !top || !bottom) return;
+    if (!column || !top || !bottom) {
+      return;
+    }
 
     const start = (e) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0) {
+        return;
+      }
       e.preventDefault();
       const columnHeight = column.getBoundingClientRect().height;
       const startY = e.clientY;

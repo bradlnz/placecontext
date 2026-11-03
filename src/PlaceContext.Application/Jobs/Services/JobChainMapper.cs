@@ -38,7 +38,7 @@ internal static class JobChainMapper
     private static ChainActionView? ToActionView(ChainAction? action) => action switch
     {
         null => null,
-        QemuChainAction vm => new QemuChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork, vm.PauseForLogin, vm.LoginProfileId),
+        VirtualMachineChainAction vm => new VirtualMachineChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork, vm.PauseForLogin, vm.LoginProfileId),
         LoopChainAction loop => new LoopChainActionView(loop.Type, loop.Instructions, loop.ResponseField, loop.ResponseType, loop.AgentProvider),
         SendEmailChainAction email => new SendEmailChainActionView(
             email.Recipient, email.RecipientName, email.Subject, email.Body, email.AttachmentPath),

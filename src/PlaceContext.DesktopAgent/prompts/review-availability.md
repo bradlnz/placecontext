@@ -1,0 +1,1 @@
+Is the main product visibly available to buy at the selected location now? Missing or uncertain availability means no.

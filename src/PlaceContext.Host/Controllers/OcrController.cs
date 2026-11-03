@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application;
 using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers;
@@ -45,12 +45,30 @@ public sealed class OcrController : ControllerBase
     public async Task<IActionResult> Complete([FromBody] CompleteOcrRequest request)
     {
         if (request.ArtifactId == Guid.Empty)
-            return BadRequest(new { error = "artifactId is required." });
+        {
+            return BadRequest(new
+            {
+                error = "artifactId is required."
+            });
+        }
         if (string.IsNullOrWhiteSpace(request.Markdown) && string.IsNullOrWhiteSpace(request.Error))
-            return BadRequest(new { error = "Provide markdown (success) or error (failure)." });
-
+        {
+            return BadRequest(new
+            {
+                error = "Provide markdown (success) or error (failure)."
+            });
+        }
         var ok = await _svc.CompleteOcrAsync(request.ArtifactId, request.Markdown, request.Error, HttpContext.RequestAborted);
-        if (!ok) return NotFound(new { error = "Artifact not found." });
-        return Ok(new { processed = true });
+        if (!ok)
+        {
+            return NotFound(new
+            {
+                error = "Artifact not found."
+            });
+        }
+        return Ok(new
+        {
+            processed = true
+        });
     }
 }

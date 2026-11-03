@@ -1,6 +1,6 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
+using System.Text;
 
 namespace PlaceContext.Host;
 
@@ -31,7 +31,9 @@ public static class ArtifactChart
         svg = "";
         var series = ExtractSeries(json);
         if (series is not { Count: >= 2 })
+        {
             return false;
+        }
         svg = RenderSvg(series);
         return true;
     }
@@ -39,10 +41,14 @@ public static class ArtifactChart
     internal static List<(string Label, double Value)>? ExtractSeries(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
+        {
             return null;
+        }
         var t = json.TrimStart();
         if (t.Length == 0 || (t[0] != '{' && t[0] != '['))
+        {
             return null;
+        }
         try
         {
             using var doc = JsonDocument.Parse(json);
@@ -59,39 +65,52 @@ public static class ArtifactChart
         switch (el.ValueKind)
         {
             case JsonValueKind.Array when el.GetArrayLength() > 0:
-            {
-                var first = el[0];
-                if (first.ValueKind == JsonValueKind.Number)
                 {
-                    var series = new List<(string, double)>();
-                    var i = 0;
-                    foreach (var e in el.EnumerateArray())
+                    var first = el[0];
+                    if (first.ValueKind == JsonValueKind.Number)
                     {
-                        if (e.ValueKind != JsonValueKind.Number) return null;
-                        series.Add((i.ToString(CultureInfo.InvariantCulture), e.GetDouble()));
-                        i++;
+                        var series = new List<(string, double)>();
+                        var i = 0;
+                        foreach (var e in el.EnumerateArray())
+                        {
+                            if (e.ValueKind != JsonValueKind.Number)
+                            {
+                                return null;
+                            }
+                            series.Add((i.ToString(CultureInfo.InvariantCulture), e.GetDouble()));
+                            i++;
+                        }
+                        return series;
                     }
-                    return series;
+                    if (first.ValueKind == JsonValueKind.Object)
+                    {
+                        return FromObjectRows(el);
+                    }
+                    return null;
                 }
-                if (first.ValueKind == JsonValueKind.Object)
-                    return FromObjectRows(el);
-                return null;
-            }
             case JsonValueKind.Object:
-            {
-                if (NumericMap(el) is { } map)
-                    return map;
-                if (depth < 1)
                 {
-                    // container object: unwrap the first array- or object-valued property that
-                    // yields a series ({"data":[…]}, {"series":[…]}, {"totals":{…}} …)
-                    foreach (var p in el.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
-                        if (p.Value.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
-                            if (Extract(p.Value, depth + 1) is { Count: > 0 } inner)
-                                return inner;
+                    if (NumericMap(el) is { } map)
+                    {
+                        return map;
+                    }
+                    if (depth < 1)
+                    {
+                        // container object: unwrap the first array- or object-valued property that
+                        // yields a series ({"data":[…]}, {"series":[…]}, {"totals":{…}} …)
+                        foreach (var p in el.EnumerateObject().OrderBy(p => p.Name, StringComparer.Ordinal))
+                        {
+                            if (p.Value.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
+                            {
+                                if (Extract(p.Value, depth + 1) is { Count: > 0 } inner)
+                                {
+                                    return inner;
+                                }
+                            }
+                        }
+                    }
+                    return null;
                 }
-                return null;
-            }
             default:
                 return null;
         }
@@ -104,9 +123,16 @@ public static class ArtifactChart
         // stray count isn't a series.
         var series = new List<(string, double)>();
         foreach (var p in obj.EnumerateObject())
+        {
             if (p.Value.ValueKind == JsonValueKind.Number)
+            {
                 series.Add((p.Name, p.Value.GetDouble()));
-        if (series.Count < 2) return null;
+            }
+        }
+        if (series.Count < 2)
+        {
+            return null;
+        }
         series.Sort(static (a, b) => string.CompareOrdinal(a.Item1, b.Item1));
         return series;
     }
@@ -117,18 +143,23 @@ public static class ArtifactChart
         var labelField = PickField(first, LabelKeys, JsonValueKind.String);
         var valueField = PickField(first, ValueKeys, JsonValueKind.Number);
         if (valueField is null)
+        {
             return null;
-
+        }
         var series = new List<(string, double)>();
         var i = 0;
         foreach (var row in rows.EnumerateArray())
         {
             if (row.ValueKind != JsonValueKind.Object
                 || !row.TryGetProperty(valueField, out var v) || v.ValueKind != JsonValueKind.Number)
+            {
                 return null; // ragged rows: not a series
+            }
             var label = i.ToString(CultureInfo.InvariantCulture);
             if (labelField is not null && row.TryGetProperty(labelField, out var l) && l.ValueKind == JsonValueKind.String)
+            {
                 label = l.GetString() ?? label;
+            }
             series.Add((label, v.GetDouble()));
             i++;
         }
@@ -138,13 +169,17 @@ public static class ArtifactChart
     private static string? PickField(JsonElement row, string[] preferred, JsonValueKind kind)
     {
         foreach (var k in preferred)
+        {
             if (row.TryGetProperty(k, out var v) && v.ValueKind == kind)
+            {
                 return k;
+            }
+        }
         return row.EnumerateObject()
-            .Where(p => p.Value.ValueKind == kind)
-            .OrderBy(p => p.Name, StringComparer.Ordinal)
-            .Select(p => (string?)p.Name)
-            .FirstOrDefault();
+                        .Where(p => p.Value.ValueKind == kind)
+                        .OrderBy(p => p.Name, StringComparer.Ordinal)
+                        .Select(p => (string?)p.Name)
+                        .FirstOrDefault();
     }
 
     // ── SVG rendering ─────────────────────────────────────────────────────────────────────────
@@ -159,14 +194,17 @@ public static class ArtifactChart
 
         var labelW = 0;
         for (var i = 0; i < shown; i++)
+        {
             labelW = Math.Max(labelW, Math.Min(series[i].Label.Length, 16));
+        }
         var labelPx = Math.Min(12 + labelW * 7, 120);
         var barArea = width - padX - labelPx - valueW - 8;
 
         var maxAbs = 0d;
         for (var i = 0; i < shown; i++)
+        {
             maxAbs = Math.Max(maxAbs, Math.Abs(series[i].Value));
-
+        }
         var height = shown * rowPitch + 8 + (series.Count > shown ? 16 : 0);
         var sb = new StringBuilder();
         sb.Append($"<svg viewBox=\"0 0 {width} {height}\" role=\"img\" aria-label=\"bar chart generated from the artifact's JSON data\" ")
@@ -180,22 +218,36 @@ public static class ArtifactChart
             var (label, value) = series[i];
             var y = 4 + i * rowPitch;
             var w = maxAbs > 0 ? (int)Math.Round(Math.Abs(value) / maxAbs * barArea) : 0;
-            if (w == 0 && value != 0) w = 2; // nonzero values always get a visible bar
+            if (w == 0 && value != 0)
+            {
+                w = 2; // nonzero values always get a visible bar
+            }
             var x0 = labelPx + 6;
             var display = label.Length > 16 ? label[..15] + "…" : label;
 
             sb.Append("<g class=\"pcab\">")
               .Append($"<title>{Esc(label)}: {Fmt(value)}</title>")
               .Append($"<text x=\"{labelPx}\" y=\"{y + barH - 3}\" text-anchor=\"end\" fill=\"var(--text-2)\" font-size=\"11\" font-family=\"'IBM Plex Sans',system-ui,sans-serif\">{Esc(display)}</text>");
-            if (w >= 5)
-                sb.Append($"<path d=\"M{x0},{y} h{w - 4} a4,4 0 0 1 4,4 v{barH - 8} a4,4 0 0 1 -4,4 h-{w - 4} z\" fill=\"var(--brand)\"/>");
-            else if (w > 0)
-                sb.Append($"<rect x=\"{x0}\" y=\"{y}\" width=\"{w}\" height=\"{barH}\" fill=\"var(--brand)\"/>");
+            void DrawBarLabel()
+            {
+                if (w >= 5)
+                {
+                    sb.Append($"<path d=\"M{x0},{y} h{w - 4} a4,4 0 0 1 4,4 v{barH - 8} a4,4 0 0 1 -4,4 h-{w - 4} z\" fill=\"var(--brand)\"/>");
+                    return;
+                }
+                if (w > 0)
+                {
+                    sb.Append($"<rect x=\"{x0}\" y=\"{y}\" width=\"{w}\" height=\"{barH}\" fill=\"var(--brand)\"/>");
+                }
+            }
+            DrawBarLabel();
             sb.Append($"<text x=\"{x0 + w + 6}\" y=\"{y + barH - 3}\" fill=\"var(--text)\" font-size=\"11\" font-family=\"'IBM Plex Mono',monospace\">{Fmt(value)}</text>")
-              .Append("</g>");
+                              .Append("</g>");
         }
         if (series.Count > shown)
+        {
             sb.Append($"<text x=\"{labelPx + 6}\" y=\"{shown * rowPitch + 16}\" fill=\"var(--text-3)\" font-size=\"11\" font-family=\"'IBM Plex Sans',system-ui,sans-serif\">… {series.Count - shown} more</text>");
+        }
         sb.Append("</svg>");
         return sb.ToString();
     }

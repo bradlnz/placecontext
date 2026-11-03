@@ -14,7 +14,7 @@
           reject(new Error(`${module} failed to load.`));
         };
         document.head.appendChild(script);
-      }).catch(error => {
+      }).catch((error) => {
         loads.delete(module);
         throw error;
       });
@@ -24,18 +24,32 @@
   }
 
   function register(namespace, module, methods) {
-    window[namespace] = Object.fromEntries(methods.map(method => [method, async function invoke(...args) {
-      await load(module);
-      if (window[namespace][method] === invoke) {
-        loads.delete(module);
-        throw new Error(`${namespace}.${method} was not registered.`);
-      }
-      return window[namespace][method](...args);
-    }]));
+    window[namespace] = Object.fromEntries(
+      methods.map((method) => [
+        method,
+        async function invoke(...args) {
+          await load(module);
+          if (window[namespace][method] === invoke) {
+            loads.delete(module);
+            throw new Error(`${namespace}.${method} was not registered.`);
+          }
+          return window[namespace][method](...args);
+        },
+      ]),
+    );
   }
 
   register('pcgraph', 'pcgraph', ['init', 'append', 'select', 'destroy', 'splitter']);
-  register('pcmonaco', 'pcmonaco', ['isMounted', 'init', 'openFile', 'closeFile', 'setValue', 'getValue', 'destroy', 'setSqlSchema']);
+  register('pcmonaco', 'pcmonaco', [
+    'isMounted',
+    'init',
+    'openFile',
+    'closeFile',
+    'setValue',
+    'getValue',
+    'destroy',
+    'setSqlSchema',
+  ]);
   register('pcdata', 'pcmonaco', ['download', 'downloadStream']);
   register('pcstudio', 'pcstudio', ['splitter']);
   register('pcmap', 'pcmap', ['render', 'destroy']);

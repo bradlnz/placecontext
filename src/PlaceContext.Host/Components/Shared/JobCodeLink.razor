@@ -1,0 +1,17 @@
+@using PlaceContext.Application.Access
+
+@if (Job is { MapSourceKind: JobSourceCatalog.Code } job)
+{
+    <AuthorizeView Policy="@Permission.JobsEdit">
+        <a class="job-code-link" href="@PageRoutes.ProjectJob(job.ProjectId, job.Id)"
+           target="_blank" rel="noopener noreferrer" draggable="false"
+           title="Edit code in a new tab" aria-label="@($"Edit code for {job.Name} (opens in a new tab)")"
+           @onclick:stopPropagation="true" @ondragstart:stopPropagation="true">
+            <AppIcon Kind="edit" /> Edit code
+        </a>
+    </AuthorizeView>
+}
+
+@code {
+    [Parameter] public JobView? Job { get; set; }
+}

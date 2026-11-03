@@ -92,8 +92,10 @@ public sealed class LogAnalyticsQueryTests
         var entry = Entry("A", "", """{"event":{"at":"2026-10-25T02:32:00Z","severity":"warning","text":"retry","source":"worker"}}""");
         var mapping = new Dictionary<string, string>
         {
-            ["timestamp"] = "json.event.at", ["level"] = "json.event.severity",
-            ["message"] = "json.event.text", ["stream"] = "json.event.source",
+            ["timestamp"] = "json.event.at",
+            ["level"] = "json.event.severity",
+            ["message"] = "json.event.text",
+            ["stream"] = "json.event.source",
         };
         var result = new LogAnalyticsQuery("filter level = WARN AND timestamp >= -1h | fields timestamp, message, stream, json.event.severity", Now)
             .Execute([entry], mapping);

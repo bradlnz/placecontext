@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
+using PlaceContext.Application.DataLinks;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -158,19 +159,34 @@ public class RecordLinkHookTests
         public Dictionary<string, IReadOnlyList<ProjectColumnInfo>> Columns { get; } = new();
         public Dictionary<string, IReadOnlyList<IReadOnlyList<string?>>> Rows { get; } = new();
         public List<(string Table, IReadOnlyDictionary<string, string?> Values)> Inserted { get; } = new();
-        public bool BreakAllReads { get; set; }
-        public int UpdateAffected { get; set; }
-        public int DeleteAffected { get; set; }
+        public bool BreakAllReads
+        {
+            get; set;
+        }
+        public int UpdateAffected
+        {
+            get; set;
+        }
+        public int DeleteAffected
+        {
+            get; set;
+        }
 
         public Task<IReadOnlyList<ProjectColumnInfo>> ListColumnsAsync(Guid projectId, string tableName, CancellationToken ct = default)
         {
-            if (BreakAllReads) throw new InvalidOperationException("store is down");
+            if (BreakAllReads)
+            {
+                throw new InvalidOperationException("store is down");
+            }
             return Task.FromResult(Columns.TryGetValue(tableName, out var c) ? c : Array.Empty<ProjectColumnInfo>());
         }
 
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
         {
-            if (BreakAllReads) throw new InvalidOperationException("store is down");
+            if (BreakAllReads)
+            {
+                throw new InvalidOperationException("store is down");
+            }
             var table = Regex.Match(sql, "FROM \"([^\"]+)\"").Groups[1].Value;
             var selected = Regex.Matches(sql, "\"([^\"]+)\"::text").Select(m => m.Groups[1].Value).ToList();
             var all = Columns[table].Select(c => c.Name).ToList();
@@ -182,7 +198,10 @@ public class RecordLinkHookTests
         }
 
         public Task InsertRowAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
-        { Inserted.Add((tableName, values)); return Task.CompletedTask; }
+        {
+            Inserted.Add((tableName, values));
+            return Task.CompletedTask;
+        }
 
         public Task<int> UpdateRowsAsync(Guid projectId, string tableName, IReadOnlyDictionary<string, string?> keys,
             IReadOnlyDictionary<string, string?> values, CancellationToken ct = default)
@@ -223,7 +242,10 @@ public class RecordLinkHookTests
             => Task.CompletedTask;
 
         public Task ReplaceForTableAsync(Guid projectId, string table, IReadOnlyList<RecordLink> links, CancellationToken ct = default)
-        { RefreshedTables.Add(table); return Task.CompletedTask; }
+        {
+            RefreshedTables.Add(table);
+            return Task.CompletedTask;
+        }
 
         public Task<IReadOnlyList<RecordLink>> RelatedAsync(Guid projectId, string table, string rowKey, int take = 20, CancellationToken ct = default)
             => throw new NotSupportedException();

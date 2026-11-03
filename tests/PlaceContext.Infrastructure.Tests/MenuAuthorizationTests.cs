@@ -1,4 +1,6 @@
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Organization;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Tests;
@@ -25,7 +27,9 @@ public sealed class MenuAuthorizationTests
         Assert.Equal(new[] { "queues", "networking", "vault", "cluster" },
             grouped.Where(item => item.Parent == infrastructure.Id).Select(item => item.Id));
         foreach (var item in items)
+        {
             Assert.Equal(item.Href, Assert.Single(grouped, resolved => resolved.Id == item.Id).Href);
+        }
         Assert.Null(Assert.Single(grouped, item => item.Id == "build.chat").Parent);
     }
 
@@ -36,7 +40,10 @@ public sealed class MenuAuthorizationTests
         var grouped = MenuConfigService.GroupSections([item]);
         var group = Assert.Single(grouped, item => item.Kind == "group");
         Assert.Equal("Custom operations", group.Label);
-        Assert.Equal(item with { Parent = group.Id }, Assert.Single(grouped, item => item.Kind == "link"));
+        Assert.Equal(item with
+        {
+            Parent = group.Id
+        }, Assert.Single(grouped, item => item.Kind == "link"));
         Assert.Empty(MenuConfigService.GroupSections([]));
     }
 

@@ -1,5 +1,3 @@
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Application.Access;
 
 /// <summary>Shared validation for role definitions: name shape and permission-catalog membership.
@@ -14,11 +12,17 @@ public static class RoleDefinitionValidation
     {
         var trimmed = (name ?? string.Empty).Trim();
         if (trimmed.Length == 0)
+        {
             throw new ArgumentException("Role name cannot be empty.");
+        }
         if (trimmed.Length > MaxNameLength)
+        {
             throw new ArgumentException($"Role name cannot exceed {MaxNameLength} characters.");
+        }
         if (trimmed.Any(c => !(char.IsLetterOrDigit(c) || c is ' ' or '-' or '_')))
+        {
             throw new ArgumentException("Role name may only contain letters, digits, spaces, dashes and underscores.");
+        }
         return trimmed;
     }
 
@@ -29,8 +33,12 @@ public static class RoleDefinitionValidation
             .Distinct(StringComparer.Ordinal)
             .ToList();
         foreach (var permission in result)
+        {
             if (!Permission.All.Contains(permission))
+            {
                 throw new ArgumentException($"Unknown permission '{permission}'.");
+            }
+        }
         return result;
     }
 }

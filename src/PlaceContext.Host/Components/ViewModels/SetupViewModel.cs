@@ -1,19 +1,33 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
+using PlaceContext.Application.Auth;
 using PlaceContext.Application.Billing;
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class SetupViewModel(
     IAuthService auth, NavigationManager navigation,
     IOptions<RunBillingDeploymentOptions>? hosting = null) : PageViewModel
 {
-    public bool Configured { get; private set; }
-    public string? Error { get; set; }
-    public string? ReturnUrl { get; private set; }
-    public string? Email { get; private set; }
-    public string? DisplayName { get; private set; }
+    public bool Configured
+    {
+        get; private set;
+    }
+    public string? Error
+    {
+        get; set;
+    }
+    public string? ReturnUrl
+    {
+        get; private set;
+    }
+    public string? Email
+    {
+        get; private set;
+    }
+    public string? DisplayName
+    {
+        get; private set;
+    }
 
     public void SetParameters(string? error, string? returnUrl, string? email, string? displayName)
     {
@@ -34,6 +48,8 @@ public sealed class SetupViewModel(
         }
         Configured = !await auth.IsUnconfiguredAsync(cancellationToken);
         if (Configured)
+        {
             navigation.NavigateTo(PageRoutes.Login, forceLoad: true);
+        }
     }
 }

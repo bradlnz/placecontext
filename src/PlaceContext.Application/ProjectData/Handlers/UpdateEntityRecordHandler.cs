@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.ProjectData;
 namespace PlaceContext.Application.Features;
 
 public sealed class UpdateEntityRecordHandler : ICommandHandler<UpdateEntityRecordCommand, int>
@@ -22,7 +21,9 @@ public sealed class UpdateEntityRecordHandler : ICommandHandler<UpdateEntityReco
     {
         var affected = await _store.UpdateRowsAsync(command.ProjectId, command.TableName, command.Keys, command.Values, ct);
         if (affected > 0)
+        {
             await RecordLinkHook.RefreshAsync(_links, command.ProjectId, command.TableName, _log, ct);
+        }
         return affected;
     }
 }

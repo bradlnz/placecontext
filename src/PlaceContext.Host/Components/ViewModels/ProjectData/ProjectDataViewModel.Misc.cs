@@ -1,5 +1,5 @@
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Application;
-using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -7,18 +7,39 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed partial class ProjectDataViewModel
 {
     // ── Tables ────────────────────────────────────────────────────────────────────────────────
-    public IReadOnlyList<ProjectTableInfo> Tables { get; private set; } =
+    public IReadOnlyList<ProjectTableInfo> Tables
+    {
+        get; private set;
+    } =
         Array.Empty<ProjectTableInfo>();
-    public bool TablesReady { get; private set; }
+    public bool TablesReady
+    {
+        get; private set;
+    }
 
     // ── Edit table ────────────────────────────────────────────────────────────────────────────
-    public string? EditTable { get; private set; }
-    public IReadOnlyList<ProjectColumnInfo> EditColumns { get; private set; } =
+    public string? EditTable
+    {
+        get; private set;
+    }
+    public IReadOnlyList<ProjectColumnInfo> EditColumns
+    {
+        get; private set;
+    } =
         Array.Empty<ProjectColumnInfo>();
-    public string? EditError { get; private set; }
-    public string? ConfirmDropColumn { get; set; }
+    public string? EditError
+    {
+        get; private set;
+    }
+    public string? ConfirmDropColumn
+    {
+        get; set;
+    }
     public ColumnDraft AddCol { get; set; } = new();
-    public bool AlteringColumn { get; private set; }
+    public bool AlteringColumn
+    {
+        get; private set;
+    }
 
     // ── Edit table ────────────────────────────────────────────────────────────────────────────
     public async Task StartEditAsync(string table)
@@ -40,7 +61,9 @@ public sealed partial class ProjectDataViewModel
     private async Task RefreshColumnsAsync()
     {
         if (EditTable is null)
+        {
             return;
+        }
         try
         {
             EditColumns = await _svc.ListProjectTableColumnsAsync(ProjectId, EditTable);
@@ -54,7 +77,9 @@ public sealed partial class ProjectDataViewModel
     public async Task AddColumnToTableAsync()
     {
         if (EditTable is null)
+        {
             return;
+        }
         EditError = null;
         if (string.IsNullOrWhiteSpace(AddCol.Name))
         {
@@ -93,7 +118,9 @@ public sealed partial class ProjectDataViewModel
     public async Task DropColumnAsync(string column)
     {
         if (EditTable is null)
+        {
             return;
+        }
         EditError = null;
         ConfirmDropColumn = null;
         try

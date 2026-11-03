@@ -1,3 +1,4 @@
+@using PlaceContext.Application.Access
 @page "/project/{ProjectId:guid}/queues"
 @page "/project/{ProjectId:guid}/queues/{QueueId:guid}"
 @attribute [Authorize(Policy = Permission.ChainsManage)]
@@ -194,9 +195,9 @@
                 {
                     <h3>@run.ChainName <span class="queue-status">@run.Status</span></h3>
                     <p class="queue-note">Run @run.Id · @Vm.Presentation.DateTime(run.StartedAt)</p>
-                    @if (run.Steps.Any(step => step.ActionType == PlaceContext.Domain.ValueObjects.QemuChainAction.ActionType))
+                    @if (run.Steps.Any(step => step.ActionType == PlaceContext.Domain.ValueObjects.VirtualMachineChainAction.ActionType))
                     {
-                        <QemuReplay @key="run.Id" Run="run" />
+                        <VirtualMachineReplay @key="run.Id" Run="run" />
                     }
                     <ChainPipeline Run="run" OnStepClick="Vm.InspectStepAsync" />
                     <div class="dcfield"><label for="queue-run-job">Underlying job logs</label>

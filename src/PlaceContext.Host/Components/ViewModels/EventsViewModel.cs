@@ -1,10 +1,10 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Host;
-using System.Text.Json;
+using PlaceContext.Application;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -20,23 +20,59 @@ public sealed class EventsViewModel : PageViewModel
         NavigationManager navigation
     ) => (_service, _ui, _navigation) = (service, ui, navigation);
 
-    public Guid ProjectId { get; private set; }
-    public IReadOnlyList<EventTypeView>? Types { get; private set; }
-    public IReadOnlyList<EventOccurrenceView>? Log { get; private set; }
-    public IReadOnlyList<TriggerView>? Triggers { get; private set; }
+    public Guid ProjectId
+    {
+        get; private set;
+    }
+    public IReadOnlyList<EventTypeView>? Types
+    {
+        get; private set;
+    }
+    public IReadOnlyList<EventOccurrenceView>? Log
+    {
+        get; private set;
+    }
+    public IReadOnlyList<TriggerView>? Triggers
+    {
+        get; private set;
+    }
     public bool Loading { get; private set; } = true;
-    public string? Message { get; private set; }
-    public bool MessageIsError { get; private set; }
-    public bool ShowDefinition { get; private set; }
+    public string? Message
+    {
+        get; private set;
+    }
+    public bool MessageIsError
+    {
+        get; private set;
+    }
+    public bool ShowDefinition
+    {
+        get; private set;
+    }
     public string DefinitionName { get; set; } = "";
     public string DefinitionDescription { get; set; } = "";
     public string DefinitionSchema { get; set; } = "";
-    public bool DefinitionBusy { get; private set; }
-    public string? DefinitionError { get; private set; }
-    public string? EmitName { get; private set; }
+    public bool DefinitionBusy
+    {
+        get; private set;
+    }
+    public string? DefinitionError
+    {
+        get; private set;
+    }
+    public string? EmitName
+    {
+        get; private set;
+    }
     public string EmitPayload { get; set; } = "";
-    public bool EmitBusy { get; private set; }
-    public string? EmitError { get; private set; }
+    public bool EmitBusy
+    {
+        get; private set;
+    }
+    public string? EmitError
+    {
+        get; private set;
+    }
     public string Tab { get; set; } = "activity";
     public bool IsActivityTab => Tab == "activity";
     public bool IsTypesTab => Tab == "types";
@@ -97,8 +133,16 @@ public sealed class EventsViewModel : PageViewModel
 
     public async Task RefreshAsync()
     {
-        try { await ReloadAsync(); Message = null; }
-        catch (Exception ex) { Message = ex.Message; MessageIsError = true; }
+        try
+        {
+            await ReloadAsync();
+            Message = null;
+        }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+            MessageIsError = true;
+        }
         NotifyStateChanged();
     }
 
@@ -116,7 +160,10 @@ public sealed class EventsViewModel : PageViewModel
 
     public static Guid? OriginRunId(EventOccurrenceView occurrence)
     {
-        if (occurrence.Name != BuiltInEvents.JobCompleted || occurrence.Source != "Domain") return null;
+        if (occurrence.Name != BuiltInEvents.JobCompleted || occurrence.Source != "Domain")
+        {
+            return null;
+        }
         return Guid.TryParse(PayloadField(occurrence.Payload, "runId"), out var id) ? id : null;
     }
 
@@ -132,7 +179,10 @@ public sealed class EventsViewModel : PageViewModel
                 && document.RootElement.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.String
                 ? value.GetString() : null;
         }
-        catch (JsonException) { return null; }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     public int SubscriberCount(string? name) =>
@@ -170,7 +220,9 @@ public sealed class EventsViewModel : PageViewModel
     public void CloseDefinition()
     {
         if (!DefinitionBusy)
+        {
             ShowDefinition = false;
+        }
     }
 
     public async Task DefineAsync()
@@ -218,13 +270,17 @@ public sealed class EventsViewModel : PageViewModel
     public void CloseEmit()
     {
         if (!EmitBusy)
+        {
             EmitName = null;
+        }
     }
 
     public async Task EmitAsync()
     {
         if (EmitName is null)
+        {
             return;
+        }
         EmitError = null;
         EmitBusy = true;
         try

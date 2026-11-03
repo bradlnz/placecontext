@@ -1,7 +1,6 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
-using PlaceContext.Application.Ports;
-
+using System.Text.Json;
+using PlaceContext.Application.ProjectData;
 namespace PlaceContext.Application.Features;
 
 /// <summary>
@@ -37,26 +36,50 @@ public sealed record ChartSpec(
     public static ChartSpec? TryParse(string raw)
     {
         var json = ExtractJson(raw);
-        if (json is null) return null;
-
+        if (json is null)
+        {
+            return null;
+        }
         ChartSpec? spec;
-        try { spec = JsonSerializer.Deserialize<ChartSpec>(json, Json); }
-        catch (JsonException) { return null; }
-        if (spec is null) return null;
-
+        try
+        {
+            spec = JsonSerializer.Deserialize<ChartSpec>(json, Json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        if (spec is null)
+        {
+            return null;
+        }
         var type = (spec.Type ?? "").Trim().ToLowerInvariant();
-        if (!Types.Contains(type)) return null;
-        if (spec.Labels is not { Count: > 0 } || spec.Series is not { Count: > 0 }) return null;
-
+        if (!Types.Contains(type))
+        {
+            return null;
+        }
+        if (spec.Labels is not { Count: > 0 } || spec.Series is not { Count: > 0 })
+        {
+            return null;
+        }
         var labels = spec.Labels.Take(MaxLabels).Select(l => l ?? "").ToList();
         var seriesLimit = type == "pie" ? 1 : MaxSeries;
         var series = new List<ChartSeries>(seriesLimit);
         foreach (var s in spec.Series.Take(seriesLimit))
         {
-            if (s?.Values is not { Count: > 0 }) return null;
-            if (s.Values.Count < labels.Count) return null;
+            if (s?.Values is not { Count: > 0 })
+            {
+                return null;
+            }
+            if (s.Values.Count < labels.Count)
+            {
+                return null;
+            }
             var values = s.Values.Take(labels.Count).ToList();
-            if (values.Any(v => double.IsNaN(v) || double.IsInfinity(v))) return null;
+            if (values.Any(v => double.IsNaN(v) || double.IsInfinity(v)))
+            {
+                return null;
+            }
             series.Add(new ChartSeries(string.IsNullOrWhiteSpace(s.Name) ? "value" : s.Name.Trim(), values));
         }
 
@@ -70,8 +93,10 @@ public sealed record ChartSpec(
     /// </summary>
     public static ChartSpec? FromSample(string tableName, ProjectQueryResult result)
     {
-        if (result.Columns.Count == 0 || result.Rows.Count == 0) return null;
-
+        if (result.Columns.Count == 0 || result.Rows.Count == 0)
+        {
+            return null;
+        }
         // Column classification: numeric when ≥80% of its non-empty cells parse as doubles.
         var numericCols = new List<int>();
         var labelCol = -1;
@@ -79,10 +104,20 @@ public sealed record ChartSpec(
         {
             var cells = result.Rows.Select(r => c < r.Count ? r[c] : null)
                 .Where(v => !string.IsNullOrWhiteSpace(v)).ToList();
-            if (cells.Count == 0) continue;
+            if (cells.Count == 0)
+            {
+                continue;
+            }
             var parsed = cells.Count(v => double.TryParse(v, out _));
-            if (parsed >= cells.Count * 0.8) numericCols.Add(c);
-            else if (labelCol < 0) labelCol = c;
+            if (parsed >= cells.Count * 0.8)
+            {
+                numericCols.Add(c);
+                continue;
+            }
+            if (labelCol < 0)
+            {
+                labelCol = c;
+            }
         }
 
         if (numericCols.Count > 0)
@@ -107,9 +142,11 @@ public sealed record ChartSpec(
                 .Take(12)
                 .ToList();
             if (counts.Count > 1)
+            {
                 return new ChartSpec("bar", $"{tableName} — rows per {result.Columns[labelCol]}",
-                    counts.Select(g => g.Key).ToList(),
-                    new[] { new ChartSeries("rows", counts.Select(g => (double)g.Count()).ToList()) });
+                                counts.Select(g => g.Key).ToList(),
+                                new[] { new ChartSeries("rows", counts.Select(g => (double)g.Count()).ToList()) });
+            }
         }
 
         return null;

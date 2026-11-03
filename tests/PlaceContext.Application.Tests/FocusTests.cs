@@ -21,8 +21,10 @@ public class FocusTests
         var ledgers = new InMemoryActivityLogRepository();
         var ledger = ActivityLog.Start(project.Id);
         for (var i = 0; i < 3; i++)
+        {
             ledger.Append($"agent change {i}", Author.Agent("claude"), Rationale.None, TestDelta.None,
-                ActivityVerification.None, new[] { "a.cs" }, Array.Empty<GraphNodeId>(), T0);
+                        ActivityVerification.None, new[] { "a.cs" }, Array.Empty<GraphNodeId>(), T0);
+        }
         await ledgers.SaveAsync(ledger);
 
         var handler = new FocusHandler(projects, ledgers);

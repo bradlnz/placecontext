@@ -5,28 +5,46 @@
 window.pcmonaco = (function () {
   const VS = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs';
   const LOAD_TIMEOUT_MS = 10000; // a hanging CDN must not hang the page
-  const editors = new Map();   // id → Monaco editor
-  const models = new Map();    // "id::path" → Monaco TextModel
+  const editors = new Map(); // id → Monaco editor
+  const models = new Map(); // "id::path" → Monaco TextModel
   const fallbacks = new Map(); // id → plain editor while Monaco loads or is unavailable
   const initLocks = new Map(); // id → in-flight init Promise (serializes concurrent inits)
   let loaderPromise = null;
 
   function loadMonaco() {
-    if (window.monaco) return Promise.resolve(window.monaco);
-    if (loaderPromise) return loaderPromise;
+    if (window.monaco) {
+      return Promise.resolve(window.monaco);
+    }
+    if (loaderPromise) {
+      return loaderPromise;
+    }
     loaderPromise = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Monaco CDN timed out.')), LOAD_TIMEOUT_MS);
       const script = document.createElement('script');
       script.src = VS + '/loader.js';
       script.onload = () => {
         window.require.config({ paths: { vs: VS } });
-        window.require(['vs/editor/editor.main'],
-          () => { clearTimeout(timer); resolve(window.monaco); },
-          (e) => { clearTimeout(timer); reject(e || new Error('Monaco modules failed to load.')); });
+        window.require(
+          ['vs/editor/editor.main'],
+          () => {
+            clearTimeout(timer);
+            resolve(window.monaco);
+          },
+          (e) => {
+            clearTimeout(timer);
+            reject(e || new Error('Monaco modules failed to load.'));
+          },
+        );
       };
-      script.onerror = () => { clearTimeout(timer); reject(new Error('Failed to load Monaco from CDN.')); };
+      script.onerror = () => {
+        clearTimeout(timer);
+        reject(new Error('Failed to load Monaco from CDN.'));
+      };
       document.head.appendChild(script);
-    }).catch(e => { loaderPromise = null; throw e; }); // allow a retry on the next init
+    }).catch((e) => {
+      loaderPromise = null;
+      throw e;
+    }); // allow a retry on the next init
     return loaderPromise;
   }
 
@@ -41,7 +59,9 @@ window.pcmonaco = (function () {
 
   let darkThemeDefined = false;
   function defineDarkTheme(monaco) {
-    if (darkThemeDefined) return;
+    if (darkThemeDefined) {
+      return;
+    }
     darkThemeDefined = true;
     monaco.editor.defineTheme('placecontext-dark', {
       base: 'vs-dark',
@@ -52,7 +72,7 @@ window.pcmonaco = (function () {
         { token: 'identifier.sql', foreground: '7EE787' },
         { token: 'string.sql', foreground: '9CDCFE' },
         { token: 'number.sql', foreground: 'B5CEA8' },
-        { token: 'comment.sql', foreground: '7E838D', fontStyle: 'italic' }
+        { token: 'comment.sql', foreground: '7E838D', fontStyle: 'italic' },
       ],
       colors: {
         'editor.background': '#171717',
@@ -73,19 +93,23 @@ window.pcmonaco = (function () {
         'editorSuggestWidget.selectedBackground': '#333333',
         'editorHoverWidget.background': '#1C1C1C',
         'editorHoverWidget.border': '#3E3E3E',
-        'focusBorder': '#5A5A5A',
+        focusBorder: '#5A5A5A',
         'scrollbarSlider.background': '#3E3E3E88',
         'scrollbarSlider.hoverBackground': '#5A5A5AAA',
-        'scrollbarSlider.activeBackground': '#707070AA'
-      }
+        'scrollbarSlider.activeBackground': '#707070AA',
+      },
     });
   }
 
   let themeWatcher = null;
   function watchTheme(monaco) {
-    if (themeWatcher) return;
+    if (themeWatcher) {
+      return;
+    }
     const shell = document.getElementById('dcshell');
-    if (!shell) return;
+    if (!shell) {
+      return;
+    }
     defineDarkTheme(monaco);
     themeWatcher = new MutationObserver(() => monaco.editor.setTheme(shellTheme()));
     themeWatcher.observe(shell, { attributes: true, attributeFilter: ['data-theme'] });
@@ -96,27 +120,81 @@ window.pcmonaco = (function () {
   // tables and OpenSearch indexes (with their columns/fields) through setSqlSchema, and this
   // provider suggests keywords, table/index names, and columns for the tables referenced so far.
   const SQL_KEYWORDS = [
-    'SELECT','FROM','WHERE','JOIN','LEFT JOIN','RIGHT JOIN','INNER JOIN','OUTER JOIN','FULL JOIN',
-    'ON','GROUP BY','ORDER BY','HAVING','LIMIT','OFFSET','AS','AND','OR','NOT','IN','IS','NULL',
-    'IS NULL','IS NOT NULL','BETWEEN','LIKE','ILIKE','DISTINCT','COUNT','SUM','AVG','MIN','MAX',
-    'CASE','WHEN','THEN','ELSE','END','INSERT INTO','UPDATE','DELETE FROM','VALUES','CREATE TABLE',
-    'CREATE VIEW','ALTER TABLE','DROP TABLE','UNION','ALL','EXISTS','WITH','ASC','DESC','SELECT *',
+    'SELECT',
+    'FROM',
+    'WHERE',
+    'JOIN',
+    'LEFT JOIN',
+    'RIGHT JOIN',
+    'INNER JOIN',
+    'OUTER JOIN',
+    'FULL JOIN',
+    'ON',
+    'GROUP BY',
+    'ORDER BY',
+    'HAVING',
+    'LIMIT',
+    'OFFSET',
+    'AS',
+    'AND',
+    'OR',
+    'NOT',
+    'IN',
+    'IS',
+    'NULL',
+    'IS NULL',
+    'IS NOT NULL',
+    'BETWEEN',
+    'LIKE',
+    'ILIKE',
+    'DISTINCT',
+    'COUNT',
+    'SUM',
+    'AVG',
+    'MIN',
+    'MAX',
+    'CASE',
+    'WHEN',
+    'THEN',
+    'ELSE',
+    'END',
+    'INSERT INTO',
+    'UPDATE',
+    'DELETE FROM',
+    'VALUES',
+    'CREATE TABLE',
+    'CREATE VIEW',
+    'ALTER TABLE',
+    'DROP TABLE',
+    'UNION',
+    'ALL',
+    'EXISTS',
+    'WITH',
+    'ASC',
+    'DESC',
+    'SELECT *',
   ];
-  let sqlTables = [];          // [{ name, columns: [{ name, type }], kind: 'table' }]
-  let sqlIndexes = [];         // [{ name, columns: [{ name, type }], kind: 'index' }]
+  let sqlTables = []; // [{ name, columns: [{ name, type }], kind: 'table' }]
+  let sqlIndexes = []; // [{ name, columns: [{ name, type }], kind: 'index' }]
   let sqlProviderRegistered = false;
 
-  function allSchemaObjects() { return sqlTables.concat(sqlIndexes); }
+  function allSchemaObjects() {
+    return sqlTables.concat(sqlIndexes);
+  }
 
   function registerSqlCompletion(monaco) {
-    if (sqlProviderRegistered) return;
+    if (sqlProviderRegistered) {
+      return;
+    }
     sqlProviderRegistered = true;
     monaco.languages.registerCompletionItemProvider('sql', {
       triggerCharacters: ['.', ' '],
       provideCompletionItems(model, position) {
         const until = model.getValueInRange({
-          startLineNumber: 1, startColumn: 1,
-          endLineNumber: position.lineNumber, endColumn: position.column,
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
         });
         const word = model.getWordUntilPosition(position);
         const suggestions = [];
@@ -124,47 +202,72 @@ window.pcmonaco = (function () {
         // `table.` or `index.` → only that object's columns/fields.
         const dot = until.match(/([A-Za-z_][\w]*)\.\s*$/);
         if (dot) {
-          const obj = allSchemaObjects().find(t => t.name === dot[1]);
+          const obj = allSchemaObjects().find((t) => t.name === dot[1]);
           if (obj) {
-            for (const c of obj.columns)
+            for (const c of obj.columns) {
               suggestions.push({
-                label: c.name, insertText: c.name, kind: monaco.languages.CompletionItemKind.Field,
-                detail: c.type || (obj.kind === 'index' ? 'field' : 'column'), range: word, sortText: 'a',
+                label: c.name,
+                insertText: c.name,
+                kind: monaco.languages.CompletionItemKind.Field,
+                detail: c.type || (obj.kind === 'index' ? 'field' : 'column'),
+                range: word,
+                sortText: 'a',
               });
+            }
           }
           return { suggestions };
         }
 
-        for (const kw of SQL_KEYWORDS)
+        for (const kw of SQL_KEYWORDS) {
           suggestions.push({
-            label: kw, insertText: kw, kind: monaco.languages.CompletionItemKind.Keyword,
-            range: word, sortText: 'z' + kw,
+            label: kw,
+            insertText: kw,
+            kind: monaco.languages.CompletionItemKind.Keyword,
+            range: word,
+            sortText: 'z' + kw,
           });
+        }
 
-        for (const t of sqlTables)
+        for (const t of sqlTables) {
           suggestions.push({
-            label: t.name, insertText: t.name, kind: monaco.languages.CompletionItemKind.Class,
-            detail: 'table', range: word, sortText: 'a' + t.name,
+            label: t.name,
+            insertText: t.name,
+            kind: monaco.languages.CompletionItemKind.Class,
+            detail: 'table',
+            range: word,
+            sortText: 'a' + t.name,
           });
+        }
 
-        for (const i of sqlIndexes)
+        for (const i of sqlIndexes) {
           suggestions.push({
-            label: i.name, insertText: i.name, kind: monaco.languages.CompletionItemKind.Interface,
-            detail: 'index', range: word, sortText: 'a' + i.name,
+            label: i.name,
+            insertText: i.name,
+            kind: monaco.languages.CompletionItemKind.Interface,
+            detail: 'index',
+            range: word,
+            sortText: 'a' + i.name,
           });
+        }
 
         const referenced = referencedSchemaObjects(until);
         const scope = referenced.length > 0 ? referenced : allSchemaObjects();
         const seen = new Set();
         for (const obj of scope) {
           for (const c of obj.columns) {
-            if (seen.has(c.name)) continue; // same label in two objects: keep the first
+            if (seen.has(c.name)) {
+              continue;
+            } // same label in two objects: keep the first
             seen.add(c.name);
             suggestions.push({
-              label: c.name, insertText: c.name, kind: monaco.languages.CompletionItemKind.Field,
-              detail: (c.type || (obj.kind === 'index' ? 'field' : 'column'))
-                + (scope.length > 1 ? ' · ' + obj.name : ''),
-              range: word, sortText: 'b' + c.name,
+              label: c.name,
+              insertText: c.name,
+              kind: monaco.languages.CompletionItemKind.Field,
+              detail:
+                (c.type || (obj.kind === 'index' ? 'field' : 'column')) +
+                (scope.length > 1 ? ' · ' + obj.name : ''),
+              range: word,
+              sortText: 'b' + c.name,
             });
           }
         }
@@ -177,71 +280,133 @@ window.pcmonaco = (function () {
     const found = new Set();
     const re = /\b(?:from|join|into|update|table|index)\s+(?:"([^"]+)"|([A-Za-z_][\w]*))/gi;
     let match;
-    while ((match = re.exec(text))) found.add(match[1] || match[2]);
-    const known = new Map(allSchemaObjects().map(t => [t.name, t]));
-    return [...found].map(name => known.get(name)).filter(Boolean);
+    while ((match = re.exec(text))) {
+      found.add(match[1] || match[2]);
+    }
+    const known = new Map(allSchemaObjects().map((t) => [t.name, t]));
+    return [...found].map((name) => known.get(name)).filter(Boolean);
   }
 
   function normalizeSchema(schema) {
     // Backward-compat: callers used to pass a plain array of tables.
-    if (Array.isArray(schema)) return { tables: schema, indexes: [] };
+    if (Array.isArray(schema)) {
+      return { tables: schema, indexes: [] };
+    }
     return {
-      tables: schema && schema.tables || [],
-      indexes: schema && schema.indexes || [],
+      tables: (schema && schema.tables) || [],
+      indexes: (schema && schema.indexes) || [],
     };
   }
 
   function setSqlSchema(schema) {
     const normalized = normalizeSchema(schema);
-    sqlTables = (normalized.tables || []).map(t => ({
+    sqlTables = (normalized.tables || []).map((t) => ({
       name: t.name,
       kind: 'table',
-      columns: (t.columns || []).map(c => ({ name: c.name, type: c.type })),
+      columns: (t.columns || []).map((c) => ({ name: c.name, type: c.type })),
     }));
-    sqlIndexes = (normalized.indexes || []).map(i => ({
+    sqlIndexes = (normalized.indexes || []).map((i) => ({
       name: i.name,
       kind: 'index',
-      columns: (i.columns || []).map(c => ({ name: c.name, type: c.type })),
+      columns: (i.columns || []).map((c) => ({ name: c.name, type: c.type })),
     }));
-    if (window.monaco) registerSqlCompletion(window.monaco);
+    if (window.monaco) {
+      registerSqlCompletion(window.monaco);
+    }
   }
 
   let logQueryRegistered = false;
   function registerLogQuery(monaco) {
-    if (logQueryRegistered) return;
+    if (logQueryRegistered) {
+      return;
+    }
     logQueryRegistered = true;
     const fields = ['job', 'project', 'run', 'status', 'level', 'stream', 'message', 'timestamp'];
-    const keywords = ['logs', 'fields', 'project', 'filter', 'where', 'stats', 'summarize', 'sort', 'limit', 'take', 'as', 'by', 'contains', '!contains', 'contains_cs', '!contains_cs', 'AND', 'OR', 'NOT', 'IN', 'ORDER BY', 'ASC', 'DESC', 'count()', 'count_distinct()', 'sum()', 'avg()', 'min()', 'max()', 'bin(5m)'];
+    const keywords = [
+      'logs',
+      'fields',
+      'project',
+      'filter',
+      'where',
+      'stats',
+      'summarize',
+      'sort',
+      'limit',
+      'take',
+      'as',
+      'by',
+      'contains',
+      '!contains',
+      'contains_cs',
+      '!contains_cs',
+      'AND',
+      'OR',
+      'NOT',
+      'IN',
+      'ORDER BY',
+      'ASC',
+      'DESC',
+      'count()',
+      'count_distinct()',
+      'sum()',
+      'avg()',
+      'min()',
+      'max()',
+      'bin(5m)',
+    ];
     monaco.languages.register({ id: 'logquery' });
     monaco.languages.setMonarchTokensProvider('logquery', {
       ignoreCase: true,
-      tokenizer: { root: [
-        [/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/, 'string'],
-        [/\b(?:logs|fields|project|filter|where|stats|summarize|sort|limit|take|as|by|contains_cs|contains|count|count_distinct|sum|avg|min|max|bin|AND|OR|NOT|IN|ORDER|ASC|DESC)\b/, 'keyword'],
-        [/\b(?:job|project|run|status|level|stream|message|timestamp)\b/, 'type.identifier'],
-        // Consume bare values whole so ERROR cannot be split into ERR + the OR keyword.
-        [/[a-z_][\w.]*/, 'identifier'],
-        [/-\d+[smhd]\b/, 'number'],
-        [/[=!<>~]+/, 'operator'],
-        [/[(),|]/, 'delimiter']
-      ] }
+      tokenizer: {
+        root: [
+          [/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/, 'string'],
+          [
+            /\b(?:logs|fields|project|filter|where|stats|summarize|sort|limit|take|as|by|contains_cs|contains|count|count_distinct|sum|avg|min|max|bin|AND|OR|NOT|IN|ORDER|ASC|DESC)\b/,
+            'keyword',
+          ],
+          [/\b(?:job|project|run|status|level|stream|message|timestamp)\b/, 'type.identifier'],
+          // Consume bare values whole so ERROR cannot be split into ERR + the OR keyword.
+          [/[a-z_][\w.]*/, 'identifier'],
+          [/-\d+[smhd]\b/, 'number'],
+          [/[=!<>~]+/, 'operator'],
+          [/[(),|]/, 'delimiter'],
+        ],
+      },
     });
     monaco.languages.registerCompletionItemProvider('logquery', {
       provideCompletionItems(model, position) {
         const word = model.getWordUntilPosition(position);
-        const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber,
-          startColumn: word.startColumn, endColumn: word.endColumn };
-        return { suggestions: [
-          ...fields.map(label => ({ label, kind: monaco.languages.CompletionItemKind.Field })),
-          ...keywords.map(label => ({ label, kind: monaco.languages.CompletionItemKind.Keyword })),
-          ...['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL', 'stdout', 'stderr', 'Succeeded', 'Failed']
-            .map(label => ({ label, kind: monaco.languages.CompletionItemKind.Value }))
-        ].map(item => ({ ...item, insertText: item.label, range })) };
-      }
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        };
+        return {
+          suggestions: [
+            ...fields.map((label) => ({ label, kind: monaco.languages.CompletionItemKind.Field })),
+            ...keywords.map((label) => ({ label, kind: monaco.languages.CompletionItemKind.Keyword })),
+            ...[
+              'TRACE',
+              'DEBUG',
+              'INFO',
+              'WARN',
+              'ERROR',
+              'FATAL',
+              'stdout',
+              'stderr',
+              'Succeeded',
+              'Failed',
+            ].map((label) => ({ label, kind: monaco.languages.CompletionItemKind.Value })),
+          ].map((item) => ({ ...item, insertText: item.label, range })),
+        };
+      },
     });
   }
 
-  function modelKey(id, path) { return id + '::' + path; }
+  function modelKey(id, path) {
+    return id + '::' + path;
+  }
 
   function getOrCreateModel(monaco, id, path, value, language) {
     const key = modelKey(id, path);
@@ -262,16 +427,23 @@ window.pcmonaco = (function () {
   }
 
   async function init(id, value, language, theme, path, readOnly = false, ariaLabel = null) {
-    const label = ariaLabel || (readOnly ? 'Run output' : language === 'logquery' ? 'Log query' : 'Code editor');
+    const label =
+      ariaLabel || (readOnly ? 'Run output' : language === 'logquery' ? 'Log query' : 'Code editor');
     // Serialize concurrent inits for the same element: a rapid file switch during initial load
     // must not spawn two racing Monaco creates, or the visible editor can end up showing the
     // previous file (or a disposed instance) instead of the requested one.
     while (initLocks.has(id)) {
-      try { await initLocks.get(id); } catch { /* keep waiting */ }
+      try {
+        await initLocks.get(id);
+      } catch {
+        /* keep waiting */
+      }
     }
     const lock = (async () => {
       const el = document.getElementById(id);
-      if (!el) return true;
+      if (!el) {
+        return true;
+      }
       destroy(id);
       el.innerHTML = '';
       const ta = document.createElement('textarea');
@@ -290,18 +462,24 @@ window.pcmonaco = (function () {
       let upgrading = false;
       try {
         const monaco = await loadMonaco();
-        if (document.getElementById(id) !== el || fallbacks.get(id) !== ta) return true;
+        if (document.getElementById(id) !== el || fallbacks.get(id) !== ta) {
+          return true;
+        }
         const currentValue = ta.value;
         const focused = document.activeElement === ta;
-        const start = ta.selectionStart, end = ta.selectionEnd;
-        const modelPath = ta.dataset.path, currentLanguage = ta.dataset.language;
+        const start = ta.selectionStart,
+          end = ta.selectionEnd;
+        const modelPath = ta.dataset.path,
+          currentLanguage = ta.dataset.language;
         upgrading = true;
         destroy(id);
         watchTheme(monaco);
         // Schema may have been pushed (setSqlSchema) before the CDN finished loading — the
         // provider is cheap and guarded, so registering here always wires autocomplete up.
         registerSqlCompletion(monaco);
-        if (language === 'logquery') registerLogQuery(monaco);
+        if (language === 'logquery') {
+          registerLogQuery(monaco);
+        }
         const model = getOrCreateModel(monaco, id, modelPath, currentValue, currentLanguage);
         const editor = monaco.editor.create(el, {
           model: model,
@@ -320,9 +498,14 @@ window.pcmonaco = (function () {
         });
         editors.set(id, editor);
         if (focused) {
-          const from = model.getPositionAt(start), to = model.getPositionAt(end);
-          editor.setSelection({ startLineNumber: from.lineNumber, startColumn: from.column,
-            endLineNumber: to.lineNumber, endColumn: to.column });
+          const from = model.getPositionAt(start),
+            to = model.getPositionAt(end);
+          editor.setSelection({
+            startLineNumber: from.lineNumber,
+            startColumn: from.column,
+            endLineNumber: to.lineNumber,
+            endColumn: to.column,
+          });
           editor.focus();
         }
         return true;
@@ -338,7 +521,11 @@ window.pcmonaco = (function () {
       }
     })();
     initLocks.set(id, lock);
-    try { return await lock; } finally { initLocks.delete(id); }
+    try {
+      return await lock;
+    } finally {
+      initLocks.delete(id);
+    }
   }
 
   // Switch the editor to display a different file. Creates a model if one doesn't exist yet.
@@ -346,7 +533,12 @@ window.pcmonaco = (function () {
   function openFile(id, path, value, language) {
     try {
       const ta = fallbacks.get(id);
-      if (ta) { ta.value = value || ''; ta.dataset.path = path; ta.dataset.language = language || ta.dataset.language; return; }
+      if (ta) {
+        ta.value = value || '';
+        ta.dataset.path = path;
+        ta.dataset.language = language || ta.dataset.language;
+        return;
+      }
       const editor = editors.get(id);
       if (!editor) {
         if (initLocks.has(id)) {
@@ -357,7 +549,9 @@ window.pcmonaco = (function () {
         return;
       }
       const monaco = window.monaco;
-      if (!monaco) return;
+      if (!monaco) {
+        return;
+      }
       const model = getOrCreateModel(monaco, id, path, value, language);
       if (editor.getModel() !== model) {
         editor.setModel(model);
@@ -384,7 +578,11 @@ window.pcmonaco = (function () {
   function setValue(id, value, language) {
     try {
       const ta = fallbacks.get(id);
-      if (ta) { ta.value = value || ''; ta.dataset.language = language || ta.dataset.language; return; }
+      if (ta) {
+        ta.value = value || '';
+        ta.dataset.language = language || ta.dataset.language;
+        return;
+      }
       let editor = editors.get(id);
       if (!editor || !editor.getModel()) {
         if (initLocks.has(id)) {
@@ -411,9 +609,13 @@ window.pcmonaco = (function () {
   function getValue(id) {
     try {
       const ta = fallbacks.get(id);
-      if (ta) return ta.value;
+      if (ta) {
+        return ta.value;
+      }
       const editor = editors.get(id);
-      if (editor && editor.getModel()) return editor.getValue();
+      if (editor && editor.getModel()) {
+        return editor.getValue();
+      }
     } catch (e) {
       console.warn('pcmonaco.getValue error:', e);
     }
@@ -423,16 +625,25 @@ window.pcmonaco = (function () {
   function destroy(id) {
     try {
       const ta = fallbacks.get(id);
-      if (ta) { ta.remove(); fallbacks.delete(id); }
+      if (ta) {
+        ta.remove();
+        fallbacks.delete(id);
+      }
       const editor = editors.get(id);
-      if (!editor) return;
+      if (!editor) {
+        return;
+      }
       editor.dispose();
       editors.delete(id);
       // Dispose all models belonging to this editor instance
       const prefix = id + '::';
       for (const [key, model] of models) {
         if (key.startsWith(prefix)) {
-          try { model.dispose(); } catch { /* already disposed */ }
+          try {
+            model.dispose();
+          } catch {
+            /* already disposed */
+          }
           models.delete(key);
         }
       }
@@ -455,8 +666,11 @@ window.pcdata = {
   async downloadStream(filename, stream) {
     const buffer = await stream.arrayBuffer();
     const url = URL.createObjectURL(new Blob([buffer], { type: 'application/octet-stream' }));
-    try { window.pcdata.download(filename, url); }
-    finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+    try {
+      window.pcdata.download(filename, url);
+    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
   },
   download(filename, dataUri) {
     const a = document.createElement('a');
@@ -465,5 +679,5 @@ window.pcdata = {
     document.body.appendChild(a);
     a.click();
     a.remove();
-  }
+  },
 };

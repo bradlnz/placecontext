@@ -1,6 +1,4 @@
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Application.Features;
 
 /// <summary>One artifact the OCR daemon should process, with everything it needs to fetch and report back.</summary>

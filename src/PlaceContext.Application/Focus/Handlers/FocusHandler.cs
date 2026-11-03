@@ -35,15 +35,18 @@ public sealed class FocusHandler : IQueryHandler<GetFocusQuery, FocusView>
             var name = p.Name.Value;
 
             if (!p.IsGraphified)
+            {
                 items.Add(new FocusItem("graphify", "low", "Build the knowledge graph",
-                    "Run rebuild_graph to map this project's structure.", p.Id.Value, name, url));
-
+                                "Run rebuild_graph to map this project's structure.", p.Id.Value, name, url));
+            }
             var ledger = await _ledgers.GetForProjectAsync(p.Id, ct);
             var unverified = ledger.Records.Count(r => r.IsAgentAuthored && !r.Verification.LiveVerified);
             if (unverified > 0)
+            {
                 items.Add(new FocusItem("unverified-changes", unverified >= 3 ? "high" : "medium",
-                    $"Verify {unverified} agent change(s)",
-                    "Run and observe the app, then record live verification.", p.Id.Value, name, $"{url}#changes"));
+                                $"Verify {unverified} agent change(s)",
+                                "Run and observe the app, then record live verification.", p.Id.Value, name, $"{url}#changes"));
+            }
         }
 
         var ordered = items

@@ -8,7 +8,10 @@ public sealed class DotnetSecurityBaselineTests
     public void Build_and_container_versions_include_the_October_25_security_update()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
-        while (root is not null && !File.Exists(Path.Combine(root.FullName, "PlaceContext.slnx"))) root = root.Parent;
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "PlaceContext.slnx")))
+        {
+            root = root.Parent;
+        }
         Assert.NotNull(root);
         using var sdk = JsonDocument.Parse(File.ReadAllText(Path.Combine(root.FullName, "global.json")));
         Assert.True(Version.Parse(sdk.RootElement.GetProperty("sdk").GetProperty("version").GetString()!) >= new Version(10, 0, 403));

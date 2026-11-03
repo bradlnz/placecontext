@@ -17,7 +17,10 @@ public sealed class ActivityLog
         _records = records.OrderBy(r => r.Sequence).ToList();
     }
 
-    public ProjectId ProjectId { get; }
+    public ProjectId ProjectId
+    {
+        get;
+    }
     public IReadOnlyList<ActivityRecord> Records => _records;
     public int Count => _records.Count;
 
@@ -55,7 +58,10 @@ public sealed class ActivityLog
     /// <summary>The most recent <paramref name="n"/> records, newest last.</summary>
     public IReadOnlyList<ActivityRecord> RecentWindow(int n)
     {
-        if (n <= 0) return Array.Empty<ActivityRecord>();
+        if (n <= 0)
+        {
+            return Array.Empty<ActivityRecord>();
+        }
         return _records.Skip(Math.Max(0, _records.Count - n)).ToList();
     }
 
@@ -66,10 +72,15 @@ public sealed class ActivityLog
     /// </summary>
     public bool TouchesWithin(IEnumerable<GraphNodeId> nodes, int window, int excludingSequence)
     {
-        if (window <= 0) return false;
+        if (window <= 0)
+        {
+            return false;
+        }
         var target = nodes.ToHashSet();
-        if (target.Count == 0) return false;
-
+        if (target.Count == 0)
+        {
+            return false;
+        }
         return _records
             .Where(r => r.Sequence != excludingSequence)
             .Skip(Math.Max(0, _records.Count - window - 1))

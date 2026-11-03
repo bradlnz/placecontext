@@ -6,12 +6,21 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class ArtifactDownloadViewModel(IJSRuntime js) : PageViewModel, IComponentViewModel
 {
-    public bool Busy { get; private set; }
-    public string? Error { get; private set; }
+    public bool Busy
+    {
+        get; private set;
+    }
+    public string? Error
+    {
+        get; private set;
+    }
 
     public async Task DownloadAsync(Func<RunArtifactView> getArtifact)
     {
-        if (Busy) return;
+        if (Busy)
+        {
+            return;
+        }
         Busy = true;
         Error = null;
         try
@@ -26,6 +35,9 @@ public sealed class ArtifactDownloadViewModel(IJSRuntime js) : PageViewModel, IC
         {
             Error = "Download failed. Please try again.";
         }
-        finally { Busy = false; }
+        finally
+        {
+            Busy = false;
+        }
     }
 }

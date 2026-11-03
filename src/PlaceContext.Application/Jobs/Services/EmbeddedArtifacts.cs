@@ -1,5 +1,5 @@
 using System.Text.Json;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
@@ -35,24 +35,49 @@ public static class EmbeddedArtifacts
     /// (not JSON, no artifacts array, or no usable entries).</summary>
     public static IReadOnlyList<RunArtifact> Extract(string? artifactJson)
     {
-        if (string.IsNullOrWhiteSpace(artifactJson)) return Array.Empty<RunArtifact>();
-
+        if (string.IsNullOrWhiteSpace(artifactJson))
+        {
+            return Array.Empty<RunArtifact>();
+        }
         JsonDocument doc;
-        try { doc = JsonDocument.Parse(artifactJson); }
-        catch (JsonException) { return Array.Empty<RunArtifact>(); }
+        try
+        {
+            doc = JsonDocument.Parse(artifactJson);
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<RunArtifact>();
+        }
 
         using (doc)
         {
-            if (doc.RootElement.ValueKind != JsonValueKind.Object) return Array.Empty<RunArtifact>();
-            if (!TryGetArray(doc.RootElement, out var entries)) return Array.Empty<RunArtifact>();
-
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return Array.Empty<RunArtifact>();
+            }
+            if (!TryGetArray(doc.RootElement, out var entries))
+            {
+                return Array.Empty<RunArtifact>();
+            }
             var artifacts = new List<RunArtifact>();
             foreach (var entry in entries.EnumerateArray())
             {
-                if (artifacts.Count >= MaxFiles) break;
-                if (entry.ValueKind != JsonValueKind.Object) continue;
-                if (SanitizeName(FirstString(entry, NameFields)) is not { } name) continue;
-                if (ResolveContent(entry) is not { } artifact) continue;
+                if (artifacts.Count >= MaxFiles)
+                {
+                    break;
+                }
+                if (entry.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+                if (SanitizeName(FirstString(entry, NameFields)) is not { } name)
+                {
+                    continue;
+                }
+                if (ResolveContent(entry) is not { } artifact)
+                {
+                    continue;
+                }
                 artifacts.Add(Build(name, artifact.Bytes, artifact.Text));
             }
             return artifacts;
@@ -62,8 +87,12 @@ public static class EmbeddedArtifacts
     private static bool TryGetArray(JsonElement root, out JsonElement entries)
     {
         foreach (var key in new[] { "artifacts", "files" })
+        {
             if (root.TryGetProperty(key, out entries) && entries.ValueKind == JsonValueKind.Array)
+            {
                 return true;
+            }
+        }
         entries = default;
         return false;
     }
@@ -73,36 +102,46 @@ public static class EmbeddedArtifacts
     {
         // 1. Explicit base64 field — authoritative; skip the entry if it doesn't decode.
         if (FirstString(entry, Base64Fields) is { } b64)
+        {
             return TryDecodeBase64(b64, out var fromB64) ? (fromB64, null) : null;
-
+        }
         // 2. A data: URI carries its own encoding declaration.
         foreach (var field in new[] { "content", "data" })
+        {
             if (entry.TryGetProperty(field, out var el) && el.ValueKind == JsonValueKind.String
-                && el.GetString() is { } uri && uri.StartsWith("data:", StringComparison.Ordinal))
+                        && el.GetString() is { } uri && uri.StartsWith("data:", StringComparison.Ordinal))
             {
                 var comma = uri.IndexOf(',');
-                if (comma < 0) return null;
+                if (comma < 0)
+                {
+                    return null;
+                }
                 return uri[..comma].EndsWith(";base64", StringComparison.OrdinalIgnoreCase)
-                    ? TryDecodeBase64(uri[(comma + 1)..], out var fromUri) ? (fromUri, null) : null
-                    : (null, Uri.UnescapeDataString(uri[(comma + 1)..]));
+                                    ? TryDecodeBase64(uri[(comma + 1)..], out var fromUri) ? (fromUri, null) : null
+                                    : (null, Uri.UnescapeDataString(uri[(comma + 1)..]));
             }
-
+        }
         // 3. content + encoding:"base64" marker.
         if (entry.TryGetProperty("encoding", out var enc) && enc.ValueKind == JsonValueKind.String
             && string.Equals(enc.GetString(), "base64", StringComparison.OrdinalIgnoreCase)
             && FirstString(entry, TextFields) is { } marked)
+        {
             return TryDecodeBase64(marked, out var fromMarked) ? (fromMarked, null) : null;
-
+        }
         // 4. Plain text content.
         if (FirstString(entry, TextFields) is { } text)
+        {
             return text.Length <= MaxBytes ? (null, text) : null;
+        }
         return null;
     }
 
     private static RunArtifact Build(string name, byte[]? bytes, string? text)
     {
-        if (bytes is null) return new RunArtifact(name, text ?? "");
-        // Same discriminator as /out capture: decoded base64 that is clean UTF-8 text stays text.
+        if (bytes is null)
+        {
+            return new RunArtifact(name, text ?? "");
+        }        // Same discriminator as /out capture: decoded base64 that is clean UTF-8 text stays text.
         return Utf8Text.TryDecode(bytes, out var decoded)
             ? new RunArtifact(name, decoded)
             : new RunArtifact(name, Convert.ToBase64String(bytes), isBinary: true);
@@ -125,19 +164,32 @@ public static class EmbeddedArtifacts
     private static string? FirstString(JsonElement entry, string[] fields)
     {
         foreach (var field in fields)
+        {
             if (entry.TryGetProperty(field, out var el) && el.ValueKind == JsonValueKind.String
-                && el.GetString() is { Length: > 0 and <= MaxChars } s)
+                        && el.GetString() is { Length: > 0 and <= MaxChars } s)
+            {
                 return s;
+            }
+        }
         return null;
     }
 
     /// <summary>Relative, traversal-free artifact names only — anything else is dropped.</summary>
     private static string? SanitizeName(string? raw)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return null;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
         var name = raw.Replace('\\', '/').TrimStart('/').Trim();
-        if (name.Length == 0 || name.Length > 260) return null;
-        if (name.Split('/').Any(seg => seg is "" or "." or "..")) return null;
+        if (name.Length == 0 || name.Length > 260)
+        {
+            return null;
+        }
+        if (name.Split('/').Any(seg => seg is "" or "." or ".."))
+        {
+            return null;
+        }
         return name;
     }
 }

@@ -19,10 +19,13 @@ public readonly record struct GraphMetrics(
         double lowConfidenceLinkRatio)
     {
         if (nodeCount < 0 || linkCount < 0 || godNodeCount < 0)
+        {
             throw new ArgumentException("GraphMetrics counts must be non-negative.");
+        }
         if (averageDegree < 0)
+        {
             throw new ArgumentException("AverageDegree must be non-negative.", nameof(averageDegree));
-
+        }
         return new GraphMetrics(
             nodeCount, linkCount, godNodeCount, averageDegree,
             Math.Clamp(lowConfidenceLinkRatio, 0.0, 1.0));

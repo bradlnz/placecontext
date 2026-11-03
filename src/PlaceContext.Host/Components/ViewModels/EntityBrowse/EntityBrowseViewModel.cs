@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -28,7 +28,9 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
     {
         ViewTab = "graph";
         if (Entity is null || GraphLoading || BrainGraph is not null)
+        {
             return;
+        }
         GraphLoading = true;
         var version = _loadVersion;
         NotifyStateChanged();
@@ -36,25 +38,60 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
         {
             var rows = await _svc.ExecuteProjectDataAsync(
                 ProjectId, $"SELECT * FROM \"{Entity.TableName.Replace("\"", "\"\"")}\" LIMIT 500");
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             Rows = rows;
             await BuildSectionGraphAsync();
         }
-        catch (Exception ex) { if (version == _loadVersion) Error = ex.Message; }
-        finally { if (version == _loadVersion) { GraphLoading = false; NotifyStateChanged(); } }
+        catch (Exception ex)
+        {
+            if (version == _loadVersion)
+            {
+                Error = ex.Message;
+            }
+        }
+        finally
+        {
+            if (version == _loadVersion)
+            {
+                GraphLoading = false;
+                NotifyStateChanged();
+            }
+        }
     }
 
-    public bool GraphLoading { get; private set; }
-    public bool InsightsLoading { get; private set; }
+    public bool GraphLoading
+    {
+        get; private set;
+    }
+    public bool InsightsLoading
+    {
+        get; private set;
+    }
 
     public async Task LoadInsightsAsync()
     {
-        if (InsightsLoading) return;
+        if (InsightsLoading)
+        {
+            return;
+        }
         var version = _loadVersion;
         InsightsLoading = true;
         NotifyStateChanged();
-        try { await BuildInsightsAsync(); }
-        finally { if (version == _loadVersion) { InsightsLoading = false; NotifyStateChanged(); } }
+        try
+        {
+            await BuildInsightsAsync();
+        }
+        finally
+        {
+            if (version == _loadVersion)
+            {
+                InsightsLoading = false;
+                NotifyStateChanged();
+            }
+        }
     }
 
     public bool IsChartInput(string type) => type == "checkbox";
@@ -89,9 +126,15 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
     }
 
     // ── Parameters ────────────────────────────────────────────────────────────────────────────
-    public Guid ProjectId { get; private set; }
+    public Guid ProjectId
+    {
+        get; private set;
+    }
     public string EntityName { get; set; } = "";
-    public string? RecordKey { get; set; }
+    public string? RecordKey
+    {
+        get; set;
+    }
 
     // ── Computed ──────────────────────────────────────────────────────────────────────────────
     public string ChartPrefix => $"sql:{Entity?.Name} · ";
@@ -178,7 +221,9 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
     public async Task AfterRenderAsync()
     {
         if (ViewTab != "analytics")
+        {
             return;
+        }
         if (ShowChartEditor && !_sqlSchemaPushed)
         {
             _sqlSchemaPushed = true;
@@ -198,7 +243,9 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
                         "vs-dark"
                     )
                 )
+                {
                     ChartMonaco = false;
+                }
             }
             catch
             {
@@ -212,8 +259,14 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
         {
             var id = ChartCanvasId(chart.TableName);
             if (RenderedCharts.TryGetValue(id, out var at) && at == chart.GeneratedAt)
+            {
                 continue;
-            entries.Add(new { id, spec = chart.Html });
+            }
+            entries.Add(new
+            {
+                id,
+                spec = chart.Html
+            });
             rendered.Add((id, chart.GeneratedAt));
         }
         if (entries.Count > 0)
@@ -222,7 +275,9 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
             {
                 await _js.InvokeVoidAsync("pcchart.renderAll", entries);
                 foreach (var (id, at) in rendered)
+                {
                     RenderedCharts[id] = at;
+                }
             }
             catch (JSException) { }
         }
@@ -283,29 +338,46 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
         try
         {
             var entities = await _svc.ListDataEntitiesAsync(ProjectId);
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             AllEntities = entities;
             Entity = AllEntities.FirstOrDefault(e =>
                 string.Equals(e.Name, EntityName, StringComparison.OrdinalIgnoreCase)
             );
             if (Entity is null)
+            {
                 return;
+            }
             Search = "";
             PageNum = 1;
             Loaded = true;
             NotifyStateChanged();
             await LoadRecordsPageAsync();
-            if (version != _loadVersion) return;
+            if (version != _loadVersion)
+            {
+                return;
+            }
             if (!string.IsNullOrWhiteSpace(RecordKey))
+            {
                 await SelectGraph();
+            }
         }
         catch (Exception ex)
         {
-            if (version == _loadVersion) Error = ex.Message;
+            if (version == _loadVersion)
+            {
+                Error = ex.Message;
+            }
         }
         finally
         {
-            if (version == _loadVersion) { Loaded = true; NotifyStateChanged(); }
+            if (version == _loadVersion)
+            {
+                Loaded = true;
+                NotifyStateChanged();
+            }
         }
     }
 }

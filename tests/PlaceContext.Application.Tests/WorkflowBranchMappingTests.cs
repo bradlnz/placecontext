@@ -11,7 +11,9 @@ public sealed class WorkflowBranchMappingTests
     public async Task Listing_workflows_preserves_nested_condition_branches_for_editing()
     {
         var projectId = Guid.NewGuid();
-        var first = Guid.NewGuid(); var fallback = Guid.NewGuid(); var nested = Guid.NewGuid();
+        var first = Guid.NewGuid();
+        var fallback = Guid.NewGuid();
+        var nested = Guid.NewGuid();
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(projectId, "conditional", null,
             [new ChainStage([first], new ConditionGate("exists:ok",

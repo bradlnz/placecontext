@@ -1,6 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
@@ -23,18 +23,21 @@ public sealed class DefineEventTypeHandler : ICommandHandler<DefineEventTypeComm
     {
         var existing = await _events.FindDefinitionByNameAsync(command.Name.Trim(), ct);
         EventDefinition definition;
-        if (existing is not null)
+        async Task<EventDefinition> SaveDefinitionAsync()
         {
-            existing.Update(command.Description, command.PayloadSchema, _clock.UtcNow);
-            await _events.UpdateDefinitionAsync(existing, ct);
-            definition = existing;
+            EventDefinition resolvedDefinition;
+            if (existing is not null)
+            {
+                existing.Update(command.Description, command.PayloadSchema, _clock.UtcNow);
+                await _events.UpdateDefinitionAsync(existing, ct);
+                resolvedDefinition = existing;
+                return resolvedDefinition;
+            }
+            resolvedDefinition = EventDefinition.Create(command.Name, command.Description, command.PayloadSchema, _clock.UtcNow);
+            await _events.AddDefinitionAsync(resolvedDefinition, ct);
+            return resolvedDefinition;
         }
-        else
-        {
-            definition = EventDefinition.Create(command.Name, command.Description, command.PayloadSchema, _clock.UtcNow);
-            await _events.AddDefinitionAsync(definition, ct);
-        }
-
+        definition = await SaveDefinitionAsync();
         await _uow.SaveChangesAsync(ct);
         return new EventTypeView(definition.Name, definition.Description, IsBuiltIn: false,
             definition.PayloadSchema, definition.CreatedAt);

@@ -1,13 +1,14 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Observability;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application;
 using PlaceContext.Domain.Mcp;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -41,7 +42,10 @@ public sealed partial class JobsViewModel : PageViewModel
     }
 
     // ── Public state (bound by markup) ─────────────────────────────────────────────────────────
-    public Guid ProjectId { get; private set; }
+    public Guid ProjectId
+    {
+        get; private set;
+    }
 
     public int EnabledTriggerCount => Triggers?.Count(trigger => trigger.Enabled) ?? 0;
     public int AutomatedJobCount => Jobs?.Count(job => EnabledTriggersFor(job.Id) > 0) ?? 0;
@@ -123,22 +127,61 @@ public sealed partial class JobsViewModel : PageViewModel
             )
             .AsTask();
 
-    public IReadOnlyList<JobView>? Jobs { get; private set; }
-    public IReadOnlyList<ProjectSecretView>? VaultSecrets { get; private set; }
-    public IReadOnlyList<JobRunView>? Runs { get; private set; }
-    public JobRunDetailView? RunDetail { get; private set; }
-    public IReadOnlyList<RunArtifactLinkView>? RunArtifacts { get; private set; }
-    public IReadOnlyList<JobRunTelemetry>? JobTelemetry { get; private set; }
-    public Guid? SelectedJobId { get; private set; }
-    public Guid? RunningJobId { get; private set; }
-    public Guid? PendingRunId { get; private set; }
-    public Guid? PendingRunJobId { get; private set; }
-    public string? Message { get; private set; }
+    public IReadOnlyList<JobView>? Jobs
+    {
+        get; private set;
+    }
+    public IReadOnlyList<ProjectSecretView>? VaultSecrets
+    {
+        get; private set;
+    }
+    public IReadOnlyList<JobRunView>? Runs
+    {
+        get; private set;
+    }
+    public JobRunDetailView? RunDetail
+    {
+        get; private set;
+    }
+    public IReadOnlyList<RunArtifactLinkView>? RunArtifacts
+    {
+        get; private set;
+    }
+    public IReadOnlyList<JobRunTelemetry>? JobTelemetry
+    {
+        get; private set;
+    }
+    public Guid? SelectedJobId
+    {
+        get; private set;
+    }
+    public Guid? RunningJobId
+    {
+        get; private set;
+    }
+    public Guid? PendingRunId
+    {
+        get; private set;
+    }
+    public Guid? PendingRunJobId
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
     public bool Loading { get; private set; } = true;
-    public Guid? ConfirmDeleteId { get; set; }
+    public Guid? ConfirmDeleteId
+    {
+        get; set;
+    }
 
     // ── MCP connections ────────────────────────────────────────────────────────────────────────
-    public IReadOnlyList<McpConnectionView>? ProjectMcpConnections { get; private set; }
+    public IReadOnlyList<McpConnectionView>? ProjectMcpConnections
+    {
+        get; private set;
+    }
     public HashSet<string> EdMcpConnectionIds { get; } = new();
 
     private int _paneVersion;
@@ -159,22 +202,26 @@ public sealed partial class JobsViewModel : PageViewModel
                 {
                     await Task.Delay(2000, ct).ConfigureAwait(false);
                     if (ct.IsCancellationRequested)
+                    {
                         break;
-
+                    }
                     try
                     {
                         var detail = await _svc.GetJobRunAsync(runId);
                         var artifacts = await _svc.ListRunArtifactsAsync(runId);
                         if (ct.IsCancellationRequested || version != _paneVersion || RunDetail?.Id != runId)
+                        {
                             break;
-
+                        }
                         RunDetail = detail;
                         RunArtifacts = artifacts;
                         NotifyStateChanged();
                         _ = ScrollLogsDown();
 
                         if (detail?.Status is "Succeeded" or "Failed" or "Partial")
+                        {
                             break;
+                        }
                     }
                     catch { }
                 }
@@ -213,7 +260,9 @@ public sealed partial class JobsViewModel : PageViewModel
         ProjectId = projectId;
         _operationSubscription?.Dispose();
         if (_tenant is { IsResolved: true })
+        {
             _operationSubscription = _opCenter.Subscribe(_tenant.TenantId, OnOpsChanged, projectId: projectId);
+        }
         McpOAuthCompleted -= OnMcpOAuthCompleted;
         McpOAuthCompleted += OnMcpOAuthCompleted;
     }
@@ -223,11 +272,20 @@ public sealed partial class JobsViewModel : PageViewModel
         Initialize(projectId);
         var version = _paneVersion;
         await LoadAsync();
-        if (version != _paneVersion) return;
+        if (version != _paneVersion)
+        {
+            return;
+        }
         if (jobId is { } id && Jobs?.FirstOrDefault(job => job.Id == id) is { } job)
         {
-            if (!ShowEditor || EditJobId != id) await OpenJobAsync(job);
-            if (ShowEditor && EditJobId == id && tab == "triggers") EditorTab = "triggers";
+            if (!ShowEditor || EditJobId != id)
+            {
+                await OpenJobAsync(job);
+            }
+            if (ShowEditor && EditJobId == id && tab == "triggers")
+            {
+                EditorTab = "triggers";
+            }
         }
     }
 
@@ -314,9 +372,11 @@ public sealed partial class JobsViewModel : PageViewModel
     {
         var id = connectionId.ToString();
         if (enabled)
+        {
             EdMcpConnectionIds.Add(id);
-        else
-            EdMcpConnectionIds.Remove(id);
+            return;
+        }
+        EdMcpConnectionIds.Remove(id);
     }
 
     public string GetOAuthUrl(Guid connectionId) => $"/mcp-oauth/start?connectionId={connectionId}";

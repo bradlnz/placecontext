@@ -1,0 +1,1 @@
+Review the supplied client scope and documents, identify missing onboarding information, and produce a sequenced onboarding plan with responsibilities. Do not contact anyone.

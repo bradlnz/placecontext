@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
+using PlaceContext.Application.Activity;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;

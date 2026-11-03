@@ -1,0 +1,1 @@
+An earlier live desktop frame was omitted; inspect the latest image.

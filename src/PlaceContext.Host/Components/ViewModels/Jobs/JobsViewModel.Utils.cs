@@ -1,10 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Observability;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
-using PlaceContext.Infrastructure.Operations;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -147,7 +147,9 @@ public sealed partial class JobsViewModel
     {
         error = null;
         if (string.IsNullOrWhiteSpace(raw))
+        {
             return Array.Empty<int>();
+        }
         var result = new List<int>();
         foreach (
             var part in raw.Split(

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
 using PlaceContext.TestSupport;
@@ -18,7 +18,11 @@ public sealed class EncryptionBootstrapIsolationTests
         foreach (var owner in owners)
         {
             await using var db = new AppDbContext(options, new FakeCurrentTenant(owner));
-            db.Requirements.Add(new() { ProjectId = Guid.NewGuid(), Markdown = "private requirements" });
+            db.Requirements.Add(new()
+            {
+                ProjectId = Guid.NewGuid(),
+                Markdown = "private requirements"
+            });
             await db.SaveChangesAsync();
         }
 

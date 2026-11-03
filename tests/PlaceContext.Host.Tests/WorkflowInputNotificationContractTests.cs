@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Host.Tests;
 
@@ -39,7 +40,10 @@ public sealed class WorkflowInputNotificationContractTests
         while (dir is not null)
         {
             var host = Path.Combine(dir.FullName, "src", "PlaceContext.Host");
-            if (Directory.Exists(host)) return host;
+            if (Directory.Exists(host))
+            {
+                return host;
+            }
             dir = dir.Parent;
         }
         throw new DirectoryNotFoundException("PlaceContext.Host root not found.");

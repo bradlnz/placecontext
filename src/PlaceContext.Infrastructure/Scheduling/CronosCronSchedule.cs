@@ -1,6 +1,5 @@
 using Cronos;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Triggers;
 namespace PlaceContext.Infrastructure.Scheduling;
 
 /// <summary>
@@ -14,7 +13,10 @@ public sealed class CronosCronSchedule : ICronSchedule
 
     public DateTimeOffset? Next(string cronExpression, DateTimeOffset after, string timeZoneId)
     {
-        if (!TryParse(cronExpression, out var expr)) return null;
+        if (!TryParse(cronExpression, out var expr))
+        {
+            return null;
+        }
         var tz = ResolveZone(timeZoneId);
         // Normalize to UTC: Cronos answers in the zone's own offset (e.g. +10:00), and Npgsql
         // refuses to write any non-UTC DateTimeOffset to timestamptz — a zoned value here made
@@ -25,7 +27,10 @@ public sealed class CronosCronSchedule : ICronSchedule
     private static bool TryParse(string cronExpression, out CronExpression? expr)
     {
         expr = null;
-        if (string.IsNullOrWhiteSpace(cronExpression)) return false;
+        if (string.IsNullOrWhiteSpace(cronExpression))
+        {
+            return false;
+        }
         try
         {
             // 6 whitespace-separated fields → the expression includes a seconds field.
@@ -42,7 +47,13 @@ public sealed class CronosCronSchedule : ICronSchedule
 
     private static TimeZoneInfo ResolveZone(string timeZoneId)
     {
-        try { return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); }
-        catch { return TimeZoneInfo.Utc; }
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+        }
+        catch
+        {
+            return TimeZoneInfo.Utc;
+        }
     }
 }

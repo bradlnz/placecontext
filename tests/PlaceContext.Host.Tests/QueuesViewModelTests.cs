@@ -1,4 +1,4 @@
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Jobs;
 using PlaceContext.Host.Components.ViewModels;
 
 namespace PlaceContext.Host.Tests;
@@ -29,7 +29,10 @@ public sealed class QueuesViewModelTests
     public void Monitoring_distinguishes_delayed_available_and_active_messages(string status, int available, int expires, string expected)
     {
         var message = new JobChainSubmission(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), status, 0, null, Now, null, null)
-        { AvailableAt = Now.AddSeconds(available), ExpiresAt = Now.AddSeconds(expires) };
+        {
+            AvailableAt = Now.AddSeconds(available),
+            ExpiresAt = Now.AddSeconds(expires)
+        };
         Assert.Equal(expected, QueuesViewModel.MessageState(message, Now));
     }
 }

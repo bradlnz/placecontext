@@ -1,5 +1,5 @@
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -9,9 +9,18 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
     private Guid? _runId;
     private ChainRunView? _latestRun;
     private JobChainView? _definition;
-    public IReadOnlyList<JobChainStageView>? Layout { get; private set; }
-    public Dictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps { get; private set; }
-    public bool UsesRecordedLayout { get; private set; }
+    public IReadOnlyList<JobChainStageView>? Layout
+    {
+        get; private set;
+    }
+    public Dictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps
+    {
+        get; private set;
+    }
+    public bool UsesRecordedLayout
+    {
+        get; private set;
+    }
 
     public async Task LoadAsync(ChainRunView run)
     {
@@ -24,7 +33,10 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
             try
             {
                 var chains = service is null ? [] : await service.ListJobChainsAsync(run.ProjectId);
-                if (_runId != run.Id) return;
+                if (_runId != run.Id)
+                {
+                    return;
+                }
                 _definition = chains.FirstOrDefault(chain => chain.Id == run.ChainId);
             }
             catch
@@ -32,14 +44,18 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
                 // Recorded steps remain available if the definition was deleted or cannot be loaded.
             }
         }
-        if (_runId != run.Id || _latestRun is not { } latest) return;
+        if (_runId != run.Id || _latestRun is not { } latest)
+        {
+            return;
+        }
         if (_definition is not null && MatchSteps(latest, _definition.Stages) is { } matched)
         {
             RunSteps = matched;
             Layout = _definition.Stages;
             UsesRecordedLayout = false;
+            return;
         }
-        else ShowRecordedLayout(latest);
+        ShowRecordedLayout(latest);
     }
 
     private void ShowRecordedLayout(ChainRunView run)
@@ -63,14 +79,20 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
         {
             recorded.Remove(index, out var steps);
             steps ??= [];
-            if (!Matches(stages[index], steps)) return null;
+            if (!Matches(stages[index], steps))
+            {
+                return null;
+            }
             mapped[index.ToString()] = steps;
             CollectAlternatives(stages[index], index.ToString());
         }
         foreach (var steps in recorded.Values)
         {
             var candidates = alternatives.Where(pair => Matches(pair.Value, steps)).ToList();
-            if (candidates.Count != 1) return null;
+            if (candidates.Count != 1)
+            {
+                return null;
+            }
             var candidate = candidates[0];
             mapped[candidate.Key] = steps;
             alternatives.Remove(candidate.Key);
@@ -125,9 +147,13 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
     {
         var typed = ScopedPresentationCatalog.StepStatus(status);
         if (typed == ChainStepStatus.Running)
+        {
             return "var(--brand-2)";
+        }
         if (typed is ChainStepStatus.Pending or ChainStepStatus.Skipped)
+        {
             return "var(--border)";
+        }
         return Color(status);
     }
 
@@ -138,9 +164,13 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
     public string Summary(ChainStepRunView step)
     {
         if (ScopedPresentationCatalog.StepStatus(step.Status) == ChainStepStatus.Running)
+        {
             return "running…";
+        }
         if (step.StartedAt.HasValue && step.FinishedAt.HasValue)
+        {
             return $"{step.Status} {Duration(step.StartedAt.Value, step.FinishedAt.Value)}";
+        }
         return step.Status.ToLowerInvariant();
     }
 

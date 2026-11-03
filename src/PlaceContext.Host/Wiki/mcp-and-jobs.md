@@ -10,13 +10,13 @@ assistant discovers and calls the server's tools to answer. Remove a mention to 
 
 ## Connect
 
-The workspace MCP endpoint is shown on **Onboarding**. For a local install it is:
+The workspace MCP endpoint is your workspace URL followed by `/mcp`. For a local install it is:
 
 ```text
 http://localhost:7700/mcp
 ```
 
-Replace the local URL below with the workspace URL shown on **Onboarding** when PlaceContext runs
+Replace the local URL below with your workspace URL when PlaceContext runs
 on another machine.
 
 ### Codex

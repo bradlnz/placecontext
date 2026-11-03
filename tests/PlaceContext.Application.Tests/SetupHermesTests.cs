@@ -38,8 +38,9 @@ public class SetupHermesTests
             "job_authoring_guide", "upload_job_code", "run_job",
             "list_job_runs", "get_job_run", "create_trigger", "emit_event",
         })
+        {
             Assert.Contains(tool, md);
-        // The contract's sharp edge must be stated: read the guide BEFORE writing code.
+        }        // The contract's sharp edge must be stated: read the guide BEFORE writing code.
         Assert.Contains("BEFORE", md);
     }
 

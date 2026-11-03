@@ -1,5 +1,5 @@
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -103,7 +103,9 @@ public class ProjectAnalyticsTests
         public Task DeleteForProjectAsync(Guid projectId, IReadOnlyCollection<string> keepTables, CancellationToken ct = default)
         {
             foreach (var key in Charts.Keys.Where(k => k.Item1 == projectId && !keepTables.Contains(k.Item2)).ToList())
+            {
                 Charts.Remove(key);
+            }
             return Task.CompletedTask;
         }
     }
@@ -189,7 +191,10 @@ public class ProjectAnalyticsTests
 
         public Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
         {
-            if (sql.Contains("\"bad\"")) throw new InvalidOperationException("relation exploded");
+            if (sql.Contains("\"bad\""))
+            {
+                throw new InvalidOperationException("relation exploded");
+            }
             return Task.FromResult(new ProjectQueryResult(new[] { "n" }, new[] { new string?[] { "1" } }, 0, false));
         }
 

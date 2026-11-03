@@ -1,14 +1,14 @@
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.Pages;
 using PlaceContext.Host.Components.ViewModels;
-using PlaceContext.Infrastructure.Operations;
 using PlaceContext.Infrastructure.Workload;
 
 namespace PlaceContext.Host.Tests;
@@ -25,8 +25,10 @@ public sealed class ObservabilityLogRenderingTests
         var report = new RunReportView(run.JobId, "Large report", "Ossen", run);
         var service = new PlaceContextService(new Reports(report), null!, null!, null!);
         var vm = new ObservabilityViewModel(service, new PortalUiState(), new Navigation(),
-            new OperationCenter(null!, null!), null!, new InMemoryWorkloadOutputBuffer(), null!)
-        { LogQueryText = "where message contains 'tail-marker' | fields message" };
+            new OperationCenter(null!, default), null!, new InMemoryWorkloadOutputBuffer(), null!)
+        {
+            LogQueryText = "where message contains 'tail-marker' | fields message"
+        };
         var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddTransient(_ => new RunOutputViewModel(null!));
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());

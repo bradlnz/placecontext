@@ -11,10 +11,16 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
 
     public IReadOnlyList<JobChainStageView> Stages { get; private set; } = [];
     public IReadOnlyList<JobView> Jobs { get; private set; } = [];
-    public IReadOnlyDictionary<int, ChainGateView> Gates { get; private set; } =
+    public IReadOnlyDictionary<int, ChainGateView> Gates
+    {
+        get; private set;
+    } =
         new Dictionary<int, ChainGateView>();
     public string PathJobId => _pathJobId;
-    public int? PathPickerStage { get; private set; }
+    public int? PathPickerStage
+    {
+        get; private set;
+    }
     public int? DragOverStage => _dragOverStage;
     public bool IsPathEnabled => Guid.TryParse(_pathJobId, out _);
 
@@ -50,7 +56,9 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
     {
         Guid? result = Guid.TryParse(_pathJobId, out var id) ? id : null;
         if (result is not null)
+        {
             ClosePathPicker();
+        }
         return result;
     }
 
@@ -71,14 +79,17 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
     public void DragLeave(int stageIndex)
     {
         if (_dragOverStage == stageIndex)
+        {
             _dragOverStage = null;
+        }
     }
 
     public (int SourceStage, int SourceBranch, int TargetStage)? ConsumePathDrop(int targetStage)
     {
         if (_draggedPath is not { } path)
+        {
             return null;
-
+        }
         (int SourceStage, int SourceBranch, int TargetStage)? result = (
             path.Stage,
             path.Branch,
@@ -124,7 +135,7 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
     {
         SendEmailChainActionView => "mail",
         SendSmsChainActionView => "message",
-        QemuChainActionView => "vm",
+        VirtualMachineChainActionView => "vm",
         LoopChainActionView loop => loop.Kind == "humanInput" ? "human" : "agent",
         null => "code",
         _ => "event",

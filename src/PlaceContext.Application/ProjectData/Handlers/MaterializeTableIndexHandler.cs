@@ -1,6 +1,7 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Search;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -11,12 +12,12 @@ public sealed class MaterializeTableIndexHandler : ICommandHandler<MaterializeTa
     private const long MaxRows = 10000;
 
     private readonly IProjectRepository _projects;
-    private readonly IOpenSearchDataGateway _openSearch;
+    private readonly ISearchDataGateway _openSearch;
     private readonly IProjectDataStore _store;
 
     public MaterializeTableIndexHandler(
         IProjectRepository projects,
-        IOpenSearchDataGateway openSearch,
+        ISearchDataGateway openSearch,
         IProjectDataStore store)
     {
         _projects = projects;
@@ -31,18 +32,21 @@ public sealed class MaterializeTableIndexHandler : ICommandHandler<MaterializeTa
 
         var read = await _store.ReadTableAsync(c.ProjectId, c.TableName, MaxRows, ct);
         if (read.Columns.Count == 0)
+        {
             throw new InvalidOperationException(
-                $"Table '{c.TableName}' has no columns to materialize.");
+                        $"Table '{c.TableName}' has no columns to materialize.");
+        }
         if (read.TotalCount == 0)
+        {
             throw new InvalidOperationException(
-                $"Table '{c.TableName}' has no rows to materialize.");
-
+                        $"Table '{c.TableName}' has no rows to materialize.");
+        }
         var indexName = string.IsNullOrWhiteSpace(c.IndexName)
             ? MaterializeTableIndexCommand.DefaultIndexName(c.TableName)
             : c.IndexName.Trim();
 
         var mappingFields = read.Columns.Select((name, i) =>
-            new OpenSearchMappingField(name, MaterializeTableIndexCommand.OpenSearchTypeFor(read.ColumnTypes[i])))
+            new SearchMappingField(name, MaterializeTableIndexCommand.OpenSearchTypeFor(read.ColumnTypes[i])))
             .ToList();
         var jsonbColumns = read.ColumnTypes
             .Select((t, i) => (t, i))

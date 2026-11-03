@@ -1,0 +1,1 @@
+Does the screenshot clearly show offer.pack as the TOTAL package quantity of the main product, including every item in a multipack? Reject unit-price denominators and serving sizes.

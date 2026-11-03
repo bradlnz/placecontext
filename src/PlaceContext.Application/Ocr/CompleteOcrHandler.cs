@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
@@ -32,8 +32,10 @@ public sealed class CompleteOcrHandler : ICommandHandler<CompleteOcrCommand, boo
         // GetByIdAsync respects the tenant global filter — a caller can only complete OCR for an
         // artifact that belongs to its own workspace.
         var link = await _links.GetByIdAsync(command.ArtifactId, ct);
-        if (link is null) return false;
-
+        if (link is null)
+        {
+            return false;
+        }
         // On success, persist the extraction first; the tracking update below commits both in the
         // same transaction. A storage failure still marks the artifact processed-with-error so it
         // leaves the pending queue and the operator can see why. (External-DB projects have no

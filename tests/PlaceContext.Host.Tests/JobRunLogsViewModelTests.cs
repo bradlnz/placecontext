@@ -40,7 +40,11 @@ public class JobRunLogsViewModelTests
         vm.Search = "RETRY";
         vm.Level = "WARN";
         Assert.Single(vm.Filtered);
-        vm.SetRun(run with { Status = "Succeeded", ShardResults = [new(0, 0, "Succeeded", null, "saved\n--- stderr ---\nWARN retry", [])] });
+        vm.SetRun(run with
+        {
+            Status = "Succeeded",
+            ShardResults = [new(0, 0, "Succeeded", null, "saved\n--- stderr ---\nWARN retry", [])]
+        });
         Assert.False(vm.IsLive);
         Assert.Equal("shard 0 / stderr", Assert.Single(vm.Filtered).Stream);
         Assert.Equal("saved", vm.Events[0].Message);
@@ -50,12 +54,21 @@ public class JobRunLogsViewModelTests
     public void Unchanged_sources_reuse_parsed_events_but_new_output_is_loaded()
     {
         var vm = new JobRunLogsViewModel(new InMemoryWorkloadOutputBuffer());
-        var run = Run("Succeeded") with { ShardResults = [new(0, 0, "Succeeded", null, "INFO original", [])] };
+        var run = Run("Succeeded") with
+        {
+            ShardResults = [new(0, 0, "Succeeded", null, "INFO original", [])]
+        };
         vm.SetRun(run);
         var events = vm.Events;
-        vm.SetRun(run with { FinishedAt = DateTimeOffset.UtcNow });
+        vm.SetRun(run with
+        {
+            FinishedAt = DateTimeOffset.UtcNow
+        });
         Assert.Same(events, vm.Events);
-        vm.SetRun(run with { ShardResults = [new(0, 0, "Succeeded", null, "INFO changed", [])] });
+        vm.SetRun(run with
+        {
+            ShardResults = [new(0, 0, "Succeeded", null, "INFO changed", [])]
+        });
         Assert.Equal("INFO changed", Assert.Single(vm.Events).Message);
     }
 

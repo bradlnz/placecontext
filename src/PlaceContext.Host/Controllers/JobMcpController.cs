@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Mcp;
-using PlaceContext.Application.Ports;
-using PlaceContext.Domain.Repositories;
+using PlaceContext.Application;
 using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers;
@@ -13,9 +13,9 @@ namespace PlaceContext.Host.Controllers;
 public sealed class JobMcpController : ControllerBase
 {
     private readonly IMcpClientService _mcp;
-    private readonly IMcpConnectionRepository _repo;
+    private readonly PlaceContextService _repo;
 
-    public JobMcpController(IMcpClientService mcp, IMcpConnectionRepository repo)
+    public JobMcpController(IMcpClientService mcp, PlaceContextService repo)
     {
         _mcp = mcp;
         _repo = repo;
@@ -26,8 +26,12 @@ public sealed class JobMcpController : ControllerBase
     {
         var conn = await ResolveConnectionAsync(projectId, connectionName);
         if (conn is null)
-            return NotFound(new { error = $"MCP connection '{connectionName}' not found" });
-
+        {
+            return NotFound(new
+            {
+                error = $"MCP connection '{connectionName}' not found"
+            });
+        }
         var toolName = body.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
         var arguments = body.TryGetProperty("arguments", out var a) ? a : (JsonElement?)null;
 
@@ -46,15 +50,22 @@ public sealed class JobMcpController : ControllerBase
     {
         var conn = await ResolveConnectionAsync(projectId, connectionName);
         if (conn is null)
-            return NotFound(new { error = $"MCP connection '{connectionName}' not found" });
-
+        {
+            return NotFound(new
+            {
+                error = $"MCP connection '{connectionName}' not found"
+            });
+        }
         var tools = await _mcp.ListToolsAsync(conn.Id);
-        return Ok(new { tools });
+        return Ok(new
+        {
+            tools
+        });
     }
 
-    private async Task<Domain.Entities.McpConnection?> ResolveConnectionAsync(Guid projectId, string connectionName)
+    private async Task<McpConnectionView?> ResolveConnectionAsync(Guid projectId, string connectionName)
     {
-        var connections = await _repo.ListByProjectAsync(projectId);
+        var connections = await _repo.ListMcpConnectionsAsync(projectId);
         return connections.FirstOrDefault(c =>
             string.Equals(c.Name, connectionName, StringComparison.OrdinalIgnoreCase) && c.Enabled);
     }

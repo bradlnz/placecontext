@@ -60,7 +60,9 @@ public sealed class WebhookIngestionContractTests
         {
             var host = Path.Combine(directory.FullName, "src", "PlaceContext.Host");
             if (Directory.Exists(host))
+            {
                 return File.ReadAllText(Path.Combine(host, relativePath));
+            }
             directory = directory.Parent;
         }
         throw new DirectoryNotFoundException("Repository root not found.");

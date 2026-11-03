@@ -1,7 +1,7 @@
 using System.Text;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Skills;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 
@@ -25,8 +25,9 @@ public sealed class ScaffoldSkillHandler : ICommandHandler<ScaffoldSkillCommand,
     public async Task<SkillScaffoldView> HandleAsync(ScaffoldSkillCommand command, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(command.SkillName))
+        {
             throw new ArgumentException("Skill name must not be empty.", nameof(command));
-
+        }
         var projectId = ProjectId.From(command.ProjectId);
         var project = await _projects.GetByIdAsync(projectId, ct)
             ?? throw new InvalidOperationException($"Project {command.ProjectId} not found.");
@@ -49,7 +50,9 @@ public sealed class ScaffoldSkillHandler : ICommandHandler<ScaffoldSkillCommand,
         {
             md.Append("## Recorded decisions\n\n");
             foreach (var d in decisions.OrderByDescending(d => d.DecidedAt).Take(10))
+            {
                 md.Append($"- **{d.Question}** → {d.Choice}\n");
+            }
             md.Append('\n');
         }
 
@@ -62,7 +65,10 @@ public sealed class ScaffoldSkillHandler : ICommandHandler<ScaffoldSkillCommand,
         var chars = name.Trim().ToLowerInvariant()
             .Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray();
         var slug = new string(chars);
-        while (slug.Contains("--")) slug = slug.Replace("--", "-");
+        while (slug.Contains("--"))
+        {
+            slug = slug.Replace("--", "-");
+        }
         return slug.Trim('-') is { Length: > 0 } s ? s : "skill";
     }
 }

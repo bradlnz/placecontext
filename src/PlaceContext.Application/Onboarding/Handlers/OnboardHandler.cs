@@ -1,6 +1,7 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Projects;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -69,8 +70,10 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
 
     private async Task<int> BackfillAsync(Project project, ProjectPath path, int limit, DateTimeOffset now, CancellationToken ct)
     {
-        if (!_git.IsRepository(path)) return 0;
-
+        if (!_git.IsRepository(path))
+        {
+            return 0;
+        }
         var ledger = await _ledgers.GetForProjectAsync(project.Id, ct);
         var seen = ledger.Records.Where(r => r.Commit is not null).Select(r => r.Commit!.Value).ToHashSet();
 
@@ -78,8 +81,10 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
         foreach (var c in (await _git.GetRecentCommitsAsync(path, limit, ct)).Reverse())
         {
             var sha = c.Sha.Trim().ToLowerInvariant();
-            if (sha.Length is < 7 or > 40 || !seen.Add(sha)) continue;
-
+            if (sha.Length is < 7 or > 40 || !seen.Add(sha))
+            {
+                continue;
+            }
             var record = ledger.Append(
                 FirstLine(c.Message),
                 Author.Human(string.IsNullOrWhiteSpace(c.AuthorName) ? "unknown" : c.AuthorName),
@@ -102,8 +107,14 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
         var global = await _requirements.GetGlobalAsync(ct);
         var project = await _requirements.GetForProjectAsync(projectId, ct);
         var parts = new List<string>();
-        if (global is { IsEmpty: false }) parts.Add(global.Markdown.Trim());
-        if (project is { IsEmpty: false }) parts.Add(project.Markdown.Trim());
+        if (global is { IsEmpty: false })
+        {
+            parts.Add(global.Markdown.Trim());
+        }
+        if (project is { IsEmpty: false })
+        {
+            parts.Add(project.Markdown.Trim());
+        }
         return parts.Count == 0 ? "_None defined yet._" : string.Join("\n\n", parts);
     }
 
@@ -115,84 +126,20 @@ public sealed class OnboardHandler : ICommandHandler<OnboardCommand, OnboardResu
 
     private static string SkillMarkdown(string agent, string name, string requirements)
     {
-        var body = $$"""
-        # PlaceContext workflow — {{name}}
-
-        ## At session start
-        - Call `get_project_overview` to load what's known.
-
-        ## Before every change (pre-action)
-        - Confirm the change is in scope of the requirements below.
-        - Note your current token usage so you can report the cost of this change afterward.
-
-        ## Guardrails — every change must pass these
-        - **Rationale** — know and state *why*, not just what.
-        - **Checks** — add or adjust the relevant checks; a change with no verification activity is flagged.
-        - **Review** — run a review on non-trivial work.
-        - **Live verification** — exercise the work and observe the result before calling it done.
-
-        ## After every change (post-action)
-        - `record_activity` — rationale, touched items, check deltas, and only the guardrail flags you actually met.
-        - `record_usage` — the input/output tokens spent on *this* change, so cost is tracked per change.
-        - `add_decision` — capture any durable direction you decided.
-
-        ## Requirements
-        {{requirements}}
-        """;
+        var body = PromptText.Render("Onboarding.Prompts.WorkflowSkill", ("name", name), ("requirements", requirements));
 
         return agent is "codex" or "openai"
-            ? "Use at the start of work and around every change in this project.\n\n" + body
-            : $$"""
-              ---
-              name: placecontext
-              description: Use at the start of work in {{name}} and around every change — load context and route changes through PlaceContext.
-              ---
-
-              {{body}}
-              """;
+            ? PromptText.Render("Onboarding.Prompts.WorkflowCommand", ("body", body))
+            : PromptText.Render("Onboarding.Prompts.SkillFrontmatter", ("name", name), ("body", body));
     }
 
     private static string AgentMarkdown(string agent, string name, string requirements)
     {
-        var body = $$"""
-        You review the current work in {{name}}. Check each change against the requirements below and
-        report findings as `where — severity (blocker/major/minor) — issue — concrete fix`. If the change
-        is clean against the requirements, say so explicitly.
-
-        ## Requirements
-        {{requirements}}
-        """;
+        var body = PromptText.Render("Onboarding.Prompts.CodeReview", ("name", name), ("requirements", requirements));
 
         return agent is "codex" or "openai"
-            ? "Reviewer prompt for " + name + ".\n\n" + body
-            : $$"""
-              ---
-              name: reviewer
-              description: Reviews changes in {{name}} against the project's requirements. Use after completing a piece of work.
-              tools: Read, Grep, Glob, Bash
-              schema:
-                type: object
-                required: [goal]
-                properties:
-                  goal:
-                    type: string
-                    description: >
-                      What should this review run focus on this turn (for example "API changes" or
-                      "documentation-only edits"). Keep it concise.
-                  focus_area:
-                    type: string
-                    description: >
-                      Optional area to prioritise (jobs, ui, data, auth, tests, etc.).
-                  questions_for_human:
-                    type: array
-                    description: >
-                      Optional clarification questions for the human before final judgement.
-                    items:
-                      type: string
-              ---
-
-              {{body}}
-              """;
+            ? PromptText.Render("Onboarding.Prompts.ReviewCommand", ("name", name), ("body", body))
+            : PromptText.Render("Onboarding.Prompts.ReviewerFrontmatter", ("name", name), ("body", body));
     }
 
     private static string FirstLine(string message)

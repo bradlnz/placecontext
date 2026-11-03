@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.ProjectData;
 namespace PlaceContext.Application.Features;
 
 public sealed class CreateEntityRecordHandler : ICommandHandler<CreateEntityRecordCommand, CreateEntityRecordResult>
@@ -29,7 +28,10 @@ public sealed class CreateEntityRecordHandler : ICommandHandler<CreateEntityReco
     // The duplicate check runs BEFORE the insert (after it, the row would match itself); warn-only.
     private async Task<IReadOnlyList<string>> FindDuplicatesAsync(CreateEntityRecordCommand command, CancellationToken ct)
     {
-        if (_links is null) return Array.Empty<string>();
+        if (_links is null)
+        {
+            return Array.Empty<string>();
+        }
         try
         {
             return await _links.FindDuplicatesAsync(command.ProjectId, command.TableName, new[] { command.Values }, ct: ct);

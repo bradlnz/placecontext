@@ -7,23 +7,27 @@
 window.pcchart = (function () {
   const chartSource = document.currentScript?.dataset.chartSrc || '/vendor/chart.umd.min.js';
   const LIGHT = ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'];
-  const DARK  = ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'];
+  const DARK = ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'];
 
-  const charts = {};   // canvas id → Chart instance
-  const specs = {};    // canvas id → spec (for theme re-render)
+  const charts = {}; // canvas id → Chart instance
+  const specs = {}; // canvas id → spec (for theme re-render)
   const observed = {}; // canvas id → canvas waiting for IntersectionObserver
   let chartLoader = null;
 
   function ensureChart() {
-    if (typeof window.Chart !== 'undefined') return Promise.resolve(window.Chart);
-    if (chartLoader) return chartLoader;
+    if (typeof window.Chart !== 'undefined') {
+      return Promise.resolve(window.Chart);
+    }
+    if (chartLoader) {
+      return chartLoader;
+    }
     chartLoader = new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = chartSource;
       script.onload = () => resolve(window.Chart);
       script.onerror = () => reject(new Error('Chart.js failed to load.'));
       document.head.appendChild(script);
-    }).catch(error => {
+    }).catch((error) => {
       chartLoader = null;
       console.warn('pcchart:', error.message);
       throw error;
@@ -40,39 +44,53 @@ window.pcchart = (function () {
       dark,
       palette: dark ? DARK : LIGHT,
       surface: v('--card', dark ? '#111418' : '#ffffff'),
-      ink: v('--text-2', dark ? '#98a2ad' : '#5a6571'),      // labels/legend: text tokens, never series color
-      muted: v('--text-3', dark ? '#5e6873' : '#8b95a1'),    // axis ticks
-      grid: v('--border', dark ? '#1d232b' : '#e5e9ed'),     // recessive hairlines
+      ink: v('--text-2', dark ? '#98a2ad' : '#5a6571'), // labels/legend: text tokens, never series color
+      muted: v('--text-3', dark ? '#5e6873' : '#8b95a1'), // axis ticks
+      grid: v('--border', dark ? '#1d232b' : '#e5e9ed'), // recessive hairlines
       tooltipBg: v('--card-2', dark ? '#161a1f' : '#f4f6f8'),
       tooltipInk: v('--text', dark ? '#e8ebef' : '#101620'),
     };
   }
 
   function datasets(spec, t) {
-    if (spec.type === 'pie')
-      return [{
-        data: spec.series[0].values,
-        backgroundColor: spec.labels.map((_, i) => t.palette[i % t.palette.length]),
-        borderColor: t.surface,   // the 2px surface gap between slices
-        borderWidth: 2,
-      }];
-    return spec.series.map((s, i) => spec.type === 'line'
-      ? {
-          label: s.name, data: s.values,
-          borderColor: t.palette[i], backgroundColor: t.palette[i],
-          borderWidth: 2, pointRadius: s.values.length === 1 ? 3 : 0, pointHoverRadius: 4, pointHitRadius: 12,
-          tension: 0.25,
-        }
-      : {
-          label: s.name, data: s.values,
-          backgroundColor: t.palette[i],
-          borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom', // rounded data-end, flat baseline
-          maxBarThickness: 36, barPercentage: 0.7, categoryPercentage: 0.8,
-        });
+    if (spec.type === 'pie') {
+      return [
+        {
+          data: spec.series[0].values,
+          backgroundColor: spec.labels.map((_, i) => t.palette[i % t.palette.length]),
+          borderColor: t.surface, // the 2px surface gap between slices
+          borderWidth: 2,
+        },
+      ];
+    }
+    return spec.series.map((s, i) =>
+      spec.type === 'line'
+        ? {
+            label: s.name,
+            data: s.values,
+            borderColor: t.palette[i],
+            backgroundColor: t.palette[i],
+            borderWidth: 2,
+            pointRadius: s.values.length === 1 ? 3 : 0,
+            pointHoverRadius: 4,
+            pointHitRadius: 12,
+            tension: 0.25,
+          }
+        : {
+            label: s.name,
+            data: s.values,
+            backgroundColor: t.palette[i],
+            borderRadius: { topLeft: 4, topRight: 4 },
+            borderSkipped: 'bottom', // rounded data-end, flat baseline
+            maxBarThickness: 36,
+            barPercentage: 0.7,
+            categoryPercentage: 0.8,
+          },
+    );
   }
 
   function config(spec, t) {
-    const font = { family: "var(--font-sans)", size: 11 };
+    const font = { family: 'var(--font-sans)', size: 11 };
     const many = spec.type === 'pie' || spec.series.length > 1; // one series needs no legend — the title names it
     return {
       type: spec.type === 'pie' ? 'doughnut' : spec.type,
@@ -86,18 +104,48 @@ window.pcchart = (function () {
           legend: {
             display: many,
             position: 'bottom',
-            labels: { color: t.ink, font, usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 14 },
+            labels: {
+              color: t.ink,
+              font,
+              usePointStyle: true,
+              pointStyle: 'circle',
+              boxWidth: 8,
+              boxHeight: 8,
+              padding: 14,
+            },
           },
           tooltip: {
-            backgroundColor: t.tooltipBg, titleColor: t.tooltipInk, bodyColor: t.ink,
-            borderColor: t.grid, borderWidth: 1, cornerRadius: 7, padding: 10,
-            titleFont: font, bodyFont: font, displayColors: many, boxWidth: 8, boxHeight: 8, usePointStyle: true,
+            backgroundColor: t.tooltipBg,
+            titleColor: t.tooltipInk,
+            bodyColor: t.ink,
+            borderColor: t.grid,
+            borderWidth: 1,
+            cornerRadius: 7,
+            padding: 10,
+            titleFont: font,
+            bodyFont: font,
+            displayColors: many,
+            boxWidth: 8,
+            boxHeight: 8,
+            usePointStyle: true,
           },
         },
-        scales: spec.type === 'pie' ? undefined : {
-          x: { grid: { display: false }, border: { color: t.grid }, ticks: { color: t.muted, font, maxRotation: 45, autoSkip: true } },
-          y: { beginAtZero: true, grid: { color: t.grid }, border: { display: false }, ticks: { color: t.muted, font, maxTicksLimit: 6 } },
-        },
+        scales:
+          spec.type === 'pie'
+            ? undefined
+            : {
+                x: {
+                  grid: { display: false },
+                  border: { color: t.grid },
+                  ticks: { color: t.muted, font, maxRotation: 45, autoSkip: true },
+                },
+                y: {
+                  beginAtZero: true,
+                  grid: { color: t.grid },
+                  border: { display: false },
+                  ticks: { color: t.muted, font, maxTicksLimit: 6 },
+                },
+              },
       },
     };
   }
@@ -105,8 +153,13 @@ window.pcchart = (function () {
   function draw(id) {
     const el = document.getElementById(id);
     const spec = specs[id];
-    if (!el || !spec || typeof Chart === 'undefined') return;
-    if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+    if (!el || !spec || typeof Chart === 'undefined') {
+      return;
+    }
+    if (charts[id]) {
+      charts[id].destroy();
+      delete charts[id];
+    }
     charts[id] = new Chart(el, config(spec, tokens()));
   }
 
@@ -116,41 +169,55 @@ window.pcchart = (function () {
   // would otherwise paint blank and never recover.
   const pending = {}; // canvas id → retry timer
   const io = window.IntersectionObserver
-    ? new IntersectionObserver(entries => {
-        for (const e of entries) {
-          const id = e.target.id;
-          // A Blazor diff can replace the canvas between observe() and this callback. Observing
-          // the detached node forever leaves its visible replacement blank, so follow the id to
-          // the current element and mount that one instead.
-          if (document.getElementById(id) !== e.target) {
+    ? new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            const id = e.target.id;
+            // A Blazor diff can replace the canvas between observe() and this callback. Observing
+            // the detached node forever leaves its visible replacement blank, so follow the id to
+            // the current element and mount that one instead.
+            if (document.getElementById(id) !== e.target) {
+              io.unobserve(e.target);
+              if (observed[id] === e.target) {
+                delete observed[id];
+              }
+              mount(id, 0);
+              continue;
+            }
+            if (!e.isIntersecting) {
+              continue;
+            }
             io.unobserve(e.target);
-            if (observed[id] === e.target) delete observed[id];
-            mount(id, 0);
-            continue;
+            delete observed[id];
+            draw(id);
           }
-          if (!e.isIntersecting) continue;
-          io.unobserve(e.target);
-          delete observed[id];
-          draw(id);
-        }
-      }, { rootMargin: '200px' })
+        },
+        { rootMargin: '200px' },
+      )
     : null;
 
   function mount(id, attempt) {
     delete pending[id];
-    if (!specs[id]) return; // destroyed while waiting
+    if (!specs[id]) {
+      return;
+    } // destroyed while waiting
     const el = document.getElementById(id);
     if (!el || typeof Chart === 'undefined') {
       if (attempt < 40) // ~1s of fast polls, then 500ms — gives CDN-slow Chart.js ~16s
+      {
         pending[id] = setTimeout(() => mount(id, attempt + 1), attempt < 10 ? 100 : 500);
+      }
       return;
     }
     if (io) {
-      if (observed[id] && observed[id] !== el) io.unobserve(observed[id]);
+      if (observed[id] && observed[id] !== el) {
+        io.unobserve(observed[id]);
+      }
       observed[id] = el;
       io.observe(el);
+      return;
     }
-    else draw(id);
+    draw(id);
   }
 
   // Once a chart has rendered, the .NET view models intentionally cache that fact to avoid an
@@ -159,7 +226,9 @@ window.pcchart = (function () {
   // an old Chart instance cannot strand a fresh canvas or block reuse of an existing one.
   let reconcileQueued = false;
   function reconcileMounts() {
-    if (reconcileQueued) return;
+    if (reconcileQueued) {
+      return;
+    }
     reconcileQueued = true;
     queueMicrotask(() => {
       reconcileQueued = false;
@@ -170,12 +239,22 @@ window.pcchart = (function () {
         if (chartEl && chartEl !== el) {
           charts[id].destroy();
           delete charts[id];
-          if (el) mount(id, 0);
-        } else if (observedEl && observedEl !== el) {
-          if (io) io.unobserve(observedEl);
+          if (el) {
+            mount(id, 0);
+          }
+          continue;
+        }
+        if (observedEl && observedEl !== el) {
+          if (io) {
+            io.unobserve(observedEl);
+          }
           delete observed[id];
-          if (el) mount(id, 0);
-        } else if (el && !chartEl && !observedEl && !pending[id]) {
+          if (el) {
+            mount(id, 0);
+          }
+          continue;
+        }
+        if (el && !chartEl && !observedEl && !pending[id]) {
           mount(id, 0);
         }
       }
@@ -183,22 +262,34 @@ window.pcchart = (function () {
   }
 
   if (window.MutationObserver && document.documentElement) {
-    new MutationObserver(reconcileMounts)
-      .observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['id'] });
+    new MutationObserver(reconcileMounts).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['id'],
+    });
   }
 
   // Theme flips re-render every live chart with the new tokens (dark is its own selected palette,
   // not an automatic flip of the light one).
   const shell = document.getElementById('dcshell');
   if (shell && window.MutationObserver) {
-    new MutationObserver(() => Object.keys(charts).forEach(draw))
-      .observe(shell, { attributes: true, attributeFilter: ['data-theme'] });
+    new MutationObserver(() => Object.keys(charts).forEach(draw)).observe(shell, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
   }
 
   function renderCore(id, specJson) {
-    try { specs[id] = typeof specJson === 'string' ? JSON.parse(specJson) : specJson; }
-    catch { return; }
-    if (pending[id]) { clearTimeout(pending[id]); delete pending[id]; }
+    try {
+      specs[id] = typeof specJson === 'string' ? JSON.parse(specJson) : specJson;
+    } catch {
+      return;
+    }
+    if (pending[id]) {
+      clearTimeout(pending[id]);
+      delete pending[id];
+    }
     return ensureChart().then(() => mount(id, 0));
   }
 
@@ -211,14 +302,24 @@ window.pcchart = (function () {
       return ensureChart().then(() => {
         for (let i = 0; i < entries.length; i++) {
           const e = entries[i];
-          if (e) renderCore(e.id, e.spec);
+          if (e) {
+            renderCore(e.id, e.spec);
+          }
         }
       });
     },
     destroy(id) {
-      if (pending[id]) { clearTimeout(pending[id]); delete pending[id]; }
-      if (charts[id]) { charts[id].destroy(); delete charts[id]; }
-      if (io && observed[id]) io.unobserve(observed[id]);
+      if (pending[id]) {
+        clearTimeout(pending[id]);
+        delete pending[id];
+      }
+      if (charts[id]) {
+        charts[id].destroy();
+        delete charts[id];
+      }
+      if (io && observed[id]) {
+        io.unobserve(observed[id]);
+      }
       delete observed[id];
       delete specs[id];
     },

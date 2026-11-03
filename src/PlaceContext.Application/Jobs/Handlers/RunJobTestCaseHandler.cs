@@ -1,9 +1,11 @@
 using System.Diagnostics;
-using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Workload;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -48,14 +50,16 @@ public sealed class RunJobTestCaseHandler
         {
             var scenario = ParseScenario(test.InputPayload);
             actual = ScenarioOutput(scenario);
-            if (test.CodeFiles.Count > 0)
+            (status, message, methodResults) = await EvaluateScenarioAsync(scenario);
+
+            async Task<(string Status, string Message, IReadOnlyList<JobTestMethodResult> Methods)> EvaluateScenarioAsync(JsonObject input)
             {
-                (status, message, methodResults) = await RunTestCodeAsync(test, job, scenario, ct);
-            }
-            else
-            {
-                (status, message) = Evaluate(test, ScenarioStatus(scenario), actual);
-                methodResults = new[] { new JobTestMethodResult(test.Name, status, null, message) };
+                if (test.CodeFiles.Count > 0)
+                {
+                    return await RunTestCodeAsync(test, job, input, ct);
+                }
+                var (resultStatus, resultMessage) = Evaluate(test, ScenarioStatus(input), actual);
+                return (resultStatus, resultMessage, new[] { new JobTestMethodResult(test.Name, resultStatus, null, resultMessage) });
             }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -92,11 +96,14 @@ public sealed class RunJobTestCaseHandler
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(test.RuntimeId))
+        {
             return ("Failed", "Test block has no framework selected.", Array.Empty<JobTestMethodResult>());
-
+        }
         var target = test.Entrypoint ?? test.CodeFiles.FirstOrDefault()?.Path;
         if (string.IsNullOrWhiteSpace(target))
+        {
             return ("Failed", "Test block has no test entrypoint.", Array.Empty<JobTestMethodResult>());
+        }
         var (runner, runnerEntrypoint) = JobTestFramework.BuildRunner(test.RuntimeId, target);
         var files = test.CodeFiles
             .Where(file => !string.Equals(file.Path, runner.Path, StringComparison.Ordinal))
@@ -104,10 +111,13 @@ public sealed class RunJobTestCaseHandler
             .ToList();
         AppendJobSource(files, job.MapSpec.Source, "job");
         if (job.ReduceSpec is { } reduce)
+        {
             AppendJobSource(files, reduce.Source, "job/reduce");
+        }
         if (string.Equals(test.RuntimeId, "python", StringComparison.Ordinal))
+        {
             EnsurePytestDependency(files);
-
+        }
         var stdin = scenario.ToJsonString();
         var result = await _workloads.RunAsync(new WorkloadRunRequest(
             Image: null,
@@ -136,8 +146,14 @@ public sealed class RunJobTestCaseHandler
         var passed = methods.Count - failed - skipped;
         var status = result.ExitCode == 0 && failed == 0 ? "Passed" : "Failed";
         var summary = $"{JobTestFramework.Label(test.RuntimeId)}: {passed}/{methods.Count} passed";
-        if (skipped > 0) summary += $", {skipped} skipped";
-        if (failed > 0) summary += $", {failed} failed";
+        if (skipped > 0)
+        {
+            summary += $", {skipped} skipped";
+        }
+        if (failed > 0)
+        {
+            summary += $", {failed} failed";
+        }
         return (status, summary + ".", methods);
     }
 
@@ -146,12 +162,17 @@ public sealed class RunJobTestCaseHandler
         WorkloadSource source,
         string prefix)
     {
-        if (source is not WorkloadSource.CodeWorkload code) return;
+        if (source is not WorkloadSource.CodeWorkload code)
+        {
+            return;
+        }
         foreach (var file in code.Files)
         {
             var path = prefix + "/" + file.Path.TrimStart('/');
             if (files.Any(existing => string.Equals(existing.Path, path, StringComparison.Ordinal)))
+            {
                 throw new InvalidOperationException($"Test sandbox path collision at '{path}'.");
+            }
             files.Add(new CodeFileDto(path, file.Content));
         }
     }
@@ -172,27 +193,33 @@ public sealed class RunJobTestCaseHandler
             .Select(line => line.TrimStart())
             .Any(IsPytestRequirement);
         if (!hasPytest)
+        {
             files[index] = manifest with
             {
                 Content = manifest.Content.TrimEnd() + "\n" + requirement + "\n",
             };
+        }
     }
 
     private static bool IsPytestRequirement(string line)
     {
         const string package = "pytest";
-        if (!line.StartsWith(package, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!line.StartsWith(package, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
         return line.Length == package.Length
-            || char.IsWhiteSpace(line[package.Length])
-            || "[=<>!~".Contains(line[package.Length]);
+                    || char.IsWhiteSpace(line[package.Length])
+                    || "[=<>!~".Contains(line[package.Length]);
     }
 
     private static JsonObject ParseScenario(string? payload)
     {
         if (string.IsNullOrWhiteSpace(payload))
+        {
             throw new InvalidOperationException(
-                "Mock scenario is invalid: provide JSON with input and run fields.");
-
+                        "Mock scenario is invalid: provide JSON with input and run fields.");
+        }
         JsonObject scenario;
         try
         {
@@ -205,18 +232,30 @@ public sealed class RunJobTestCaseHandler
         }
 
         if (scenario["run"] is not JsonObject run)
+        {
             throw new InvalidOperationException(
-                "Mock scenario is invalid: run must be a JSON object.");
+                        "Mock scenario is invalid: run must be a JSON object.");
+        }
         if (run["status"] is not JsonValue status
-            || status.GetValueKind() != JsonValueKind.String
-            || string.IsNullOrWhiteSpace(status.GetValue<string>()))
+                    || status.GetValueKind() != JsonValueKind.String
+                    || string.IsNullOrWhiteSpace(status.GetValue<string>()))
+        {
             throw new InvalidOperationException(
-                "Mock scenario is invalid: run.status must be a non-empty string.");
-        if (run["shards"] is null) run["shards"] = new JsonArray();
+                        "Mock scenario is invalid: run.status must be a non-empty string.");
+        }
+        if (run["shards"] is null)
+        {
+            run["shards"] = new JsonArray();
+        }
         if (run["shards"] is not JsonArray)
+        {
             throw new InvalidOperationException(
-                "Mock scenario is invalid: run.shards must be an array.");
-        if (!scenario.ContainsKey("input")) scenario["input"] = null;
+                        "Mock scenario is invalid: run.shards must be an array.");
+        }
+        if (!scenario.ContainsKey("input"))
+        {
+            scenario["input"] = null;
+        }
         return scenario;
     }
 
@@ -226,10 +265,13 @@ public sealed class RunJobTestCaseHandler
     private static string? ScenarioOutput(JsonObject scenario)
     {
         var output = scenario["run"]?["output"];
-        if (output is null) return null;
+        if (output is null)
+        {
+            return null;
+        }
         return output is JsonValue value && value.GetValueKind() == JsonValueKind.String
-            ? value.GetValue<string>()
-            : output.ToJsonString();
+                    ? value.GetValue<string>()
+                    : output.ToJsonString();
     }
 
     private static string? FirstNonBlank(params string?[] values)
@@ -246,8 +288,9 @@ public sealed class RunJobTestCaseHandler
         JobTestCaseRecord test, string runStatus, string? actual)
     {
         if (!string.Equals(runStatus, "Succeeded", StringComparison.Ordinal))
+        {
             return ("Failed", $"Expected a successful run, but the mock scenario finished as {runStatus}.");
-
+        }
         return test.AssertionType switch
         {
             JobTestAssertionType.Succeeds
@@ -301,7 +344,10 @@ public sealed class RunJobTestCaseHandler
 
     private static bool IsSubset(JsonElement expected, JsonElement actual)
     {
-        if (expected.ValueKind != actual.ValueKind) return false;
+        if (expected.ValueKind != actual.ValueKind)
+        {
+            return false;
+        }
         return expected.ValueKind switch
         {
             JsonValueKind.Object => expected.EnumerateObject().All(property =>

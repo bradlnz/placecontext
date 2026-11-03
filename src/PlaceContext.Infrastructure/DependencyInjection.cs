@@ -1,14 +1,40 @@
-using PlaceContext.Application.Ports;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Activity;
+using PlaceContext.Application.Artifacts;
+using PlaceContext.Application.Auth;
+using PlaceContext.Application.Build;
+using PlaceContext.Application.Cluster;
+using PlaceContext.Application.Communications;
+using PlaceContext.Application.DataEntities;
+using PlaceContext.Application.DataLinks;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application.Mcp;
+using PlaceContext.Application.Membership;
+using PlaceContext.Application.Networking;
+using PlaceContext.Application.Observability;
+using PlaceContext.Application.Organization;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Projects;
+using PlaceContext.Application.SavedQueries;
+using PlaceContext.Application.Search;
+using PlaceContext.Application.Secrets;
+using PlaceContext.Application.Shared;
+using PlaceContext.Application.Skills;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Triggers;
+using PlaceContext.Application.Workload.VirtualMachines;
+using PlaceContext.Application.Workload;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Git;
+using PlaceContext.Infrastructure.Mcp;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Skills;
 using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Infrastructure.Workload;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace PlaceContext.Infrastructure;
 
@@ -22,30 +48,38 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<PlaceContextOptions>(configuration.GetSection("PlaceContext"));
-        services.Configure<PlaceContext.Application.Billing.StripeRunBillingOptions>(
+        services.Configure<Billing.PaymentBillingOptions>(
             configuration.GetSection("PlaceContext:Stripe"));
         services.Configure<PlaceContext.Application.Billing.RunBillingDeploymentOptions>(
             configuration.GetSection("PlaceContext:SaaS"));
         services.Configure<PlaceContext.Application.Billing.WorkspaceSignupOptions>(
             configuration.GetSection("PlaceContext:SaaS:Signup"));
         services.AddScoped<Auth.ManagedWorkspaceSignup>();
+        services.AddScoped<PlaceContext.Application.Auth.IWorkspaceSignup>(sp => sp.GetRequiredService<Auth.ManagedWorkspaceSignup>());
         services.AddScoped<PlaceContext.Application.Billing.IWorkspaceSignupEmailSender,
-            Auth.PostmarkWorkspaceSignupEmailSender>();
+            Auth.TransactionalSignupEmailSender>();
+        services.AddHttpClient<IRemoteOAuthClientResolver, Auth.RemoteOAuthClientResolver>(client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false,
+                UseCookies = false,
+                PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+            });
         services.AddHttpClient("signup-mailer", client => client.Timeout = TimeSpan.FromSeconds(15))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
-        services.Configure<PlaceContext.Application.Connections.ManagedMicrosoftOAuthOptions>(
+        services.Configure<Connections.ManagedOfficeOAuthOptions>(
             configuration.GetSection("PlaceContext:ManagedOAuth:Microsoft"));
         services.AddScoped<PlaceContext.Application.Billing.IRunAllowance, Billing.DbRunAllowance>();
         services.AddScoped<PlaceContext.Application.Billing.IExecutionCapacity, Billing.DbExecutionCapacity>();
-        services.AddScoped<PlaceContext.Application.Billing.IRunBillingPortal, Billing.StripeRunBillingPortal>();
-        services.AddScoped<Billing.StripeRunBillingWebhook>();
-        services.AddScoped<PlaceContext.Application.Connections.IManagedOAuthConnections, Connections.ManagedMicrosoftOAuthConnections>();
+        services.AddScoped<PlaceContext.Application.Billing.IRunBillingPortal, Billing.PaymentBillingPortal>();
+        services.AddScoped<PlaceContext.Application.Billing.IRunBillingWebhook, Billing.PaymentBillingWebhook>();
+        services.AddScoped<PlaceContext.Application.Connections.IManagedOAuthConnections, Connections.ManagedOfficeOAuthConnections>();
         services.AddHttpClient("stripe-billing", client => client.Timeout = TimeSpan.FromSeconds(25))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.AddHttpClient("managed-microsoft-oauth", client => client.Timeout = TimeSpan.FromSeconds(25))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
-        services.Configure<OpenSearch.OpenSearchOptions>(
+        services.Configure<Search.SearchOptions>(
             configuration.GetSection("PlaceContext:OpenSearch"));
 
         services.AddScoped<PlaceContext.Application.Build.IBuildChatStore, Build.DbBuildChatStore>();
@@ -55,13 +89,24 @@ public static class DependencyInjection
         services.AddScoped<PlaceContext.Application.Build.IModelConnections>(sp => sp.GetRequiredService<Build.ModelConnections>());
         services.AddScoped<PlaceContext.Application.AgentWorkflows.IAgentModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
         services.Configure<AgentWorkflows.AgentWorkflowOptions>(configuration.GetSection("PlaceContext:AgentWorkflows"));
-        services.AddScoped<PlaceContext.Application.AgentWorkflows.IAgentWorkflows, AgentWorkflows.AgentWorkflowService>();
-        services.AddScoped<PlaceContext.Application.Dashboards.IPersonalDashboards, Dashboards.PersonalDashboardService>();
+        services.AddScoped<PlaceContext.Application.AgentWorkflows.IAgentWorkflowStore, AgentWorkflows.EfAgentWorkflowStore>();
+        services.AddSingleton(sp => new PlaceContext.Application.AgentWorkflows.AgentWorkflowPolicy(() =>
+            sp.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName == "Development"
+            && sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AgentWorkflows.AgentWorkflowOptions>>().Value.SimulateSubscriptions));
         services.AddScoped<PlaceContext.Application.Build.IBuildModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
         services.AddHttpClient("build-model", client => client.Timeout = Timeout.InfiniteTimeSpan)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
+        services.AddScoped<IMcpClientService, McpClientService>();
+        services.AddScoped<IMcpOAuthClient, HttpMcpOAuthClient>();
+        services.AddScoped<IMcpConnectionProbe, HttpMcpConnectionProbe>();
+
         services.AddSingleton<IClock, SystemClock>();
+        services.AddHostedService<Build.BuildChatBackgroundService>();
+        services.AddScoped<IWorkspaceAdministratorReader, Auth.EfWorkspaceAdministratorReader>();
+        services.AddScoped<PlaceContext.Application.DatabaseInspection.IDatabaseInspector, DatabaseInspector>();
+        services.AddScoped<PlaceContext.Application.Auth.IExternalIdentityProvider, Auth.HttpExternalIdentityProvider>();
+        services.AddScoped<IPresignedUploadClient, Storage.HttpPresignedUploadClient>();
 
         // (Activation/licensing removed — subscriptions are managed by a separate billing portal.)
 
@@ -69,8 +114,9 @@ public static class DependencyInjection
         services.AddSingleton<ICurrentTenant, CurrentTenant>();
         services.AddSingleton<ICurrentProject, CurrentProject>();
         services.AddScoped<ITenantStore, EfTenantStore>();
-        services.AddSingleton<KubernetesTenantRuntime>();
+        services.AddSingleton<ITenantRuntime, ClusterTenantRuntime>();
         services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
+        services.AddScoped<ITenantBrandingStore, EfTenantBrandingStore>();
         services.AddScoped<IMenuConfigService, Tenancy.MenuConfigService>();
         services.AddScoped<IArtifactViewConfigService, Tenancy.ArtifactViewConfigService>();
         services.AddScoped<IWorkerNetworkService, Networking.DbWorkerNetworkService>();
@@ -109,11 +155,11 @@ public static class DependencyInjection
         // EF repositories.
         services.AddScoped<IProjectRepository, EfProjectRepository>();
         services.AddScoped<IJobTestStore, EfJobTestStore>();
-        services.AddScoped<IOpenSearchDashboardStore, EfOpenSearchDashboardStore>();
+        services.AddScoped<ISearchDashboardStore, EfSearchDashboardStore>();
         services.AddScoped<ISavedQueryStore, EfSavedQueryStore>();
-        services.AddScoped<IOpenSearchConnectionResolver, OpenSearch.OpenSearchConnectionResolver>();
-        services.AddScoped<IOpenSearchDataGateway, OpenSearch.OpenSearchDataGateway>();
-        services.AddScoped<IOpenSearchSyncGateway, OpenSearch.OpenSearchSyncGateway>();
+        services.AddScoped<ISearchConnectionResolver, Search.SearchConnectionResolver>();
+        services.AddScoped<ISearchDataGateway, Search.SearchDataGateway>();
+        services.AddScoped<ISearchSyncGateway, Search.SearchSyncGateway>();
         services.AddHttpClient("opensearch", client =>
         {
             client.Timeout = TimeSpan.FromSeconds(30);
@@ -136,40 +182,43 @@ public static class DependencyInjection
         // Workloads use Kubernetes in-cluster or the explicitly configured local kubeconfig.
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));
-        services.Configure<QemuEnvironmentOptions>(configuration.GetSection("PlaceContext:Qemu"));
+        services.Configure<VirtualMachineEnvironmentOptions>(configuration.GetSection("PlaceContext:Qemu"));
         services.AddHttpClient("qemu-agent", client => client.Timeout = TimeSpan.FromSeconds(90))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
-        services.AddSingleton<QemuPromptAgent>();
-        services.AddSingleton<JevQemuTaskAgent>();
-        services.AddSingleton<IQemuTaskAgent>(sp =>
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<QemuEnvironmentOptions>>().Value.Executor == "model"
-                ? sp.GetRequiredService<QemuPromptAgent>() : sp.GetRequiredService<JevQemuTaskAgent>());
+        services.AddSingleton<VirtualMachinePromptAgent>();
+        services.AddSingleton<ReviewedVirtualMachineTaskAgent>();
+        services.AddSingleton<IVirtualMachineTaskAgent>(sp =>
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<VirtualMachineEnvironmentOptions>>().Value.Executor == "model"
+                ? sp.GetRequiredService<VirtualMachinePromptAgent>() : sp.GetRequiredService<ReviewedVirtualMachineTaskAgent>());
         services.AddSingleton<IChainQuestionGenerator, ModelChainQuestionGenerator>();
-        services.Configure<TypeSafeOptions>(configuration.GetSection("PlaceContext:TypeSafe"));
-        services.PostConfigure<TypeSafeOptions>(options =>
+        services.Configure<ModelReviewOptions>(configuration.GetSection("PlaceContext:TypeSafe"));
+        services.PostConfigure<ModelReviewOptions>(options =>
         {
-            if (string.IsNullOrWhiteSpace(options.ApiKey)) options.ApiKey = configuration["TYPESAFE_API_KEY"] ?? "";
+            if (string.IsNullOrWhiteSpace(options.ApiKey))
+            {
+                options.ApiKey = configuration["TYPESAFE_API_KEY"] ?? "";
+            }
         });
         services.AddHttpClient("typesafe", client => client.Timeout = TimeSpan.FromSeconds(90))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
-        services.AddSingleton<TypeSafeConfiguration>();
-        services.AddSingleton<IJevReviewer, JevReviewer>();
-        services.AddScoped<IQemuReplayStore, DbQemuReplayStore>();
-        services.AddSingleton<QemuDesktopSessions>();
-        services.AddScoped<IQemuDesktop, QemuDesktopAccess>();
-        services.AddScoped<IQemuLoginStore, DbQemuLoginStore>();
-        services.AddSingleton<QemuEnvironmentRunner>();
-        services.AddSingleton<IQemuEnvironmentRunner>(sp => sp.GetRequiredService<QemuEnvironmentRunner>());
-        services.AddSingleton<IQemuEnvironmentCatalog>(sp => sp.GetRequiredService<QemuEnvironmentRunner>());
+        services.AddSingleton<IModelCredentialsResolver, ModelCredentialsResolver>();
+        services.AddSingleton<IOutcomeReviewer, ModelOutcomeReviewer>();
+        services.AddScoped<IVirtualMachineReplayStore, DbVirtualMachineReplayStore>();
+        services.AddSingleton<VirtualMachineDesktopSessions>();
+        services.AddScoped<IVirtualMachineDesktop, VirtualMachineDesktopAccess>();
+        services.AddScoped<IVirtualMachineLoginStore, DbVirtualMachineLoginStore>();
+        services.AddSingleton<VirtualMachineEnvironmentRunner>();
+        services.AddSingleton<IVirtualMachineEnvironmentRunner>(sp => sp.GetRequiredService<VirtualMachineEnvironmentRunner>());
+        services.AddSingleton<IVirtualMachineEnvironmentCatalog>(sp => sp.GetRequiredService<VirtualMachineEnvironmentRunner>());
         services.AddSingleton<IWorkloadOutputBuffer, InMemoryWorkloadOutputBuffer>();
-        services.AddSingleton<KubernetesWorkloadRunner>();
-        services.AddSingleton<k8s.IKubernetes>(sp => new k8s.Kubernetes(KubernetesRuntime.Configuration(
+        services.AddSingleton<ClusterWorkloadRunner>();
+        services.AddSingleton<k8s.IKubernetes>(sp => new k8s.Kubernetes(ClusterRuntime.Configuration(
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkloadRunnerOptions>>().Value)));
-        services.AddScoped<KubernetesServiceConsole>();
-        services.AddScoped<IServiceConsole>(sp => sp.GetRequiredService<KubernetesServiceConsole>());
-        services.AddScoped<IDatabaseConsole>(sp => sp.GetRequiredService<KubernetesServiceConsole>());
+        services.AddScoped<ClusterServiceConsole>();
+        services.AddScoped<IServiceConsole>(sp => sp.GetRequiredService<ClusterServiceConsole>());
+        services.AddScoped<IDatabaseConsole>(sp => sp.GetRequiredService<ClusterServiceConsole>());
         services.AddHttpClient("persistent-workloads", client => client.Timeout = Timeout.InfiniteTimeSpan);
-        services.AddSingleton<IWorkloadRunner>(sp => sp.GetRequiredService<KubernetesWorkloadRunner>());
+        services.AddSingleton<IWorkloadRunner>(sp => sp.GetRequiredService<ClusterWorkloadRunner>());
 
         // Field encryption at rest (AES via Data Protection). Portal/jobs decrypt in-process;
         // raw Postgres/MinIO without the DP key ring only see ciphertext.
@@ -180,44 +229,46 @@ public static class DependencyInjection
 
         // Object store (S3-compatible: MinIO, DO Spaces, AWS S3) for post-job artifacts.
         services.Configure<Storage.ObjectStoreOptions>(configuration.GetSection("PlaceContext:ObjectStore"));
-        services.AddSingleton<IObjectStore, Storage.S3ObjectStore>();
+        services.AddSingleton<IObjectStore, Storage.CompatibleObjectStore>();
         services.AddScoped<IRunArtifactLinkRepository, EfRunArtifactLinkRepository>();
         services.AddScoped<IProjectChartRepository, EfProjectChartRepository>();
 
         // Redis-backed distributed cache for job run shard results (keeps Postgres lean).
         var redisConn = configuration["PlaceContext:Redis:ConnectionString"];
-        if (!string.IsNullOrWhiteSpace(redisConn))
+        void ConfigureRunCache()
         {
-            services.AddStackExchangeRedisCache(opts =>
+            if (!string.IsNullOrWhiteSpace(redisConn))
             {
-                opts.Configuration = redisConn;
-                opts.InstanceName = "pc";
-            });
-            services.AddSingleton<Caching.IJobRunCache, Caching.RedisJobRunCache>();
-            services.AddSingleton<IChainContextStore, Caching.RedisChainContextStore>();
-        }
-        else
-        {
+                services.AddStackExchangeRedisCache(opts =>
+                {
+                    opts.Configuration = redisConn;
+                    opts.InstanceName = "pc";
+                });
+                services.AddSingleton<Caching.IJobRunCache, Caching.DistributedJobRunCache>();
+                services.AddSingleton<IChainContextStore, Caching.DistributedChainContextStore>();
+                return;
+            }
             services.AddSingleton<Caching.IJobRunCache, Caching.NullJobRunCache>();
             services.AddSingleton<IChainContextStore, Caching.NullChainContextStore>();
         }
-
+        ConfigureRunCache();
         // Job / JobRun repositories.
         services.AddScoped<IJobRepository, EfJobRepository>();
         services.AddScoped<IJobRunRepository, EfJobRunRepository>();
         services.AddScoped<IJobRunHeartbeat, Scheduling.DbJobRunHeartbeat>();
         services.Configure<Comms.ClientCommsOptions>(
             configuration.GetSection(Comms.ClientCommsOptions.SectionName));
-        services.AddScoped<Comms.CommunicationProviderService>();
+        services.AddScoped<PlaceContext.Application.Communications.ICommunicationProviderStore, Comms.EfCommunicationProviderStore>();
         services.AddScoped<Comms.DatabaseCommunicationSender>();
+        services.AddScoped<ICommunicationTestSender>(sp => sp.GetRequiredService<Comms.DatabaseCommunicationSender>());
         services.AddScoped<IClientCommunicationSender>(
             sp => sp.GetRequiredService<Comms.DatabaseCommunicationSender>());
 
         // Data map (declarative job-result → project-table ingestion rules).
         services.AddScoped<IDataMappingRepository, EfDataMappingRepository>();
         services.AddScoped<IDataEntityRepository, EfDataEntityRepository>();
-        services.AddScoped<Application.Features.IEntityTagStore, EfEntityTagStore>();
-        services.AddScoped<Application.Features.IRecordLinkStore, EfRecordLinkStore>();
+        services.AddScoped<Application.DataEntities.IEntityTagStore, EfEntityTagStore>();
+        services.AddScoped<Application.DataLinks.IRecordLinkStore, EfRecordLinkStore>();
         services.AddSingleton<IDocumentTextExtractor, Documents.DocumentTextExtractor>();
 
         // Trigger + event repositories.
@@ -228,40 +279,49 @@ public static class DependencyInjection
 
         // Embeddings: Voyage AI when a key is configured, else the cluster shard server
         // (self-hosted, vectors from the chat model's hidden states), else a no-op.
-        if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Voyage:ApiKey"]))
-            services.AddSingleton<IEmbeddingGateway, Embeddings.VoyageEmbeddingGateway>();
-        else if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:ClusterChat:Endpoint"]))
-            services.AddSingleton<IEmbeddingGateway, Embeddings.ClusterEmbeddingGateway>();
-        else
+        void ConfigureEmbeddings()
+        {
+            if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Voyage:ApiKey"]))
+            {
+                services.AddSingleton<IEmbeddingGateway, Embeddings.RemoteEmbeddingGateway>();
+                return;
+            }
+            if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:ClusterChat:Endpoint"]))
+            {
+                services.AddSingleton<IEmbeddingGateway, Embeddings.ClusterEmbeddingGateway>();
+                return;
+            }
             services.AddSingleton<IEmbeddingGateway, Embeddings.NullEmbeddingGateway>();
-
+        }
+        ConfigureEmbeddings();
         // Vector stores: Qdrant when an endpoint is configured, otherwise pgvector (with lazy init).
         var qdrantUrl2 = configuration["PlaceContext:Qdrant:Endpoint"];
-        if (!string.IsNullOrWhiteSpace(qdrantUrl2))
+        void ConfigureVectorStorage()
         {
-            services.AddScoped<IRunEmbeddingRepository>(sp =>
+            if (!string.IsNullOrWhiteSpace(qdrantUrl2))
             {
-                var embeddings = sp.GetRequiredService<IEmbeddingGateway>();
-                var tenant = sp.GetRequiredService<ICurrentTenant>();
-                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-                return new VectorStore.QdrantRunEmbeddingRepository(embeddings, tenant, httpFactory, qdrantUrl2);
-            });
-            services.AddScoped<IContentIndexer>(sp =>
-            {
-                var gateway = sp.GetRequiredService<IEmbeddingGateway>();
-                var tenant = sp.GetRequiredService<ICurrentTenant>();
-                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-                return new VectorStore.QdrantContentIndexer(gateway, tenant, httpFactory, qdrantUrl2);
-            });
-            // One-shot migration from pgvector tables on first startup.
-            services.AddHostedService<VectorStore.MigrateToQdrantService>();
-        }
-        else
-        {
+                services.AddScoped<IRunEmbeddingRepository>(sp =>
+                {
+                    var embeddings = sp.GetRequiredService<IEmbeddingGateway>();
+                    var tenant = sp.GetRequiredService<ICurrentTenant>();
+                    var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
+                    return new VectorStore.VectorRunEmbeddingRepository(embeddings, tenant, httpFactory, qdrantUrl2);
+                });
+                services.AddScoped<IContentIndexer>(sp =>
+                {
+                    var gateway = sp.GetRequiredService<IEmbeddingGateway>();
+                    var tenant = sp.GetRequiredService<ICurrentTenant>();
+                    var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
+                    return new VectorStore.VectorContentIndexer(gateway, tenant, httpFactory, qdrantUrl2);
+                });
+                // One-shot migration from pgvector tables on first startup.
+                services.AddHostedService<VectorStore.VectorIndexMigrationHostedService>();
+                return;
+            }
             services.AddScoped<IRunEmbeddingRepository, Persistence.EfRunEmbeddingRepository>();
             services.AddScoped<IContentIndexer, Embeddings.ContentIndexer>();
         }
-
+        ConfigureVectorStorage();
         services.AddScoped<Domain.Repositories.IMcpConnectionRepository, Persistence.EfMcpConnectionRepository>();
 
         // Dependency-graph assembly is expensive (full ledger + decisions + O(n²) embedding weave);
@@ -270,7 +330,7 @@ public static class DependencyInjection
         services.AddMemoryCache();
         services.AddScoped<Application.Features.DecisionTreeProvider>();
         services.AddScoped<Application.Features.IDecisionTreeProvider, Caching.CachedDecisionTreeProvider>();
-        services.AddHostedService<Caching.DecisionTreeCacheWarmer>();
+        services.AddHostedService<Caching.DecisionTreeCacheBackgroundService>();
 
         // Trigger scheduling: cron evaluation, a durable DB-backed run queue, and the background firing
         // service (advisory-lock-elected schedule scan + atomic queue drain — correct across replicas).
@@ -280,58 +340,63 @@ public static class DependencyInjection
         services.AddScoped<IJobChainSubmissionQueue, Scheduling.DbJobChainSubmissionQueue>();
         services.AddScoped<Scheduling.DbChainQueueService>();
         services.AddScoped<IChainQueueService>(sp => sp.GetRequiredService<Scheduling.DbChainQueueService>());
-        services.AddScoped<IAppQueueGateway, KubernetesAppQueueGateway>();
-        services.AddHostedService<Scheduling.TriggerSchedulerService>();
-        services.AddHostedService<Scheduling.ChainContinuationWorker>();
-        services.AddHostedService<Scheduling.RpcChainSubmissionWorker>();
-        services.AddHostedService<Scheduling.RpcJobSubmissionWorker>();
+        services.AddScoped<IAppQueueGateway, ClusterAppQueueGateway>();
+        services.AddHostedService<Scheduling.TriggerSchedulerBackgroundService>();
+        services.AddHostedService<Scheduling.ChainContinuationBackgroundService>();
+        services.AddHostedService<Scheduling.RpcChainSubmissionBackgroundService>();
+        services.AddHostedService<Scheduling.RpcJobSubmissionBackgroundService>();
 
         // Background portal operations (the notifications-pane ledger) + the analytics chart sweep
         // worker (generation can be slow; the portal only enqueues and reads stored charts).
-        services.AddSingleton<Operations.OperationCenter>();
+        services.AddSingleton(sp => new PlaceContext.Application.Operations.OperationCenter(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            sp.GetRequiredService<Microsoft.Extensions.Hosting.IHostApplicationLifetime>().ApplicationStopping,
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<PlaceContext.Application.Operations.OperationCenter>>()));
         services.AddSingleton<Scheduling.AnalyticsRefreshQueue>();
-        services.AddHostedService<Scheduling.AnalyticsWorkerService>();
+        services.AddSingleton<IAnalyticsRefreshQueue>(sp => sp.GetRequiredService<Scheduling.AnalyticsRefreshQueue>());
+        services.AddHostedService<Scheduling.AnalyticsBackgroundService>();
 
         // Run-status watcher: syncs persisted job/chain run statuses into the notifications pane on
         // a short tick, so the bell reflects finish/fail the moment the row commits — independent of
         // the (slow, best-effort) in-process enrichment and of which replica executed the run.
         services.AddScoped<IRunStatusReader, DbRunStatusReader>();
         services.AddSingleton<IRunStatusNotifier, Operations.OperationCenterRunStatusNotifier>();
-        services.AddHostedService<Scheduling.RunStatusWatcherService>();
+        services.AddHostedService<Scheduling.RunStatusWatcherBackgroundService>();
 
         // Each project's own database (Postgres schema + role isolation; Monaco SQL in the portal).
         // A project's external database override resolves through the Vault (cluster DB is the default).
         services.AddScoped<IProjectDatabaseConnectionResolver, ProjectData.ProjectDatabaseConnectionResolver>();
-        services.AddScoped<IProjectDataStore, ProjectData.NpgsqlProjectDataStore>();
+        services.AddScoped<IProjectDataStore, ProjectData.SqlProjectDataStore>();
 
         // Cluster page: node inventory + fleet-master admin (promote / join codes over Tailscale).
         // Same in-cluster vs local detection as the workload runner above.
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+        void ConfigureServiceConsole()
         {
-            services.AddSingleton<Cluster.KubernetesClusterInfoProvider>();
-            services.AddSingleton<IClusterInfoProvider>(sp =>
-                sp.GetRequiredService<Cluster.KubernetesClusterInfoProvider>());
-            services.AddSingleton<IClusterAdminPort>(sp =>
-                sp.GetRequiredService<Cluster.KubernetesClusterInfoProvider>());
-        }
-        else
-        {
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST")))
+            {
+                services.AddSingleton<Cluster.ClusterInfoProvider>();
+                services.AddSingleton<IClusterInfoProvider>(sp =>
+                    sp.GetRequiredService<Cluster.ClusterInfoProvider>());
+                services.AddSingleton<IClusterAdminPort>(sp =>
+                    sp.GetRequiredService<Cluster.ClusterInfoProvider>());
+                return;
+            }
             services.AddSingleton<Cluster.LocalClusterInfoProvider>();
             services.AddSingleton<IClusterInfoProvider>(sp =>
                 sp.GetRequiredService<Cluster.LocalClusterInfoProvider>());
             services.AddSingleton<IClusterAdminPort>(sp =>
                 sp.GetRequiredService<Cluster.LocalClusterInfoProvider>());
         }
-
+        ConfigureServiceConsole();
         // Mints fresh Tailscale auth keys from vaulted OAuth client credentials for agent join codes.
-        services.AddSingleton<ITailscaleKeyMinter, Cluster.TailscaleApiKeyMinter>();
+        services.AddSingleton<IPrivateNetworkKeyMinter, Cluster.PrivateNetworkKeyMinter>();
 
         // Agent join tokens — short-lived, one-time tokens exchanged for join codes from join.sh.
         services.AddSingleton<IAgentTokenManager, Cluster.InMemoryAgentTokenManager>();
 
         services.AddSingleton<Observability.JobTelemetryCollector>();
         services.AddSingleton<IJobTelemetryReader>(sp => sp.GetRequiredService<Observability.JobTelemetryCollector>());
-        services.AddHostedService<Observability.JobTelemetryCollectorStartup>();
+        services.AddHostedService<Observability.JobTelemetryStartupHostedService>();
 
         return services;
     }
@@ -350,7 +415,7 @@ public static class DependencyInjection
         EnsureRpcJobSubmissionSchema(db);
         EnsureWorkerNetworkingSchema(db);
         EnsureQemuReplaySchema(db);
-        db.Database.ExecuteSqlRaw(DbQemuLoginStore.Schema);
+        db.Database.ExecuteSqlRaw(DbVirtualMachineLoginStore.Schema);
         // Additive indexes for the hot run queries (safe if already present). The status watcher
         // scans job_runs/chain_runs for in-flight or recently-finished rows every 2 seconds — a
         // sequential scan of the whole run history without these. Partial indexes keep the active-
@@ -515,13 +580,18 @@ public static class DependencyInjection
         try
         {
             var enc = sp.GetService<IDataEncryptor>();
-            if (enc is null) return;
+            if (enc is null)
+            {
+                return;
+            }
             var purpose = IDataEncryptor.Purpose.JobRun;
             var rows = db.JobRuns
                 .FromSqlRaw("""SELECT * FROM job_runs WHERE "ShardCount" = 0 AND "ShardResultsJson" IS NOT NULL""")
                 .ToList();
-            if (rows.Count == 0) return;
-
+            if (rows.Count == 0)
+            {
+                return;
+            }
             foreach (var row in rows)
             {
                 try
@@ -529,7 +599,10 @@ public static class DependencyInjection
                     var json = enc.Unprotect(row.ShardResultsJson, purpose);
                     var shards = System.Text.Json.JsonSerializer.Deserialize<List<ShardResultDto>>(json,
                         new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (shards is null) continue;
+                    if (shards is null)
+                    {
+                        continue;
+                    }
                     row.ShardCount = shards.Count;
                     row.SucceededShards = shards.Count(s =>
                         string.Equals(s.Outcome, "Succeeded", StringComparison.OrdinalIgnoreCase));

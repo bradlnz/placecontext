@@ -2,7 +2,8 @@ using System.Net;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Communications;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Infrastructure.Comms;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
@@ -311,10 +312,22 @@ public sealed class CommunicationProviderTests
         private readonly IHttpClientFactory _factory;
         private readonly StubState _state;
 
-        public AppDbContext Db { get; }
-        public EfProjectSecretRepository Secrets { get; }
-        public CommunicationProviderService Service { get; }
-        public Guid VaultProjectId { get; }
+        public AppDbContext Db
+        {
+            get;
+        }
+        public EfProjectSecretRepository Secrets
+        {
+            get;
+        }
+        public CommunicationProviderService Service
+        {
+            get;
+        }
+        public Guid VaultProjectId
+        {
+            get;
+        }
         public CapturedRequest? Captured => _state.Captured;
 
         private Fixture(
@@ -352,7 +365,7 @@ public sealed class CommunicationProviderTests
                 return state.Respond();
             });
             var factory = new StubHttpClientFactory(handler);
-            var service = new CommunicationProviderService(db, secrets, new PlaintextSecretProtector());
+            var service = new CommunicationProviderService(new EfCommunicationProviderStore(db), db, secrets, new PlaintextSecretProtector());
             return new Fixture(db, secrets, service, factory, state, vaultProjectId);
         }
 
@@ -380,7 +393,9 @@ public sealed class CommunicationProviderTests
             {
                 var response = StubState.Json(body);
                 foreach (var (key, value) in headers ?? new())
+                {
                     response.Headers.TryAddWithoutValidation(key, value);
+                }
                 return response;
             };
 
@@ -389,7 +404,7 @@ public sealed class CommunicationProviderTests
                 _factory,
                 Options.Create(new ClientCommsOptions
                 {
-                    Postmark = new PostmarkOptions { ApiEndpoint = "https://api.postmark.test" },
+                    Postmark = new TransactionalEmailOptions { ApiEndpoint = "https://api.postmark.test" },
                 }),
                 Service);
 

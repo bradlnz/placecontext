@@ -19,17 +19,32 @@ public sealed class ReduceResult
     }
 
     /// <summary>Raw exit code returned by the reduce container.</summary>
-    public int ExitCode { get; }
+    public int ExitCode
+    {
+        get;
+    }
 
     /// <summary>Whether the reduce step was considered successful (exit code in policy's success set).</summary>
-    public bool Succeeded { get; }
+    public bool Succeeded
+    {
+        get;
+    }
 
     /// <summary>Opaque JSON artifact written by the reduce container to /out/result.json.</summary>
-    public string? Artifact { get; }
+    public string? Artifact
+    {
+        get;
+    }
 
     /// <summary>Combined stdout/stderr from the reduce container. May be truncated.</summary>
-    public string? Log { get; }
+    public string? Log
+    {
+        get;
+    }
 
     /// <summary>Named output files captured from /out beyond result.json (e.g. report.csv). May be empty.</summary>
-    public IReadOnlyList<RunArtifact> Artifacts { get; }
+    public IReadOnlyList<RunArtifact> Artifacts
+    {
+        get;
+    }
 }

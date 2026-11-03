@@ -1,5 +1,4 @@
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Secrets;
 namespace PlaceContext.TestSupport;
 
 /// <summary>No-op encryptor for tests — stores values as plaintext (no encryption).</summary>

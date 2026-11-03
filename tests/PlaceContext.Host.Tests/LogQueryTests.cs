@@ -94,16 +94,32 @@ public sealed class LogQueryTests
         var report = Entry("").Report!;
         var lines = Enumerable.Range(1, 30).Select(i => i == 15
             ? "{\"level\":\"ERROR\",\"message\":\"failed\",\"request\":{\"id\":\"abc\"}}" : $"INFO line {i}");
-        report = report with { Run = report.Run with { ShardResults = [new(0, 0, "Succeeded", null,
-            string.Join('\n', lines), []), new(1, 0, "Succeeded", null, "INFO other shard", [])] } };
-        var other = report with { Run = report.Run with { Id = Guid.NewGuid() } };
+        report = report with
+        {
+            Run = report.Run with
+            {
+                ShardResults = [new(0, 0, "Succeeded", null,
+            string.Join('\n', lines), []), new(1, 0, "Succeeded", null, "INFO other shard", [])]
+            }
+        };
+        var other = report with
+        {
+            Run = report.Run with
+            {
+                Id = Guid.NewGuid()
+            }
+        };
         vm.SetLogResults([report, other], new LogQuery($"run = '{report.Run.Id}' AND level = ERROR", Now));
         var match = Assert.Single(vm.LogResults!);
         vm.ToggleLogEvent(match);
         Assert.Same(match, vm.SelectedLog);
         Assert.Equal("abc", vm.SelectedLogFields!.Cell("json.request.id"));
         Assert.Equal(Enumerable.Range(5, 21), vm.LogContext.Select(entry => entry.Event.Index));
-        Assert.All(vm.LogContext, entry => { Assert.Equal(report.Run.Id, entry.Report!.Run.Id); Assert.Equal("shard 0", entry.Event.Stream); });
+        Assert.All(vm.LogContext, entry =>
+        {
+            Assert.Equal(report.Run.Id, entry.Report!.Run.Id);
+            Assert.Equal("shard 0", entry.Event.Stream);
+        });
         Assert.Contains(vm.LogContext, entry => entry.Event.Level == "INFO");
         vm.ToggleLogEvent(match);
         Assert.Null(vm.SelectedLog);
@@ -123,8 +139,14 @@ public sealed class LogQueryTests
     {
         var vm = new ObservabilityViewModel(null!, null!, null!, null!, null!, new InMemoryWorkloadOutputBuffer(), null!);
         var report = Entry("").Report!;
-        report = report with { Run = report.Run with { ShardResults = [new(0, 0, "Succeeded", null,
-            string.Join('\n', Enumerable.Range(1, 30).Select(i => $"INFO line {i}")), [])] } };
+        report = report with
+        {
+            Run = report.Run with
+            {
+                ShardResults = [new(0, 0, "Succeeded", null,
+            string.Join('\n', Enumerable.Range(1, 30).Select(i => $"INFO line {i}")), [])]
+            }
+        };
         vm.SetLogResults([report], new LogQuery("", Now));
         vm.ToggleLogEvent(vm.LogResults![selected]);
         Assert.Equal(Enumerable.Range(first, count), vm.LogContext.Select(entry => entry.Event.Index));
@@ -136,10 +158,22 @@ public sealed class LogQueryTests
         var buffer = new InMemoryWorkloadOutputBuffer();
         var vm = new ObservabilityViewModel(null!, null!, null!, null!, null!, buffer, null!);
         var saved = Entry("").Report;
-        saved = saved with { Run = saved.Run with { ShardResults = [new(0, 0, "Succeeded", null,
-            string.Join('\n', Enumerable.Range(0, 2100).Select(i => $"WARN saved {i}")), [])] } };
+        saved = saved with
+        {
+            Run = saved.Run with
+            {
+                ShardResults = [new(0, 0, "Succeeded", null,
+            string.Join('\n', Enumerable.Range(0, 2100).Select(i => $"WARN saved {i}")), [])]
+            }
+        };
         var live = Entry("").Report;
-        live = live with { Run = live.Run with { Status = "Running" } };
+        live = live with
+        {
+            Run = live.Run with
+            {
+                Status = "Running"
+            }
+        };
         buffer.Set($"{live.Run.Id:N}-map-0", "", "ERROR live failure\n");
         vm.SetLogResults([saved, live], new LogQuery("level IN (WARN, ERROR)", Now));
         Assert.Equal(2, vm.LogRunCount);

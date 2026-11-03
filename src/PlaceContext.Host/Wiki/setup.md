@@ -51,8 +51,10 @@ See [Cluster and nodes](/wiki/cluster-and-nodes) for local and Tailscale topolog
 
 1. Open `http://localhost:7700`.
 2. If there is no owner account, complete the first-run setup form. There is no default password.
-3. Create or onboard a project, then run a small job and confirm its logs and artifact are retained.
-4. Export a configuration backup from **Settings → Backup** and store it outside the cluster.
+3. Follow the cluster setup guide: choose cloud or local execution, connect workers, and check **Settings → Cluster**.
+4. For a managed workspace, choose a plan under **Settings → Billing & usage**. Local workers do not remove the managed workspace subscription requirement.
+5. Create or onboard a project, then run a small job and confirm its worker, logs and artifact are retained.
+6. Export a configuration backup from **Settings → Backup** and store it outside the cluster.
 
 ## Production URL and reverse proxy
 
@@ -107,11 +109,14 @@ verified recovery plan.
 
 ## Workspace settings
 
+- **Cluster** shows node health and worker join instructions. Use **Cloud or local setup** to reopen the setup guide.
+- **Billing & usage** manages the workspace subscription and reports top-level starts. Open the secure billing portal for payment methods, billing details, invoices and subscription changes. Self-hosted infrastructure is billed by your own hosting providers.
 - **Branding** changes the workspace name, logo, accent, and dark-mode colours.
 - **Menu** controls navigation labels, order, and visibility.
 - **Artifacts** controls the file categories shown on the Artifacts page.
 - **Communications** connects email and SMS delivery for workflow actions. Jobs and users see
   the generic Email or SMS channel rather than needing to choose a delivery provider.
+- **PlaceContext database** lets owners and super admins browse application table schemas and workspace records. It is read-only, masks sensitive fields, and shows only schemas for deployment-wide tables. The same browser is linked from SQL Studio.
 - **Connections** configures project-specific PostgreSQL and OpenSearch services.
 - **MCP servers** connects extra tools that jobs may use.
 - **Locality** sets the timezone used by schedules and displayed dates.

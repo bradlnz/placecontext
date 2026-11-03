@@ -1,4 +1,3 @@
-using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 
@@ -12,7 +11,10 @@ namespace PlaceContext.Application.Features;
 public sealed class RunWatchState
 {
     /// <summary>Terminal-status watermark for the reader query; default triggers the startup lookback.</summary>
-    public DateTimeOffset Cursor { get; set; }
+    public DateTimeOffset Cursor
+    {
+        get; set;
+    }
 
     /// <summary>Job runs already notified as Running.</summary>
     public HashSet<Guid> JobRuns { get; } = new();

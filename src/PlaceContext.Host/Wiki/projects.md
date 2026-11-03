@@ -4,7 +4,7 @@
 
 ## Create a project
 
-Projects register through MCP. Connect an MCP client from **Onboarding**, then ask it to onboard the
+Projects register through MCP. Connect an MCP client using [Getting started](/wiki/getting-started), then ask it to onboard the
 current repository. The `onboard` tool registers the path, reads available project guidance,
 and imports useful context from git history.
 

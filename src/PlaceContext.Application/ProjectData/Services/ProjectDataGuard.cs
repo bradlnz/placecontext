@@ -9,6 +9,8 @@ internal static class ProjectDataGuard
     public static async Task EnsureExistsAsync(IProjectRepository projects, Guid projectId, CancellationToken ct)
     {
         if (!await projects.ExistsAsync(ProjectId.From(projectId), ct))
+        {
             throw new InvalidOperationException($"Project {projectId} not found.");
+        }
     }
 }

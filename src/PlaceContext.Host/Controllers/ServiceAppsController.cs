@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Workload;
 using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers;
@@ -18,7 +20,10 @@ public sealed class ServiceAppsController(ServiceAppSso sso, IServiceConsole ser
     [HttpGet("/services/sso/{project:guid}/{service:guid}")]
     public async Task<IActionResult> SignIn(Guid project, Guid service, string? state, string? returnPath, CancellationToken ct)
     {
-        if (state?.Length != 64 || !state.All(Uri.IsHexDigit) || Request.Host != new HostString(sso.PortalOrigin.Authority)) return BadRequest();
+        if (state?.Length != 64 || !state.All(Uri.IsHexDigit) || Request.Host != new HostString(sso.PortalOrigin.Authority))
+        {
+            return BadRequest();
+        }
         await services.GetSsoEndpointAsync(project, service, ct);
         var session = new ServiceAppSession(tenant.TenantId, user.UserId, user.Role, project, service, DateTimeOffset.UtcNow.AddMinutes(15));
         var code = sso.Issue(session, state, returnPath ?? "/");

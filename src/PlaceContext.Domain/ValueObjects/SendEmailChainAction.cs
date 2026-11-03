@@ -26,22 +26,43 @@ public sealed class SendEmailChainAction : ChainAction
         // A templated recipient is validated after substitution; literals must already be valid.
         if (!ContainsTemplate(Recipient))
         {
-            try { _ = new MailAddress(Recipient); }
-            catch (FormatException) { throw new ArgumentException("Enter a valid email recipient.", nameof(recipient)); }
+            try
+            {
+                _ = new MailAddress(Recipient);
+            }
+            catch (FormatException)
+            {
+                throw new ArgumentException("Enter a valid email recipient.", nameof(recipient));
+            }
         }
     }
 
     public override string Type => ActionType;
     public override string DisplayName => "Send email";
-    public string Recipient { get; }
-    public string RecipientName { get; }
-    public string Subject { get; }
-    public string Body { get; }
+    public string Recipient
+    {
+        get;
+    }
+    public string RecipientName
+    {
+        get;
+    }
+    public string Subject
+    {
+        get;
+    }
+    public string Body
+    {
+        get;
+    }
     /// <summary>
     /// Optional path into the previous stage's JSON payload. The resolved value may be one
     /// attachment object or an array of objects containing a name, content, and content type.
     /// </summary>
-    public string AttachmentPath { get; }
+    public string AttachmentPath
+    {
+        get;
+    }
 
     private static bool ContainsTemplate(string value)
         => value.Contains("{{", StringComparison.Ordinal)
@@ -50,10 +71,14 @@ public sealed class SendEmailChainAction : ChainAction
     private static string Required(string value, string parameter, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(value))
+        {
             throw new ArgumentException($"{parameter} is required.", parameter);
+        }
         var trimmed = value.Trim();
         if (trimmed.Length > maxLength)
+        {
             throw new ArgumentException($"{parameter} is too long.", parameter);
+        }
         return trimmed;
     }
 
@@ -61,7 +86,9 @@ public sealed class SendEmailChainAction : ChainAction
     {
         var trimmed = value?.Trim() ?? "";
         if (trimmed.Length > maxLength)
+        {
             throw new ArgumentException($"{parameter} is too long.", parameter);
+        }
         return trimmed;
     }
 }

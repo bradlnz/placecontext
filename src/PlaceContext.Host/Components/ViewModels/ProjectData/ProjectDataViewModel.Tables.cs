@@ -1,6 +1,6 @@
-using PlaceContext.Application;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Application.Shared;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -24,17 +24,35 @@ public sealed partial class ProjectDataViewModel
 
     public static readonly string[] ColumnTypes = DataColumnTypes.All.ToArray();
 
-    public TableDraft? NewTable { get; private set; }
-    public string? NewTableError { get; private set; }
-    public bool Creating { get; private set; }
+    public TableDraft? NewTable
+    {
+        get; private set;
+    }
+    public string? NewTableError
+    {
+        get; private set;
+    }
+    public bool Creating
+    {
+        get; private set;
+    }
 
     // ── Views ─────────────────────────────────────────────────────────────────────────────────
-    public bool ShowNewView { get; private set; }
+    public bool ShowNewView
+    {
+        get; private set;
+    }
     public string NewViewName { get; set; } = "";
     public string NewViewSql { get; set; } = "";
-    public string? ViewError { get; private set; }
+    public string? ViewError
+    {
+        get; private set;
+    }
     public bool ViewMonaco { get; set; } = true;
-    public bool ViewMonacoReady { get; set; }
+    public bool ViewMonacoReady
+    {
+        get; set;
+    }
     public const string ViewEditorId = "pcmonaco-newview";
 
     // ── CSV import ────────────────────────────────────────────────────────────────────────────
@@ -51,16 +69,34 @@ public sealed partial class ProjectDataViewModel
         public IEnumerable<string[]> PreviewRows() => DataRecords.Take(8);
     }
 
-    public CsvImportDraft? CsvImport { get; private set; }
-    public string? CsvError { get; private set; }
+    public CsvImportDraft? CsvImport
+    {
+        get; private set;
+    }
+    public string? CsvError
+    {
+        get; private set;
+    }
     public IReadOnlyList<string> ImportWarnings { get; private set; } = Array.Empty<string>();
-    public bool Importing { get; private set; }
+    public bool Importing
+    {
+        get; private set;
+    }
     public const long MaxCsvBytes = 15L * 1024 * 1024;
 
     // ── Rename / drop ─────────────────────────────────────────────────────────────────────────
-    public string? Renaming { get; private set; }
-    public string? RenameTo { get; set; }
-    public string? Dropping { get; private set; }
+    public string? Renaming
+    {
+        get; private set;
+    }
+    public string? RenameTo
+    {
+        get; set;
+    }
+    public string? Dropping
+    {
+        get; private set;
+    }
 
     // ── New table wizard ──────────────────────────────────────────────────────────────────────
     public void StartNewTable()
@@ -91,7 +127,9 @@ public sealed partial class ProjectDataViewModel
     public async Task CreateTableAsync()
     {
         if (NewTable is null)
+        {
             return;
+        }
         NewTableError = null;
         if (string.IsNullOrWhiteSpace(NewTable.Name))
         {
@@ -161,7 +199,9 @@ public sealed partial class ProjectDataViewModel
     public void OnHeaderToggled(bool hasHeader)
     {
         if (CsvImport is null)
+        {
             return;
+        }
         CsvImport.HasHeader = hasHeader;
         BuildColumns(CsvImport);
         NotifyStateChanged();
@@ -170,7 +210,9 @@ public sealed partial class ProjectDataViewModel
     public async Task RunImportAsync(Func<Task<string>>? getMonacoValue = null)
     {
         if (CsvImport is null)
+        {
             return;
+        }
         CsvError = null;
         var d = CsvImport;
         if (string.IsNullOrWhiteSpace(d.TableName))
@@ -249,7 +291,9 @@ public sealed partial class ProjectDataViewModel
             var baseName = name;
             var n = 2;
             while (!used.Add(name))
+            {
                 name = $"{baseName}_{n++}";
+            }
             var sample = d.DataRecords.Take(200).Select(r => c < r.Length ? r[c] : null);
             cols.Add(new ColumnDraft { Name = name, Type = InferType(sample) });
         }
@@ -277,7 +321,9 @@ public sealed partial class ProjectDataViewModel
         try
         {
             if (ViewMonaco && ViewMonacoReady && getMonacoValue is not null)
+            {
                 NewViewSql = await getMonacoValue(ViewEditorId);
+            }
             await _svc.SaveProjectViewAsync(ProjectId, NewViewName, NewViewSql);
             ShowNewView = false;
             NewViewName = "";
@@ -336,7 +382,9 @@ public sealed partial class ProjectDataViewModel
     public async Task ConfirmRenameAsync()
     {
         if (Renaming is null || string.IsNullOrWhiteSpace(RenameTo))
+        {
             return;
+        }
         try
         {
             await _svc.RenameProjectTableAsync(ProjectId, Renaming, RenameTo.Trim());
@@ -353,7 +401,9 @@ public sealed partial class ProjectDataViewModel
     public async Task ConfirmDropAsync()
     {
         if (Dropping is null)
+        {
             return;
+        }
         try
         {
             await _svc.DropProjectTableAsync(ProjectId, Dropping);

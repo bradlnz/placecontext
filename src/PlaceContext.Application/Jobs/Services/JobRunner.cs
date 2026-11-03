@@ -23,8 +23,9 @@ public sealed class JobRunner : IJobRunner
     private async Task<PlaceContext.Domain.Entities.Job?> LoadJobAsync(Guid id, CancellationToken ct)
     {
         if (_scopes is null)
+        {
             return await _jobs.GetByIdAsync(id, ct); // Lightweight unit tests.
-        // A single workflow may dispatch multiple branches concurrently. The
+        }        // A single workflow may dispatch multiple branches concurrently. The
         // JobRunner itself is scoped to the parent handler; its injected job
         // repository would share the parent's DbContext across parallel tasks.
         // Resolve job metadata in an independent scope for each branch instead.
@@ -66,14 +67,21 @@ public sealed class JobRunner : IJobRunner
 
             // Terminal statuses other than Failed (Succeeded/Partial) stop immediately.
             if (result.Status != "Failed" || attemptNumber > job.RetryCount)
+            {
                 return result;
-
+            }
             // We have retry budget left; wait then attempt again with a fresh run id replaying
             // the original attempt's snapshot.
             if (job.RetryDelaySeconds > 0)
             {
-                try { await Task.Delay(TimeSpan.FromSeconds(job.RetryDelaySeconds), ct); }
-                catch (OperationCanceledException) { throw; }
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(job.RetryDelaySeconds), ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
             }
 
             attemptNumber++;

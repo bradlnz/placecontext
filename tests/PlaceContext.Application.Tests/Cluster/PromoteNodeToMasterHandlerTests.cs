@@ -1,6 +1,4 @@
 using PlaceContext.Application.Cluster;
-using PlaceContext.Application.Ports;
-
 namespace PlaceContext.Application.Tests.Cluster;
 
 public sealed class PromoteNodeToMasterHandlerTests

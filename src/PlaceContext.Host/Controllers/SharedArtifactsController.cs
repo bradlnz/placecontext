@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using PlaceContext.Application.Ports;
-
+using PlaceContext.Application.Artifacts;
 namespace PlaceContext.Host.Controllers;
 
 /// <summary>
@@ -24,12 +23,16 @@ public sealed class SharedArtifactsController : ControllerBase
     public async Task<IActionResult> Get(string token)
     {
         var artifact = await _shares.ResolveAsync(token, HttpContext.RequestAborted);
-        if (artifact is null) return NotFound();
-
+        if (artifact is null)
+        {
+            return NotFound();
+        }
         var obj = await _store.OpenReadAsync(
             artifact.Bucket, artifact.ObjectKey, HttpContext.RequestAborted);
-        if (obj is null) return NotFound();
-
+        if (obj is null)
+        {
+            return NotFound();
+        }
         Response.Headers.CacheControl = "private, no-store";
         Response.Headers["Pragma"] = "no-cache";
         Response.Headers["Referrer-Policy"] = "no-referrer";
@@ -38,11 +41,19 @@ public sealed class SharedArtifactsController : ControllerBase
         var contentType = string.IsNullOrWhiteSpace(obj.ContentType)
             ? artifact.ContentType
             : obj.ContentType;
-        if (string.IsNullOrWhiteSpace(contentType)) contentType = "application/octet-stream";
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            contentType = "application/octet-stream";
+        }
         var fileName = artifact.ObjectKey[(artifact.ObjectKey.LastIndexOf('/') + 1)..];
-        if (string.IsNullOrWhiteSpace(fileName)) fileName = artifact.Title;
-        if (string.IsNullOrWhiteSpace(fileName)) fileName = "artifact";
-
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            fileName = artifact.Title;
+        }
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            fileName = "artifact";
+        }
         return InlinePreview.StreamResult(Response, obj.Content, contentType, fileName);
     }
 }

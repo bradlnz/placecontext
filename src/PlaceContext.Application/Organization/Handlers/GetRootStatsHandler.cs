@@ -1,6 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.Services;
@@ -33,11 +33,19 @@ public sealed class GetRootStatsHandler : IQueryHandler<GetRootStatsQuery, RootS
             var ledger = await _ledgers.GetForProjectAsync(p.Id, ct);
             foreach (var r in ledger.Records.Where(r => r.RecordedAt >= since))
             {
-                if (r.Author.IsAgent) agentToday++; else humanToday++;
+                if (r.Author.IsAgent)
+                {
+                    agentToday++;
+                    continue;
+                }
+                humanToday++;
             }
 
             godTotal += p.LastGraph?.GodNodes.Count ?? 0;
-            if (p.LastGraph is not null && ledger.Records.Any(r => r.RecordedAt > p.LastGraph.BuiltAt)) stale++;
+            if (p.LastGraph is not null && ledger.Records.Any(r => r.RecordedAt > p.LastGraph.BuiltAt))
+            {
+                stale++;
+            }
         }
 
         return new RootStatsView(

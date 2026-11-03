@@ -1,11 +1,12 @@
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
-using PlaceContext.Domain.Repositories;
+using PlaceContext.Application.Jobs;
+using PlaceContext.Application;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -15,9 +16,8 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     private readonly PortalUiState Ui;
     private readonly NavigationManager Nav;
     private readonly IJSRuntime Js;
-    private readonly IObjectStore Store;
     private readonly IArtifactViewConfigService ArtifactConfigService;
-    private readonly IRunArtifactLinkRepository Links;
+    private readonly ArtifactReader Links;
     private readonly IPermissionService Permissions;
 
     public ArtifactsViewModel(
@@ -25,9 +25,8 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
         PortalUiState ui,
         NavigationManager nav,
         IJSRuntime js,
-        IObjectStore store,
         IArtifactViewConfigService artifactConfig,
-        IRunArtifactLinkRepository links,
+        ArtifactReader links,
         IPermissionService permissions
     )
     {
@@ -35,14 +34,16 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
         Ui = ui;
         Nav = nav;
         Js = js;
-        Store = store;
         ArtifactConfigService = artifactConfig;
         Links = links;
         Permissions = permissions;
     }
 
     [SupplyParameterFromQuery(Name = "artifact")]
-    public string? ArtifactId { get; set; }
+    public string? ArtifactId
+    {
+        get; set;
+    }
 
     public IReadOnlyList<ArtifactFileView> Files = Array.Empty<ArtifactFileView>();
     public IReadOnlyList<ProjectSummaryView> Projects = Array.Empty<ProjectSummaryView>();
@@ -50,7 +51,7 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public string Filter = "";
     public string ProjectFilter = "";
     public string? CategoryFilter;
-    public PlaceContext.Application.Ports.ArtifactViewConfig ArtifactConfig = new([]);
+    public PlaceContext.Application.Artifacts.ArtifactViewConfig ArtifactConfig = new([]);
     public System.Text.Json.JsonElement? Content;
     public string? RawText;
     public (IReadOnlyList<string> Header, IReadOnlyList<IReadOnlyList<string>> Rows)? Csv;
@@ -88,8 +89,14 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
 
     public const int FilesBatchSize = 100;
     public bool LoadMayBeIncomplete;
-    public bool FilesLoading { get; private set; }
-    public string? FilesError { get; private set; }
+    public bool FilesLoading
+    {
+        get; private set;
+    }
+    public string? FilesError
+    {
+        get; private set;
+    }
     private int _filesVersion;
     private int _filesOffset;
 
@@ -113,7 +120,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
         // Default the filter to the project the sidebar is on; a project-scoped load pulls ALL of
         // that project's artifacts, so older files aren't hidden behind a global "recent" cap.
         if (Ui.CurrentProjectId is { } pid)
+        {
             ProjectFilter = pid.ToString();
+        }
         await LoadFilesAsync();
 
         await ApplyDeepLinkAsync();
@@ -122,8 +131,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public async Task AfterRenderAsync(bool firstRender)
     {
         if (Active is null || !IsPdf(Active.ContentType))
+        {
             return;
-
+        }
         try
         {
             await Js.InvokeVoidAsync("placecontext.renderPdf", PdfMobileId(Active), Url(Active));
@@ -160,18 +170,28 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
             var batch = Guid.TryParse(project, out var pid)
                 ? await Svc.ListProjectArtifactsAsync(pid, FilesBatchSize + 1, search, skip: _filesOffset)
                 : await Svc.ListRecentArtifactsAsync(FilesBatchSize + 1, skip: _filesOffset, search: search);
-            if (version != _filesVersion) return;
+            if (version != _filesVersion)
+            {
+                return;
+            }
             Files = Files.Concat(batch.Take(FilesBatchSize)).DistinctBy(file => file.Id).ToArray();
             _filesOffset += Math.Min(batch.Count, FilesBatchSize);
             LoadMayBeIncomplete = batch.Count > FilesBatchSize;
         }
         catch (Exception ex)
         {
-            if (version == _filesVersion) FilesError = ex.Message;
+            if (version == _filesVersion)
+            {
+                FilesError = ex.Message;
+            }
         }
         finally
         {
-            if (version == _filesVersion) { FilesLoading = false; NotifyStateChanged(); }
+            if (version == _filesVersion)
+            {
+                FilesLoading = false;
+                NotifyStateChanged();
+            }
         }
     }
 
@@ -181,9 +201,13 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     private async Task ApplyDeepLinkCoreAsync()
     {
         if (!Guid.TryParse(ArtifactId, out var artifactId))
+        {
             return;
+        }
         if (Active?.Id == artifactId)
+        {
             return;
+        }
         var target = Files.FirstOrDefault(f => f.Id == artifactId);
         if (target is null)
         {
@@ -191,7 +215,7 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
             LoadError = null;
             try
             {
-                var link = await Links.GetByIdAsync(artifactId);
+                var link = await Links.GetAsync(artifactId);
                 if (link is null)
                 {
                     LoadError = "artifact not found for this workspace";
@@ -221,7 +245,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
             await LoadFilesAsync();
             target = Files.FirstOrDefault(f => f.Id == artifactId) ?? target;
             if (!Files.Any(file => file.Id == artifactId))
+            {
                 Files = Files.Prepend(target).ToArray();
+            }
             await OpenAsync(target);
         }
     }
@@ -257,7 +283,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
             return;
         }
         if (cts.IsCancellationRequested)
+        {
             return;
+        }
         await LoadFilesAsync();
         NotifyStateChanged();
     }
@@ -283,9 +311,11 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public void ToggleOne(Guid id, bool on)
     {
         if (on)
+        {
             Selected.Add(id);
-        else
-            Selected.Remove(id);
+            return;
+        }
+        Selected.Remove(id);
     }
 
     public void ToggleGroup(IReadOnlyList<ArtifactFileView> group, bool on)
@@ -293,9 +323,11 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
         foreach (var v in group)
         {
             if (on)
+            {
                 Selected.Add(v.Id);
-            else
-                Selected.Remove(v.Id);
+                continue;
+            }
+            Selected.Remove(v.Id);
         }
     }
 
@@ -305,7 +337,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public async Task DeleteSelectedAsync()
     {
         if (Selected.Count == 0 || BulkDeleting)
+        {
             return;
+        }
         BulkDeleting = true;
         var ids = Selected.ToList();
         try
@@ -348,16 +382,25 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public IReadOnlyList<ArtifactFileView> Filtered()
     {
         IEnumerable<ArtifactFileView> q = BaseFiltered();
-        if (CategoryFilter == OtherCategory)
-            q = q.Where(file => ArtifactConfig.CategoryFor(file.Title) is null);
-        else if (!string.IsNullOrWhiteSpace(CategoryFilter))
-            q = q.Where(file =>
-                string.Equals(
-                    ArtifactConfig.CategoryFor(file.Title),
-                    CategoryFilter,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            );
+        void FilterCategory()
+        {
+            if (CategoryFilter == OtherCategory)
+            {
+                q = q.Where(file => ArtifactConfig.CategoryFor(file.Title) is null);
+                return;
+            }
+            if (!string.IsNullOrWhiteSpace(CategoryFilter))
+            {
+                q = q.Where(file =>
+                            string.Equals(
+                                ArtifactConfig.CategoryFor(file.Title),
+                                CategoryFilter,
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                        );
+            }
+        }
+        FilterCategory();
         return q.ToList();
     }
 
@@ -365,12 +408,16 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     {
         IEnumerable<ArtifactFileView> q = Files;
         if (Guid.TryParse(ProjectFilter, out var pid))
+        {
             q = q.Where(f => f.ProjectId == pid);
+        }
         if (!string.IsNullOrWhiteSpace(Filter))
+        {
             q = q.Where(f =>
-                f.Title.Contains(Filter, StringComparison.OrdinalIgnoreCase)
-                || f.Kind.Contains(Filter, StringComparison.OrdinalIgnoreCase)
-            );
+                        f.Title.Contains(Filter, StringComparison.OrdinalIgnoreCase)
+                        || f.Kind.Contains(Filter, StringComparison.OrdinalIgnoreCase)
+                    );
+        }
         return q.ToList();
     }
 
@@ -390,9 +437,13 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public string EmptyMessage()
     {
         if (!string.IsNullOrWhiteSpace(Filter))
+        {
             return "No files match your search and selected filters.";
+        }
         if (CategoryFilter == OtherCategory)
+        {
             return "No uncategorized artifact files match the selected project.";
+        }
         if (!string.IsNullOrWhiteSpace(CategoryFilter))
         {
             var label =
@@ -430,14 +481,17 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
         ConfirmDelete = false;
         ResetShareUi();
         if (!IsJson(a.ContentType) && !IsCsv(a.ContentType))
+        {
             return;
-
+        }
         Loading = true;
         try
         {
             var text = await ReadTextAsync(a);
             if (openGeneration != OpenGeneration)
+            {
                 return;
+            }
             if (text is null)
             {
                 LoadFailed = true;
@@ -445,28 +499,32 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
                 return;
             }
             RawText = text;
-            if (IsJson(a.ContentType))
+            void LoadContent()
             {
-                // Not all *.json artifacts hold valid JSON (raw bundles keep whatever the run
-                // printed) — parse failure falls back to the raw text, not an error.
-                try
+                if (IsJson(a.ContentType))
                 {
-                    Content = System.Text.Json.JsonDocument.Parse(text).RootElement.Clone();
+                    // Not all *.json artifacts hold valid JSON (raw bundles keep whatever the run
+                    // printed) — parse failure falls back to the raw text, not an error.
+                    try
+                    {
+                        Content = System.Text.Json.JsonDocument.Parse(text).RootElement.Clone();
+                    }
+                    catch
+                    {
+                        Content = null;
+                    }
+                    return;
                 }
-                catch
-                {
-                    Content = null;
-                }
-            }
-            else
-            {
                 Csv = ParseCsv(text);
             }
+            LoadContent();
         }
         finally
         {
             if (openGeneration == OpenGeneration)
+            {
                 Loading = false;
+            }
         }
     }
 
@@ -477,13 +535,13 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
         LoadError = null;
         try
         {
-            var link = await Links.GetByIdAsync(a.Id);
+            var link = await Links.GetAsync(a.Id);
             if (link is null)
             {
                 LoadError = "artifact link not found for this workspace";
                 return null;
             }
-            var obj = await Store.OpenReadAsync(link.Bucket, link.ObjectKey);
+            var obj = await Links.OpenAsync(a.Id);
             if (obj is null)
             {
                 LoadError = "object missing from the store";
@@ -620,21 +678,31 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
                 {
                     sb.Append('"');
                     i++;
+                    continue;
                 }
-                else if (c == '"')
+                if (c == '"')
+                {
                     quoted = false;
-                else
-                    sb.Append(c);
+                    continue;
+                }
+                sb.Append(c);
+                continue;
             }
-            else if (c == '"')
+            if (c == '"')
+            {
                 quoted = true;
-            else if (c == ',')
+                continue;
+            }
+            if (c == ',')
             {
                 cells.Add(sb.ToString());
                 sb.Clear();
+                continue;
             }
-            else if (c != '\r')
+            if (c != '\r')
+            {
                 sb.Append(c);
+            }
         }
         cells.Add(sb.ToString());
         return cells;
@@ -643,7 +711,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public async Task DeleteActiveAsync()
     {
         if (Active is null || Deleting)
+        {
             return;
+        }
         var id = Active.Id;
         Deleting = true;
         try
@@ -680,7 +750,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public async Task ToggleShareAsync()
     {
         if (Active is null || ShareBusy)
+        {
             return;
+        }
         if (ShareOpen)
         {
             ResetShareUi();
@@ -707,7 +779,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public async Task CreateShareAsync()
     {
         if (Active is null || ShareBusy)
+        {
             return;
+        }
         ShareBusy = true;
         ShareMessage = null;
         try
@@ -736,7 +810,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public async Task RevokeShareAsync()
     {
         if (Active is null || ShareBusy)
+        {
             return;
+        }
         ShareBusy = true;
         ShareMessage = null;
         try
@@ -760,7 +836,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public async Task CopyShareAsync()
     {
         if (ShareUrl is null)
+        {
             return;
+        }
         try
         {
             await Js.InvokeVoidAsync("navigator.clipboard.writeText", ShareUrl);
@@ -794,7 +872,9 @@ public sealed class ArtifactsViewModel : PageViewModel, IDisposable
     public static bool IsImage(ArtifactFileView artifact)
     {
         if (artifact.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
             return true;
+        }
         var extension = Path.GetExtension(artifact.Title);
         return extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)

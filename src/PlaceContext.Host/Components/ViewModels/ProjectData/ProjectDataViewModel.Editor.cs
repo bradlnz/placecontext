@@ -1,6 +1,5 @@
 using Microsoft.JSInterop;
 using PlaceContext.Application;
-using PlaceContext.Application.Ports;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -15,8 +14,14 @@ public sealed partial class ProjectDataViewModel
     public const string SqlEditorId = "pcdata-sql-editor";
 
     public bool SqlEditorMonaco { get; set; } = true;
-    public bool SqlEditorReady { get; set; }
-    public string? SqlEditorActiveTable { get; private set; }
+    public bool SqlEditorReady
+    {
+        get; set;
+    }
+    public string? SqlEditorActiveTable
+    {
+        get; private set;
+    }
     private string SqlEditorPendingValue { get; set; } = "";
 
     public void ResetSqlEditor()
@@ -69,7 +74,9 @@ public sealed partial class ProjectDataViewModel
             {
                 var value = await _js.InvokeAsync<string>("pcmonaco.getValue", SqlEditorId);
                 if (value is not null)
+                {
                     return value;
+                }
             }
             catch
             {

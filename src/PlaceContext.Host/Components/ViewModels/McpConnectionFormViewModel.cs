@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
-using PlaceContext.Application;
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application;
 using PlaceContext.Domain.Mcp;
 using PlaceContext.Host.Auth;
 
@@ -23,26 +23,45 @@ public sealed class McpConnectionFormViewModel(PlaceContextService service,
     public bool HasTokenAuth => AuthType is McpAuthType.Bearer or McpAuthType.ApiKey;
     public bool IsHeaderAuth => AuthType == McpAuthType.Header;
     public bool IsOAuth => AuthType == McpAuthType.OAuth;
-    public bool Saving { get; private set; }
-    public string? Error { get; private set; }
+    public bool Saving
+    {
+        get; private set;
+    }
+    public string? Error
+    {
+        get; private set;
+    }
 
     public async Task<McpConnectionView?> SaveAsync(Guid projectId)
     {
-        if (Saving) return null;
-        Saving = true; Error = null;
+        if (Saving)
+        {
+            return null;
+        }
+        Saving = true;
+        Error = null;
         try
         {
             var user = (await authentication.GetAuthenticationStateAsync()).User;
             if (!(await authorization.AuthorizeAsync(user, Policies.DefaultAdmin)).Succeeded)
+            {
                 throw new UnauthorizedAccessException("Only workspace administrators can add MCP servers.");
+            }
             var connection = await service.CreateMcpConnectionAsync(new(projectId, Name, Transport,
-                IsStdio ? null : Endpoint, IsStdio ? Command : null, IsStdio ? Args : null,
-                AuthType, HasTokenAuth || IsHeaderAuth ? AuthToken : null, IsHeaderAuth ? AuthHeader : null,
-                null, IsOAuth ? OAuthScopes : null));
+                            IsStdio ? null : Endpoint, IsStdio ? Command : null, IsStdio ? Args : null,
+                            AuthType, HasTokenAuth || IsHeaderAuth ? AuthToken : null, IsHeaderAuth ? AuthHeader : null,
+                            null, IsOAuth ? OAuthScopes : null));
             AuthToken = "";
             return connection;
         }
-        catch (Exception ex) { Error = ex.Message; return null; }
-        finally { Saving = false; }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            return null;
+        }
+        finally
+        {
+            Saving = false;
+        }
     }
 }

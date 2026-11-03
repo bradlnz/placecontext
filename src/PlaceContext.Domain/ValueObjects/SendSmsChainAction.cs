@@ -15,15 +15,23 @@ public sealed class SendSmsChainAction : ChainAction
         {
             var normalized = new string(Recipient.Where(char.IsDigit).ToArray());
             if (!Recipient.StartsWith('+') || normalized.Length is < 8 or > 15)
+            {
                 throw new ArgumentException(
-                    "Enter an international SMS recipient such as +61412345678.", nameof(recipient));
+                                "Enter an international SMS recipient such as +61412345678.", nameof(recipient));
+            }
         }
     }
 
     public override string Type => ActionType;
     public override string DisplayName => "Send SMS";
-    public string Recipient { get; }
-    public string Body { get; }
+    public string Recipient
+    {
+        get;
+    }
+    public string Body
+    {
+        get;
+    }
 
     private static bool ContainsTemplate(string value)
         => value.Contains("{{", StringComparison.Ordinal)
@@ -32,10 +40,14 @@ public sealed class SendSmsChainAction : ChainAction
     private static string Required(string value, string parameter, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(value))
+        {
             throw new ArgumentException($"{parameter} is required.", parameter);
+        }
         var trimmed = value.Trim();
         if (trimmed.Length > maxLength)
+        {
             throw new ArgumentException($"{parameter} is too long.", parameter);
+        }
         return trimmed;
     }
 }

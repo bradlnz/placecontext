@@ -2,33 +2,6 @@ using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public enum JobRunStatus
-{
-    Unknown,
-    Queued,
-    Running,
-    Succeeded,
-    Failed,
-    Partial,
-}
-
-public enum ChainStepStatus
-{
-    Unknown,
-    Pending,
-    Running,
-    Succeeded,
-    Failed,
-    Partial,
-    Skipped,
-}
-
-public enum MapSourceMode
-{
-    Image,
-    Code,
-}
-
 public static class ScopedPresentationCatalog
 {
     public static JobRunStatus JobStatus(string? value) => Parse(value, JobRunStatus.Unknown);

@@ -1,13 +1,15 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Operations;
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels;
-using PlaceContext.Infrastructure.Operations;
 using PlaceContext.Infrastructure.Observability;
 using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.TestSupport;
@@ -20,7 +22,7 @@ public sealed class LazyViewLoadingTests
     public async Task Observability_coalesces_operation_bursts_and_reloads_changes_arriving_during_a_query()
     {
         var dispatcher = new Dispatcher();
-        var operations = new OperationCenter(null!, null!);
+        var operations = new OperationCenter(null!, default);
         var tenant = new FakeCurrentTenant(Guid.NewGuid());
         using var vm = new ObservabilityViewModel(Service(dispatcher), new PortalUiState(), new Navigation(),
             operations, null!, null!, null!, tenant: tenant);
@@ -31,7 +33,10 @@ public sealed class LazyViewLoadingTests
         var calls = 0;
         dispatcher.Delay = query =>
         {
-            if (query is not ListRecentRunReportsQuery) return null;
+            if (query is not ListRecentRunReportsQuery)
+            {
+                return null;
+            }
             if (Interlocked.Increment(ref calls) == 1)
             {
                 started.SetResult();
@@ -41,7 +46,10 @@ public sealed class LazyViewLoadingTests
             return null;
         };
         var info = new TenantInfo(tenant.TenantId, "own", "Own", "UTC");
-        for (var i = 0; i < 100; i++) operations.Track(info, null, "burst", null);
+        for (var i = 0; i < 100; i++)
+        {
+            operations.Track(info, null, "burst", null);
+        }
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(1, calls);
         operations.Track(info, null, "arrived during query", null);
@@ -56,7 +64,7 @@ public sealed class LazyViewLoadingTests
         var dispatcher = new Dispatcher();
         using var services = new ServiceCollection().AddSingleton(Service(dispatcher)).BuildServiceProvider();
         using var vm = new MainLayoutViewModel(new PortalUiState(), new ConfigurationBuilder().Build(),
-            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!), null!, new Navigation(),
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, default), null!, new Navigation(),
             services.GetRequiredService<IServiceScopeFactory>());
         await Task.WhenAll(vm.SearchAsync("fi"), vm.SearchAsync("fir"), vm.SearchAsync("first"));
         Assert.Equal("first", Assert.Single(dispatcher.Queries.OfType<SearchQuery>()).Term);
@@ -65,7 +73,10 @@ public sealed class LazyViewLoadingTests
         var stale = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
         dispatcher.Delay = query =>
         {
-            if (query is not SearchQuery { Term: "old" }) return null;
+            if (query is not SearchQuery { Term: "old" })
+            {
+                return null;
+            }
             started.SetResult();
             return stale.Task;
         };
@@ -101,7 +112,7 @@ public sealed class LazyViewLoadingTests
         var ui = new PortalUiState();
         ui.SetProject(Guid.NewGuid(), "Project");
         using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!,
-            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!));
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, default));
         var loading = vm.LoadAsync();
         Assert.False(vm.Ready);
         Assert.False(vm.ChainsReady);
@@ -122,22 +133,30 @@ public sealed class LazyViewLoadingTests
     [Fact]
     public async Task Build_overview_uses_project_totals_and_reports_refresh_failure_without_showing_zero_as_fact()
     {
-        var projectId = Guid.NewGuid(); var dispatcher = new Dispatcher();
+        var projectId = Guid.NewGuid();
+        var dispatcher = new Dispatcher();
         dispatcher.Delay = query => query is GetProjectRunCountsQuery
             ? Task.FromResult<object>(new Dictionary<string, int> { ["Running"] = 205, ["Queued"] = 3, ["Failed"] = 7, ["Succeeded"] = 40 }) : null;
-        var ui = new PortalUiState(); ui.SetProject(Guid.NewGuid(), "Other selected project");
+        var ui = new PortalUiState();
+        ui.SetProject(Guid.NewGuid(), "Other selected project");
         using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!,
-            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!));
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, default));
         vm.Initialize(projectId);
         await vm.LoadAsync();
-        Assert.Equal(205, vm.Running); Assert.Equal(3, vm.Queued); Assert.Equal(7, vm.Failed24); Assert.Equal(40, vm.Succeeded24);
-        Assert.Empty(vm.Reports); Assert.Null(vm.LoadError); Assert.NotNull(vm.CapturedAt);
+        Assert.Equal(205, vm.Running);
+        Assert.Equal(3, vm.Queued);
+        Assert.Equal(7, vm.Failed24);
+        Assert.Equal(40, vm.Succeeded24);
+        Assert.Empty(vm.Reports);
+        Assert.Null(vm.LoadError);
+        Assert.NotNull(vm.CapturedAt);
         Assert.Equal(projectId, Assert.Single(dispatcher.Queries.OfType<ListRecentRunReportsQuery>()).ProjectId);
         Assert.Equal(projectId, Assert.Single(dispatcher.Queries.OfType<GetProjectRunCountsQuery>()).ProjectId);
         dispatcher.Delay = query => query is GetProjectRunCountsQuery
             ? Task.FromException<object>(new InvalidOperationException("Offline")) : null;
         await vm.RefreshActivityAsync();
-        Assert.NotNull(vm.LoadError); Assert.Null(vm.CapturedAt);
+        Assert.NotNull(vm.LoadError);
+        Assert.Null(vm.CapturedAt);
     }
 
     [Fact]
@@ -146,7 +165,7 @@ public sealed class LazyViewLoadingTests
         var dispatcher = new Dispatcher();
         var permissions = new Permissions { Allowed = true };
         using var vm = new DashboardViewModel(Service(dispatcher), new PortalUiState(), new Navigation(), null!,
-            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!), permissions);
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, default), permissions);
         vm.Initialize(Guid.NewGuid());
         Assert.False(vm.CanViewActivity);
         await vm.LoadAsync();
@@ -167,7 +186,7 @@ public sealed class LazyViewLoadingTests
     {
         var dispatcher = new Dispatcher();
         var tenant = new FakeCurrentTenant(Guid.NewGuid());
-        var operations = new OperationCenter(null!, null!);
+        var operations = new OperationCenter(null!, default);
         var ui = new PortalUiState();
         ui.SetProject(Guid.NewGuid(), "Project");
         using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!, tenant, operations);
@@ -194,11 +213,22 @@ public sealed class LazyViewLoadingTests
         using var telemetry = new JobTelemetryCollector();
         using var vm = new ObservabilityViewModel(Service(dispatcher), new PortalUiState(),
             new Navigation($"http://localhost/observability?tab={tab}"),
-            new OperationCenter(null!, null!), telemetry, null!, null!);
+            new OperationCenter(null!, default), telemetry, null!, null!);
         await vm.InitializeAsync();
-        if (queryType is null) Assert.Empty(dispatcher.Queries);
-        else Assert.IsType(queryType, Assert.Single(dispatcher.Queries));
-        if (tab == "logs") Assert.NotNull(vm.LogResults);
+        void AssertQuery()
+        {
+            if (queryType is null)
+            {
+                Assert.Empty(dispatcher.Queries);
+                return;
+            }
+            Assert.IsType(queryType, Assert.Single(dispatcher.Queries));
+        }
+        AssertQuery();
+        if (tab == "logs")
+        {
+            Assert.NotNull(vm.LogResults);
+        }
         var count = dispatcher.Queries.Count;
         await vm.RestoreTabAsync(tab);
         Assert.Equal(count, dispatcher.Queries.Count);
@@ -220,7 +250,7 @@ public sealed class LazyViewLoadingTests
         using var telemetry = new JobTelemetryCollector();
         using var vm = new ObservabilityViewModel(Service(dispatcher), new PortalUiState(),
             new Navigation("http://localhost/observability?tab=traces"),
-            new OperationCenter(null!, null!), telemetry, null!, null!);
+            new OperationCenter(null!, default), telemetry, null!, null!);
         await vm.InitializeAsync();
         await vm.OpenLiveTrace(new(run.Id, run.JobId, "Job", run.ProjectId, run.Status, false,
             run.StartedAt, 100, []));
@@ -235,7 +265,7 @@ public sealed class LazyViewLoadingTests
         var history = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
         dispatcher.Delay = query => query is ListRecentRunReportsQuery ? history.Task : null;
         using var vm = new ObservabilityViewModel(Service(dispatcher), new PortalUiState(), new Navigation(),
-            new OperationCenter(null!, null!), null!, null!, null!);
+            new OperationCenter(null!, default), null!, null!, null!);
         var loading = vm.InitializeAsync();
         Assert.False(vm.Loading);
         Assert.False(loading.IsCompleted);
@@ -259,7 +289,7 @@ public sealed class LazyViewLoadingTests
         var dispatcher = new Dispatcher();
         var ui = new PortalUiState();
         using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!,
-            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!));
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, default));
         vm.Initialize();
         await vm.LoadAsync();
         Assert.Empty(vm.SqlCharts());
@@ -287,7 +317,7 @@ public sealed class LazyViewLoadingTests
         dispatcher.Delay = query => query is ListProjectChartsQuery q && q.ProjectId == oldProject
             ? pending.Task : null;
         using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!,
-            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!));
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, default));
         vm.Initialize();
         var loading = vm.LoadAsync();
         Assert.False(loading.IsCompleted);
@@ -311,7 +341,7 @@ public sealed class LazyViewLoadingTests
         var ui = new PortalUiState();
         ui.SetProject(Guid.NewGuid(), "Project");
         using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!,
-            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!));
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, default));
         await vm.LoadAsync();
         Assert.True(vm.Ready);
         Assert.Single(vm.Entities);
@@ -337,7 +367,7 @@ public sealed class LazyViewLoadingTests
         var ui = new PortalUiState();
         ui.SetProject(Guid.NewGuid(), "Project");
         using var vm = new DashboardViewModel(Service(dispatcher), ui, new Navigation(), null!,
-            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, null!));
+            new FakeCurrentTenant(Guid.NewGuid()), new OperationCenter(null!, default));
         await vm.LoadAsync();
         dispatcher.Delay = query => query is ListProjectTableColumnsQuery
             ? Task.FromException<object>(new InvalidOperationException("offline")) : null;
@@ -415,7 +445,7 @@ public sealed class LazyViewLoadingTests
         Assert.IsType<ListProjectDataTablesQuery>(Assert.Single(dispatcher.Queries));
 
         vm.ShowPane(SidebarPane.Indexes);
-        Assert.Contains(dispatcher.Queries, query => query is ListOpenSearchIndicesQuery);
+        Assert.Contains(dispatcher.Queries, query => query is ListSearchIndicesQuery);
 
         dispatcher.Queries.Clear();
         var analytics = new ProjectAnalyticsViewModel(Service(dispatcher), new PortalUiState(), null!, null!);
@@ -439,7 +469,7 @@ public sealed class LazyViewLoadingTests
         Assert.DoesNotContain(dispatcher.Queries, query => query is ListProjectTableColumnsQuery);
         pending.SetResult(Array.Empty<ProjectTableSchema>());
         await js.SchemaPushed.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        Assert.DoesNotContain(dispatcher.Queries, query => query is ListOpenSearchIndicesQuery);
+        Assert.DoesNotContain(dispatcher.Queries, query => query is ListSearchIndicesQuery);
     }
 
     [Fact]
@@ -460,7 +490,10 @@ public sealed class LazyViewLoadingTests
         public ValueTask<T> InvokeAsync<T>(string identifier, object?[]? args)
         {
             Calls.Add(identifier);
-            if (identifier == "pcmonaco.setSqlSchema") SchemaPushed.TrySetResult();
+            if (identifier == "pcmonaco.setSqlSchema")
+            {
+                SchemaPushed.TrySetResult();
+            }
             return ValueTask.FromResult(typeof(T) == typeof(bool) ? (T)(object)true : default!);
         }
         public ValueTask<T> InvokeAsync<T>(string identifier, CancellationToken cancellationToken, object?[]? args)
@@ -491,7 +524,7 @@ public sealed class LazyViewLoadingTests
     public async Task Jobs_catalogue_defers_editor_metadata_until_a_pane_opens()
     {
         var dispatcher = new Dispatcher();
-        var vm = new JobsViewModel(Service(dispatcher), new OperationCenter(null!, null!), null!, new Navigation());
+        var vm = new JobsViewModel(Service(dispatcher), new OperationCenter(null!, default), null!, new Navigation());
         try
         {
             await vm.LoadPageAsync(Guid.NewGuid(), null, null);
@@ -506,23 +539,26 @@ public sealed class LazyViewLoadingTests
             await vm.AfterRenderAsync();
             Assert.Equal(count, dispatcher.Queries.Count);
         }
-        finally { vm.DetachEvents(); }
+        finally
+        {
+            vm.DetachEvents();
+        }
     }
 
     [Fact]
     public async Task OpenSearch_waits_for_the_chart_action_before_running_aggregations()
     {
         var dispatcher = new Dispatcher();
-        var vm = new OpenSearchDataViewModel(Service(dispatcher), new PortalUiState(), null!, new Permissions()) { ProjectId = Guid.NewGuid() };
+        var vm = new SearchDataViewModel(Service(dispatcher), new PortalUiState(), null!, new Permissions()) { ProjectId = Guid.NewGuid() };
         await vm.SetParametersAsync();
         Assert.True(vm.InitialLoadComplete);
         Assert.False(vm.ChartsRequested);
-        Assert.DoesNotContain(dispatcher.Queries, query => query is SearchOpenSearchQuery);
+        Assert.DoesNotContain(dispatcher.Queries, query => query is SearchDocumentsQuery);
         await vm.SelectIndexAsync(new("records", 1000000, null));
-        Assert.DoesNotContain(dispatcher.Queries, query => query is SearchOpenSearchQuery);
+        Assert.DoesNotContain(dispatcher.Queries, query => query is SearchDocumentsQuery);
         await vm.GenerateChartsAsync();
         Assert.True(vm.ChartsRequested);
-        Assert.Contains(dispatcher.Queries, query => query is SearchOpenSearchQuery);
+        Assert.Contains(dispatcher.Queries, query => query is SearchDocumentsQuery);
     }
 
     [Fact]
@@ -582,7 +618,7 @@ public sealed class LazyViewLoadingTests
     }
 
     private static PlaceContextService Service(Dispatcher dispatcher) => new(dispatcher, null!, null!, null!);
-    private static ArtifactsViewModel Artifacts(Dispatcher dispatcher) => new(Service(dispatcher), new PortalUiState(), new Navigation(), null!, null!, null!, null!, null!);
+    private static ArtifactsViewModel Artifacts(Dispatcher dispatcher) => new(Service(dispatcher), new PortalUiState(), new Navigation(), null!, null!, null!, null!);
     private static ProjectTablePageResult Page(int page) => new(["name"], [new string?[] { $"row {page}" }], 100, page, 50);
 
     [Fact]
@@ -600,11 +636,15 @@ public sealed class LazyViewLoadingTests
         };
         var permissions = new Permissions { Allowed = true };
         using var vm = new ObservabilityViewModel(Service(dispatcher), new PortalUiState(), new Navigation(),
-            new OperationCenter(null!, null!), new JobTelemetryCollector(), null!, null!, permissions: permissions);
+            new OperationCenter(null!, default), new JobTelemetryCollector(), null!, null!, permissions: permissions);
         await vm.InitializeAsync();
         await vm.OpenRun(report);
         Assert.True(vm.CanCancelRun(run));
-        Assert.False(vm.CanCancelRun(run with { Status = "Succeeded", FinishedAt = DateTimeOffset.UtcNow }));
+        Assert.False(vm.CanCancelRun(run with
+        {
+            Status = "Succeeded",
+            FinishedAt = DateTimeOffset.UtcNow
+        }));
         permissions.Allowed = false;
         await vm.CancelRunAsync(run.Id);
         Assert.Empty(dispatcher.Commands);
@@ -618,8 +658,15 @@ public sealed class LazyViewLoadingTests
         var command = Assert.IsType<CancelJobRunCommand>(Assert.Single(dispatcher.Commands));
         Assert.Equal(run.Id, command.RunId);
         Assert.Equal(Permission.JobsRun, ((IRequiresPermission)command).RequiredPermission);
-        run = run with { Status = "Cancelled", FinishedAt = DateTimeOffset.UtcNow };
-        report = report with { Run = run };
+        run = run with
+        {
+            Status = "Cancelled",
+            FinishedAt = DateTimeOffset.UtcNow
+        };
+        report = report with
+        {
+            Run = run
+        };
         pending.SetResult(true);
         await cancelling;
         Assert.Null(vm.CancellingRunId);
@@ -632,8 +679,14 @@ public sealed class LazyViewLoadingTests
     {
         public List<object> Queries { get; } = [];
         public List<object> Commands { get; } = [];
-        public Func<object, Task<object>?>? Delay { get; set; }
-        public Func<object, Task<object>>? CommandResult { get; set; }
+        public Func<object, Task<object>?>? Delay
+        {
+            get; set;
+        }
+        public Func<object, Task<object>>? CommandResult
+        {
+            get; set;
+        }
         private readonly ArtifactFileView[] _files = Enumerable.Range(0, 230).Select(index => new ArtifactFileView(
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.Empty, "report", $"file {index}", "text/plain", 1, DateTimeOffset.UtcNow)).ToArray();
 
@@ -647,7 +700,10 @@ public sealed class LazyViewLoadingTests
         public async Task<T> Query<T>(IQuery<T> query, CancellationToken ct = default)
         {
             Queries.Add(query);
-            if (Delay?.Invoke(query) is { } pending) return (T)await pending;
+            if (Delay?.Invoke(query) is { } pending)
+            {
+                return (T)await pending;
+            }
             object result = query switch
             {
                 SearchQuery q => new SearchResultsView(q.Term, []),
@@ -655,11 +711,11 @@ public sealed class LazyViewLoadingTests
                 QueryProjectTablePageQuery q => Page(q.Page),
                 ListProjectDataTablesQuery => Array.Empty<ProjectTableInfo>(),
                 ListProjectChartsQuery => new ProjectChartView[] { new("sql:Summary", "{\"type\":\"bar\"}", DateTimeOffset.UtcNow) },
-                ListOpenSearchIndicesQuery => Array.Empty<OpenSearchIndexView>(),
-                ListOpenSearchDashboardsQuery => Array.Empty<OpenSearchDashboardView>(),
-                ListOpenSearchFieldsQuery => new OpenSearchFieldView[] { new("category", "keyword", true, true) },
-                GetOpenSearchLastUpdatedQuery => new OpenSearchLastUpdatedView(null, null),
-                SearchOpenSearchQuery => new OpenSearchSearchView(0, 0, [], null),
+                ListSearchIndicesQuery => Array.Empty<SearchIndexView>(),
+                ListSearchDashboardsQuery => Array.Empty<SearchDashboardView>(),
+                ListSearchFieldsQuery => new SearchFieldView[] { new("category", "keyword", true, true) },
+                GetSearchLastUpdatedQuery => new SearchLastUpdatedView(null, null),
+                SearchDocumentsQuery => new SearchResultView(0, 0, [], null),
                 GetProjectOverviewQuery q => new ProjectOverviewView(q.ProjectId, "Project", "/project", "Ready", null, null, 0, 0, [], 0),
                 GetProjectRequirementsQuery q => RequirementsView.EmptyForProject(q.ProjectId),
                 GetTimelineQuery q => new ActivityTimelineView(q.ProjectId, []),
@@ -696,7 +752,10 @@ public sealed class LazyViewLoadingTests
         public int ActivityChecks;
         public Task<bool> HasAsync(string permission, CancellationToken ct = default)
         {
-            if (permission == Permission.JobsView) ActivityChecks++;
+            if (permission == Permission.JobsView)
+            {
+                ActivityChecks++;
+            }
             return Task.FromResult(Allowed);
         }
         public Task<IReadOnlySet<string>> GetEffectivePermissionsAsync(CancellationToken ct = default) => throw new NotSupportedException();

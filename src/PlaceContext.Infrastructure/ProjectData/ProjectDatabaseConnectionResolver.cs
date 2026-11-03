@@ -1,7 +1,9 @@
+using PlaceContext.Application.ProjectData;
+using PlaceContext.Application.Secrets;
+using static PlaceContext.Application.Connections.ProjectDatabaseSettings;
 using System.Globalization;
 using Microsoft.Extensions.Options;
 using Npgsql;
-using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Infrastructure.ProjectData;
@@ -14,15 +16,7 @@ namespace PlaceContext.Infrastructure.ProjectData;
 /// </summary>
 public sealed class ProjectDatabaseConnectionResolver : IProjectDatabaseConnectionResolver
 {
-    public const string HostVariable = "PROJECT_DB_HOST";
-    public const string PortVariable = "PROJECT_DB_PORT";
-    public const string NameVariable = "PROJECT_DB_NAME";
-    public const string UsernameVariable = "PROJECT_DB_USER";
-    public const string PasswordVariable = "PROJECT_DB_PASSWORD";
-    public const string SslModeVariable = "PROJECT_DB_SSL_MODE";
 
-    public const string DefaultPort = "5432";
-    public const string DefaultSslMode = "Prefer";
 
     private readonly PlaceContextOptions _options;
     private readonly IProjectSecretRepository _secrets;
@@ -40,27 +34,35 @@ public sealed class ProjectDatabaseConnectionResolver : IProjectDatabaseConnecti
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, cipher) in await _secrets.GetCiphersAsync(projectId, ct))
         {
-            try { values[name] = _protector.Unprotect(cipher); }
+            try
+            {
+                values[name] = _protector.Unprotect(cipher);
+            }
             catch { /* A damaged unrelated Vault entry must not disable project data. */ }
         }
 
         var host = Value(values, HostVariable);
         if (string.IsNullOrWhiteSpace(host))
+        {
             return new ProjectDatabaseConnection(_options.ConnectionString, IsExternal: false);
-
+        }
         var user = Value(values, UsernameVariable);
         var password = Value(values, PasswordVariable);
         if (string.IsNullOrWhiteSpace(user))
+        {
             throw new InvalidOperationException(
-                $"'{UsernameVariable}' is required when an external database is configured.");
+                        $"'{UsernameVariable}' is required when an external database is configured.");
+        }
         if (password is null)
+        {
             throw new InvalidOperationException(
-                $"'{PasswordVariable}' is required when an external database is configured.");
-
+                        $"'{PasswordVariable}' is required when an external database is configured.");
+        }
         var port = Value(values, PortVariable) ?? DefaultPort;
         if (!int.TryParse(port, NumberStyles.None, CultureInfo.InvariantCulture, out _))
+        {
             throw new InvalidOperationException($"'{PortVariable}' must be a number.");
-
+        }
         var connectionString = new NpgsqlConnectionStringBuilder
         {
             Host = host,
@@ -78,8 +80,12 @@ public sealed class ProjectDatabaseConnectionResolver : IProjectDatabaseConnecti
         IReadOnlyDictionary<string, string> values, params string[] names)
     {
         foreach (var name in names)
+        {
             if (values.TryGetValue(name, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
                 return value.Trim();
+            }
+        }
         return null;
     }
 

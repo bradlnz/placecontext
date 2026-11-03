@@ -1,4 +1,4 @@
-using PlaceContext.Host.Build;
+using PlaceContext.Application.Build;
 
 namespace PlaceContext.Host.Tests;
 
@@ -32,7 +32,10 @@ public sealed class DataWorkflowSaasFoundationTests
         while (directory is not null)
         {
             var path = Path.Combine(directory.FullName, "src", "PlaceContext.Host");
-            if (Directory.Exists(path)) return path;
+            if (Directory.Exists(path))
+            {
+                return path;
+            }
             directory = directory.Parent;
         }
         throw new DirectoryNotFoundException();

@@ -16,11 +16,11 @@ public sealed class JobChainActionPersistenceTests
         var repository = new EfJobChainRepository(db);
         var loginId = Guid.NewGuid();
         var chain = JobChain.Create(Guid.NewGuid(), "vm", null,
-            [ChainStage.ForAction(new QemuChainAction("browser", "cat", "result", 2048, 2, 60, true, true, loginId))], T0);
+            [ChainStage.ForAction(new VirtualMachineChainAction("browser", "cat", "result", 2048, 2, 60, true, true, loginId))], T0);
         await repository.AddAsync(chain);
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
-        var loaded = Assert.IsType<QemuChainAction>((await repository.GetByIdAsync(chain.Id))!.Stages[0].Action);
+        var loaded = Assert.IsType<VirtualMachineChainAction>((await repository.GetByIdAsync(chain.Id))!.Stages[0].Action);
         Assert.Equal("browser", loaded.ImageProfile);
         Assert.Equal("cat", loaded.Command);
         Assert.Equal("result", loaded.OutputField);
@@ -90,9 +90,15 @@ public sealed class JobChainActionPersistenceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
-        var row = new JobChainRow { Id = Guid.NewGuid(), ProjectId = Guid.NewGuid(), Name = "Legacy review",
+        var row = new JobChainRow
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = Guid.NewGuid(),
+            Name = "Legacy review",
             StagesJson = """[{"jobs":[],"action":{"type":"agentInput","instructions":"Review","responseField":"answer"}}]""",
-            CreatedAt = T0, UpdatedAt = T0 };
+            CreatedAt = T0,
+            UpdatedAt = T0
+        };
         db.JobChains.Add(row);
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();

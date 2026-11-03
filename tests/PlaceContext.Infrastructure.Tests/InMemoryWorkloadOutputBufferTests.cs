@@ -1,3 +1,4 @@
+using PlaceContext.Application.Workload;
 using PlaceContext.Infrastructure.Workload;
 using Xunit;
 
@@ -15,7 +16,7 @@ public sealed class InMemoryWorkloadOutputBufferTests
         buffer.Append(correlationId, "processing 1/2\n");
         buffer.Append(correlationId, "retrying\n", isError: true);
 
-        var snapshot = Assert.IsType<PlaceContext.Application.Ports.LiveWorkloadOutput>(
+        var snapshot = Assert.IsType<PlaceContext.Application.Workload.LiveWorkloadOutput>(
             buffer.Snapshot(runId));
         Assert.Contains("processing 1/2", snapshot.Text);
         Assert.Contains("[stderr]", snapshot.Text);

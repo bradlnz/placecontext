@@ -38,18 +38,45 @@ public sealed class ActivityRecord
         RecordedAt = recordedAt;
     }
 
-    public ActivityRecordId Id { get; }
-    public int Sequence { get; }
+    public ActivityRecordId Id
+    {
+        get;
+    }
+    public int Sequence
+    {
+        get;
+    }
     /// <summary>What changed (the commit message / headline). The "why" is <see cref="Rationale"/>.</summary>
-    public string Summary { get; }
-    public Author Author { get; }
-    public Rationale Rationale { get; }
-    public TestDelta TestDelta { get; }
-    public ActivityVerification Verification { get; }
+    public string Summary
+    {
+        get;
+    }
+    public Author Author
+    {
+        get;
+    }
+    public Rationale Rationale
+    {
+        get;
+    }
+    public TestDelta TestDelta
+    {
+        get;
+    }
+    public ActivityVerification Verification
+    {
+        get;
+    }
     public IReadOnlyList<string> TouchedFiles => _touchedFiles;
     public IReadOnlyList<GraphNodeId> TouchedNodes => _touchedNodes;
-    public CommitSha? Commit { get; private set; }
-    public DateTimeOffset RecordedAt { get; }
+    public CommitSha? Commit
+    {
+        get; private set;
+    }
+    public DateTimeOffset RecordedAt
+    {
+        get;
+    }
 
     public bool IsAgentAuthored => Author.IsAgent;
     public bool IsCommitted => Commit is not null;
@@ -95,8 +122,9 @@ public sealed class ActivityRecord
     {
         ArgumentNullException.ThrowIfNull(commit);
         if (Commit is not null)
+        {
             throw new InvalidOperationException("This change already has a commit attached.");
-
+        }
         Commit = commit;
     }
 }

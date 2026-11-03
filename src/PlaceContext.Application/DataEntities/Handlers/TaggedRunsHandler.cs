@@ -1,3 +1,4 @@
+using PlaceContext.Application.DataEntities;
 namespace PlaceContext.Application.Features;
 
 public sealed class TaggedRunsHandler : Cqrs.IQueryHandler<TaggedRunsQuery, IReadOnlyList<Guid>>

@@ -1,9 +1,7 @@
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application;
 using PlaceContext.Application.Connections;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Infrastructure.OpenSearch;
-using PlaceContext.Infrastructure.ProjectData;
+using PlaceContext.Application;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -24,37 +22,54 @@ public sealed class ConnectionsSettingsViewModel(
 
     private static readonly string[] ExternalDatabaseKeys =
     [
-        ProjectDatabaseConnectionResolver.HostVariable,
-        ProjectDatabaseConnectionResolver.PortVariable,
-        ProjectDatabaseConnectionResolver.NameVariable,
-        ProjectDatabaseConnectionResolver.UsernameVariable,
-        ProjectDatabaseConnectionResolver.PasswordVariable,
-        ProjectDatabaseConnectionResolver.SslModeVariable,
+        ProjectDatabaseSettings.HostVariable,
+        ProjectDatabaseSettings.PortVariable,
+        ProjectDatabaseSettings.NameVariable,
+        ProjectDatabaseSettings.UsernameVariable,
+        ProjectDatabaseSettings.PasswordVariable,
+        ProjectDatabaseSettings.SslModeVariable,
     ];
 
     private static readonly string[] ExternalIndexKeys =
     [
-        OpenSearchConnectionResolver.EndpointVariable,
-        OpenSearchConnectionResolver.UsernameVariable,
-        OpenSearchConnectionResolver.PasswordVariable,
-        OpenSearchConnectionResolver.IndexVariable,
+        SearchConnectionSettings.EndpointVariable,
+        SearchConnectionSettings.UsernameVariable,
+        SearchConnectionSettings.PasswordVariable,
+        SearchConnectionSettings.IndexVariable,
     ];
 
     private static readonly string[] SslModes = ["Disable", "Allow", "Prefer", "Require", "Verify-CA", "Verify-Full"];
 
-    public IReadOnlyList<ProjectSummaryView>? Projects { get; private set; }
+    public IReadOnlyList<ProjectSummaryView>? Projects
+    {
+        get; private set;
+    }
     public IReadOnlyList<ProjectSecretView> Secrets { get; private set; } = Array.Empty<ProjectSecretView>();
     public IReadOnlyList<ManagedConnectionView> ManagedConnections { get; private set; } = [];
     public bool MicrosoftConnected => ManagedConnections.Any(x => x.Provider == "microsoft");
     public async Task ConnectMicrosoftAsync()
     {
-        if (managed is null || navigation is null || SelectedProjectId is not { } id) return;
-        try { navigation.NavigateTo((await managed.BeginAsync(id)).ToString(), forceLoad: true); }
-        catch (Exception ex) { Message = ex.Message; MessageIsError = true; NotifyStateChanged(); }
+        if (managed is null || navigation is null || SelectedProjectId is not { } id)
+        {
+            return;
+        }
+        try
+        {
+            navigation.NavigateTo((await managed.BeginAsync(id)).ToString(), forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+            MessageIsError = true;
+            NotifyStateChanged();
+        }
     }
     public async Task DisconnectMicrosoftAsync()
     {
-        if (managed is null || SelectedProjectId is not { } id) return;
+        if (managed is null || SelectedProjectId is not { } id)
+        {
+            return;
+        }
         try
         {
             await managed.DisconnectAsync(id);
@@ -62,15 +77,34 @@ public sealed class ConnectionsSettingsViewModel(
             Message = "Microsoft Graph disconnected.";
             MessageIsError = false;
         }
-        catch (Exception ex) { Message = ex.Message; MessageIsError = true; }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
+            MessageIsError = true;
+        }
         NotifyStateChanged();
     }
-    public Guid? SelectedProjectId { get; set; }
+    public Guid? SelectedProjectId
+    {
+        get; set;
+    }
     public bool Loading { get; private set; } = true;
-    public bool Busy { get; private set; }
-    public string? Message { get; private set; }
-    public bool MessageIsError { get; private set; }
-    public string? FormError { get; private set; }
+    public bool Busy
+    {
+        get; private set;
+    }
+    public string? Message
+    {
+        get; private set;
+    }
+    public bool MessageIsError
+    {
+        get; private set;
+    }
+    public string? FormError
+    {
+        get; private set;
+    }
 
     // External database form.
     public string DbHost { get; set; } = "";
@@ -89,10 +123,10 @@ public sealed class ConnectionsSettingsViewModel(
     public string? SelectedProjectName => Projects?.FirstOrDefault(p => p.Id == SelectedProjectId)?.Name;
 
     public bool HasExternalDatabase =>
-        Secrets.Any(s => s.Name == ProjectDatabaseConnectionResolver.HostVariable);
+        Secrets.Any(s => s.Name == ProjectDatabaseSettings.HostVariable);
 
     public bool HasExternalIndex =>
-        Secrets.Any(s => s.Name == OpenSearchConnectionResolver.EndpointVariable);
+        Secrets.Any(s => s.Name == SearchConnectionSettings.EndpointVariable);
 
     public IReadOnlyList<string> SslModeOptions => SslModes;
 
@@ -105,13 +139,24 @@ public sealed class ConnectionsSettingsViewModel(
         try
         {
             Projects = await service.GetProjectsAsync();
-            if (requestedProjectId is { } projectId && Projects.Any(project => project.Id == projectId))
-                SelectedProjectId = projectId;
-            else if (Projects.Count > 0 && SelectedProjectId is null)
-                SelectedProjectId = Projects[0].Id;
+            void SelectProject()
+            {
+                if (requestedProjectId is { } projectId && Projects.Any(project => project.Id == projectId))
+                {
+                    SelectedProjectId = projectId;
+                    return;
+                }
+                if (Projects.Count > 0 && SelectedProjectId is null)
+                {
+                    SelectedProjectId = Projects[0].Id;
+                }
+            }
+            SelectProject();
             await LoadSecretsAsync();
             if (SelectedProjectId is { } managedProject && managed is not null)
+            {
                 ManagedConnections = await managed.ListAsync(managedProject);
+            }
         }
         catch (Exception ex)
         {
@@ -185,15 +230,19 @@ public sealed class ConnectionsSettingsViewModel(
         {
             var values = new Dictionary<string, string>
             {
-                [ProjectDatabaseConnectionResolver.HostVariable] = DbHost.Trim(),
-                [ProjectDatabaseConnectionResolver.UsernameVariable] = DbUser.Trim(),
-                [ProjectDatabaseConnectionResolver.PasswordVariable] = DbPassword,
-                [ProjectDatabaseConnectionResolver.SslModeVariable] = DbSslMode.Trim(),
+                [ProjectDatabaseSettings.HostVariable] = DbHost.Trim(),
+                [ProjectDatabaseSettings.UsernameVariable] = DbUser.Trim(),
+                [ProjectDatabaseSettings.PasswordVariable] = DbPassword,
+                [ProjectDatabaseSettings.SslModeVariable] = DbSslMode.Trim(),
             };
             if (port is not null)
-                values[ProjectDatabaseConnectionResolver.PortVariable] = port;
+            {
+                values[ProjectDatabaseSettings.PortVariable] = port;
+            }
             if (!string.IsNullOrWhiteSpace(DbName))
-                values[ProjectDatabaseConnectionResolver.NameVariable] = DbName.Trim();
+            {
+                values[ProjectDatabaseSettings.NameVariable] = DbName.Trim();
+            }
             await WriteSecretsAsync(id, values);
             Message = $"External database for '{SelectedProjectName}' saved. This project now runs against it; reset to return to the cluster database.";
             MessageIsError = false;
@@ -214,13 +263,18 @@ public sealed class ConnectionsSettingsViewModel(
 
     public async Task ResetExternalDatabaseAsync()
     {
-        if (SelectedProjectId is not { } id) return;
+        if (SelectedProjectId is not { } id)
+        {
+            return;
+        }
         Busy = true;
         NotifyStateChanged();
         try
         {
             foreach (var key in ExternalDatabaseKeys)
+            {
                 await service.DeleteProjectSecretAsync(id, key);
+            }
             Message = $"Project '{SelectedProjectName}' reverted to the cluster database.";
             MessageIsError = false;
             ClearForms();
@@ -264,14 +318,20 @@ public sealed class ConnectionsSettingsViewModel(
         {
             var values = new Dictionary<string, string>
             {
-                [OpenSearchConnectionResolver.EndpointVariable] = OsEndpoint.Trim().TrimEnd('/'),
+                [SearchConnectionSettings.EndpointVariable] = OsEndpoint.Trim().TrimEnd('/'),
             };
             if (!string.IsNullOrWhiteSpace(OsUsername))
-                values[OpenSearchConnectionResolver.UsernameVariable] = OsUsername.Trim();
+            {
+                values[SearchConnectionSettings.UsernameVariable] = OsUsername.Trim();
+            }
             if (!string.IsNullOrWhiteSpace(OsPassword))
-                values[OpenSearchConnectionResolver.PasswordVariable] = OsPassword;
+            {
+                values[SearchConnectionSettings.PasswordVariable] = OsPassword;
+            }
             if (!string.IsNullOrWhiteSpace(OsIndex))
-                values[OpenSearchConnectionResolver.IndexVariable] = OsIndex.Trim();
+            {
+                values[SearchConnectionSettings.IndexVariable] = OsIndex.Trim();
+            }
             await WriteSecretsAsync(id, values);
             Message = $"External index for '{SelectedProjectName}' saved. Data Search now targets it; reset to fall back to the workspace default.";
             MessageIsError = false;
@@ -292,13 +352,18 @@ public sealed class ConnectionsSettingsViewModel(
 
     public async Task ResetExternalIndexAsync()
     {
-        if (SelectedProjectId is not { } id) return;
+        if (SelectedProjectId is not { } id)
+        {
+            return;
+        }
         Busy = true;
         NotifyStateChanged();
         try
         {
             foreach (var key in ExternalIndexKeys)
+            {
                 await service.DeleteProjectSecretAsync(id, key);
+            }
             Message = $"Project '{SelectedProjectName}' reverted to the workspace OpenSearch default.";
             MessageIsError = false;
             ClearForms();

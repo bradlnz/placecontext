@@ -3,8 +3,14 @@ namespace PlaceContext.Domain.ValueObjects;
 /// <summary>The author of a change — a named human or a named agent.</summary>
 public sealed record Author
 {
-    public string Name { get; }
-    public ActorKind Kind { get; }
+    public string Name
+    {
+        get;
+    }
+    public ActorKind Kind
+    {
+        get;
+    }
 
     private Author(string name, ActorKind kind)
     {
@@ -17,8 +23,9 @@ public sealed record Author
     public static Author From(string name, ActorKind kind)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("Author name must not be empty.", nameof(name));
-
+        }
         return new Author(name.Trim(), kind);
     }
 

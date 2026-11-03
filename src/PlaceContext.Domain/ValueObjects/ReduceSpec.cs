@@ -22,10 +22,16 @@ public sealed class ReduceSpec
     }
 
     /// <summary>How to run the reduce step — either a pre-built image or inline source code.</summary>
-    public WorkloadSource Source { get; }
+    public WorkloadSource Source
+    {
+        get;
+    }
 
     /// <summary>Environment variable key/value pairs injected into the reduce container.</summary>
-    public IReadOnlyDictionary<string, string> Env { get; }
+    public IReadOnlyDictionary<string, string> Env
+    {
+        get;
+    }
 
     // ── Convenience accessor (backward compat) ───────────────────────────────────────────────────
 

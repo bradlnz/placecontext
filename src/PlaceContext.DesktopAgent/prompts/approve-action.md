@@ -1,0 +1,1 @@
+Perform the proposed action: its target is visible, it advances the task, and it respects the task restrictions.

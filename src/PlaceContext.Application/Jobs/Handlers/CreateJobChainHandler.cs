@@ -1,6 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -52,14 +52,18 @@ public sealed class CreateJobChainHandler : ICommandHandler<CreateJobChainComman
         {
             jobIds.UnionWith(stage.JobIds);
             foreach (var branch in stage.ElseBranch ?? (stage.Gate as ConditionGate)?.ElseBranch ?? [])
+            {
                 stages.Push(branch);
+            }
         }
         foreach (var jobId in jobIds)
         {
             var job = await jobs.GetByIdAsync(jobId, ct)
                 ?? throw new InvalidOperationException($"Chain step references unknown job {jobId}.");
             if (job.ProjectId != chain.ProjectId)
+            {
                 throw new InvalidOperationException($"Job '{job.Name}' belongs to a different project.");
+            }
         }
     }
 }

@@ -26,27 +26,84 @@ public sealed class McpConnection
         CreatedAt = createdAt;
     }
 
-    public Guid Id { get; }
-    public Guid ProjectId { get; }
-    public string Name { get; private set; }
-    public string Transport { get; private set; }  // "http" | "sse" | "stdio"
-    public string? EndpointUrl { get; private set; }
-    public string? Command { get; private set; }
-    public string? Args { get; private set; }
-    public string? AuthType { get; private set; }   // "none" | "bearer" | "header" | "apikey" | "oauth"
-    public string? AuthToken { get; private set; }
-    public string? AuthHeader { get; private set; }
-    public bool Enabled { get; private set; }
-    public string? LastStatus { get; private set; }
-    public DateTimeOffset? LastConnectedAt { get; private set; }
-    public DateTimeOffset CreatedAt { get; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
+    public string Name
+    {
+        get; private set;
+    }
+    public string Transport
+    {
+        get; private set;
+    }  // "http" | "sse" | "stdio"
+    public string? EndpointUrl
+    {
+        get; private set;
+    }
+    public string? Command
+    {
+        get; private set;
+    }
+    public string? Args
+    {
+        get; private set;
+    }
+    public string? AuthType
+    {
+        get; private set;
+    }   // "none" | "bearer" | "header" | "apikey" | "oauth"
+    public string? AuthToken
+    {
+        get; private set;
+    }
+    public string? AuthHeader
+    {
+        get; private set;
+    }
+    public bool Enabled
+    {
+        get; private set;
+    }
+    public string? LastStatus
+    {
+        get; private set;
+    }
+    public DateTimeOffset? LastConnectedAt
+    {
+        get; private set;
+    }
+    public DateTimeOffset CreatedAt
+    {
+        get;
+    }
 
     // OAuth fields
-    public string? OAuthAccessToken { get; private set; }
-    public string? OAuthRefreshToken { get; private set; }
-    public DateTimeOffset? OAuthTokenExpiresAt { get; private set; }
-    public string? OAuthClientId { get; private set; }
-    public string? OAuthScopes { get; private set; }
+    public string? OAuthAccessToken
+    {
+        get; private set;
+    }
+    public string? OAuthRefreshToken
+    {
+        get; private set;
+    }
+    public DateTimeOffset? OAuthTokenExpiresAt
+    {
+        get; private set;
+    }
+    public string? OAuthClientId
+    {
+        get; private set;
+    }
+    public string? OAuthScopes
+    {
+        get; private set;
+    }
 
     public bool OAuthTokenExpired => OAuthTokenExpiresAt.HasValue && OAuthTokenExpiresAt.Value <= DateTimeOffset.UtcNow;
 
@@ -54,11 +111,17 @@ public sealed class McpConnection
         string? endpointUrl, string? command, string? args, string? authType,
         string? authToken, string? authHeader, DateTimeOffset now)
     {
-        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Name required.", nameof(name));
-        if (transport is not (McpTransport.Http or McpTransport.Sse or McpTransport.Stdio)) throw new ArgumentException("Invalid transport.", nameof(transport));
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("Name required.", nameof(name));
+        }
+        if (transport is not (McpTransport.Http or McpTransport.Sse or McpTransport.Stdio))
+        {
+            throw new ArgumentException("Invalid transport.", nameof(transport));
+        }
         return new McpConnection(Guid.NewGuid(), projectId, name.Trim(), transport,
-            endpointUrl?.Trim(), command?.Trim(), args?.Trim(),
-            authType ?? McpAuthType.None, authToken?.Trim(), authHeader?.Trim(), true, now);
+                    endpointUrl?.Trim(), command?.Trim(), args?.Trim(),
+                    authType ?? McpAuthType.None, authToken?.Trim(), authHeader?.Trim(), true, now);
     }
 
     public void Update(string name, string transport, string? endpointUrl, string? command, string? args,

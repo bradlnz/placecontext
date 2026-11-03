@@ -1,5 +1,5 @@
-using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Diagnostics;
 
 namespace PlaceContext.Application.Observability;
 

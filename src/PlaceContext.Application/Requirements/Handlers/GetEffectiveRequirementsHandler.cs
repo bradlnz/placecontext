@@ -1,6 +1,5 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Ports;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
@@ -18,9 +17,14 @@ public sealed class GetEffectiveRequirementsHandler : IQueryHandler<GetEffective
         var project = await _requirements.GetForProjectAsync(ProjectId.From(query.ProjectId), ct);
 
         var sections = new List<string>();
-        if (global is { IsEmpty: false }) sections.Add("# Global requirements\n\n" + global.Markdown.Trim());
-        if (project is { IsEmpty: false }) sections.Add("# Project requirements\n\n" + project.Markdown.Trim());
-
+        if (global is { IsEmpty: false })
+        {
+            sections.Add("# Global requirements\n\n" + global.Markdown.Trim());
+        }
+        if (project is { IsEmpty: false })
+        {
+            sections.Add("# Project requirements\n\n" + project.Markdown.Trim());
+        }
         var merged = string.Join("\n\n", sections);
         return new EffectiveRequirementsView(query.ProjectId, merged, merged.Length == 0);
     }

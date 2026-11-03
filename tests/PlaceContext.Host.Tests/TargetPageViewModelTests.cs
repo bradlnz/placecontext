@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Components;
-using PlaceContext.Application.Ports;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Auth;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Host.Components.ViewModels;
 using PlaceContext.Host.Wiki;
 using PlaceContext.Infrastructure.Persistence;
@@ -22,23 +24,6 @@ public sealed class TargetPageViewModelTests
 
         Assert.Equal(2031, vm.CopyrightYear);
         Assert.Equal("About", ui.Title);
-    }
-
-    [Fact]
-    public void Onboarding_routes_each_source_to_its_existing_setup_surface()
-    {
-        var projectId = Guid.NewGuid();
-
-        Assert.Equal(PageRoutes.ProjectData(projectId),
-            OnboardingViewModel.DataSourceRoute("workspace-database", projectId));
-        Assert.Equal(PageRoutes.ConnectionsSettings,
-            OnboardingViewModel.DataSourceRoute("postgresql", projectId));
-        Assert.Equal(PageRoutes.McpSettings,
-            OnboardingViewModel.DataSourceRoute("mcp", projectId));
-        Assert.Equal(PageRoutes.WebhookIngestionWiki,
-            OnboardingViewModel.DataSourceRoute("webhook", projectId));
-        Assert.Equal(PageRoutes.ProjectJobs(projectId),
-            OnboardingViewModel.DataSourceRoute("job", projectId));
     }
 
     [Fact]
@@ -90,7 +75,9 @@ public sealed class TargetPageViewModelTests
         {
             var host = Path.Combine(directory.FullName, "src", "PlaceContext.Host");
             if (Directory.Exists(host))
+            {
                 return File.ReadAllText(Path.Combine(host, relativePath));
+            }
             directory = directory.Parent;
         }
         throw new DirectoryNotFoundException("Repository root not found.");
@@ -103,9 +90,18 @@ public sealed class TargetPageViewModelTests
 
     private sealed class TestNavigationManager : NavigationManager
     {
-        public string? NavigatedUri { get; private set; }
-        public bool Replace { get; private set; }
-        public bool ForceLoad { get; private set; }
+        public string? NavigatedUri
+        {
+            get; private set;
+        }
+        public bool Replace
+        {
+            get; private set;
+        }
+        public bool ForceLoad
+        {
+            get; private set;
+        }
 
         public TestNavigationManager() => Initialize("https://localhost/", "https://localhost/");
 
@@ -215,7 +211,10 @@ public sealed class TargetPageViewModelTests
 
     private sealed class StubTenantStore : ITenantStore
     {
-        public bool Saved { get; private set; }
+        public bool Saved
+        {
+            get; private set;
+        }
 
         public Task SetTimeZoneAsync(
             Guid tenantId,
@@ -233,8 +232,6 @@ public sealed class TargetPageViewModelTests
         public Task<TenantInfo> GetOrCreateAsync(string slug, CancellationToken ct = default) =>
             throw new NotImplementedException();
 
-        public Task<TenantRow?> GetRowAsync(Guid tenantId, CancellationToken ct = default) =>
-            throw new NotImplementedException();
 
         public Task SaveGitHubAsync(
             Guid tenantId,

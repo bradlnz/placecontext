@@ -53,7 +53,10 @@ public sealed class DecisionTreeAssembler
 
         void AddNode(string id, string label, TreeNodeKind kind, string? content = null)
         {
-            if (seen.Add(id)) specs.Add((id, label, kind, ClipContent(content)));
+            if (seen.Add(id))
+            {
+                specs.Add((id, label, kind, ClipContent(content)));
+            }
         }
 
         // Decisions branch off the root, oldest first, so a change can attach to the latest prior decision.
@@ -120,15 +123,22 @@ public sealed class DecisionTreeAssembler
             {
                 foreach (var jobId in stage.JobIds)
                 {
-                    if (!jobNodeIds.TryGetValue(jobId, out var jobNodeId)) continue;
+                    if (!jobNodeIds.TryGetValue(jobId, out var jobNodeId))
+                    {
+                        continue;
+                    }
                     chainedJobIds.Add(jobId);
                     edges.Add(new DecisionTreeEdge(chainId, jobNodeId, ConfidenceTag.Extracted));
                     if (previousStageJobId is not null)
+                    {
                         edges.Add(new DecisionTreeEdge(previousStageJobId, jobNodeId, ConfidenceTag.Extracted));
+                    }
                 }
                 // For parallel fan-out stages the dependency fans in from the single previous stage.
                 if (stage.JobIds.Count > 0 && jobNodeIds.TryGetValue(stage.JobIds[0], out var firstOfStage))
+                {
                     previousStageJobId = firstOfStage;
+                }
             }
         }
 
@@ -136,14 +146,19 @@ public sealed class DecisionTreeAssembler
         foreach (var (jobId, nodeId) in jobNodeIds)
         {
             if (!chainedJobIds.Contains(jobId))
+            {
                 edges.Add(new DecisionTreeEdge(rootId, nodeId, ConfidenceTag.Extracted));
+            }
         }
 
         // Tables written by jobs (data mappings) and any remaining project tables off the root.
         var mappedTables = new HashSet<string>(StringComparer.Ordinal);
         foreach (var mapping in mappings ?? (IReadOnlyList<DataMapping>)Array.Empty<DataMapping>())
         {
-            if (!jobNodeIds.TryGetValue(mapping.JobId, out var jobNodeId)) continue;
+            if (!jobNodeIds.TryGetValue(mapping.JobId, out var jobNodeId))
+            {
+                continue;
+            }
             var tableId = "table:" + mapping.TargetTable;
             mappedTables.Add(mapping.TargetTable);
             AddNode(tableId, Clip(mapping.TargetTable), TreeNodeKind.Table);
@@ -151,7 +166,10 @@ public sealed class DecisionTreeAssembler
         }
         foreach (var table in tables ?? (IReadOnlyList<string>)Array.Empty<string>())
         {
-            if (mappedTables.Contains(table)) continue;
+            if (mappedTables.Contains(table))
+            {
+                continue;
+            }
             var tableId = "table:" + table;
             AddNode(tableId, Clip(table), TreeNodeKind.Table);
             edges.Add(new DecisionTreeEdge(rootId, tableId, ConfidenceTag.Extracted));
@@ -195,8 +213,10 @@ public sealed class DecisionTreeAssembler
         var runNodeIds = new Dictionary<Guid, string>();
         foreach (var run in runs ?? (IReadOnlyList<JobRun>)Array.Empty<JobRun>())
         {
-            if (runNodeIds.Count >= MaxJobRuns) break;
-            // Keep the full run id in the graph identity. The label remains abbreviated, while
+            if (runNodeIds.Count >= MaxJobRuns)
+            {
+                break;
+            }            // Keep the full run id in the graph identity. The label remains abbreviated, while
             // consumers such as Data Graph can resolve the selected node to its complete run.
             var id = "run:" + run.Id.ToString("N");
             runNodeIds[run.Id] = id;
@@ -209,8 +229,14 @@ public sealed class DecisionTreeAssembler
         foreach (var art in artifacts ?? (IReadOnlyList<RunArtifactLink>)Array.Empty<RunArtifactLink>())
         {
             var id = "artifact:" + art.Id.ToString("N");
-            if (seen.Contains(id)) continue;
-            if (specs.Count(s => s.Kind == TreeNodeKind.Artifact) >= MaxArtifacts) break;
+            if (seen.Contains(id))
+            {
+                continue;
+            }
+            if (specs.Count(s => s.Kind == TreeNodeKind.Artifact) >= MaxArtifacts)
+            {
+                break;
+            }
             AddNode(id, Clip(art.Title), TreeNodeKind.Artifact, $"{art.Kind} · {art.ContentType}");
             var parentId = runNodeIds.TryGetValue(art.RunId, out var runNodeId)
                 ? runNodeId
@@ -220,19 +246,27 @@ public sealed class DecisionTreeAssembler
 
         foreach (var cluster in linkClusters ?? (IReadOnlyList<RecordLinkCluster>)Array.Empty<RecordLinkCluster>())
         {
-            if (specs.Count(s => s.Kind is TreeNodeKind.Address or TreeNodeKind.Location) >= MaxLinkClusters) break;
+            if (specs.Count(s => s.Kind is TreeNodeKind.Address or TreeNodeKind.Location) >= MaxLinkClusters)
+            {
+                break;
+            }
             var kind = cluster.Kind switch
             {
                 var k when string.Equals(k, "address", StringComparison.OrdinalIgnoreCase) => TreeNodeKind.Address,
                 _ => TreeNodeKind.Location,
             };
             var id = $"link:{cluster.Kind}:{cluster.NormalizedValue}";
-            if (seen.Contains(id)) continue;
+            if (seen.Contains(id))
+            {
+                continue;
+            }
             AddNode(id, Clip(cluster.DisplayValue), kind, $"shared {cluster.Kind}");
             foreach (var occ in cluster.Occurrences.DistinctBy(o => o.TableName))
             {
                 if (entityByTable.TryGetValue(occ.TableName, out var entityNodeId))
+                {
                     edges.Add(new DecisionTreeEdge(entityNodeId, id, ConfidenceTag.Extracted));
+                }
             }
         }
 
@@ -278,12 +312,17 @@ public sealed class DecisionTreeAssembler
         Action<string, string, TreeNodeKind, string?> addNode,
         IReadOnlyDictionary<Guid, string>? jobNodeIds = null)
     {
-        if (runOutputs is not { Count: > 0 }) return;
-
+        if (runOutputs is not { Count: > 0 })
+        {
+            return;
+        }
         var outputs = new List<(string Id, float[] Vector)>();
         foreach (var o in runOutputs)
         {
-            if (o.Vector.Count == 0) continue;
+            if (o.Vector.Count == 0)
+            {
+                continue;
+            }
             var id = "runoutput:" + o.Id;
             if (!seen.Contains(id))
             {
@@ -302,9 +341,15 @@ public sealed class DecisionTreeAssembler
             var neighbours = new List<(int J, double Sim)>();
             for (var j = 0; j < outputs.Count; j++)
             {
-                if (i == j) continue;
+                if (i == j)
+                {
+                    continue;
+                }
                 var sim = Cosine(outputs[i].Vector, outputs[j].Vector);
-                if (sim >= SimilarityThreshold) neighbours.Add((j, sim));
+                if (sim >= SimilarityThreshold)
+                {
+                    neighbours.Add((j, sim));
+                }
             }
 
             foreach (var (j, _) in neighbours.OrderByDescending(n => n.Sim).Take(MaxSimilarLinks))
@@ -313,14 +358,19 @@ public sealed class DecisionTreeAssembler
                 var b = outputs[j].Id;
                 var key = string.CompareOrdinal(a, b) < 0 ? a + "|" + b : b + "|" + a;
                 if (linked.Add(key))
+                {
                     edges.Add(new DecisionTreeEdge(a, b, ConfidenceTag.Inferred));
+                }
             }
         }
     }
 
     private static double Cosine(float[] a, float[] b)
     {
-        if (a.Length == 0 || b.Length == 0 || a.Length != b.Length) return 0;
+        if (a.Length == 0 || b.Length == 0 || a.Length != b.Length)
+        {
+            return 0;
+        }
         double dot = 0, na = 0, nb = 0;
         for (var i = 0; i < a.Length; i++)
         {
@@ -343,7 +393,10 @@ public sealed class DecisionTreeAssembler
     // Content is a readable snippet, not the whole document — keep it to a paragraph.
     private static string? ClipContent(string? content)
     {
-        if (string.IsNullOrWhiteSpace(content)) return null;
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return null;
+        }
         var t = content.Trim();
         return t.Length <= MaxContent ? t : t[..(MaxContent - 1)] + "…";
     }

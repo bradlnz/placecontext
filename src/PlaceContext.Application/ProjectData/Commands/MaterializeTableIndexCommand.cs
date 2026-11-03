@@ -18,9 +18,14 @@ public sealed record MaterializeTableIndexCommand(
     {
         var sb = new StringBuilder("pi-");
         foreach (var ch in (tableName ?? "").Trim().ToLowerInvariant())
+        {
             sb.Append(char.IsLetterOrDigit(ch) ? ch : '-');
+        }
         var name = sb.ToString().Trim('-');
-        if (name.Length is <= 3 or > 255) name = "pi-materialized";
+        if (name.Length is <= 3 or > 255)
+        {
+            name = "pi-materialized";
+        }
         return name;
     }
 

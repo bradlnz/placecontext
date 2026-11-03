@@ -31,10 +31,22 @@ public sealed class JobChain
         OriginalUpdatedAt = updatedAt;
     }
 
-    public Guid Id { get; }
-    public Guid ProjectId { get; }
-    public string Name { get; private set; }
-    public string? Description { get; private set; }
+    public Guid Id
+    {
+        get;
+    }
+    public Guid ProjectId
+    {
+        get;
+    }
+    public string Name
+    {
+        get; private set;
+    }
+    public string? Description
+    {
+        get; private set;
+    }
 
     /// <summary>The pipeline's stages, in run order. A stage with more than one job id is a parallel
     /// fan-out group; the stage right after it is the join.</summary>
@@ -49,19 +61,30 @@ public sealed class JobChain
     /// <summary>Total executable jobs and typed actions represented in run history.</summary>
     public int ExecutionStepCount => _stages.Sum(stage => stage.ExecutionCount);
 
-    public DateTimeOffset CreatedAt { get; }
-    public DateTimeOffset UpdatedAt { get; private set; }
+    public DateTimeOffset CreatedAt
+    {
+        get;
+    }
+    public DateTimeOffset UpdatedAt
+    {
+        get; private set;
+    }
     /// <summary>Revision loaded from storage, held across edits for atomic optimistic concurrency.</summary>
-    public DateTimeOffset OriginalUpdatedAt { get; }
+    public DateTimeOffset OriginalUpdatedAt
+    {
+        get;
+    }
 
     public static JobChain Create(Guid projectId, string name, string? description,
         IReadOnlyList<ChainStage> stages, DateTimeOffset now)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("Chain name must not be empty.", nameof(name));
+        }
         return new JobChain(Guid.NewGuid(), projectId, name.Trim(),
-            string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
-            ValidateStages(stages), now, now);
+                    string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+                    ValidateStages(stages), now, now);
     }
 
     /// <summary>Backward-compatible factory: one job id per stage — a purely sequential chain.</summary>
@@ -72,7 +95,9 @@ public sealed class JobChain
     public void Update(string name, string? description, IReadOnlyList<ChainStage> stages, DateTimeOffset now)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException("Chain name must not be empty.", nameof(name));
+        }
         Name = name.Trim();
         Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
         var validated = ValidateStages(stages);
@@ -88,15 +113,18 @@ public sealed class JobChain
     private static List<ChainStage> ToLinearStages(IReadOnlyList<Guid> stepJobIds)
     {
         if (stepJobIds is null)
+        {
             throw new ArgumentException("A chain needs at least one step (job).", nameof(stepJobIds));
+        }
         return stepJobIds.Select(ChainStage.Of).ToList();
     }
 
     private static List<ChainStage> ValidateStages(IReadOnlyList<ChainStage> stages)
     {
         if (stages is null || stages.Count == 0)
+        {
             throw new ArgumentException("A chain needs at least one stage.", nameof(stages));
-        // Defensive copy — each ChainStage already validated its own job ids at construction, and a
+        }        // Defensive copy — each ChainStage already validated its own job ids at construction, and a
         // stage may legitimately repeat a job (e.g. transform → verify → transform, or fan-out
         // branches sharing a job) — no dedup.
         return stages.Select(s => new ChainStage(s.JobIds, s.Gate, s.ElseBranch, s.Action)).ToList();
