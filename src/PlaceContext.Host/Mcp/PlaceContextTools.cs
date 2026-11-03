@@ -917,26 +917,30 @@ public sealed class PlaceContextTools
         IToolCallLog log, string tool, string project, string summary, object request, Func<Task<T>> action)
     {
         var sw = Stopwatch.StartNew();
+        var projectData = tool is "query_project_data" or "save_sql_chart";
+        var traceSummary = projectData ? "Project data operation (payload omitted)" : summary;
+        var traceRequest = projectData ? JsonSerializer.Serialize(new { projectId = project }, Json)
+            : JsonSerializer.Serialize(request, Json);
         try
         {
             var result = await action();
             sw.Stop();
             var response = JsonSerializer.Serialize(result, Json);
             log.Record(new ToolCallEntry(
-                NewId(), tool, "agent → mcp", project, summary, ToolCallStatus.Ok, sw.ElapsedMilliseconds,
-                JsonSerializer.Serialize(request, Json), response, DateTimeOffset.UtcNow));
+                NewId(), tool, "agent → mcp", project, traceSummary, ToolCallStatus.Ok, sw.ElapsedMilliseconds,
+                traceRequest, projectData ? "{\"ok\":true,\"payloadOmitted\":true}" : response, DateTimeOffset.UtcNow));
             return response;
         }
         catch (Exception ex)
         {
             sw.Stop();
             log.Record(new ToolCallEntry(
-                NewId(), tool, "agent → mcp", project, summary, ToolCallStatus.Error, sw.ElapsedMilliseconds,
-                JsonSerializer.Serialize(request, Json),
+                NewId(), tool, "agent → mcp", project, traceSummary, ToolCallStatus.Error, sw.ElapsedMilliseconds,
+                traceRequest,
                 JsonSerializer.Serialize(new
                 {
                     ok = false,
-                    error = ex.Message
+                    error = projectData ? "Project data operation failed." : ex.Message
                 }, Json), DateTimeOffset.UtcNow));
             throw;
         }

@@ -516,6 +516,8 @@ app.Use(async (ctx, next) =>
 app.UseMiddleware<TenantResolutionMiddleware>(); // resolve {user}.placecontext.io → tenant, before any data access
 // Project for the entity data and search APIs: X-Project-Id / X-Project (optional elsewhere).
 app.UseMiddleware<ProjectResolutionMiddleware>();
+// Wrap authentication/authorization so rejected data requests are audited as well as successful reads.
+app.UseMiddleware<DataAccessAuditMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();

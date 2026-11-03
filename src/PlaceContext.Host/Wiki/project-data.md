@@ -66,10 +66,20 @@ Jobs can query any table or view in their project through the read-only data API
 it as an entity. Map and reduce processes receive `PC_PROJECT_ID`, `PC_JOB_ID`, and `PC_RUN_ID` for
 the actual execution; these values override job environment values with the same names.
 
-Configure `PC_HOST` with a worker-reachable portal URL and `PC_TOKEN` with a personal API token in
-the project's Vault. The token's user needs `data.read`. Permit access to that portal in the job's
-network policy; network-disabled jobs cannot call the API. Use HTTPS in production. No database
-credentials or PII encryption keys need to be given to the job.
+Enable project data access for the map or reduce process (`PC_USE_PROJECT_DATA=true`). Starting
+the job requires `data.read`. The opted-in process receives a transient `PC_DATA_TOKEN` scoped to
+its tenant, project, job, and run; it is not saved into the run snapshot. Access ends when the run
+finishes, its heartbeat becomes stale, or the credential expires (at most 24 hours).
+
+Configure `PC_HOST` with a worker-reachable portal URL and permit access to it in the job's network
+policy; network-disabled jobs cannot use this opt-in. Use HTTPS in production. Jobs do not need a
+personal token, database credentials, or PII encryption keys for this API.
+
+- `GET /api/v1/job-data/tables` lists the authenticated run's project tables and views.
+- `POST /api/v1/job-data/query` accepts `{"sql":"SELECT …"}`. The credential determines the project;
+  caller-supplied project IDs cannot select a different project.
+
+For integrations outside a job, a personal API token with `data.read` also supports:
 
 - `GET /api/v1/projects/{projectId}/data/tables` lists tables and views.
 - `POST /api/v1/projects/{projectId}/data/query` accepts `{"sql":"SELECT …"}` and returns
@@ -83,9 +93,9 @@ import json
 import os
 import urllib.request
 
-url = f"{os.environ['PC_HOST'].rstrip('/')}/api/v1/projects/{os.environ['PC_PROJECT_ID']}/data/query"
+url = f"{os.environ['PC_HOST'].rstrip('/')}/api/v1/job-data/query"
 request = urllib.request.Request(url, method="POST", headers={
-    "Authorization": f"Bearer {os.environ['PC_TOKEN']}",
+    "Authorization": f"Bearer {os.environ['PC_DATA_TOKEN']}",
     "Content-Type": "application/json",
 }, data=json.dumps({"sql": "SELECT count(*) AS paid_orders FROM orders WHERE status = 'paid'"}).encode())
 with urllib.request.urlopen(request, timeout=15) as response:
@@ -96,10 +106,16 @@ count = int(result["rows"][0][0])
 print(json.dumps({"action": "process_orders" if count > 0 else "wait", "paid_orders": count}))
 ```
 
-Personal tokens inherit their user's workspace permissions; they are not restricted to a run or
-individual tables. Grant them deliberately to trusted job code. `data.read` currently permits
-decrypted results: this API does not yet enforce separate PII field grants or masking. Do not give
-an untrusted job a token expecting the project ID environment variable to enforce its permissions.
+Both APIs currently permit decrypted results across the selected project's tables; separate PII
+field grants and masking are not enforced. Personal tokens inherit their user's workspace permissions
+and are not restricted to a run or individual tables. A project ID environment variable does not
+restrict a personal token's authority. Use the transient job credential for opted-in workers, and
+do not print credentials or sensitive rows into job output.
+
+The host emits metadata-only access events for both APIs, including authorization denials. New
+MCP `query_project_data` and `save_sql_chart` Inspector traces omit SQL, chart names, returned data,
+and database error details; the actual tool response is unchanged. Existing Inspector history is
+not rewritten. See [Setup](/wiki/setup) for audit collection requirements.
 
 A personal API token lets an approved script or integration read entity records and search the
 selected project. Create one under **Settings → API tokens**. The secret is shown once, so copy it

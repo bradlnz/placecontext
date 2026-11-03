@@ -95,6 +95,27 @@ failures after execution starts are not automatically retried, to avoid repeatin
 timeouts start when the workload container starts, separately from the queue deadline. Scheduler
 messages appear in live output and retried startup failures are retained in the final diagnostics.
 
+## Data access audit collection
+
+The host logger category `PlaceContext.Host.Auth.DataAccessAuditMiddleware` emits Information-level
+event `7100` (`DataAccess`) for table-list and query requests to `/api/v1/projects/{projectId}/data`
+and `/api/v1/job-data`. Events include the resolved tenant, authenticated user or run identifier,
+authentication scheme, action, project/job/run identifiers where available, HTTP status, outcome,
+duration, a generated audit ID, and the current trace ID when tracing is active. Rejected credentials
+have no authenticated actor; job scope is recorded only after successful job authentication.
+
+Events exclude request/response bodies, SQL, credentials, email addresses, and exception details.
+They wrap authentication and authorization, so denied requests are included; disconnected requests
+are marked `cancelled` with status `499`. These are server-side outcomes, not proof that a client
+received every response byte. Requests rejected before tenant resolution/routing are not covered.
+
+Production must collect host logs into an access-controlled destination with an agreed retention
+period, restricted deletion, and delivery monitoring. Keep this category enabled at Information or
+lower. The default console provider alone does not establish durable or tamper-resistant evidence;
+log collection is not a fail-closed authorization control. Confirm collection with a successful read,
+a denied read, and an invalid query, then retain evidence of those checks. Broader audit coverage
+(including portal, entity APIs, permission changes, and exports) remains in the security backlog.
+
 ## Storage and backups
 
 The vector adapters encrypt stored source text (and content source keys) using the existing
