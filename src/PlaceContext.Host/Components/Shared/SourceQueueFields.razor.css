@@ -1,0 +1,8 @@
+.queue-fields { display:grid; gap:14px; clear:both; }
+label { display:flex; flex-direction:column; gap:7px; color:var(--text-2); font-size:12px; min-width:0; }
+.dcinput { width:100%; box-sizing:border-box; font-size:12px; }
+small, p { color:var(--text-3); font-size:11px; line-height:1.6; margin:0; }
+.queue-help { display:flex; align-items:center; gap:16px; font-size:12px; }
+.queue-help a { color:var(--brand-2); }
+.trim-option { flex-direction:row; align-items:center; }
+.trim-option input { accent-color:var(--brand); }

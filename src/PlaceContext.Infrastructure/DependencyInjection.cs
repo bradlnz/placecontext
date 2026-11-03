@@ -152,6 +152,20 @@ public static class DependencyInjection
 
         // Shared, persisted MCP tool-call log (singleton; opens short-lived scopes).
         services.AddSingleton<IToolCallLog, EfToolCallLog>();
+        services.AddScoped<PlaceContext.Application.DataSources.IDataSourceStore, DataSources.EfDataSourceStore>();
+        services.AddScoped<PlaceContext.Application.DataSources.ISourceQueueDelivery, DataSources.SourceQueueDelivery>();
+        services.AddScoped<DataSources.DatabaseSourceReader>();
+        services.AddScoped<DataSources.ConnectedSourceReader>();
+        services.AddScoped<PlaceContext.Application.DataSources.IDataSourceReader>(sp => sp.GetRequiredService<DataSources.ConnectedSourceReader>());
+        services.AddScoped<PlaceContext.Application.DataSources.IDataSourceDiscovery>(sp => sp.GetRequiredService<DataSources.ConnectedSourceReader>());
+        services.AddScoped<PlaceContext.Application.DataSources.IDataFeedAccess>(sp => sp.GetRequiredService<DataSources.ConnectedSourceReader>());
+        services.AddHttpClient("data-source", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
+            client.MaxResponseContentBufferSize = 8_000_000;
+        })
+            .RemoveAllLoggers()
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
         // EF repositories.
         services.AddScoped<IProjectRepository, EfProjectRepository>();

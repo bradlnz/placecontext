@@ -21,14 +21,6 @@
 <div class="page data-page sql-studio-page">
 
     <DataTabs ProjectId="ProjectId" Active="@DataSection.Tables" />
-    <AuthorizeView Policy="@Policies.DatabaseInspection">
-        <label class="database-source">Database
-            <select class="dcinput" value="@(ApplicationDatabase ? "application" : "project")" @onchange="SwitchDatabase">
-                <option value="project">Project database</option>
-                <option value="application">PlaceContext database</option>
-            </select>
-        </label>
-    </AuthorizeView>
     @if (Vm.Error is { } databaseError)
     {
         <p class="studio-note" role="alert">@databaseError</p>
@@ -40,6 +32,14 @@
 
     <section class="sql-studio">
         <aside class="studio-sidebar">
+            <AuthorizeView Policy="@Policies.DatabaseInspection">
+                <label class="database-source">Database
+                    <select class="dcinput" value="@(ApplicationDatabase ? "application" : "project")" @onchange="SwitchDatabase">
+                        <option value="project">Project database</option>
+                        <option value="application">PlaceContext database</option>
+                    </select>
+                </label>
+            </AuthorizeView>
             <div class="studio-sidebar-tabs">
                 <button class="studio-sidebar-tab @(Vm.SidebarPane == SidebarPane.Tables ? "active" : "")"
                         @onclick="() => Vm.ShowPane(SidebarPane.Tables)">Tables</button>
@@ -252,7 +252,7 @@
                     {
                         @if (activeTab.Result is { Columns.Count: > 0 })
                         {
-                            <div class="studio-results">
+                            <div class="studio-results" @key="activeTab">
                                 <table class="studio-result-table">
                                     <thead>
                                         <tr>
@@ -265,7 +265,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <Virtualize Items="@FilteredResultRows(activeTab)" Context="row" ItemSize="24">
+                                        <Virtualize Items="@FilteredResultRows(activeTab)" Context="row" ItemSize="24" SpacerElement="tr">
                                             <tr @onclick="@(() => SelectRow(row.Index))" class="@(_selectedRowIndex == row.Index ? "selected" : "")">
                                                 <td class="result-row-num">@(row.Index + 1)</td>
                                                 @for (var i = 0; i < activeTab.Result!.Columns.Count; i++)
@@ -607,6 +607,8 @@
         public ProjectQueryResult? Result { get; set; }
         public string? Error { get; set; }
         public bool Running { get; set; }
+        public string ResultFilter { get; set; } = "";
+        public ResultsPane ResultsPane { get; set; } = ResultsPane.Table;
     }
 
     private enum ResultsPane { Table, Chart }
@@ -616,8 +618,28 @@
     private string? _jsonViewerTitle;
     private string? _jsonViewerValue;
     private string _tableFilter = "";
-    private string _resultFilter = "";
-    private ResultsPane _resultsPane = ResultsPane.Table;
+    private string _resultFilter
+    {
+        get => ActiveTableTab?.ResultFilter ?? "";
+        set
+        {
+            if (ActiveTableTab is { } tab)
+            {
+                tab.ResultFilter = value;
+            }
+        }
+    }
+    private ResultsPane _resultsPane
+    {
+        get => ActiveTableTab?.ResultsPane ?? ResultsPane.Table;
+        set
+        {
+            if (ActiveTableTab is { } tab)
+            {
+                tab.ResultsPane = value;
+            }
+        }
+    }
     private int? _selectedRowIndex;
     private string? _lastChartJson;
     private string? _lastRenderKey;

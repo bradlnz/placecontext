@@ -75,8 +75,27 @@ public sealed class JobDataAccessTests
         Assert.Equal(1, reader.Calls);
     }
 
+    [Fact]
+    public async Task Source_sync_grant_is_only_given_to_the_stage_that_requested_it()
+    {
+        var jobs = new InMemoryJobRepository();
+        var runner = new FakeWorkloadRunner();
+        var clock = new FakeClock(DateTimeOffset.UtcNow);
+        var sourceId = Guid.NewGuid();
+        var handler = new RunJobHandler(jobs, new InMemoryJobRunRepository(), runner, new RecordingUnitOfWork(), clock, dataTokens: new Tokens());
+        var job = Job.Create(Guid.NewGuid(), "Sync", null,
+            new MapSpec("worker", ["{}"], new Dictionary<string, string> { ["PC_USE_PROJECT_DATA"] = "true", ["PC_SYNC_SOURCE_ID"] = sourceId.ToString() }),
+            new ReduceSpec("worker", new Dictionary<string, string> { ["PC_USE_PROJECT_DATA"] = "true" }),
+            1, ExitCodePolicy.Default, clock.UtcNow, allowNetworkEgress: true);
+        await jobs.AddAsync(job);
+        await handler.HandleAsync(new RunJobCommand(job.Id));
+        Assert.Equal("source-" + sourceId, runner.ReceivedRequests[0].Env["PC_DATA_TOKEN"]);
+        Assert.Equal("issued-credential", runner.ReceivedRequests[1].Env["PC_DATA_TOKEN"]);
+    }
+
     private sealed class Access(Guid? project) : IJobDataAccess
     {
+        public Guid RequireSourceId() => throw new UnauthorizedAccessException();
         public Guid RequireProjectId() => project ?? throw new UnauthorizedAccessException();
     }
 
@@ -97,7 +116,7 @@ public sealed class JobDataAccessTests
         public int Calls;
         public Guid RunId;
         public bool Deny;
-        public Task<string> CreateAsync(Guid runId, CancellationToken ct = default)
+        public Task<string> CreateAsync(Guid runId, CancellationToken ct = default, Guid? sourceId = null)
         {
             Calls++;
             RunId = runId;
@@ -105,7 +124,7 @@ public sealed class JobDataAccessTests
             {
                 throw new UnauthorizedAccessException();
             }
-            return Task.FromResult("issued-credential");
+            return Task.FromResult(sourceId is { } id ? "source-" + id : "issued-credential");
         }
         public Task<JobDataGrant?> ValidateAsync(string token, CancellationToken ct = default)
             => throw new NotSupportedException();

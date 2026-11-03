@@ -1,0 +1,290 @@
+@page "/project/{ProjectId:guid}/sources"
+@using PlaceContext.Application.Access
+@using PlaceContext.Application.DataSources
+@using PlaceContext.Host.Components.ViewModels
+@attribute [Authorize(Policy = Permission.DataRead)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@inject DataSourcesViewModel Vm
+@implements IDisposable
+
+<PageTitle>PlaceContext — Data sources</PageTitle>
+<div class="page source-page @(Vm.ShowConnect ? "setting-up" : "")">
+    <DataTabs ProjectId="ProjectId" Active="@DataSection.Sources" />
+    <header class="source-page-head">
+        <div><h1>Sources</h1><p>Import data from databases, lakes and feeds into one workspace.</p></div>
+        <AuthorizeView Policy="@Permission.SecretsManage">
+            <button class="dcbtn primary" disabled="@(Vm.Busy || Vm.ShowConnect)" aria-expanded="@Vm.ShowConnect" aria-controls="source-connect" @onclick="Vm.OpenConnectAsync"><AppIcon Kind="plus" /> Connect source</button>
+        </AuthorizeView>
+    </header>
+    @if (!Vm.ShowConnect && Vm.FeedToken is not null && Vm.FeedSourceId is { } feedId)
+    {
+        <section class="dccard feed-setup" aria-label="Feed credentials">
+            <h2>Connect your inbound feed</h2><p>Copy this token now. It is shown only in this session. Keep it out of chat and logs.</p>
+            <label for="feed-token">Bearer token<input id="feed-token" class="dcinput" type="password" readonly value="@Vm.FeedToken" autocomplete="off" /></label>
+            <label for="feed-endpoint">Endpoint<input id="feed-endpoint" class="dcinput" readonly value="@($"/api/v1/projects/{ProjectId}/sources/{feedId}/inbound" + (Vm.Sources.FirstOrDefault(source => source.Id == feedId)?.Provider == "email" ? "/email" : ""))" /></label>
+            <p>Use your workspace URL and send the token in the Authorization: Bearer header. <a href="/wiki/project-data">Payload and forwarding guide</a></p>
+        </section>
+    }
+    <div class="source-status-slot" aria-busy="@Vm.Busy">
+        @if (Vm.Error is not null)
+        {
+            <div role="alert" class="source-message error">@Vm.Error</div>
+        }
+        else if (Vm.Busy)
+        {
+            <div role="status" class="source-message">Working…</div>
+        }
+        else if (Vm.Notice is not null || Vm.StatusError is not null)
+        {
+            <div role="status" class="source-message @(Vm.Notice is not null ? "success" : "")">@(Vm.Notice ?? Vm.StatusError)</div>
+        }
+    </div>
+
+    @if (Vm.ShowConnect)
+    {
+        <AuthorizeView Policy="@Permission.SecretsManage">
+            <section id="source-connect" class="dccard connect-panel" aria-labelledby="connect-title">
+                <div class="panel-head"><div><span class="source-eyebrow">NEW SOURCE · STEP @Vm.SetupStep OF 3</span><h2 id="connect-title">@Vm.SetupTiles[Vm.SetupStep - 1].Title</h2></div><span class="source-badge provider-badge" title="@Vm.ProviderInfo.Name"><img src="@($"/images/sources/{Vm.Provider}.svg")" width="24" height="24" alt="" /><span>@Vm.ProviderInfo.Name</span></span></div>
+                <nav class="setup-tiles" aria-label="Source setup steps">
+                    @foreach (var tile in Vm.SetupTiles)
+                    {
+                        <button type="button" @key="tile.Step" class="setup-tile @tile.Status" disabled="@(!Vm.CanOpenStep(tile.Step))" aria-current="@(Vm.SetupStep == tile.Step ? "step" : null)" @onclick="() => Vm.OpenStep(tile.Step)">
+                            <span class="step-number">@if (tile.Status == "complete") { <AppIcon Kind="check" /> } else { @tile.Step }</span>
+                            <span><strong>@tile.Title</strong><small>@tile.Description</small></span>
+                        </button>
+                    }
+                </nav>
+                <form @onsubmit="Vm.CreateAsync" @onsubmit:preventDefault>
+                    <div class="setup-body" tabindex="0" role="region" aria-label="@Vm.SetupTiles[Vm.SetupStep - 1].Title">
+                    <fieldset disabled="@Vm.Busy" class="connection-fields" hidden="@(Vm.SetupStep != 1)">
+                        <legend>Choose the source</legend>
+                        <div class="provider-tiles" aria-label="Source providers">@foreach (var provider in Vm.ConnectableProviders)
+                        {
+                            <button type="button" @key="provider.Id" class="provider-tile @(Vm.Provider == provider.Id ? "selected" : "")" aria-pressed="@(Vm.Provider == provider.Id)" @onclick="() => Vm.SetProvider(provider.Id)"><span class="provider-art"><img src="@($"/images/sources/{provider.Id}.svg")" width="48" height="48" alt="" /></span><strong>@provider.Name</strong><small>@provider.Kind</small></button>
+                        }</div>
+                        <div class="source-form connection-grid">
+                            <label for="source-name">Source name<input id="source-name" class="dcinput" @bind="Vm.Name" required maxlength="100" placeholder="e.g. Customer knowledge" /></label>
+                            @foreach (var field in Vm.ProviderInfo.Fields)
+                            {
+                                <label @key="field.Key" for="@($"source-{field.Key}")">@field.Label<input id="@($"source-{field.Key}")" class="dcinput" type="@(field.Secret ? "password" : "text")" value="@Vm.ConnectionFields[field.Key]" @onchange="e => Vm.SetConnectionField(field.Key, e.Value?.ToString())" maxlength="8192" autocomplete="off" /></label>
+                            }
+                        </div>
+                        @if (Vm.ProviderInfo.Kind != "feed")
+                        {
+                            <p class="source-footnote">Use a read-only account and a trusted TLS certificate.</p>
+                            <button type="button" class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.DiscoverAsync"><AppIcon Kind="refresh" /> Connect &amp; discover data</button>
+                        }
+                        else
+                        {
+                            <p>@(Vm.Provider == "email" ? "Forward plain-text messages from your email service. Message IDs prevent duplicate delivery; attachments are not imported." : "Push JSON records from a platform or processing job. Stable record IDs make updates repeatable.") A private token is generated when setup is saved.</p>
+                        }
+                    </fieldset>
+                    <fieldset disabled="@Vm.Busy" class="connection-fields" hidden="@(Vm.SetupStep != 2)">
+                        <legend>Select and approve fields</legend>
+                        <div class="source-form fields-grid">
+                            <label for="source-dataset" class="wide-field">Dataset<select id="source-dataset" class="dcinput" value="@Vm.DatasetIndex" @onchange="e => Vm.SelectDataset(int.Parse(e.Value!.ToString()!))">@for (var i = 0; i < Vm.Datasets.Count; i++) { var dataset = Vm.Datasets[i]; <option value="@i">@dataset.Schema.@dataset.Table</option> }</select></label>
+                            <label for="source-key">Unique key<input id="source-key" class="dcinput" @bind="Vm.KeyColumn" @bind:after="Vm.InvalidateFieldApprovals" required maxlength="63" /></label>
+                            <label for="source-columns" class="wide-field">Approved fields<input id="source-columns" class="dcinput" @bind="Vm.Columns" @bind:after="Vm.InvalidateFieldApprovals" required /><small>Remove fields this project should not receive. Include a unique key.</small></label>
+                        </div>
+                        @if (Vm.ProviderInfo.Kind == "files") { <p>Each TXT, Markdown, CSV, JSON or JSONL file becomes a document. Query Parquet/Delta tables through a SQL connector.</p> }
+                        <label class="source-check"><input id="source-approved" type="checkbox" @bind="Vm.FieldsApproved" required /><span><strong>Approve these fields for project readers</strong><small>Anyone with data access to this project can read the selected fields.</small></span></label>
+                    </fieldset>
+                    <fieldset disabled="@Vm.Busy" class="connection-fields retrieval-options" hidden="@(Vm.SetupStep != 3)">
+                        <legend>Organise, sanitise and queue</legend>
+                        <label for="source-tags">Dataset tags<input id="source-tags" class="dcinput" @bind="Vm.Tags" placeholder="knowledge, support" /></label>
+                        <p>Pull → organise and sanitise → queue → processing workflow.</p>
+                        <SourceQueueFields Vm="Vm" />
+                    </fieldset>
+                    </div>
+                    @if (Vm.SetupStep == 3 && !Vm.QueueId.HasValue)
+                    {
+                        <p class="source-access-note" role="status">Choose a destination queue to enable Save source. If there are no queues, use Manage queues to create one, then refresh the list.</p>
+                    }
+                    <div class="connect-footer"><span>Up to 1,000 records per source. <a href="/wiki/project-data">Setup guide</a></span><div class="source-actions"><button type="button" class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.CloseConnect">Cancel</button><button type="button" class="dcbtn" disabled="@(Vm.Busy || Vm.SetupStep == 1)" @onclick="() => Vm.OpenStep(Vm.SetupStep - 1)">Back</button>@if (Vm.SetupStep < 3) { <button type="button" class="dcbtn primary" disabled="@(!Vm.CanOpenStep(Vm.SetupStep + 1))" @onclick="Vm.ContinueSetup">Continue <AppIcon Kind="arrow-right" /></button> } else { <button type="submit" class="dcbtn primary" disabled="@(Vm.Busy || !Vm.CanSave)">Save source</button> }</div></div>
+                </form>
+            </section>
+        </AuthorizeView>
+    }
+
+    @if (Vm.Sources.Count == 0 && !Vm.ShowConnect)
+    {
+        <section class="dccard source-empty" aria-labelledby="source-empty-title">
+            <div class="panel-head"><div><h2 id="source-empty-title">Connect your first source</h2><p>Choose where your data lives to get started.</p></div></div>
+            <AuthorizeView Policy="@Permission.SecretsManage">
+                <Authorized>
+                    <div class="provider-tiles source-catalog-picker">
+                        @foreach (var provider in Vm.ConnectableProviders)
+                        {
+                            <button type="button" @key="provider.Id" class="provider-tile" disabled="@Vm.Busy" @onclick="() => Vm.OpenConnectAsync(provider.Id)"><span class="provider-art"><img src="@($"/images/sources/{provider.Id}.svg")" width="48" height="48" alt="" /></span><strong>@provider.Name</strong><small>@(provider.Kind switch { "database" => "Database tables", "files" => "Files and documents", "warehouse" => "Warehouse tables", _ => "Incoming messages and events" })</small></button>
+                        }
+                    </div>
+                </Authorized>
+                <NotAuthorized><p class="source-access-note">Ask a workspace administrator to connect a source.</p></NotAuthorized>
+            </AuthorizeView>
+        </section>
+    }
+
+    @if (Vm.Sources.Count > 0 && !Vm.ShowConnect)
+    {
+        <section class="source-summary" aria-label="Source summary">
+            <div><strong>@Vm.Sources.Count</strong><span>connected sources</span></div>
+            <div><strong>@Vm.Sources.Sum(source => source.RecordCount).ToString("N0")</strong><span>imported records</span></div>
+            <div><strong>@Vm.Sources.Count(source => source.EnableEmbeddings)</strong><span>semantic datasets</span></div>
+        </section>
+        <section class="dccard source-catalog" aria-labelledby="connected-title">
+            <div class="panel-head"><h2 id="connected-title">Connected sources</h2><span class="source-footnote">Select a source to explore its data</span></div>
+            <div class="source-table-scroll">
+                <table class="source-table">
+                    <thead><tr><th scope="col">Source</th><th scope="col">Table</th><th scope="col">Records</th><th scope="col">Destination</th><th scope="col">Last sync</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+                    <tbody>
+                    @foreach (var source in Vm.Sources)
+                    {
+                        <tr @key="source.Id" class="@(Vm.SelectedSourceId == source.Id ? "selected" : "")">
+                            <td><button class="source-select" disabled="@Vm.Busy" aria-pressed="@(Vm.SelectedSourceId == source.Id)" @onclick="() => Vm.SelectSource(source.Id)"><span class="provider-art compact-art"><img src="@($"/images/sources/{source.Provider}.svg")" width="28" height="28" alt="" /></span><span><strong>@source.Name</strong><small>@SourceProviders.Get(source.Provider).Name</small></span></button></td>
+                            <td class="source-table-name">@source.Schema.@source.Table</td>
+                            <td>@source.RecordCount.ToString("N0")</td>
+                            <td><span class="source-badge">@(source.Queue is not null ? "Queue" : source.EnableEmbeddings ? "Semantic" : "Keyword")</span></td>
+                            <td>@if (source.SyncedAt is { } at) { <span class="sync-state synced"><span aria-hidden="true"></span>@Vm.Presentation.DateTime(at)</span> } else { <span class="sync-state pending"><span aria-hidden="true"></span>Not synced</span> }</td>
+                            <td><div class="source-row-actions">
+                                <AuthorizeView Policy="@Permission.DataWrite"><button class="dcbtn compact" disabled="@Vm.Busy" aria-label="Sync @source.Name" @onclick="() => Vm.SyncAsync(source.Id)"><AppIcon Kind="refresh" /> Sync</button></AuthorizeView>
+                                <AuthorizeView Policy="@Permission.SecretsManage"><button class="dcbtn compact" disabled="@Vm.Busy" aria-label="Delete @source.Name" aria-haspopup="dialog" @onclick="() => Vm.RequestDelete(source.Id)"><AppIcon Kind="trash" /> Delete</button></AuthorizeView>
+                            </div></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+
+    @if (!Vm.ShowConnect && Vm.SelectedSource is { } selected)
+    {
+        <div class="selected-source-head"><div><h2>@selected.Name</h2><p>@selected.Columns.Count selected fields · @selected.Schema.@selected.Table</p></div><div class="source-tags">@foreach (var tag in selected.Tags) { <span class="source-badge">@tag</span> }</div></div>
+        <section class="dccard execution-status" aria-live="polite" aria-label="Import status">
+            <div><h2>@(Vm.ExecutionStatus switch { "running" => "Importing data", "needs-review" => "Records need review", "completed" => "Import complete", "failed" => "Import failed", "interrupted" => "Import interrupted", _ => "Ready to import" })</h2>
+                <p>@(selected.Execution is { Status: not "pending" } run ? $"{run.Processed} of {run.Total} records processed · {run.Held} held for review" : SourceProviders.Get(selected.Provider).Kind == "feed" ? "Send data to the feed endpoint to start importing." : "Run a sync to import the selected fields.")</p>
+                @if (selected.Processing is not null) { <small>An existing review policy applies to this source.</small> }
+                @if (Vm.ExecutionStatus is "failed" or "interrupted") { <p>Previous data was retained. Check the connection and settings before retrying.</p> }
+                @if (Vm.ExecutionStatus == "needs-review") { <p>Held records are visible in the preview and excluded from queue delivery and retrieval.</p> }
+                @if (selected.Queue is not null && selected.Execution is { Status: "completed" or "needs-review" }) { <p>Valid changes have been sent to the destination queue. Follow processing progress in the queue.</p> }
+            </div>
+            <AuthorizeView Policy="@Permission.DataWrite"><button class="dcbtn" disabled="@(Vm.Busy || Vm.ExecutionStatus == "running")" @onclick="() => Vm.SyncAsync(selected.Id)"><AppIcon Kind="refresh" /> Sync now</button></AuthorizeView>
+            <progress class="@(Vm.ExecutionStatus == "running" ? "" : "inactive-progress")" max="@Math.Max(1, selected.Execution?.Total ?? 0)" value="@(selected.Execution?.Processed ?? 0)" aria-label="Records imported" aria-hidden="@(Vm.ExecutionStatus != "running")"></progress>
+        </section>
+        <div class="source-explorer">
+            <section class="dccard preview-panel" aria-labelledby="preview-title">
+                <div class="panel-head"><div><h2 id="preview-title">Imported records</h2><p>Inspect preparation results and expand records to view their data.</p></div><button class="dcbtn compact" disabled="@Vm.Busy" @onclick="() => Vm.PreviewAsync(selected.Id)"><AppIcon Kind="refresh" /> Preview records</button></div>
+                @if (Vm.Preview is { } preview)
+                {
+                    <SourceRecordLogs @key="selected.Id" Source="selected" Records="preview" />
+                }
+                else
+                {
+                    <div class="panel-empty"><AppIcon Kind="data" /><p>Your imported data, ready to explore.</p><span>Choose Preview records to inspect the selected fields.</span></div>
+                }
+            </section>
+            <section class="dccard retrieval-panel" aria-labelledby="retrieval-title">
+                @if (selected.Queue is { } destination)
+                {
+                    <div class="panel-head"><div><h2 id="retrieval-title">Preparation &amp; delivery</h2><p>Approved fields are organised and sanitised before queueing.</p></div></div>
+                    <div class="workflow-body">
+                        <p>Records with missing required fields or conflicting keys stay here for review. Correct the source and sync again.</p>
+                        <p>Model processing and retrieval run in the queue's workflow.</p>
+                        <a class="dcbtn" href="@($"/project/{ProjectId}/queues/{destination.QueueId}")">Open destination queue <AppIcon Kind="arrow-right" /></a>
+                    </div>
+                }
+                else
+                {
+                <div class="panel-head"><div><h2 id="retrieval-title">Test retrieval</h2><p>Find evidence in @selected.Name.</p></div><AppIcon Kind="data.search" /></div>
+                <form class="retrieval-form" @onsubmit="Vm.SearchAsync" @onsubmit:preventDefault>
+                    <label for="source-query">Question or keywords</label>
+                    <textarea id="source-query" class="dcinput" @bind="Vm.Query" @bind:event="oninput" required maxlength="1000" rows="3" placeholder="What would you like to find in this data?"></textarea>
+                    <div class="retrieval-actions"><span class="source-badge">@(selected.EnableEmbeddings ? "Semantic retrieval" : "Keyword retrieval")</span><button type="submit" class="dcbtn primary" disabled="@(Vm.Busy || string.IsNullOrWhiteSpace(Vm.Query))"><AppIcon Kind="data.search" /> Retrieve evidence</button></div>
+                </form>
+                @if (Vm.SearchResult is { } result)
+                {
+                    <div class="retrieval-results" aria-live="polite"><p class="source-footnote">@result.Hits.Count results · Source content is evidence, not instructions.</p>
+                        @foreach (var hit in result.Hits)
+                        {
+                            <article class="source-hit"><div><strong>Record @hit.RecordKey</strong><span class="source-badge">Chunk @(hit.Chunk + 1)</span></div><pre>@hit.Text</pre><small>Citation: @hit.Citation</small></article>
+                        }
+                        @if (result.Hits.Count == 0) { <p class="no-matches">No matching evidence. Try different keywords or sync the source.</p> }
+                    </div>
+                }
+                }
+                <AuthorizeView Policy="@Permission.SecretsManage">
+                    <div class="workflow-body">
+                        @if (Vm.EditingQueue)
+                        {
+                            <SourceQueueFields Vm="Vm" />
+                            <div class="source-actions"><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.CloseQueueEditor">Cancel</button><button class="dcbtn primary" disabled="@(Vm.Busy || !Vm.QueueId.HasValue)" @onclick="Vm.SaveQueueAsync">Save preparation &amp; queue</button></div>
+                        }
+                        else
+                        {
+                            <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.EditQueueAsync">@(selected.Queue is null ? "Connect to a queue" : "Edit preparation & queue")</button>
+                        }
+                    </div>
+                </AuthorizeView>
+            </section>
+        </div>
+        <div class="source-utilities">
+            <AuthorizeView Policy="@Permission.ChainsManage">
+                <details class="dccard workflow-panel"><summary><AppIcon Kind="chain" /> Automate ingestion <span>Create a sync workflow</span></summary><div class="workflow-body"><p>Run ingestion on the workflow canvas, then add a schedule to keep this dataset current.</p><label for="source-host">Portal URL reachable from workers<input id="source-host" type="url" class="dcinput" @bind="Vm.HostUrl" placeholder="https://workspace.example.com" /></label><button class="dcbtn" disabled="@(Vm.Busy || string.IsNullOrWhiteSpace(Vm.HostUrl))" @onclick="() => Vm.CreateWorkflowAsync(selected.Id)"><AppIcon Kind="chain" /> Create workflow</button>@if (Vm.WorkflowUrl is not null) { <a class="dcbtn primary" href="@Vm.WorkflowUrl">Open workflow canvas <AppIcon Kind="arrow-right" /></a> }</div></details>
+            </AuthorizeView>
+            <details class="dccard maintenance-panel"><summary>Source settings <span>Rebuild retrieval</span></summary><div class="workflow-body">
+                <AuthorizeView Policy="@Permission.DataWrite"><p>Rebuild retrieval after changing your embedding model.</p><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.SyncAsync(selected.Id, true)"><AppIcon Kind="refresh" /> Rebuild retrieval</button></AuthorizeView>
+
+            </div></details>
+        </div>
+    }
+</div>
+
+@if (Vm.PendingDelete is { } deleteId && Vm.Sources.FirstOrDefault(source => source.Id == deleteId) is { } deleting)
+{
+    <AuthorizeView Policy="@Permission.SecretsManage">
+        <div class="dcmodal-overlay source-delete-overlay" @onclick="Vm.CancelDelete" @onkeydown="CloseDeleteOnEscape">
+            <section class="dcmodal source-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-source-title" aria-describedby="delete-source-description" @onclick:stopPropagation="true">
+                <div class="dcmodal-head"><h2 id="delete-source-title">Delete source?</h2><button class="dcslide-x" disabled="@Vm.Busy" aria-label="Close delete confirmation" @onclick="Vm.CancelDelete"><AppIcon Kind="close" /></button></div>
+                <div class="dcmodal-body"><p id="delete-source-description">Delete <strong>@deleting.Name</strong> and its @deleting.RecordCount imported records, retrieval index and saved credentials? The original data is kept. This cannot be undone.</p>
+                    @if (Vm.Error is not null) { <p role="alert">@Vm.Error</p> }
+                </div>
+                <div class="dcmodal-foot"><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.CancelDelete">Cancel</button><button class="dcbtn danger" disabled="@Vm.Busy" @onclick="() => Vm.DeleteAsync(deleteId)">@(Vm.Busy ? "Deleting…" : "Delete source")</button></div>
+            </section>
+        </div>
+    </AuthorizeView>
+}
+
+@code {
+    private void CloseDeleteOnEscape(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Vm.CancelDelete();
+        }
+    }
+    [Parameter] public Guid ProjectId { get; set; }
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    [Parameter, SupplyParameterFromQuery(Name = "connect")] public string? ConnectProvider { get; set; }
+    private (Guid, string?)? _appliedConnection;
+    private Guid? _loadedProject;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedProject != ProjectId)
+        {
+            _loadedProject = ProjectId;
+            await Vm.InitializeAsync(ProjectId);
+            Vm.StartStatusPolling();
+        }
+        var request = (ProjectId, ConnectProvider);
+        if (_appliedConnection != request && Vm.ConnectableProviders.Any(provider => provider.Id == ConnectProvider))
+        {
+            _appliedConnection = request;
+            await Vm.OpenConnectAsync(ConnectProvider!);
+        }
+    }
+    public void Dispose()
+    {
+        Vm.StopStatusPolling();
+        Vm.Detach();
+    }
+}

@@ -1,4 +1,4 @@
-.bell-btn { position:relative; width:30px; height:30px; min-width:30px; min-height:30px; flex:none; border-radius:3px; border:1px solid var(--border); background:var(--card); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2); transition:background .12s ease, border-color .12s ease, color .12s ease; }
+.bell-btn { position:relative; width:32px; height:32px; min-width:32px; min-height:32px; flex:none; border-radius:3px; border:1px solid var(--border); background:var(--card); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2); transition:background .12s ease, border-color .12s ease, color .12s ease; }
 .bell-btn:hover { background:var(--hover); border-color:var(--border-2); color:var(--text); }
 .bell-icon { width:16px; height:16px; flex:none; }
 .bell-badge { position:absolute; top:-5px; right:-5px; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:var(--brand); color:#fff; font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
@@ -31,6 +31,7 @@
 @keyframes dcspin { to { transform: rotate(360deg); } }
 
 @media (max-width: 600px) {
+    .bell-btn { width:40px; height:40px; min-width:40px; min-height:40px; }
     .pane {
         top: 56px;
         left: 8px;

@@ -45,7 +45,8 @@
 .entity-summary span { margin-top: 2px; color: var(--text-3); font-size: 10.5px; }
 
 .entity-suite { overflow: hidden; margin-bottom: 16px; }
-.entity-suite-head { padding: 13px 16px; border-bottom: 1px solid var(--border); }
+.entity-suite-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; border-bottom: 1px solid var(--border); }
+.catalogue-search { width: min(420px, 55%); font-size: 12px; }
 .entity-suite-head > div { display: flex; flex-direction: column; gap: 2px; }
 .entity-suite-head strong { font-size: 12.5px; }
 .entity-suite-head span { color: var(--text-3); font-size: 10.5px; }
@@ -57,9 +58,8 @@
     align-items: center;
     gap: 12px;
     min-width: 0;
-    padding: 12px 16px;
+    padding: 20px 16px;
     border-bottom: 1px solid var(--border);
-    cursor: pointer;
 }
 
 .entity-row:last-child { border-bottom: 0; }
@@ -68,7 +68,11 @@
 .entity-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; }
 .entity-copy { min-width: 0; }
 .entity-copy > div:first-child { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.entity-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.entity-name { color: var(--text); text-decoration: none; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.entity-name:hover { color: var(--brand-2); text-decoration: underline; }
+.entity-relations { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; font-size: 11px; }
+.entity-relations > span { color: var(--text-3); }
+.entity-relations a { color: var(--brand-2); text-decoration: none; }
 .entity-copy small { display: block; margin-top: 3px; color: var(--text-3); font-size: 10.5px; }
 .entity-table-chip { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 7px; border-radius: 5px; background: var(--card-2); color: var(--text-2); font: 10px var(--font-sans); }
 .entity-actions { display: flex; align-items: center; gap: 6px; }
@@ -105,7 +109,7 @@
 }
 
 .editor-slide {
-    width: 540px;
+    width: min(680px, 100vw);
 }
 
 .flex-1 {
@@ -262,4 +266,9 @@
     .entity-row { grid-template-columns: 32px minmax(0, 1fr); }
     .entity-actions { grid-column: 2; justify-content: flex-start; }
     .entity-copy > div:first-child { align-items: flex-start; flex-direction: column; gap: 4px; }
+    .entity-suite-head { align-items: stretch; flex-direction: column; }
+    .catalogue-search { width: 100%; }
+    .field-row { flex-direction: column; }
+    .rel-edit-row { flex-wrap: wrap; }
+    .rel-edit-row .dcinput { min-width: 100px; }
 }

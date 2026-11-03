@@ -4,4 +4,5 @@ namespace PlaceContext.Application.Jobs;
 public interface IJobDataAccess
 {
     Guid RequireProjectId();
+    Guid RequireSourceId();
 }

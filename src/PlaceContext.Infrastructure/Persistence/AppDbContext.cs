@@ -54,6 +54,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<DecisionRow> Decisions => Set<DecisionRow>();
     public DbSet<RequirementsRow> Requirements => Set<RequirementsRow>();
     public DbSet<UsageRow> UsageRecords => Set<UsageRow>();
+    public DbSet<DataSourceRow> DataSources => Set<DataSourceRow>();
+    public DbSet<SourceDocumentRow> SourceDocuments => Set<SourceDocumentRow>();
     public DbSet<ToolCallRow> ToolCalls => Set<ToolCallRow>();
     public DbSet<JobRow> Jobs => Set<JobRow>();
     public DbSet<JobRunRow> JobRuns => Set<JobRunRow>();
@@ -329,6 +331,23 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.ToTable("usage_records");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.ProjectId, x.RecordedAt });
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<DataSourceRow>(e =>
+        {
+            e.ToTable("data_sources");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Version).IsConcurrencyToken();
+            e.HasIndex(x => new { x.TenantId, x.ProjectId });
+            e.HasOne<ProjectRow>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
+        b.Entity<SourceDocumentRow>(e =>
+        {
+            e.ToTable("source_documents");
+            e.HasKey(x => new { x.SourceId, x.KeyHash });
+            e.HasOne<DataSourceRow>().WithMany().HasForeignKey(x => x.SourceId).OnDelete(DeleteBehavior.Cascade);
             e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 

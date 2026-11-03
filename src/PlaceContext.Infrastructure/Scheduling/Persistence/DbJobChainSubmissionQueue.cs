@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using System.Text.Json;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using PlaceContext.Application.Access;
@@ -131,7 +132,9 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         {
             await connection.OpenAsync(ct);
         }
-        await using var transaction = await connection.BeginTransactionAsync(ct);
+        // Source ingestion owns the transaction when its records and messages must commit together.
+        await using var ownedTransaction = _db.Database.CurrentTransaction is null ? await connection.BeginTransactionAsync(ct) : null;
+        var transaction = ownedTransaction ?? (NpgsqlTransaction)_db.Database.CurrentTransaction!.GetDbTransaction();
         if (idempotencyKey is not null)
         {
             // PostgreSQL can observe a concurrent ON CONFLICT row without making it visible to a
@@ -232,7 +235,10 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             }
         }
         ValidateRequest();
-        await transaction.CommitAsync(ct);
+        if (ownedTransaction is not null)
+        {
+            await ownedTransaction.CommitAsync(ct);
+        }
         return result;
     }
 

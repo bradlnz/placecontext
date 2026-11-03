@@ -964,6 +964,28 @@ public sealed class BuildChatTests
         }
     }
     [Fact]
+    public async Task Jev_selects_real_connectors_and_hands_credentials_to_a_project_scoped_form()
+    {
+        var projectId = Guid.NewGuid();
+        var dispatcher = new ToolDispatcher(projectId);
+        var permissions = new Permissions { Allowed = true };
+        var tools = new BuildTools(projectId, new PlaceContextService(dispatcher, null!, null!, null!), permissions, null!);
+        foreach (var provider in PlaceContext.Application.DataSources.SourceProviders.All)
+        {
+            var result = JsonSerializer.Serialize(await tools.prepare_data_source(provider.Id, default));
+            Assert.Contains($"/project/{projectId}/sources?connect={provider.Id}", result);
+            Assert.Contains("Awaiting secure connection", result);
+        }
+        Assert.Equal(0, dispatcher.Commands);
+        await Assert.ThrowsAsync<ArgumentException>(() => tools.prepare_data_source("invented", default));
+        permissions.Allowed = false;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.prepare_data_source("email", default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.source_connectors(default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.list_data_sources(default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.create_data_pipeline(Guid.NewGuid(), "https://example.com", default));
+    }
+
+    [Fact]
     public async Task Build_exposes_workflows_and_Jev_without_app_or_database_tools()
     {
         await using var fixture = new Fixture();

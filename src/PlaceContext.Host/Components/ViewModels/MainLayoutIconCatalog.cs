@@ -29,6 +29,7 @@ internal static class MainLayoutIconCatalog
             "edit" => "<path d='m16 3 5 5-12 12-6 1 1-6L16 3ZM13 6l5 5'/>",
             "trash" => "<path d='M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7'/>",
             "refresh" => "<path d='M20 7a9 9 0 0 0-15-2L2 8m0-5v5h5M4 17a9 9 0 0 0 15 2l3-3m0 5v-5h-5'/>",
+            "search" => "<circle cx='11' cy='11' r='7'/><path d='m20 20-4-4'/>",
             "download" => "<path d='M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5'/>",
             "arrow-right" => "<path d='M4 12h16m-6-6 6 6-6 6'/>",
             "chevron-down" => "<path d='m6 9 6 6 6-6'/>",

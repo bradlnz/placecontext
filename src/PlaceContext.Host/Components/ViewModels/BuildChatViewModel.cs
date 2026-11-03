@@ -88,6 +88,8 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             "Help me build a QEMU browser workflow to check a real website. Ask for the starting URL, the task and the expected result. Inspect existing workflows first. Use Live preview to guide the browser and AI verification to verify the outcome, with replay evidence and a clear pass or fail result."),
         ("Create a report", "Turn your data into a summary and useful charts.", "data.graph",
             "Help me build a report with a concise summary and charts. First inspect the project's existing jobs and data sources, then ask which data and questions the report should cover. Reuse existing work where possible, use real data, and make missing data clear. Ask whether this should run once or on a schedule."),
+        ("Connect data with Jev", "Choose a source and build its processing and retrieval pipeline.", "data",
+            "Help me connect data and choose a pipeline. Identify my source, inspect supported connectors and existing sources, and guide me through secure setup. Include databases, lakes, warehouses or inbound email as appropriate. Ask what data I have and what outcome I need."),
         ("Add a review step", "Check a result with AI review or ask a person to approve it.", "agent",
             "Help me add a review step to a workflow. Inspect the existing workflows and ask which one to use, what needs checking, and whether AI review or a person should review it. Define the approval criteria and an explicit path for approved, rejected or uncertain results. Preserve the other workflow steps."),
         ("Onboard a client", "Collect information and check what is still missing.", "human",

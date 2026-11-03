@@ -13,16 +13,19 @@
 
 <PageTitle>PlaceContext — Analytics</PageTitle>
 
-<div class="page">
+<div class="page analytics-page" data-tv-page>
 
-    <DataTabs ProjectId="ProjectId" Active="@DataSection.Analytics" />
+    <div class="analytics-navigation"><DataTabs ProjectId="ProjectId" Active="@DataSection.Analytics" /></div>
 
     <div class="page-head">
         <div>
             <h2 class="page-title">Analytics</h2>
-            <span class="page-sub">Charts query your project data automatically every 10 seconds. Pause updates to inspect a result.</span>
+            <span class="page-sub analytics-description">Charts query your project data automatically every 10 seconds. Pause updates to inspect a result.</span>
         </div>
         <div class="live-controls">
+            <span class="tv-status @(Vm.LiveEnabled ? "is-live" : "is-paused")" role="status"><span aria-hidden="true"></span>@(Vm.LiveEnabled ? "Live · refreshes every 10s" : "Live refresh paused")</span>
+            <button type="button" class="dcbtn tv-enter" data-tv-enter title="Present charts in full screen"><AppIcon Kind="fullscreen" /> TV mode</button>
+            <button type="button" class="dcbtn tv-exit" data-tv-exit title="Exit TV mode (Esc)"><AppIcon Kind="close" /> Exit TV mode</button>
             <label><input type="checkbox" @bind="Vm.LiveEnabled" /> Live · 10s</label>
             <button class="dcbtn" disabled="@Vm.Refreshing" @onclick="Vm.ReloadAsync">
                 <AppIcon Kind="refresh" /> @(Vm.Refreshing ? "Updating…" : "Refresh now")

@@ -12,7 +12,7 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Build;
 
-public sealed class BuildTools(Guid projectId, PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IOutcomeReviewer? reviewer = null)
+public sealed partial class BuildTools(Guid projectId, PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IOutcomeReviewer? reviewer = null)
 {
     public IReadOnlyList<AIFunction> Functions() => GetType().GetMethods()
         .Where(m => m.GetCustomAttribute<DescriptionAttribute>() is not null)

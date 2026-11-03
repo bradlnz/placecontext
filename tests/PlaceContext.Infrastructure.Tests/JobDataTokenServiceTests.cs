@@ -88,6 +88,25 @@ public sealed class JobDataTokenServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => outsider.CreateAsync(run.Id));
     }
 
+    [Fact]
+    public async Task Source_sync_requires_data_write_and_is_bound_to_a_source_in_the_run_project()
+    {
+        await using var db = CreateDatabase(out var tenant, out var clock);
+        var run = await AddRun(db, clock);
+        var source = new DataSourceRow { Id = Guid.NewGuid(), ProjectId = run.ProjectId, Version = Guid.NewGuid() };
+        var foreign = new DataSourceRow { Id = Guid.NewGuid(), ProjectId = Guid.NewGuid(), Version = Guid.NewGuid() };
+        db.DataSources.AddRange(source, foreign);
+        await db.SaveChangesAsync();
+        var protection = new EphemeralDataProtectionProvider();
+        var reader = new JobDataTokenService(db, protection, tenant, clock, new Permissions());
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => reader.CreateAsync(run.Id, sourceId: source.Id));
+        var writer = new JobDataTokenService(db, protection, tenant, clock, new Permissions(write: true));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => writer.CreateAsync(run.Id, sourceId: foreign.Id));
+        var grant = await writer.ValidateAsync(await writer.CreateAsync(run.Id, sourceId: source.Id));
+        Assert.Equal(source.Id, grant!.SourceId);
+        Assert.Null((await reader.ValidateAsync(await reader.CreateAsync(run.Id)))!.SourceId);
+    }
+
     private static AppDbContext CreateDatabase(out FakeCurrentTenant tenant, out FakeClock clock)
     {
         tenant = new FakeCurrentTenant(Guid.NewGuid());
@@ -108,10 +127,10 @@ public sealed class JobDataTokenServiceTests
         return row;
     }
 
-    private sealed class Permissions(bool allowed = true) : IPermissionService
+    private sealed class Permissions(bool allowed = true, bool write = false) : IPermissionService
     {
         public Task<bool> HasAsync(string permission, CancellationToken ct = default)
-            => Task.FromResult(allowed && permission == Permission.DataRead);
+            => Task.FromResult(allowed && (permission == Permission.DataRead || (write && permission == Permission.DataWrite)));
         public Task<IReadOnlySet<string>> GetEffectivePermissionsAsync(CancellationToken ct = default)
             => throw new NotSupportedException();
         public Task<IReadOnlySet<string>> GetEffectivePermissionsForUserAsync(Guid userId, string roleName, CancellationToken ct = default)

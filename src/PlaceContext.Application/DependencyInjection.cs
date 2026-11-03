@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Artifacts;
+using PlaceContext.Application.DataSources;
 using PlaceContext.Application.Cluster;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
@@ -24,6 +25,25 @@ public static class DependencyInjection
         services.AddScoped<IDispatcher, Dispatcher>();
         services.AddScoped<PlaceContextService>();
         services.AddScoped<DatabaseInspectionAccess>();
+        services.AddScoped<DataSources.DataSourcePipeline>();
+        services.AddScoped<SourceQueueApproval>();
+        services.AddScoped<ICommandHandler<ConfigureSourceQueueCommand, DataSourceDefinition>, ConfigureSourceQueueHandler>();
+        services.AddScoped<IQueryHandler<ListSourceQueuesQuery, IReadOnlyList<Jobs.ChainQueueDefinition>>, ListSourceQueuesHandler>();
+        services.AddScoped<ICommandHandler<ConfigureSourceProcessingCommand, DataSourceDefinition>, ConfigureSourceProcessingHandler>();
+        services.AddScoped<IQueryHandler<ReadJobSourceRecordsQuery, IReadOnlyList<SourceRecord>>, ReadJobSourceRecordsHandler>();
+        services.AddScoped<ICommandHandler<WriteJobSourceRecordsCommand, SourceSyncResult>, WriteJobSourceRecordsHandler>();
+        services.AddScoped<ICommandHandler<ReceiveDataFeedCommand, SourceSyncResult>, ReceiveDataFeedHandler>();
+        services.AddScoped<IQueryHandler<SearchProjectSourcesQuery, IReadOnlyList<DataSourceSearchResult>>, SearchProjectSourcesHandler>();
+        services.AddScoped<IQueryHandler<DiscoverDataSourceQuery, IReadOnlyList<SourceDataset>>, DiscoverDataSourceHandler>();
+        services.AddScoped<ICommandHandler<CreateDataSourceCommand, DataSourceDefinition>, CreateDataSourceHandler>();
+        services.AddScoped<ICommandHandler<DeleteDataSourceCommand, bool>, DeleteDataSourceHandler>();
+        services.AddScoped<ICommandHandler<SyncDataSourceCommand, SourceSyncResult>, SyncDataSourceHandler>();
+        services.AddScoped<IQueryHandler<ListDataSourcesQuery, IReadOnlyList<DataSourceDefinition>>, ListDataSourcesHandler>();
+        services.AddScoped<IQueryHandler<SearchDataSourceQuery, DataSourceSearchResult>, SearchDataSourceHandler>();
+        services.AddScoped<IQueryHandler<ReadSourceRecordsQuery, IReadOnlyList<SourceRecord>>, ReadSourceRecordsHandler>();
+        services.AddScoped<ICommandHandler<CreateSourceWorkflowCommand, Guid>, CreateSourceWorkflowHandler>();
+        services.AddScoped<ICommandHandler<SyncJobDataSourceCommand, SourceSyncResult>, SyncJobDataSourceHandler>();
+
         services.AddScoped<IQueryHandler<ListDatabaseTablesQuery, IReadOnlyList<DatabaseTable>>, ListDatabaseTablesHandler>();
         services.AddScoped<IQueryHandler<ReadDatabaseTableQuery, DatabaseTablePage>, ReadDatabaseTableHandler>();
         services.AddScoped<IQueryHandler<QueryDatabaseQuery, PlaceContext.Application.ProjectData.ProjectQueryResult>, QueryDatabaseHandler>();

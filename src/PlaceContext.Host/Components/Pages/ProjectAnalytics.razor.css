@@ -275,3 +275,48 @@
 
 .live-controls { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
 .live-controls label { display:flex; align-items:center; gap:6px; white-space:nowrap; color:var(--text-2); font-size:12px; }
+
+.tv-exit, .tv-status { display: none; }
+.tv-enter, .tv-exit { align-items: center; gap: 7px; }
+.tv-enter { display: inline-flex; }
+.analytics-page[data-tv-mode] {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    width: 100%;
+    height: 100dvh;
+    padding: 24px 32px 32px;
+    overflow: auto;
+    overscroll-behavior: contain;
+    background: var(--bg);
+    color: var(--text);
+}
+.analytics-page[data-tv-mode] .analytics-navigation,
+.analytics-page[data-tv-mode] .analytics-description,
+.analytics-page[data-tv-mode] .tv-enter,
+.analytics-page[data-tv-mode] .live-controls > label,
+.analytics-page[data-tv-mode] .live-controls > button:not(.tv-exit),
+.analytics-page[data-tv-mode] .section-head > button,
+.analytics-page[data-tv-mode] .sql-editor,
+.analytics-page[data-tv-mode] .chart-card-head button,
+.analytics-page[data-tv-mode] .type-switch,
+.analytics-page[data-tv-mode] .redraw-row { display: none; }
+.analytics-page[data-tv-mode] .tv-exit,
+.analytics-page[data-tv-mode] .tv-status { display: inline-flex; }
+.analytics-page[data-tv-mode] .page-head { margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.analytics-page[data-tv-mode] .page-title { font-size: 28px; }
+.tv-status { align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); }
+.tv-status > span { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.tv-status.is-live > span { background: var(--good); }
+.analytics-page[data-tv-mode] .section-title { font-size: 15px; }
+.analytics-page[data-tv-mode] .sql-chart-grid,
+.analytics-page[data-tv-mode] .table-chart-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 540px), 1fr)); gap: 20px; }
+.analytics-page[data-tv-mode] .chart-card { padding: 18px; }
+.analytics-page[data-tv-mode] .chart-name { font-size: 17px; }
+.analytics-page[data-tv-mode] .chart-time { font-size: 12px; }
+.analytics-page[data-tv-mode] .chart-canvas-box,
+.analytics-page[data-tv-mode] .chart-iframe { height: clamp(300px, 42vh, 620px); }
+@media (max-width: 700px) {
+    .analytics-page[data-tv-mode] { padding: 18px 14px; }
+    .analytics-page[data-tv-mode] .page-title { font-size: 22px; }
+}

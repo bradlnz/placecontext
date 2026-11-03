@@ -1,0 +1,24 @@
+@using PlaceContext.Host.Components.ViewModels
+
+<div class="queue-fields">
+    <label for="source-queue">Destination queue
+        <select id="source-queue" class="dcinput" @bind="Vm.QueueId" required>
+            <option value="">Choose a queue</option>
+            @foreach (var queue in Vm.Queues)
+            {
+                <option value="@queue.Id" disabled="@(!queue.Enabled)">@queue.Name@(!queue.Enabled ? " (paused)" : "")</option>
+            }
+        </select>
+    </label>
+    <div class="queue-help"><a href="@($"/project/{Vm.ProjectId}/queues")" target="_blank" rel="noopener">Manage queues ↗</a><button type="button" class="dcbtn" @onclick="Vm.LoadQueuesAsync">Refresh queues</button></div>
+    @if (Vm.QueueError is not null) { <p role="alert">@Vm.QueueError</p> }
+    @if (Vm.Queues.Count == 0 && Vm.QueueError is null) { <p>Create a queue linked to a processing workflow, then refresh this list.</p> }
+    <label for="source-required-fields">Required fields<input id="source-required-fields" class="dcinput" @bind="Vm.RequiredFields" placeholder="e.g. title, content" /><small>Comma-separated approved field names. Missing or empty values hold the record for review.</small></label>
+    <label for="source-redacted-fields">Redact fields<input id="source-redacted-fields" class="dcinput" @bind="Vm.RedactedFields" placeholder="e.g. email, phone" /><small>Replace these entire fields with [REDACTED] before storage and queueing. The unique key must remain intact.</small></label>
+    <label class="trim-option"><input type="checkbox" @bind="Vm.TrimText" /> Trim whitespace from text fields</label>
+    <p>Only approved fields are kept. Identical records are deduplicated; conflicting keys and invalid records are held. The queue's workflow handles further processing and RAG.</p>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DataSourcesViewModel Vm { get; set; } = null!;
+}

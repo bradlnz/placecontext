@@ -284,6 +284,9 @@
 @code {
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "conversation")] public Guid? ConversationId { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "task")] public string? TaskHint { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "source")] public Guid? SourceHint { get; set; }
+    private (Guid, string?, Guid?)? _appliedSourceHint;
     private ElementReference _composer;
     private bool _focusComposer;
     private async Task SelectMcpAsync(Guid id)
@@ -300,7 +303,18 @@
         if (Vm.UseQuickPick(prompt)) await _composer.FocusAsync();
     }
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
-    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId, ConversationId);
+    protected override async Task OnParametersSetAsync()
+    {
+        await Vm.LoadAsync(ProjectId, ConversationId);
+        var hint = (ProjectId, TaskHint, SourceHint);
+        if (TaskHint == "sources" && _appliedSourceHint != hint)
+        {
+            _appliedSourceHint = hint;
+            Vm.UseQuickPick(SourceHint is { } source
+                ? $"Help me choose and build a data pipeline for source {source}. Inspect its metadata and existing workflows, then ask what processing and retrieval outcome I need."
+                : "Help me connect data and choose a pipeline. Identify the source from my description, check the supported connectors and existing sources, then guide me through the secure connection form. Ask what data I have and what I want to do with it.");
+        }
+    }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender) await Vm.InitializeBrowserAsync();

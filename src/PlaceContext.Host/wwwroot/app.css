@@ -121,12 +121,14 @@ button, a, [role="button"] { touch-action: manipulation; }
 .dclink { background:none; border:none; color:var(--text-2); padding:0; cursor:pointer; font-size:inherit; font-family:inherit; font-weight:500; text-decoration:underline; text-decoration-color:transparent; transition:text-decoration-color .12s; }
 .dclink:hover { text-decoration-color:currentColor; }
 
-.dcsearch-trigger { display:flex; align-items:center; gap:7px; padding:6px 10px; background:var(--card-2); border:1px solid var(--border); border-radius:3px; color:var(--text-3); font-size:12px; min-width:220px; cursor:pointer; }
+.dcsearch-trigger { display:flex; align-items:center; gap:7px; height:32px; padding:0 10px; background:var(--card-2); border:1px solid var(--border); border-radius:3px; color:var(--text-3); font-size:12px; min-width:220px; cursor:pointer; }
 .dcsearch-trigger:hover { border-color:var(--border-2); color:var(--text-2); }
 .dcsearch-trigger kbd { margin-left:auto; font-family:var(--font-sans); font-size:10.5px; color:var(--text-3); border:1px solid var(--border); border-radius:4px; padding:0 4px; }
-.dcsearch-overlay { z-index:50; }
-.dcsearch-modal { width:min(560px, 100vw); }
+.dcsearch-overlay.dcmodal-overlay { align-items:center; justify-content:center; padding:16px; }
+.dcsearch-modal.dcmodal { width:640px; max-width:100%; height:auto; max-height:calc(100dvh - 32px); border:1px solid var(--border-2); border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,.4); }
 .dcsearch-modal .dcsearch-results { flex:1; min-height:0; max-height:none; overflow-y:auto; }
+.dcsearch-modal .dcmodal-head { align-items:center; }
+.dcsearch-modal .dcmodal-head h3 { flex:1; margin:0; }
 
 .dcsearch-input { width:100%; border:none; border-bottom:1px solid var(--border); background:transparent; color:var(--text); font-size:15px; padding:16px 18px; outline:none; }
 .dcsearch-results { max-height:52vh; overflow-y:auto; }

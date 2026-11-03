@@ -61,6 +61,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
     private readonly IExecutionCapacity? _capacity;
     private readonly IJobDataTokenService? _dataTokens;
     private string? _dataToken;
+    private readonly Dictionary<Guid, string> _sourceDataTokens = new();
     private WorkerNetworkPolicy? _network;
     private IReadOnlyDictionary<string, string> _runSecrets = new Dictionary<string, string>();
     private IReadOnlyDictionary<string, string> _mcpEnv = new Dictionary<string, string>();
@@ -243,6 +244,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         try
         {
             _dataToken = null;
+            _sourceDataTokens.Clear();
             if (_heartbeat is not null)
             {
                 using var establish = CancellationTokenSource.CreateLinkedTokenSource(execution.Token);
@@ -265,6 +267,13 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
                     throw new InvalidOperationException("Job data credentials are unavailable.");
                 }
                 _dataToken = await _dataTokens.CreateAsync(run.Id, execution.Token);
+                foreach (var env in new[] { effectiveMap.Env, effectiveReduce?.Env })
+                {
+                    if (RequestsProjectData(env) && SyncSourceId(env!) is { } sourceId && !_sourceDataTokens.ContainsKey(sourceId))
+                    {
+                        _sourceDataTokens[sourceId] = await _dataTokens.CreateAsync(run.Id, execution.Token, sourceId);
+                    }
+                }
             }
             var shardResults = await RunMapShardsAsync(job, effectiveMap, concurrency, allowEgress, run.Id, execution.Token);
             execution.Token.ThrowIfCancellationRequested();
@@ -312,6 +321,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         finally
         {
             _dataToken = null;
+            _sourceDataTokens.Clear();
             await pulseStop.CancelAsync();
             await heartbeat;
         }
@@ -663,9 +673,19 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
         result.Remove("PC_DATA_TOKEN");
         if (RequestsProjectData(env) && _dataToken is not null)
         {
-            result["PC_DATA_TOKEN"] = _dataToken;
+            result["PC_DATA_TOKEN"] = SyncSourceId(env) is { } sourceId ? _sourceDataTokens[sourceId] : _dataToken;
         }
         return result;
+    }
+
+    private static Guid? SyncSourceId(IReadOnlyDictionary<string, string> env)
+    {
+        if (!env.TryGetValue("PC_SYNC_SOURCE_ID", out var value))
+        {
+            return null;
+        }
+        return Guid.TryParse(value, out var id) && id != Guid.Empty ? id
+            : throw new ArgumentException("PC_SYNC_SOURCE_ID must be a source ID.");
     }
 
     private static bool RequestsProjectData(IReadOnlyDictionary<string, string>? env)

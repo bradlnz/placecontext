@@ -8,6 +8,7 @@ public static class DataSectionNavigation
     } =
     [
         new(DataSection.Tables, "Records", "data"),
+        new(DataSection.Sources, "Sources", "sources"),
         new(DataSection.Analytics, "Analytics", "analytics"),
         new(DataSection.DataMap, "Data map", "datamap"),
         new(DataSection.Entities, "Entities", "entities"),

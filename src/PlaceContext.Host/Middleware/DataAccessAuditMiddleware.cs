@@ -13,15 +13,16 @@ public sealed class DataAccessAuditMiddleware(RequestDelegate next, ILogger<Data
     {
         var action = context.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>();
         var controller = action?.ControllerTypeInfo.AsType();
-        if (controller != typeof(ProjectDataController) && controller != typeof(JobDataController))
+        if (controller != typeof(ProjectDataController) && controller != typeof(JobDataController) && controller != typeof(DataSourcesController) && controller != typeof(DataFeedsController))
         {
             await next(context);
             return;
         }
 
         var jobAccess = controller == typeof(JobDataController);
-        var scheme = jobAccess ? JobDataAuthenticationHandler.SchemeName : UserApiTokenAuthenticationHandler.SchemeName;
-        var operation = (jobAccess ? "job-data." : "project-data.") + action!.ActionName;
+        var scheme = jobAccess ? JobDataAuthenticationHandler.SchemeName
+            : controller == typeof(DataFeedsController) ? "SourceFeedToken" : UserApiTokenAuthenticationHandler.SchemeName;
+        var operation = (jobAccess ? "job-data." : controller == typeof(DataSourcesController) || controller == typeof(DataFeedsController) ? "data-sources." : "project-data.") + action!.ActionName;
         var tenantId = tenant.IsResolved ? tenant.TenantId : (Guid?)null;
         var started = Stopwatch.GetTimestamp();
         var status = StatusCodes.Status500InternalServerError;
@@ -43,13 +44,15 @@ public sealed class DataAccessAuditMiddleware(RequestDelegate next, ILogger<Data
             var grant = jobAccess && identity is not null ? context.Features.Get<JobDataGrant>() : null;
             var projectId = jobAccess ? grant?.ProjectId
                 : Guid.TryParse(context.Request.RouteValues["projectId"]?.ToString(), out var project) ? project : (Guid?)null;
+            var sourceId = jobAccess ? grant?.SourceId
+                : Guid.TryParse(context.Request.RouteValues["sourceId"]?.ToString(), out var source) ? source : (Guid?)null;
             var outcome = status is 401 or 403 ? "denied"
                 : status == 499 ? "cancelled"
                 : status >= 400 ? "failed" : "succeeded";
             // Only fixed labels and typed identifiers belong here; never log bodies, SQL, tokens or exceptions.
             logger.LogInformation(new EventId(7100, "DataAccess"),
-                "Data access {AuditId}: trace {TraceId}, tenant {TenantId}, actor {ActorId}, scheme {AuthenticationScheme}, operation {Operation}, project {ProjectId}, job {JobId}, run {RunId}, outcome {Outcome}, status {StatusCode}, duration {DurationMs} ms",
-                Guid.NewGuid(), Activity.Current?.TraceId.ToHexString(), tenantId, actorId, scheme, operation, projectId, grant?.JobId, grant?.RunId,
+                "Data access {AuditId}: trace {TraceId}, tenant {TenantId}, actor {ActorId}, scheme {AuthenticationScheme}, operation {Operation}, project {ProjectId}, source {SourceId}, job {JobId}, run {RunId}, outcome {Outcome}, status {StatusCode}, duration {DurationMs} ms",
+                Guid.NewGuid(), Activity.Current?.TraceId.ToHexString(), tenantId, actorId, scheme, operation, projectId, sourceId, grant?.JobId, grant?.RunId,
                 outcome, status, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         }
     }

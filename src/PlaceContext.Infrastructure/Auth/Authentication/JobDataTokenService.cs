@@ -17,7 +17,7 @@ public sealed class JobDataTokenService(
     private const string Prefix = "pc_job_";
     private readonly IDataProtector _protector = protection.CreateProtector("placecontext.job-data.v1");
 
-    public async Task<string> CreateAsync(Guid runId, CancellationToken ct = default)
+    public async Task<string> CreateAsync(Guid runId, CancellationToken ct = default, Guid? sourceId = null)
     {
         if (!await permissions.HasAsync(Permission.DataRead, ct))
         {
@@ -30,7 +30,12 @@ public sealed class JobDataTokenService(
             .Select(row => new { row.TenantId, row.ProjectId, row.JobId, row.Id })
             .SingleOrDefaultAsync(ct)
             ?? throw new InvalidOperationException("Project data access requires an active run.");
-        var grant = new JobDataGrant(run.TenantId, run.ProjectId, run.JobId, run.Id, clock.UtcNow.AddHours(24));
+        if (sourceId is { } allowedSource && (!await permissions.HasAsync(Permission.DataWrite, ct)
+            || !await db.DataSources.AnyAsync(row => row.Id == allowedSource && row.ProjectId == run.ProjectId, ct)))
+        {
+            throw new UnauthorizedAccessException("Source sync requires data.write and a source in the run's project.");
+        }
+        var grant = new JobDataGrant(run.TenantId, run.ProjectId, run.JobId, run.Id, clock.UtcNow.AddHours(24), sourceId);
         return Prefix + _protector.Protect(JsonSerializer.Serialize(grant));
     }
 

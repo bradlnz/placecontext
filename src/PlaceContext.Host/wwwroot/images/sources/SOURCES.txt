@@ -1,0 +1,13 @@
+Connector artwork
+
+postgres.svg: https://raw.githubusercontent.com/devicons/devicon/master/icons/postgresql/postgresql-original.svg
+mysql.svg: https://raw.githubusercontent.com/devicons/devicon/master/icons/mysql/mysql-original.svg
+mssql.svg: https://raw.githubusercontent.com/devicons/devicon/master/icons/microsoftsqlserver/microsoftsqlserver-original.svg
+adls.svg: https://raw.githubusercontent.com/devicons/devicon/master/icons/azure/azure-original.svg
+snowflake.svg: https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/snowflake.svg
+databricks.svg: https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/databricks.svg
+DEVICON-LICENSE.txt: https://raw.githubusercontent.com/devicons/devicon/master/LICENSE
+SIMPLE-ICONS-LICENSE.txt: https://raw.githubusercontent.com/simple-icons/simple-icons/develop/LICENSE.md
+
+Brand marks identify their respective providers.
+S3 bucket, Fabric weave, email and event feed illustrations are original project SVG artwork.

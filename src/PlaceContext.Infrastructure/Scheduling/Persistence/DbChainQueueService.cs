@@ -2,6 +2,7 @@ using System.Data;
 using System.Text.Json;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using PlaceContext.Application.Access;
 using PlaceContext.Application.Jobs;
@@ -230,6 +231,7 @@ public sealed class DbChainQueueService(AppDbContext db, ICurrentTenant tenant, 
             await connection.OpenAsync(ct);
         }
         var command = connection.CreateCommand();
+        command.Transaction = (NpgsqlTransaction?)db.Database.CurrentTransaction?.GetDbTransaction();
         command.CommandText = sql;
         command.Parameters.AddWithValue("tenant", tenant.TenantId);
         return command;

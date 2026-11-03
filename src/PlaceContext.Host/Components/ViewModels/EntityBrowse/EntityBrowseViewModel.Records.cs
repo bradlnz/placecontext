@@ -211,7 +211,7 @@ public sealed partial class EntityBrowseViewModel
         Artifacts.Clear();
         LinkedRuns.Clear();
         RunArtifacts.Clear();
-        ShowGraph = true;
+        ShowGraph = false;
         if (Entity is null || Rows is null)
         {
             return;

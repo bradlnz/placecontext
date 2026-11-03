@@ -33,6 +33,19 @@ public sealed class DataEntitiesViewModel : PageViewModel
         get; private set;
     } =
         Array.Empty<ProjectTableInfo>();
+    public string Search { get; set; } = "";
+    public IReadOnlyList<DataEntityView> FilteredEntities => Entities
+        .Where(entity => MatchesSearch(entity, Search))
+        .ToArray();
+
+    public static bool MatchesSearch(DataEntityView entity, string search)
+    {
+        var term = search.Trim();
+        return entity.Name.Contains(term, StringComparison.OrdinalIgnoreCase)
+            || entity.TableName.Contains(term, StringComparison.OrdinalIgnoreCase)
+            || entity.Tags.Any(tag => tag.Contains(term, StringComparison.OrdinalIgnoreCase))
+            || entity.Relations.Any(relation => relation.TargetEntity.Contains(term, StringComparison.OrdinalIgnoreCase));
+    }
     public bool ShowEditor
     {
         get; set;
@@ -74,6 +87,8 @@ public sealed class DataEntitiesViewModel : PageViewModel
     public async Task LoadAsync(Guid projectId)
     {
         ProjectId = projectId;
+        Search = "";
+        Error = null;
         _ui.Set("Entities", "the project's data graph — tagged tables, related records");
         try
         {

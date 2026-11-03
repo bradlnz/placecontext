@@ -24,6 +24,15 @@ public sealed class PlaceContextService
         _linkStore = linkStore;
     }
 
+    public Task<IReadOnlyList<DataSources.DataSourceDefinition>> ListDataSourcesAsync(Guid projectId, CancellationToken ct)
+        => _dispatcher.Query(new ListDataSourcesQuery(projectId), ct);
+
+    public Task<Guid> CreateDataPipelineAsync(Guid projectId, Guid sourceId, string hostUrl, CancellationToken ct)
+        => _dispatcher.Send(new CreateSourceWorkflowCommand(projectId, sourceId, hostUrl), ct);
+
+    public Task<IReadOnlyList<DataSources.DataSourceSearchResult>> SearchSourcesAsync(Guid projectId, string query, int take, CancellationToken ct)
+        => _dispatcher.Query(new SearchProjectSourcesQuery(projectId, query, take), ct);
+
     public Task<ProjectSummaryView> CreateProjectAsync(string path, string? name, CancellationToken ct = default)
         => _dispatcher.Send(new CreateProjectCommand(path, name), ct);
 

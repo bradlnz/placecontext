@@ -1,0 +1,72 @@
+@using System.Text.Json
+@using PlaceContext.Application.DataSources
+
+@{ var filtered = Records.Where(record => (_status.Length == 0 || Status(record) == _status)
+    && (_search.Length == 0 || record.Key.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || record.Json.Contains(_search, StringComparison.OrdinalIgnoreCase)
+        || (record.ValidationError?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false))).ToArray(); }
+
+<section class="record-log-viewer" aria-label="Imported record logs">
+    <div class="log-filters">
+        <input type="search" class="dcinput" aria-label="Search loaded records" placeholder="Search keys, fields or review reasons…" @bind="_search" @bind:event="oninput" />
+        <select class="dcinput" aria-label="Record status" @bind="_status">
+            <option value="">All statuses</option>
+            @foreach (var status in Records.Select(Status).Distinct()) { <option value="@status">@status</option> }
+        </select>
+    </div>
+    <div class="log-events wrap-lines" tabindex="0" role="region" aria-label="Scrollable imported records">
+        <table>
+            <thead><tr><th scope="col">Record key</th><th scope="col">Status</th><th scope="col">Record / review reason</th></tr></thead>
+            <tbody>
+                @foreach (var record in filtered)
+                {
+                    var status = Status(record);
+                    <tr @key="record.Key">
+                        <td class="record-key">@record.Key</td>
+                        <td><span class="log-level @(status == "Held" ? "warn" : "info")">@status</span></td>
+                        <td class="record-message">
+                            @if (record.ValidationError is not null) { <p class="review-reason">@record.ValidationError</p> }
+                            @if (status == "Held" && record.ValidationError is null) { <p class="review-reason">This record has not passed the current review policy.</p> }
+                            <details><summary><span class="record-excerpt">@record.Json</span><span class="detail-label">View record</span></summary><pre>@FormatJson(record.Json)</pre></details>
+                        </td>
+                    </tr>
+                }
+                @if (filtered.Length == 0)
+                {
+                    <tr><td colspan="3" class="log-empty">@(Records.Count == 0 ? "No imported records yet." : "No records match these filters.")</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="log-footer">Showing @filtered.Length of @Records.Count loaded records · First 50 records only · Prepared is not workflow completion</div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public DataSourceDefinition Source { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<SourceRecord> Records { get; set; } = [];
+    private string _search = "";
+    private string _status = "";
+
+    private string Status(SourceRecord record)
+    {
+        if (record.ValidationError is not null || Source.Processing is not null
+            && !(record.Review is { Status: "accepted" } review && review.PolicyFingerprint == DataSourcePipeline.PolicyFingerprint(Source.Processing)))
+        {
+            return "Held";
+        }
+        return Source.Queue is not null ? "Prepared" : Source.Processing is not null ? "Accepted" : "Imported";
+    }
+
+    private static string FormatJson(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (JsonException)
+        {
+            return json;
+        }
+    }
+}

@@ -1,0 +1,24 @@
+.record-log-viewer { min-width:0; background:var(--card); }
+.log-filters { display:flex; gap:10px; padding:12px 16px; background:var(--card-2); }
+.log-filters input { flex:1; min-width:120px; }
+.log-filters select { width:auto; min-width:120px; }
+.log-events { height:360px; overflow:auto; background:var(--bg); overscroll-behavior:contain; }
+.log-events:focus-visible { outline:2px solid var(--brand-2); outline-offset:-2px; }
+.log-events table { table-layout:fixed; }
+.log-events th:first-child { width:18%; }
+.log-events th:nth-child(2) { width:90px; }
+.record-key, .record-message { overflow-wrap:anywhere; }
+.log-level { display:inline-block; padding:3px 6px; border-radius:4px; background:var(--card-2); }
+.review-reason { margin:0 0 8px; color:var(--warn); line-height:1.5; }
+details summary { cursor:pointer; }
+.record-excerpt { display:inline-block; max-width:90%; vertical-align:bottom; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.detail-label { display:block; margin:5px 0; color:var(--text-3); font:10px var(--font-sans); }
+details pre { white-space:pre-wrap; overflow-wrap:anywhere; margin:10px 0; font:inherit; line-height:1.6; }
+.log-footer { padding:10px 16px; color:var(--text-3); font-size:10px; line-height:1.6; }
+@media (max-width:650px) {
+    .log-filters { flex-wrap:wrap; }
+    .log-filters input { flex-basis:100%; }
+    .log-filters select { flex:1; }
+    .log-events th:first-child { width:20%; }
+    .log-events th:nth-child(2) { width:80px; }
+}

@@ -22,263 +22,6 @@ namespace PlaceContext.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.PendingWorkspaceSignupRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Slug")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("WorkspaceName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Plan")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("TokenHash")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("VerifiedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ExchangeHash")
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset?>("ExchangeExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("ExchangeRedeemedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-                    b.HasIndex("TokenHash")
-                        .IsUnique()
-                        .HasDatabaseName("ux_pending_signup_token");
-                    b.HasIndex("ExchangeHash")
-                        .IsUnique()
-                        .HasDatabaseName("ux_pending_signup_exchange");
-                    b.HasIndex("ExpiresAt")
-                        .HasDatabaseName("ix_pending_signup_expiry");
-                    b.HasIndex("Slug")
-                        .HasDatabaseName("ix_pending_signup_slug");
-
-                    b.ToTable("pending_workspace_signups", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.TenantRunPlanRow", b =>
-                {
-                    b.Property<Guid>("TenantId")
-                        .IsConcurrencyToken()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Plan")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("IncludedRuns")
-                        .HasColumnType("integer");
-
-                    b.Property<long>("UsedRuns")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTimeOffset>("PeriodStart")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("PeriodEnd")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("NextDispatchAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("StripeCustomerId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("StripeSubscriptionId")
-                        .HasColumnType("text");
-
-                    b.Property<long>("LastStripeEventCreated")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("TenantId");
-                    b.HasIndex("StripeCustomerId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tenant_run_plans_customer");
-                    b.HasIndex("StripeSubscriptionId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tenant_run_plans_subscription");
-
-                    b.ToTable("tenant_run_plans", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.BillableRunRow", b =>
-                {
-                    b.Property<Guid>("TenantId")
-                        .IsConcurrencyToken()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RunKey")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("ReservedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("DispatchAfter")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("PeriodStart")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("TenantId", "RunKey");
-                    b.HasIndex("TenantId", "PeriodStart")
-                        .HasDatabaseName("ix_billable_runs_period");
-
-                    b.ToTable("billable_runs", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.PaymentBillingEventRow", b =>
-                {
-                    b.Property<string>("EventId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("ProcessedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("EventId");
-
-                    b.ToTable("stripe_billing_events", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ManagedOAuthConnectionRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .IsConcurrencyToken()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("DisplayName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("AccessToken")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("RefreshToken")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Scopes")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-                    b.HasIndex("TenantId", "ProjectId", "Provider")
-                        .IsUnique()
-                        .HasDatabaseName("ix_managed_oauth_connection_project");
-
-                    b.ToTable("managed_oauth_connections", (string)null);
-                });
-
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ManagedOAuthStateRow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .IsConcurrencyToken()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("StateHash")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("PkceVerifier")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTimeOffset>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-                    b.HasIndex("StateHash")
-                        .IsUnique()
-                        .HasDatabaseName("ix_managed_oauth_states_StateHash");
-                    b.HasIndex("ExpiresAt")
-                        .HasDatabaseName("ix_managed_oauth_states_expiry");
-
-                    b.ToTable("managed_oauth_states", (string)null);
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")
@@ -489,6 +232,39 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("artifact_share_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.BillableRunRow", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RunKey")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("DispatchAfter")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("PeriodStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ReservedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("TenantId", "RunKey");
+
+                    b.HasIndex("TenantId", "PeriodStart")
+                        .HasDatabaseName("ix_billable_runs_period");
+
+                    b.ToTable("billable_runs", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.BuildConversationRow", b =>
@@ -815,6 +591,46 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("ProjectId");
 
                     b.ToTable("data_mappings", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.DataSourceRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConnectionCipher")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("DefinitionCipher")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("RecordCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("SyncedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("TenantId", "ProjectId");
+
+                    b.ToTable("data_sources", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.DecisionRow", b =>
@@ -1439,6 +1255,97 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("job_triggers", (string)null);
                 });
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ManagedOAuthConnectionRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessToken")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RefreshToken")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Scopes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ProjectId", "Provider")
+                        .IsUnique()
+                        .HasDatabaseName("ix_managed_oauth_connection_project");
+
+                    b.ToTable("managed_oauth_connections", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ManagedOAuthStateRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PkceVerifier")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StateHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_managed_oauth_states_expiry");
+
+                    b.HasIndex("StateHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_managed_oauth_states_StateHash");
+
+                    b.ToTable("managed_oauth_states", (string)null);
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.McpConnectionRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1657,80 +1564,17 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("oauth_refresh_tokens", (string)null);
                 });
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.SearchDashboardRow", b =>
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.PaymentBillingEventRow", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BucketField")
-                        .IsRequired()
+                    b.Property<string>("EventId")
                         .HasColumnType("text");
 
-                    b.Property<string>("BucketType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("terms");
+                    b.Property<DateTimeOffset>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("ChartSpecJson")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.HasKey("EventId");
 
-                    b.Property<string>("ChartType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("bar");
-
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.Property<string>("DateInterval")
-                        .HasColumnType("text");
-
-                    b.Property<string>("IndexPattern")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("*");
-
-                    b.Property<string>("MetricField")
-                        .HasColumnType("text");
-
-                    b.Property<string>("MetricType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("count");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ProjectId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("QueryText")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("TenantId")
-                        .IsConcurrencyToken()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("now()");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId", "Name")
-                        .IsUnique();
-
-                    b.ToTable("opensearch_dashboards", (string)null);
+                    b.ToTable("stripe_billing_events", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.PendingRunRow", b =>
@@ -1769,6 +1613,83 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("ClaimedAt", "EnqueuedAt");
 
                     b.ToTable("pending_job_runs", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.PendingWorkspaceSignupRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ExchangeExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExchangeHash")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ExchangeRedeemedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Plan")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WorkspaceName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExchangeHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_pending_signup_exchange");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_pending_signup_expiry");
+
+                    b.HasIndex("Slug")
+                        .HasDatabaseName("ix_pending_signup_slug");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_pending_signup_token");
+
+                    b.ToTable("pending_workspace_signups", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.PersonalDashboardRow", b =>
@@ -2083,6 +2004,103 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("saved_queries", (string)null);
                 });
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.SearchDashboardRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BucketField")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("BucketType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("terms");
+
+                    b.Property<string>("ChartSpecJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ChartType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("bar");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DateInterval")
+                        .HasColumnType("text");
+
+                    b.Property<string>("IndexPattern")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("*");
+
+                    b.Property<string>("MetricField")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MetricType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("count");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("QueryText")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("opensearch_dashboards", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.SourceDocumentRow", b =>
+                {
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("KeyHash")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentCipher")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("SourceId", "KeyHash");
+
+                    b.ToTable("source_documents", (string)null);
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.TenantRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2125,6 +2143,58 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("tenants", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.TenantRunPlanRow", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("IncludedRuns")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("LastStripeEventCreated")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("NextDispatchAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("PeriodEnd")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("PeriodStart")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Plan")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StripeCustomerId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("StripeSubscriptionId")
+                        .HasColumnType("text");
+
+                    b.Property<long>("UsedRuns")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("TenantId");
+
+                    b.HasIndex("StripeCustomerId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tenant_run_plans_customer");
+
+                    b.HasIndex("StripeSubscriptionId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tenant_run_plans_subscription");
+
+                    b.ToTable("tenant_run_plans", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ToolCallRow", b =>
@@ -2383,11 +2453,29 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.DataSourceRow", b =>
+                {
+                    b.HasOne("PlaceContext.Infrastructure.Persistence.ProjectRow", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.JobTestCaseRow", b =>
                 {
                     b.HasOne("PlaceContext.Infrastructure.Persistence.JobRow", null)
                         .WithMany()
                         .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.SourceDocumentRow", b =>
+                {
+                    b.HasOne("PlaceContext.Infrastructure.Persistence.DataSourceRow", null)
+                        .WithMany()
+                        .HasForeignKey("SourceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
