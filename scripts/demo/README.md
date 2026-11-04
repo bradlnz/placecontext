@@ -1,5 +1,8 @@
 # Ecommerce demo
 
+For separate PostgreSQL, MySQL, SQL Server, RabbitMQ, and Redis source fixtures, see
+[Local demo sources](../../deploy/demo-sources/README.md).
+
 Seeds a separate **Harbour & Pine · Ecommerce demo** project in the default workspace of the local `devcontext-validation-postgres` development container. The app's database migrations must already have run.
 
 ```sh

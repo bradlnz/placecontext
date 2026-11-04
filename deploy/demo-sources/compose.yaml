@@ -1,0 +1,101 @@
+name: placecontext-sources
+
+services:
+  artifacts:
+    image: chrislusf/seaweedfs:4.52
+    container_name: placecontext-artifacts
+    restart: unless-stopped
+    mem_limit: 256m
+    env_file: ../../dist/demo-source/object-store.env
+    command: ["mini", "-dir=/data"]
+    ports: ["127.0.0.1:8333:8333"]
+    volumes: ["artifacts:/data"]
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: placecontext-source-demo
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      POSTGRES_DB: source_demo
+      POSTGRES_PASSWORD: ${DEMO_ADMIN_PASSWORD:?Run setup.py first}
+    ports: ["127.0.0.1:5434:5432"]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "source_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    mem_limit: 512m
+    environment:
+      MYSQL_DATABASE: source_demo
+      MYSQL_ROOT_PASSWORD: ${DEMO_ADMIN_PASSWORD}
+    command: ["--innodb-buffer-pool-size=128M"]
+    ports: ["127.0.0.1:3307:3306"]
+    volumes: ["mysql:/var/lib/mysql", "mysql_config:/etc/mysql/conf.d"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    mem_limit: 2g
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${DEMO_ADMIN_PASSWORD}
+      MSSQL_MEMORY_LIMIT_MB: "1024"
+    ports: ["127.0.0.1:1434:1433"]
+    volumes: ["mssql:/var/opt/mssql"]
+    healthcheck:
+      test: ["CMD-SHELL", "SQLCMDPASSWORD=\"$$MSSQL_SA_PASSWORD\" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -Q 'SELECT 1' -b -l 5"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    restart: unless-stopped
+    hostname: source-rabbitmq
+    mem_limit: 384m
+    environment:
+      RABBITMQ_DEFAULT_USER: source_demo
+      RABBITMQ_DEFAULT_PASS: ${DEMO_BROKER_PASSWORD}
+    ports: ["127.0.0.1:5673:5672", "127.0.0.1:15673:15672"]
+    volumes: ["rabbitmq:/var/lib/rabbitmq"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    mem_limit: 128m
+    environment:
+      REDISCLI_AUTH: ${DEMO_BROKER_PASSWORD}
+    command: ["/bin/sh", "-c", "exec redis-server --appendonly yes --maxmemory 64mb --maxmemory-policy noeviction --requirepass \"$$REDISCLI_AUTH\""]
+    ports: ["127.0.0.1:6380:6379"]
+    volumes: ["redis:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  artifacts:
+  postgres:
+  mysql:
+  mysql_config:
+  mssql:
+  rabbitmq:
+  redis:
