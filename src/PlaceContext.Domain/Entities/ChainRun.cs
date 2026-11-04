@@ -177,6 +177,19 @@ public sealed class ChainRun
         Status = ChainRunStatus.Running;
     }
 
+    public void RetryStep(int index, string? payload, DateTimeOffset resumeAt, string reason,
+        string? overridesJson = null)
+    {
+        Pause(_steps[index].StageIndex, payload, resumeAt, overridesJson);
+        _steps[index] = _steps[index] with
+        {
+            Status = ChainStepStatus.Pending,
+            FinishedAt = null,
+            Error = reason,
+            RetryCount = _steps[index].RetryCount + 1
+        };
+    }
+
     /// <summary>Appends a placeholder step to this chain run and returns its flat index.</summary>
     public int AppendStep(string actionType, int stageIndex)
         => AppendStep(actionType, stageIndex, 0, Guid.Empty, actionType);
@@ -206,7 +219,9 @@ public sealed class ChainRun
         {
             Status = ChainStepStatus.Running,
             RunId = runId,
-            StartedAt = now
+            StartedAt = now,
+            FinishedAt = null,
+            Error = null
         };
 
     public void MarkStepFinished(int index, Guid? runId, ChainStepStatus outcome, DateTimeOffset now,

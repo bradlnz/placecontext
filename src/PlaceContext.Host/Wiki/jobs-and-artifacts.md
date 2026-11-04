@@ -92,14 +92,15 @@ current workflow layout with recorded run results; when the steps no longer matc
 layout, it shows the recorded steps in execution order instead. The same view appears in
 Observability and queue message details.
 
-Human and agent steps use the configured model to turn validation instructions and the preceding
+Human and external-agent steps use the configured model to turn validation instructions and the preceding
 output into a question. Human steps and **External agent** steps pause until a response arrives.
 A No answer is a valid boolean response, not a missing answer. Configure the question model
 through `PlaceContext:Qemu:Agent` (Codex or a chat-completions endpoint).
 Local Development configuration uses the signed-in Codex CLI with `gpt-6-astra`; override these settings to use another provider or model.
 
 For an automatic verification call, select **AI verification** in an agent step. The AI verifier evaluates the
-question against the preceding output and saves its probability of Yes in the response field's
+configured instructions directly against the complete preceding output, sent as JSON text. It
+does not call a second model to rewrite the instructions. It saves its probability of Yes in the response field's
 `noul` property, alongside the question and model version. Use a condition on a later stage,
 such as `gte:agent_response.noul:0.9`, to decide whether to proceed. Obtaining a result does not
 mean approval. An administrator must configure the AI verification service. Question generation or verification errors fail the step.
@@ -187,6 +188,15 @@ preventing late completion from replacing that status. Upgrade the portal to app
 `AddJobRunHeartbeat` migration and apply the updated `placecontext-jobs` Role (Jobs need `patch`
 permission for pulse renewal). Existing runs from an older portal retain their original deadline.
 
+Workflow cancellation is saved before child-job cleanup. Running action steps and pending steps
+become cancelled, while completed steps and their checkpoint remain available. Database concurrency
+checks reject late workflow writes after cancellation, including when a worker finishes during cleanup.
+
+Kubernetes resource-quota admission conflicts and quota-evaluation timeouts retry before creation,
+with exponential backoff and jitter, up to five attempts total. Cancellation stops the retry wait.
+Already-existing resources, quota exhaustion, and unrelated server errors are not retried by this
+policy because they do not establish that a safe, transient admission failure occurred.
+
 ## Artifacts
 
 Every job declares a return type: JSON, table, chart, HTML, CSV, text, PDF, image, or video.
@@ -233,3 +243,23 @@ Use **Take control** whenever the running agent needs help; it waits for a safe 
 The timeout includes human interaction, and closing the pane does not resume the agent.
 Use **Forget selected login** to remove a saved session. Login sessions are private to their
 creator in the project; other operators must use their own.
+
+AI verification throttling (HTTP 429 or 529) uses exponential backoff and the provider's
+`Retry-After` delay. If the HTTP retries are exhausted, the workflow waits and retries the
+same AI step up to three times, after approximately 30, 60, and 120 seconds (longer when
+requested by the provider). The checkpoint and retry count survive restarts. Completed
+jobs are not rerun, and downstream steps wait for successful verification. Exhausting
+these retries fails the workflow without approving its records.
+
+A background reconciliation job runs at startup and every 30 seconds. It scans failed
+and abandoned workflows in pages of 100, including historical failures. One malformed
+record does not stop the sweep. It also reconciles standalone job receipts and applies
+configured queue retry limits and delays, even when every execution slot is busy.
+Exhausted retries stay failed; it does not blindly replay completed work.
+It waits at least two minutes beyond the job's retry delay and checks active worker
+heartbeats, execution leases, and newer job attempts before correcting the workflow.
+Waiting retries and human-input holds stay paused. Corrections update the stored steps
+and workflow state; the notification watcher then updates the existing notification.
+An abandoned workflow whose child job was cancelled also becomes cancelled, and its queue receipt
+is closed without retrying. A failed sibling retains the workflow's failed outcome.
+Each reconciliation sweep logs how many records it repaired and queues it retried or closed.

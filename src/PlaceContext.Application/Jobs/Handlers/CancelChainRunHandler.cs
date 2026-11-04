@@ -6,8 +6,8 @@ using PlaceContext.Domain.ValueObjects;
 namespace PlaceContext.Application.Features;
 
 /// <summary>
-/// Cancels a running chain run: cancels every still-running step job run, then marks
-/// the chain run as Cancelled. Pending steps become Cancelled instead of Skipped.
+/// Persists workflow cancellation before stopping its child jobs, so the driver cannot
+/// advance while cleanup runs. Pending steps become Cancelled instead of Skipped.
 /// Idempotent — safe to call on a terminal chain run.
 /// </summary>
 public sealed class CancelChainRunHandler : ICommandHandler<CancelChainRunCommand, bool>
@@ -40,26 +40,25 @@ public sealed class CancelChainRunHandler : ICommandHandler<CancelChainRunComman
         {
             return true;
         }
-        // Cancel every step that has a running job run, then mark each as Cancelled.
-        var cancelTasks = new List<(int Index, Task Task)>();
-        foreach (var step in chainRun.Steps)
-        {
-            if (step.Status is ChainStepStatus.Running && step.RunId is { } runId)
-            {
-                var idx = step.Index;
-                cancelTasks.Add((idx, SafeCancelRunAsync(runId, ct)));
-            }
-        }
-        await Task.WhenAll(cancelTasks.Select(t => t.Task));
+        var jobRuns = new List<Guid>();
         var now = _clock.UtcNow;
-        foreach (var (idx, _) in cancelTasks)
+        for (var index = 0; index < chainRun.Steps.Count; index++)
         {
-            chainRun.MarkStepFinished(idx, chainRun.Steps[idx].RunId, ChainStepStatus.Cancelled, now);
+            var step = chainRun.Steps[index];
+            if (step.Status != ChainStepStatus.Running)
+            {
+                continue;
+            }
+            if (step.RunId is { } runId)
+            {
+                jobRuns.Add(runId);
+            }
+            chainRun.MarkStepFinished(step.Index, step.RunId, ChainStepStatus.Cancelled, now);
         }
-        // Mark the entire chain run as Cancelled.
         chainRun.Complete(ChainRunStatus.Cancelled, chainRun.FinalOutput, now);
         await _runs.UpdateAsync(chainRun, ct);
         await _uow.SaveChangesAsync(ct);
+        await Task.WhenAll(jobRuns.Select(runId => SafeCancelRunAsync(runId, ct)));
         return true;
     }
 

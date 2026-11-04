@@ -19,4 +19,5 @@ public sealed record ChainStepRunView(
     string? ActionType = null,
     string? Provider = null,
     string? ExternalId = null,
-    string? Error = null);
+    string? Error = null,
+    int RetryCount = 0);

@@ -17,6 +17,11 @@ public sealed class ModelChainQuestionGenerator(IHttpClientFactory clients, IOpt
 
     public async Task<string> GenerateAsync(LoopChainAction action, string? output, CancellationToken ct)
     {
+        if (action.AgentProvider == LoopChainAction.JevAgent)
+        {
+            // Jev evaluates the configured criteria directly against the complete state.
+            return action.Instructions;
+        }
         var model = options.Value.Agent;
         // A human can review the supplied instructions without a question-writing model.
         if (action.Type == LoopChainAction.HumanType && string.IsNullOrWhiteSpace(model.Model))
@@ -40,7 +45,7 @@ public sealed class ModelChainQuestionGenerator(IHttpClientFactory clients, IOpt
             context = context[..65_536] + "\n[Remaining output omitted]";
         }
         var audience = action.Type == LoopChainAction.HumanType ? "human user" : "external reviewing agent";
-        var format = action.ResponseType == LoopChainAction.YesNoResponse || action.AgentProvider == LoopChainAction.JevAgent
+        var format = action.ResponseType == LoopChainAction.YesNoResponse
             ? PromptText.Read("Workflows.Prompts.YesNoResponse")
             : PromptText.Read("Workflows.Prompts.WrittenResponse");
         var messages = new JsonArray

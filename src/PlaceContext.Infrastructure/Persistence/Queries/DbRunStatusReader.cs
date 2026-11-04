@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Jobs;
+using PlaceContext.Application.Secrets;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 
@@ -17,7 +18,9 @@ public sealed class DbRunStatusReader : IRunStatusReader
 
     private readonly AppDbContext _db;
 
-    public DbRunStatusReader(AppDbContext db) => _db = db;
+    private readonly IDataEncryptor _encryptor;
+
+    public DbRunStatusReader(AppDbContext db, IDataEncryptor encryptor) => (_db, _encryptor) = (db, encryptor);
 
     public async Task<IReadOnlyList<JobRunStatusRow>> ListJobRunsAsync(
         DateTimeOffset finishedSince, CancellationToken ct = default)
@@ -60,7 +63,7 @@ public sealed class DbRunStatusReader : IRunStatusReader
 
         return rows.Select(r =>
         {
-            var steps = ParseSteps(r.StepsJson);
+            var steps = ParseSteps(_encryptor.Unprotect(r.StepsJson, IDataEncryptor.Purpose.ChainRun));
             return new ChainRunStatusRow(
                 r.Id, r.ChainId, r.ChainName, r.ProjectId,
                 Enum.TryParse<ChainRunStatus>(r.Status, out var s) ? s : ChainRunStatus.Failed,

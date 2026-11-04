@@ -94,6 +94,7 @@ public sealed class RunStatusWatchService
             if (chain.Status is ChainRunStatus.Running or ChainRunStatus.Waiting or ChainRunStatus.AwaitingInput)
             {
                 seen.Add(chain.RunId);
+                state.NotifiedTerminal.Remove(chain.RunId);
                 // State is part of the fingerprint: a transition from executing → awaiting
                 // input → resumed must update one notification, not create duplicates.
                 var fingerprint = $"{chain.Status}:{chain.FinishedSteps}/{chain.TotalSteps}:{chain.CurrentStepName}";

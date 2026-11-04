@@ -98,18 +98,9 @@ public class RpcChainSubmissionBackgroundService : BackgroundService
         }
     }
 
-    protected virtual async Task<IReadOnlyList<ClaimedSubmission>> ClaimAsync(int available, CancellationToken ct)
-    {
-        await using var scope = _scopes.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var connection = (NpgsqlConnection)db.Database.GetDbConnection();
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync(ct);
-        }
-        // Reconcile terminal failures after direct runs or human/agent continuations. The run-id
-        // predicate makes concurrent workers and late completion callbacks harmless.
-        await db.Database.ExecuteSqlRawAsync("""
+    /// <summary>Apply configured queue retries even when all execution slots are occupied.</summary>
+    internal static Task<int> ReconcileFailuresAsync(AppDbContext db, CancellationToken ct = default)
+        => db.Database.ExecuteSqlRawAsync("""
             UPDATE rpc_chain_submissions submission
             SET "Attempts" = "Attempts" + 1,
                 "Status" = CASE WHEN "Attempts" + 1 >= "MaxAttempts" THEN 'Failed' ELSE 'Queued' END,
@@ -122,8 +113,19 @@ public class RpcChainSubmissionBackgroundService : BackgroundService
                 "StartedAt" = CASE WHEN "Attempts" + 1 >= "MaxAttempts" THEN "StartedAt" ELSE NULL END,
                 "ClaimedBy" = NULL, "ClaimedAt" = NULL, "HeartbeatAt" = NULL
             WHERE "QueueId" IS NOT NULL AND "Status" IN ('Running', 'Waiting', 'AwaitingInput', 'RetryPending')
-              AND EXISTS (SELECT 1 FROM chain_runs run WHERE run."Id" = submission."ChainRunId" AND run."Status" = 'Failed')
+              AND EXISTS (SELECT 1 FROM chain_runs run WHERE run."Id" = submission."ChainRunId" AND run."TenantId" = submission."TenantId" AND run."Status" = 'Failed')
             """, ct);
+
+    protected virtual async Task<IReadOnlyList<ClaimedSubmission>> ClaimAsync(int available, CancellationToken ct)
+    {
+        await using var scope = _scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var connection = (NpgsqlConnection)db.Database.GetDbConnection();
+        if (connection.State != ConnectionState.Open)
+        {
+            await connection.OpenAsync(ct);
+        }
+        await ReconcileFailuresAsync(db, ct);
         // Expiry applies before dispatch, including abandoned claims that never created a run.
         await db.Database.ExecuteSqlRawAsync("""
             UPDATE rpc_chain_submissions submission

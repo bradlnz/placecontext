@@ -163,6 +163,10 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
 
     public string Summary(ChainStepRunView step)
     {
+        if (step.Status == "Pending" && step.RetryCount > 0)
+        {
+            return $"waiting for retry {step.RetryCount}/3";
+        }
         if (ScopedPresentationCatalog.StepStatus(step.Status) == ChainStepStatus.Running)
         {
             return "running…";

@@ -16,6 +16,95 @@ namespace PlaceContext.Application.Tests;
 public class JobChainTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cancellation_prevents_waiting_fanout_branches_from_starting(bool inElseBranch)
+    {
+        var jobs = new InMemoryJobRepository();
+        var group = Enumerable.Range(0, 6).Select(i => MakeJob($"parallel-{i}")).ToArray();
+        var next = MakeJob("must-not-run");
+        foreach (var job in group.Append(next))
+        {
+            await jobs.AddAsync(job);
+        }
+        var fanout = new ChainStage(group.Select(job => job.Id).ToArray());
+        var first = inElseBranch
+            ? new ChainStage(new[] { next.Id }, new ConditionGate("false", new[] { fanout }))
+            : fanout;
+        var chain = JobChain.Create(ProjectId, "cancel fanout", null, new[] { first, ChainStage.Of(next.Id) }, T0);
+        var chains = new InMemoryJobChainRepository();
+        await chains.AddAsync(chain);
+        var runs = new InMemoryChainRunRepository();
+        var runner = new BlockedCancellationRunner();
+        var handler = new RunJobChainHandler(chains, jobs, runs, new RecordingUnitOfWork(), new FakeClock(T0), runner);
+        var runId = Guid.NewGuid();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var executing = handler.HandleAsync(new RunJobChainCommand(chain.Id, ChainRunId: runId), timeout.Token);
+        await runner.FourStarted.Task.WaitAsync(timeout.Token);
+        var stored = (await runs.GetByIdAsync(runId))!;
+        stored.Complete(ChainRunStatus.Cancelled, stored.FinalOutput, T0);
+        runner.Release.TrySetResult();
+        var result = await executing;
+        Assert.Equal("Cancelled", result.Status);
+        Assert.Equal(4, runner.Started);
+    }
+
+    private sealed class BlockedCancellationRunner : IJobRunner
+    {
+        public TaskCompletionSource FourStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Started;
+
+        public async Task<JobRunDetailView> RunAsync(Guid jobId, string? inputPayload = null,
+            Guid? runId = null, Guid? replayOfRunId = null, CancellationToken ct = default)
+        {
+            if (Interlocked.Increment(ref Started) == 4)
+            {
+                FourStarted.TrySetResult();
+            }
+            await Release.Task.WaitAsync(ct);
+            return Run(jobId, "Cancelled");
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Runner_exception_finishes_workflow_and_failed_step_including_else_branch(bool inElseBranch)
+    {
+        var jobs = new InMemoryJobRepository();
+        var failing = MakeJob("failing");
+        var sibling = MakeJob("sibling");
+        var next = MakeJob("must-not-run");
+        foreach (var job in new[] { failing, sibling, next }) await jobs.AddAsync(job);
+        var failingStage = new ChainStage(new[] { failing.Id, sibling.Id });
+        var first = inElseBranch
+            ? new ChainStage(new[] { next.Id }, new ConditionGate("false", new[] { failingStage }))
+            : failingStage;
+        var chain = JobChain.Create(ProjectId, "runner failure", null, new[] { first, ChainStage.Of(next.Id) }, T0);
+        var chains = new InMemoryJobChainRepository();
+        await chains.AddAsync(chain);
+        var runs = new InMemoryChainRunRepository();
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Failures[failing.Id] = new HttpRequestException("Workload server unavailable");
+        dispatcher.Results[sibling.Id] = Run(sibling.Id, "Succeeded");
+        dispatcher.Delays[sibling.Id] = TimeSpan.FromMilliseconds(20);
+        var handler = new RunJobChainHandler(chains, jobs, runs, new RecordingUnitOfWork(),
+            new FakeClock(T0), new FakeJobRunner(dispatcher));
+        var result = await handler.HandleAsync(new RunJobChainCommand(chain.Id));
+        var saved = (await runs.GetByIdAsync(result.Id))!;
+        Assert.Equal(ChainRunStatus.Failed, saved.Status);
+        Assert.NotNull(saved.FinishedAt);
+        Assert.DoesNotContain(saved.Steps, step => step.Status is ChainStepStatus.Running or ChainStepStatus.Pending);
+        var failed = Assert.Single(saved.Steps, step => step.JobId == failing.Id);
+        Assert.Equal(ChainStepStatus.Failed, failed.Status);
+        Assert.NotNull(failed.RunId);
+        Assert.Contains("Workload server unavailable", failed.Error);
+        Assert.Equal(ChainStepStatus.Succeeded, Assert.Single(saved.Steps, step => step.JobId == sibling.Id).Status);
+        Assert.DoesNotContain(next.Id, dispatcher.DispatchedJobIds);
+    }
+
+    [Theory]
     [InlineData(0, true)]
     [InlineData(7, true)]
     [InlineData(0, false)]
@@ -1125,6 +1214,102 @@ public class JobChainTests
         Assert.Empty(dispatcher.DispatchedJobIds);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Throttled_AI_retries_same_stage_with_backoff_without_repeating_completed_jobs(bool exhausted)
+    {
+        var jobs = new InMemoryJobRepository();
+        var prepare = MakeJob("prepare");
+        var publish = MakeJob("publish");
+        await jobs.AddAsync(prepare);
+        await jobs.AddAsync(publish);
+        var chain = JobChain.Create(ProjectId, "retry review", null,
+        [ChainStage.Of(prepare.Id),
+         ChainStage.ForAction(new LoopChainAction(LoopChainAction.AgentType, "Check output", "review", agentProvider: LoopChainAction.JevAgent)),
+         ChainStage.Of(publish.Id)], T0);
+        var chains = new InMemoryJobChainRepository();
+        await chains.AddAsync(chain);
+        var runs = new InMemoryChainRunRepository();
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[prepare.Id] = Run(prepare.Id, "Succeeded", shardArtifacts: ["{\"records\":[1,2,3]}"]);
+        dispatcher.Results[publish.Id] = Run(publish.Id, "Succeeded");
+        var reviewer = new ThrottledReviewer();
+        var clock = new FakeClock(T0);
+        RunJobChainHandler Handler() => new(chains, jobs, runs, new RecordingUnitOfWork(), clock,
+            new FakeJobRunner(dispatcher), jev: reviewer);
+        var result = await Handler().HandleAsync(new RunJobChainCommand(chain.Id));
+        var payload = (await runs.GetByIdAsync(result.Id))!.FinalOutput;
+        for (var retry = 1; retry <= 3; retry++)
+        {
+            var saved = (await runs.GetByIdAsync(result.Id))!;
+            Assert.Equal("Waiting", result.Status);
+            Assert.Equal(1, saved.ResumeStageIndex);
+            Assert.Null(saved.FinishedAt);
+            Assert.Equal(retry, saved.Steps[1].RetryCount);
+            Assert.Equal(ChainStepStatus.Pending, saved.Steps[1].Status);
+            Assert.Equal(payload, saved.FinalOutput);
+            Assert.Single(dispatcher.DispatchedJobIds);
+            var minimum = Math.Max(45, 30 * Math.Pow(2, retry - 1));
+            Assert.InRange((saved.ResumeAt!.Value - clock.UtcNow).TotalSeconds, minimum, minimum + 1);
+            clock.UtcNow = saved.ResumeAt.Value;
+            reviewer.Succeed = !exhausted && retry == 3;
+            result = await Handler().HandleAsync(new RunJobChainCommand(chain.Id, ChainRunId: saved.Id, ResumeFromStageIndex: 1));
+        }
+        Assert.Equal(exhausted ? "Failed" : "Succeeded", result.Status);
+        Assert.Equal(3, result.Steps[1].RetryCount);
+        Assert.NotNull(result.FinishedAt);
+        Assert.Equal(4, reviewer.States.Count);
+        Assert.All(reviewer.States, state => Assert.Equal(payload, state));
+        Assert.Equal(exhausted ? 1 : 2, dispatcher.DispatchedJobIds.Count);
+        Assert.DoesNotContain(result.Steps, step => step.Status is "Running" or "Pending");
+    }
+
+    [Theory]
+    [InlineData(0.5, 250)]
+    [InlineData(0.99, 1)]
+    [InlineData(0.99, 0)]
+    public async Task Held_records_require_human_input_after_either_mapping_branch(double probability, int held)
+    {
+        var jobs = new InMemoryJobRepository();
+        var accepted = MakeJob("accepted");
+        var review = MakeJob("held");
+        await jobs.AddAsync(accepted);
+        await jobs.AddAsync(review);
+        var chain = JobChain.Create(ProjectId, "review holds", null,
+        [ChainStage.ForAction(new LoopChainAction(LoopChainAction.AgentType, "Check all records", "classification", agentProvider: LoopChainAction.JevAgent)),
+         new ChainStage([accepted.Id], new ConditionGate("gte:classification.noul:0.9", [ChainStage.Of(review.Id)])),
+         new ChainStage([], new ConditionGate("gt:summary.needs_review:0"), action:
+             new LoopChainAction(LoopChainAction.HumanType, "Review every held record and record your decision", "human_review_decision"))], T0);
+        var chains = new InMemoryJobChainRepository();
+        await chains.AddAsync(chain);
+        var dispatcher = new FakeRunDispatcher();
+        foreach (var job in new[] { accepted, review })
+            dispatcher.Results[job.Id] = Run(job.Id, "Succeeded", shardArtifacts: [$"{{\"summary\":{{\"needs_review\":{held}}}}}"]);
+        var result = await RunHandler(chains, jobs, dispatcher, jev: new FakeOutcomeReviewer(probability))
+            .HandleAsync(new RunJobChainCommand(chain.Id, "{\"records\":[1,2,3]}"));
+        Assert.Equal(held > 0 ? "AwaitingInput" : "Succeeded", result.Status);
+        Assert.Equal(probability >= 0.9 ? accepted.Id : review.Id, Assert.Single(dispatcher.DispatchedJobIds));
+        if (held > 0)
+        {
+            Assert.Equal("humanInput", result.InputRequest!.Kind);
+            Assert.Equal(2, Assert.Single(result.InputRequest.Steps).Index);
+            Assert.Contains("records", result.FinalOutput);
+        }
+    }
+
+    private sealed class ThrottledReviewer : IOutcomeReviewer
+    {
+        public bool Succeed;
+        public List<string?> States { get; } = [];
+        public Task<System.Text.Json.Nodes.JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null)
+        {
+            States.Add(state);
+            if (!Succeed) throw new OutcomeReviewThrottledException(States.Count % 2 == 0 ? 529 : 429, TimeSpan.FromSeconds(45));
+            return Task.FromResult(new System.Text.Json.Nodes.JsonObject { ["noul"] = 0.99 });
+        }
+    }
+
     private sealed class ValidationQuestions(bool fail = false) : IChainQuestionGenerator
     {
         public List<string?> Outputs { get; } = [];
@@ -1174,6 +1359,7 @@ public class JobChainTests
 
         public Dictionary<Guid, JobRunDetailView> Results { get; } = new();
         public Dictionary<Guid, TimeSpan> Delays { get; } = new();
+        public Dictionary<Guid, Exception> Failures { get; } = new();
         public List<string?> Payloads { get; } = new();
         public List<Guid?> RunIds { get; } = new();
         public List<Guid> DispatchedJobIds { get; } = new();
@@ -1209,6 +1395,7 @@ public class JobChainTests
                 JobRunDetailView result;
                 lock (_gate)
                 {
+                    if (Failures.TryGetValue(run.JobId, out var failure)) throw failure;
                     result = Results[run.JobId];
                 }
                 return (TResult)(object)result;

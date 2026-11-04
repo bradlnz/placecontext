@@ -19,7 +19,7 @@ public sealed class FakeRunStatusReader : IRunStatusReader
 
     public Task<IReadOnlyList<ChainRunStatusRow>> ListChainRunsAsync(DateTimeOffset finishedSince, CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<ChainRunStatusRow>>(ChainRuns
-            .Where(r => r.Status == ChainRunStatus.Running
+            .Where(r => r.Status is ChainRunStatus.Running or ChainRunStatus.Waiting or ChainRunStatus.AwaitingInput
                 || (r.FinishedAt is { } f && f >= finishedSince))
             .ToList());
 }

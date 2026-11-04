@@ -275,6 +275,22 @@ public class RunStatusWatchServiceTests
             ctx.Notifier.Synced.Select(x => x.Outcome).ToArray());
     }
 
+    [Fact]
+    public async Task Recovered_workflow_updates_the_same_notification_after_a_previous_failure()
+    {
+        var ctx = new Ctx();
+        var id = Guid.NewGuid();
+        ctx.Reader.ChainRuns.Add(ChainRow(id, ChainRunStatus.Failed, 3, 1, null, finished: T0));
+        await ctx.Sweep();
+        ctx.Reader.ChainRuns[0] = ChainRow(id, ChainRunStatus.Waiting, 3, 1, null);
+        await ctx.Sweep();
+        ctx.Reader.ChainRuns[0] = ChainRow(id, ChainRunStatus.Succeeded, 3, 3, null, finished: T0);
+        await ctx.Sweep();
+        await ctx.Sweep();
+        Assert.Equal(new[] { RunOutcome.Failed, RunOutcome.Running, RunOutcome.Succeeded }, ctx.Notifier.Synced.Select(n => n.Outcome));
+        Assert.All(ctx.Notifier.Synced, n => Assert.Equal(RunStatusWatchService.ChainRunKey(id), n.Key));
+    }
+
     // ── State hygiene ────────────────────────────────────────────────────────────────────────────
 
     [Fact]

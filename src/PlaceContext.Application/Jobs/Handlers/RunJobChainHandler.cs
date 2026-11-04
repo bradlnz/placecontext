@@ -293,6 +293,19 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                                                 .EvaluateAsync(question, payload, ct, chain.ProjectId);
                     }
                 }
+                catch (OutcomeReviewThrottledException ex) when (loop.AgentProvider == LoopChainAction.JevAgent
+                    && chainRun.Steps[flatIndex].RetryCount < 3 && !ct.IsCancellationRequested)
+                {
+                    var retry = chainRun.Steps[flatIndex].RetryCount + 1;
+                    var delay = TimeSpan.FromSeconds(30 * Math.Pow(2, retry - 1) + Random.Shared.NextDouble());
+                    if (ex.RetryAfter > delay) delay = ex.RetryAfter;
+                    var resumeAt = _clock.UtcNow.Add(delay);
+                    chainRun.RetryStep(flatIndex, payload, resumeAt,
+                        $"{ex.Message} Retry {retry}/3 scheduled for {resumeAt:O}.",
+                        command.StepPayloadOverrides is null ? null : JsonSerializer.Serialize(command.StepPayloadOverrides));
+                    await SaveProgressAsync(chainRun, ct);
+                    return ChainRunMapper.ToView(chainRun);
+                }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
                     throw;
@@ -509,7 +522,23 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 await dispatchGate.WaitAsync(ct);
                 try
                 {
+                    if (await IsCancelledAsync(chainRun.Id, progressLock, ct))
+                    {
+                        branchStatuses[branchIndex] = ChainStepStatus.Cancelled;
+                        return;
+                    }
                     run = await _jobRunner.RunWorkflowStepAsync(stage.JobIds[branchIndex], stepPayload, stepRunId, ct);
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    branchStatuses[branchIndex] = ChainStepStatus.Failed;
+                    await WithProgressLockAsync(progressLock, async () =>
+                    {
+                        chainRun.MarkStepFinished(flat, stepRunId, ChainStepStatus.Failed,
+                            _clock.UtcNow, error: ShortError(ex.Message));
+                        await SaveProgressAsync(chainRun, ct);
+                    });
+                    return;
                 }
                 finally
                 {
@@ -777,7 +806,23 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             JobRunDetailView run;
             try
             {
+                if (await IsCancelledAsync(chainRun.Id, progressLock, ct))
+                {
+                    branchStatuses[branchIndex] = ChainStepStatus.Cancelled;
+                    return;
+                }
                 run = await _jobRunner.RunWorkflowStepAsync(stage.JobIds[branchIndex], stagePayload, stepRunId, ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                branchStatuses[branchIndex] = ChainStepStatus.Failed;
+                await WithProgressLockAsync(progressLock, async () =>
+                {
+                    chainRun.MarkStepFinished(flat, stepRunId, ChainStepStatus.Failed,
+                        _clock.UtcNow, error: ShortError(ex.Message));
+                    await SaveProgressAsync(chainRun, ct);
+                });
+                return;
             }
             finally
             {
@@ -971,6 +1016,19 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     {
         await _runs.UpdateAsync(run, ct);
         await _uow.SaveChangesAsync(ct);
+    }
+
+    private async Task<bool> IsCancelledAsync(Guid runId, SemaphoreSlim progressLock, CancellationToken ct)
+    {
+        await progressLock.WaitAsync(ct);
+        try
+        {
+            return (await _runs.GetByIdAsync(runId, ct))?.Status == ChainRunStatus.Cancelled;
+        }
+        finally
+        {
+            progressLock.Release();
+        }
     }
 
     private async Task SaveContextAsync(ChainRun run, string? payload, CancellationToken ct)

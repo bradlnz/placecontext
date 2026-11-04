@@ -26,19 +26,6 @@ public sealed class ModelOutcomeReviewer(IHttpClientFactory clients, IOptions<Mo
         {
             throw new InvalidOperationException("The workflow output is too large for AI review. Reduce it to 65,536 characters; verification input is not truncated.");
         }
-        JsonNode? context;
-        try
-        {
-            context = JsonNode.Parse(state ?? "{}");
-        }
-        catch (JsonException)
-        {
-            context = JsonValue.Create(state);
-        }
-        if (context is not (JsonObject or JsonArray) && !(context is JsonValue value && value.TryGetValue<string>(out _)))
-        {
-            context = JsonValue.Create(state ?? "{}");
-        }
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(TimeSpan.FromSeconds(90));
         using var client = clients.CreateClient("typesafe");
@@ -47,7 +34,8 @@ public sealed class ModelOutcomeReviewer(IHttpClientFactory clients, IOptions<Mo
             Content = JsonContent.Create(new
             {
                 model = config.Model,
-                state = context,
+                // Preserve complete JSON as text without structured-field token overhead.
+                state = state ?? "{}",
                 questions = new
                 {
                     verification = new
@@ -62,6 +50,12 @@ public sealed class ModelOutcomeReviewer(IHttpClientFactory clients, IOptions<Mo
         try
         {
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+            if ((int)response.StatusCode is 429 or 529)
+            {
+                var retryAfter = response.Headers.RetryAfter;
+                throw new OutcomeReviewThrottledException((int)response.StatusCode,
+                    retryAfter?.Delta ?? (retryAfter?.Date - DateTimeOffset.UtcNow) ?? TimeSpan.Zero);
+            }
             if (!response.IsSuccessStatusCode)
             {
                 throw new InvalidOperationException($"AI verification returned HTTP {(int)response.StatusCode}. Check the configured provider credentials, quota and request limits.");

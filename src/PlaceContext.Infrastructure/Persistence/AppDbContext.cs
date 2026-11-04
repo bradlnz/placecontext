@@ -567,6 +567,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         {
             e.ToTable("chain_runs");
             e.HasKey(x => x.Id);
+            e.Property(x => x.Status).IsConcurrencyToken();
             // The pipeline history is read newest-first per chain.
             e.HasIndex(x => new { x.ChainId, x.StartedAt });
             e.HasIndex(x => new { x.TenantId, x.StartedAt }).HasDatabaseName("ix_chain_runs_tenant_started");

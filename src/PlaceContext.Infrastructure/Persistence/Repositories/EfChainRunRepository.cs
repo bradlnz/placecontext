@@ -28,6 +28,10 @@ public sealed class EfChainRunRepository : IChainRunRepository
         {
             return;
         }
+        if (existing.Status == nameof(ChainRunStatus.Cancelled) && run.Status != ChainRunStatus.Cancelled)
+        {
+            throw new DbUpdateConcurrencyException("The workflow was cancelled before this update.");
+        }
         existing.Status = run.Status.ToString();
         existing.StepsJson = Encrypt(JsonSerializer.Serialize(run.Steps.Select(StepJson.From), Json));
         existing.FinalOutput = EncryptNullable(run.FinalOutput);
@@ -156,6 +160,7 @@ public sealed class EfChainRunRepository : IChainRunRepository
         {
             get; set;
         }
+        public int RetryCount { get; set; }
 
         public static StepJson From(ChainStepRun s) => new()
         {
@@ -172,11 +177,12 @@ public sealed class EfChainRunRepository : IChainRunRepository
             Provider = s.Provider,
             ExternalId = s.ExternalId,
             Error = s.Error,
+            RetryCount = s.RetryCount,
         };
 
         public ChainStepRun ToDomain() => new(
             Index, StageIndex ?? Index, BranchIndex ?? 0, JobId, JobName, RunId,
             Enum.Parse<ChainStepStatus>(Status), StartedAt, FinishedAt,
-            ActionType, Provider, ExternalId, Error);
+            ActionType, Provider, ExternalId, Error, RetryCount);
     }
 }

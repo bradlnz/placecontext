@@ -153,6 +153,22 @@ public sealed class ChainInputResumeTests
                 Assert.Equal(0, released.ResumeStageIndex);
                 Assert.NotNull(released.InputRequest);
             }
+            var retryAt = DateTimeOffset.UtcNow.AddMinutes(1);
+            run.RetryStep(0, "{\"records\":[1,2,3]}", retryAt, "HTTP 429; retry scheduled");
+            await using (var db = new AppDbContext(options, tenant))
+            {
+                await new EfChainRunRepository(db, encryptor).UpdateAsync(run);
+                await db.SaveChangesAsync();
+            }
+            await using (var db = new AppDbContext(options, tenant))
+            {
+                var loaded = (await new EfChainRunRepository(db, encryptor).GetByIdAsync(run.Id))!;
+                Assert.Equal(ChainRunStatus.Waiting, loaded.Status);
+                Assert.Equal(1, loaded.Steps[0].RetryCount);
+                Assert.Equal(ChainStepStatus.Pending, loaded.Steps[0].Status);
+                Assert.Equal(run.FinalOutput, loaded.FinalOutput);
+                Assert.True((loaded.ResumeAt!.Value - retryAt).Duration() < TimeSpan.FromMilliseconds(1));
+            }
         }
         finally
         {

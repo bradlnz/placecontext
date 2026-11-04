@@ -7,6 +7,25 @@ namespace PlaceContext.Infrastructure.Tests;
 
 public sealed class ModelOutcomeReviewerTests
 {
+    [Theory]
+    [InlineData(429)]
+    [InlineData(529)]
+    public async Task Throttling_returns_a_workflow_retry_signal_with_provider_delay(int status)
+    {
+        using var api = new ModelReviewTestApi((_, _) =>
+        {
+            var response = new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent("private response") };
+            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(75));
+            return Task.FromResult(response);
+        });
+        var reviewer = new ModelOutcomeReviewer(api, Options.Create(new ModelReviewOptions { ApiKey = "test-key" }));
+        var error = await Assert.ThrowsAsync<PlaceContext.Application.Build.OutcomeReviewThrottledException>(
+            () => reviewer.EvaluateAsync("Correct?", "{}", default));
+        Assert.Equal(TimeSpan.FromSeconds(75), error.RetryAfter);
+        Assert.Contains(status.ToString(), error.Message);
+        Assert.DoesNotContain("private response", error.Message);
+    }
+
     [Fact]
     public async Task Sends_typed_question_and_complete_state_and_preserves_probability_and_model()
     {
@@ -17,7 +36,7 @@ public sealed class ModelOutcomeReviewerTests
             Assert.Equal("Bearer test-key", request.Headers.Authorization!.ToString());
             var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!;
             Assert.Equal("jev-1.14.0", body["model"]!.GetValue<string>());
-            Assert.Equal(42, body["state"]!["total"]!.GetValue<int>());
+            Assert.Equal("{\"total\":42}", body["state"]!.GetValue<string>());
             Assert.Equal("noul", body["questions"]!["verification"]!["type"]!.GetValue<string>());
             Assert.Equal("Is the total correct?", body["questions"]!["verification"]!["instructions"]!.GetValue<string>());
             Assert.DoesNotContain("test-key", body.ToJsonString());
@@ -51,9 +70,8 @@ public sealed class ModelOutcomeReviewerTests
     }
 
     [Theory]
+    [InlineData(400)]
     [InlineData(401)]
-    [InlineData(429)]
-    [InlineData(529)]
     [InlineData(302)]
     public async Task Http_errors_do_not_expose_provider_response_bodies(int status)
     {
@@ -62,6 +80,25 @@ public sealed class ModelOutcomeReviewerTests
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => reviewer.EvaluateAsync("Correct?", "{}", default));
         Assert.Contains(status.ToString(), error.Message);
         Assert.DoesNotContain("sensitive-provider-response", error.Message);
+        Assert.Equal(1, api.Requests);
+    }
+
+    [Fact]
+    public async Task Complete_json_text_is_sent_once_without_truncation()
+    {
+        var state = "{\"records\":[{\"text\":\"" + new string('x', 60_000) + "\"},{\"id\":2}]}";
+        using var api = new ModelReviewTestApi(async (request, ct) =>
+        {
+            var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!;
+            Assert.Equal(state, body["state"]!.GetValue<string>());
+            return new(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"model":"jev-1.14.0","answers":{"verification":{"type":"noul","noul":0.95}}}""")
+            };
+        });
+        var reviewer = new ModelOutcomeReviewer(api, Options.Create(new ModelReviewOptions { ApiKey = "test-key" }));
+        Assert.Equal(0.95, (await reviewer.EvaluateAsync("Every record valid?", state, default))["noul"]!.GetValue<double>());
+        Assert.Equal(1, api.Requests);
     }
 
     [Fact]

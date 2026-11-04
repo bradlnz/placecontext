@@ -214,7 +214,10 @@ public static class DependencyInjection
                 options.ApiKey = configuration["TYPESAFE_API_KEY"] ?? "";
             }
         });
+        services.AddSingleton<ITypeSafeRateBudget, TypeSafeRateBudget>();
+        services.AddTransient<TypeSafeRateLimitHandler>();
         services.AddHttpClient("typesafe", client => client.Timeout = TimeSpan.FromSeconds(90))
+            .AddHttpMessageHandler<TypeSafeRateLimitHandler>()
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         services.AddSingleton<IModelCredentialsResolver, ModelCredentialsResolver>();
         services.AddSingleton<IOutcomeReviewer, ModelOutcomeReviewer>();
@@ -375,6 +378,8 @@ public static class DependencyInjection
         // a short tick, so the bell reflects finish/fail the moment the row commits — independent of
         // the (slow, best-effort) in-process enrichment and of which replica executed the run.
         services.AddScoped<IRunStatusReader, DbRunStatusReader>();
+        services.AddScoped<Scheduling.DbRunStatusReconciler>();
+        services.AddHostedService<Scheduling.FailedRunReconciliationBackgroundService>();
         services.AddSingleton<IRunStatusNotifier, Operations.OperationCenterRunStatusNotifier>();
         services.AddHostedService<Scheduling.RunStatusWatcherBackgroundService>();
 
