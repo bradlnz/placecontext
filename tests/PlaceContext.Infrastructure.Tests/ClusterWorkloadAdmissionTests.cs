@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using k8s;
+using k8s.Autorest;
 using k8s.Models;
 using Microsoft.Extensions.Options;
 using PlaceContext.Infrastructure.Workload;
@@ -9,6 +10,103 @@ namespace PlaceContext.Infrastructure.Tests;
 
 public sealed class ClusterWorkloadAdmissionTests
 {
+    [Theory]
+    [InlineData(409, "Operation cannot be fulfilled on resourcequotas: the object has been modified", 1, 2)]
+    [InlineData(409, "Operation cannot be fulfilled on resourcequotas: the object has been modified", 10, 5)]
+    [InlineData(500, "Internal error occurred: resource quota evaluation timed out", 1, 2)]
+    [InlineData(500, "Internal error occurred: resource quota evaluation timed out", 10, 5)]
+    [InlineData(409, "configmaps batch already exists", 1, 1)]
+    [InlineData(500, "unexpected storage failure", 1, 1)]
+    [InlineData(403, "exceeded quota", 1, 1)]
+    public async Task Only_confirmed_quota_admission_failures_retry_with_a_bounded_attempt_count(
+        int code, string message, int failures, int expectedCalls)
+    {
+        using var api = new AdmissionApi(failures, (HttpStatusCode)code, message);
+        using var client = new Kubernetes(new KubernetesClientConfiguration { Host = "http://localhost" }, api);
+        Task<V1ConfigMap> Create() => ClusterWorkloadRunner.CreateWithQuotaRetryAsync(
+            () => client.CoreV1.CreateNamespacedConfigMapAsync(new V1ConfigMap { Metadata = new() { Name = "batch" } }, "tenant"), default);
+        if (expectedCalls > failures)
+        {
+            await Create();
+        }
+        else
+        {
+            await Assert.ThrowsAsync<HttpOperationException>(Create);
+        }
+        Assert.Equal(expectedCalls, api.Calls);
+    }
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 0)]
+    public async Task Cancellation_stops_admission_before_creation_or_during_backoff(bool alreadyCancelled, int calls)
+    {
+        using var cancellation = new CancellationTokenSource();
+        using var api = new AdmissionApi(10, HttpStatusCode.InternalServerError,
+            "Internal error occurred: resource quota evaluation timed out", () => cancellation.Cancel());
+        using var client = new Kubernetes(new KubernetesClientConfiguration { Host = "http://localhost" }, api);
+        if (alreadyCancelled)
+        {
+            cancellation.Cancel();
+        }
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ClusterWorkloadRunner.CreateWithQuotaRetryAsync(
+            () => client.CoreV1.CreateNamespacedConfigMapAsync(new V1ConfigMap { Metadata = new() { Name = "batch" } }, "tenant"), cancellation.Token));
+        Assert.Equal(calls, api.Calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Pulse_timeout_keeps_polling_but_caller_cancellation_propagates(bool cancelCaller)
+    {
+        using var api = new PulseTimeoutApi();
+        using var client = new Kubernetes(new KubernetesClientConfiguration { Host = "http://localhost" }, api);
+        using var cancellation = new CancellationTokenSource();
+        if (cancelCaller) cancellation.Cancel();
+        Task Pulse() => ClusterWorkloadRunner.PulseJobAsync(client, "tenant",
+            new V1Job { Metadata = new() { Name = "batch" }, Spec = new(), Status = new() }, 60, cancellation.Token);
+        if (cancelCaller)
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(Pulse);
+        }
+        else
+        {
+            await Pulse();
+            Assert.Equal(1, api.Calls);
+        }
+    }
+
+    private sealed class AdmissionApi(int failures, HttpStatusCode code, string message, Action? onFailure = null) : DelegatingHandler
+    {
+        public int Calls { get; private set; }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var failed = ++Calls <= failures;
+            var body = failed ? System.Text.Json.JsonSerializer.Serialize(new
+            {
+                kind = "Status", status = "Failure", reason = "AdmissionFailure", code = (int)code, message
+            }) : KubernetesJson.Serialize(new V1ConfigMap { Metadata = new() { Name = "batch" } });
+            if (failed)
+            {
+                onFailure?.Invoke();
+            }
+            return Task.FromResult(new HttpResponseMessage(failed ? code : HttpStatusCode.Created)
+            {
+                RequestMessage = request, Content = new StringContent(body, Encoding.UTF8, "application/json")
+            });
+        }
+    }
+
+    private sealed class PulseTimeoutApi : DelegatingHandler
+    {
+        public int Calls { get; private set; }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Calls++;
+            return Task.FromException<HttpResponseMessage>(new TaskCanceledException("Timed out awaiting Kubernetes heartbeat"));
+        }
+    }
+
     [Theory]
     [InlineData("StartError", "resource temporarily unavailable", true)]
     [InlineData("StartError", "cannot allocate memory", true)]

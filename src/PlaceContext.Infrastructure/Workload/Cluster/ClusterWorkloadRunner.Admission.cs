@@ -8,6 +8,34 @@ namespace PlaceContext.Infrastructure.Workload;
 
 public sealed partial class ClusterWorkloadRunner
 {
+    internal static async Task<T> CreateWithQuotaRetryAsync<T>(Func<Task<T>> create, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                return await create();
+            }
+            catch (HttpOperationException ex) when (attempt < 4 && IsQuotaAdmissionFailure(ex))
+            {
+                // Admission failed before creation; retrying cannot execute the workload twice.
+                await Task.Delay(TimeSpan.FromMilliseconds(200 * Math.Pow(2, attempt) + Random.Shared.Next(100)), ct);
+            }
+        }
+    }
+
+    private static bool IsQuotaAdmissionFailure(HttpOperationException error)
+    {
+        var body = error.Response?.Content;
+        return error.Response?.StatusCode switch
+        {
+            HttpStatusCode.Conflict => body?.Contains("the object has been modified", StringComparison.Ordinal) == true,
+            HttpStatusCode.InternalServerError => body?.Contains("resource quota evaluation timed out", StringComparison.Ordinal) == true,
+            _ => false
+        };
+    }
+
     internal async Task<WorkloadRunResult> RunPreparedJobAsync(Kubernetes client, string ns, V1Job job,
         string correlationId, int timeoutSeconds, CancellationToken ct)
     {
@@ -17,7 +45,7 @@ public sealed partial class ClusterWorkloadRunner
         for (var attempt = 0; ; attempt++)
         {
             await WaitForCapacityAsync(client, ns, name, correlationId, deadline, drain: attempt > 0, ct);
-            await client.BatchV1.CreateNamespacedJobAsync(job, ns, cancellationToken: ct);
+            await CreateWithQuotaRetryAsync(() => client.BatchV1.CreateNamespacedJobAsync(job, ns, cancellationToken: ct), ct);
             var (result, retryable) = await AwaitResultAsync(client, ns, name, correlationId, timeoutSeconds, deadline, ct);
             if (!retryable || attempt >= Math.Max(0, _options.ClusterStartupRetries) || DateTimeOffset.UtcNow >= deadline)
             {

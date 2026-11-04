@@ -161,12 +161,12 @@ public sealed partial class ClusterWorkloadRunner : IWorkloadRunner
         // pivot into cluster/private address space.
         try
         {
-            var createConfigMap = client.CoreV1.CreateNamespacedConfigMapAsync(
-                new V1ConfigMap { Metadata = new V1ObjectMeta { Name = name }, Data = data }, ns, cancellationToken: ct);
-            var createNetPolicy = client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(
+            var createConfigMap = CreateWithQuotaRetryAsync(() => client.CoreV1.CreateNamespacedConfigMapAsync(
+                new V1ConfigMap { Metadata = new V1ObjectMeta { Name = name }, Data = data }, ns, cancellationToken: ct), ct);
+            var createNetPolicy = CreateWithQuotaRetryAsync(() => client.NetworkingV1.CreateNamespacedNetworkPolicyAsync(
                 request.Network is { } policy ? Networking.KubeOvnNetwork.Policy(name, policy)
                     : BuildEgressPolicy(name, runLabel, request.AllowNetworkEgress), ns,
-                cancellationToken: ct);
+                cancellationToken: ct), ct);
             await Task.WhenAll(createConfigMap, createNetPolicy);
 
             // ── The Job ─────────────────────────────────────────────────────────────────────────────
@@ -583,7 +583,7 @@ public sealed partial class ClusterWorkloadRunner : IWorkloadRunner
     internal static long LeaseDeadlineSeconds(DateTimeOffset? startedAt, int timeoutSeconds, DateTimeOffset now)
         => Math.Min(timeoutSeconds, Math.Max(0, (long)((now - (startedAt ?? now)).TotalSeconds)) + IJobRunHeartbeat.TimeoutSeconds);
 
-    private static async Task PulseJobAsync(Kubernetes client, string ns, V1Job job, int timeoutSeconds, CancellationToken ct)
+    internal static async Task PulseJobAsync(Kubernetes client, string ns, V1Job job, int timeoutSeconds, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         if (job.Status?.StartTime is { } started && job.Spec.ActiveDeadlineSeconds is { } deadline
@@ -594,15 +594,22 @@ public sealed partial class ClusterWorkloadRunner : IWorkloadRunner
         var seconds = LeaseDeadlineSeconds(job.Status?.StartTime, timeoutSeconds, now);
         using var pulse = CancellationTokenSource.CreateLinkedTokenSource(ct);
         pulse.CancelAfter(TimeSpan.FromSeconds(IJobRunHeartbeat.IntervalSeconds));
-        await client.BatchV1.PatchNamespacedJobAsync(new V1Patch(
-            new
-            {
-                spec = new
+        try
+        {
+            await client.BatchV1.PatchNamespacedJobAsync(new V1Patch(
+                new
                 {
-                    activeDeadlineSeconds = seconds
-                }
-            }, V1Patch.PatchType.MergePatch),
-            job.Metadata.Name, ns, cancellationToken: pulse.Token);
+                    spec = new
+                    {
+                        activeDeadlineSeconds = seconds
+                    }
+                }, V1Patch.PatchType.MergePatch),
+                job.Metadata.Name, ns, cancellationToken: pulse.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Poll the same job again; its existing deadline still limits the workload lease.
+        }
     }
 
     /// <summary>
