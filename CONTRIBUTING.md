@@ -12,14 +12,22 @@ changes are all welcome.
 
 ## Development setup
 
-Install the .NET 10 SDK, Docker, and PostgreSQL, then run:
+Install the .NET 10 SDK and `curl`, and start Docker, then run:
 
 ```bash
 dotnet restore PlaceContext.slnx
-dotnet run --project src/PlaceContext.Host --urls http://localhost:7700
+./run.sh
 ```
 
 The portal is served at `http://localhost:7700` and the MCP endpoint is `/mcp`.
+If the local app is already healthy, the script prints "The application is already running."
+and exits successfully before checking or starting dependencies.
+The script checks the SDK and Docker, starts the existing `devcontext-validation-postgres`
+container, and waits for a successful database query before launching the host. If the container
+does not exist, it creates PostgreSQL 17 on `127.0.0.1:5433` with the defaults in
+`appsettings.json` and a persistent `placecontext-dev-postgres` Docker volume.
+The database keeps running when the app exits; existing database volumes are preserved.
+The script forwards arguments to `dotnet run`, for example `./run.sh --no-build`.
 
 ## Repository layout
 
