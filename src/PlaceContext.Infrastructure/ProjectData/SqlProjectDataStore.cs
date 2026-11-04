@@ -788,29 +788,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             await create.ExecuteNonQueryAsync(ct);
         }
 
-        // Values travel as text and are cast to each column's declared type server-side.
-        var cols = string.Join(", ", columns.Select(c => QuoteIdent(c.Name)));
-        var placeholders = string.Join(", ", columns.Select((_, i) => $"@p{i}::{pgTypes[i]}"));
-        foreach (var row in rows)
-        {
-            await using var insert = conn.CreateCommand();
-            insert.Transaction = tx;
-            insert.CommandText = $"INSERT INTO {qualified} ({cols}) VALUES ({placeholders})";
-            for (var i = 0; i < columns.Count; i++)
-            {
-                var cell = row[i];
-                // text/jsonb cells are encrypted at rest; typed columns stay native for joins/keys.
-                if (cell is not null && pgTypes[i] is DataColumnTypes.Text or DataColumnTypes.Jsonb)
-                {
-                    cell = ProtectCell(cell);
-                }
-                insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
-                {
-                    Value = (object?)cell ?? DBNull.Value
-                });
-            }
-            await insert.ExecuteNonQueryAsync(ct);
-        }
+        await InsertRowsAsync(conn, tx, qualified, columns, pgTypes, rows, ct);
 
         await tx.CommitAsync(ct);
     }
@@ -868,31 +846,43 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             await create.ExecuteNonQueryAsync(ct);
         }
 
-        // Values travel as text and are cast to each column's declared type server-side.
-        var cols = string.Join(", ", columns.Select(c => QuoteIdent(c.Name)));
-        var placeholders = string.Join(", ", columns.Select((_, i) => $"@p{i}::{pgTypes[i]}"));
-        var inserted = 0;
-        foreach (var row in rows)
-        {
-            await using var insert = conn.CreateCommand();
-            insert.Transaction = tx;
-            insert.CommandText = $"INSERT INTO {QuoteIdent(tableName)} ({cols}) VALUES ({placeholders})";
-            for (var i = 0; i < columns.Count; i++)
-            {
-                var cell = row[i];
-                if (cell is not null && pgTypes[i] is DataColumnTypes.Text or DataColumnTypes.Jsonb)
-                {
-                    cell = ProtectCell(cell);
-                }
-                insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
-                {
-                    Value = (object?)cell ?? DBNull.Value
-                });
-            }
-            inserted += await insert.ExecuteNonQueryAsync(ct);
-        }
+        var inserted = await InsertRowsAsync(conn, tx, QuoteIdent(tableName), columns, pgTypes, rows, ct);
 
         await tx.CommitAsync(ct);
+        return inserted;
+    }
+
+    private async Task<int> InsertRowsAsync(NpgsqlConnection conn, NpgsqlTransaction tx, string table,
+        IReadOnlyList<ProjectColumnSpec> columns, IReadOnlyList<string> pgTypes,
+        IReadOnlyList<IReadOnlyList<string?>> rows, CancellationToken ct)
+    {
+        var cols = string.Join(", ", columns.Select(c => QuoteIdent(c.Name)));
+        var placeholders = string.Join(", ", columns.Select((_, i) => $"@p{i}::{pgTypes[i]}"));
+        var statement = $"INSERT INTO {table} ({cols}) VALUES ({placeholders})";
+        var inserted = 0;
+        // Bound buffered parameters while sharing one round trip per chunk and one transaction for all rows.
+        foreach (var chunk in rows.Chunk(250))
+        {
+            await using var batch = new NpgsqlBatch(conn, tx);
+            foreach (var row in chunk)
+            {
+                var insert = new NpgsqlBatchCommand(statement);
+                for (var i = 0; i < columns.Count; i++)
+                {
+                    var cell = row[i];
+                    if (cell is not null && pgTypes[i] is DataColumnTypes.Text or DataColumnTypes.Jsonb)
+                    {
+                        cell = ProtectCell(cell);
+                    }
+                    insert.Parameters.Add(new NpgsqlParameter($"p{i}", NpgsqlTypes.NpgsqlDbType.Text)
+                    {
+                        Value = (object?)cell ?? DBNull.Value
+                    });
+                }
+                batch.BatchCommands.Add(insert);
+            }
+            inserted += await batch.ExecuteNonQueryAsync(ct);
+        }
         return inserted;
     }
 
