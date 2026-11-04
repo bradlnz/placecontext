@@ -29,7 +29,7 @@ public sealed class DataSourcesController(IDispatcher dispatcher) : ControllerBa
                 request.Schema, request.Table, request.KeyColumn, request.Columns, request.Tags, request.EnableEmbeddings, request.Provider,
                 request.Processing is { Enabled: true } processing ? new(processing.Criteria, processing.MinimumConfidence) : null,
                 request.Processing?.ProcessingApproved == true,
-                request.Queue is { } queue ? new(queue.QueueId, queue.RequiredFields, queue.RedactedFields, queue.TrimText) : null), HttpContext.RequestAborted));
+                request.Queue is { } queue ? new(queue.QueueId, queue.RequiredFields, queue.RedactedFields, queue.TrimText, BatchSize: queue.BatchSize) : null), HttpContext.RequestAborted));
         }
         catch (ArgumentException)
         {
@@ -73,7 +73,7 @@ public sealed class DataSourcesController(IDispatcher dispatcher) : ControllerBa
         try
         {
             return Ok(await dispatcher.Send(new ConfigureSourceQueueCommand(projectId, sourceId,
-                new(request.QueueId, request.RequiredFields, request.RedactedFields, request.TrimText)), HttpContext.RequestAborted));
+                new(request.QueueId, request.RequiredFields, request.RedactedFields, request.TrimText, BatchSize: request.BatchSize)), HttpContext.RequestAborted));
         }
         catch (ArgumentException)
         {

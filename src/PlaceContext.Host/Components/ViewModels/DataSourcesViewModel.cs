@@ -119,6 +119,7 @@ public sealed class DataSourcesViewModel(IDispatcher dispatcher, PortalUiState u
     public string RequiredFields { get; set; } = "";
     public string RedactedFields { get; set; } = "";
     public bool TrimText { get; set; } = true;
+    public int BatchSize { get; set; } = 10;
     public bool EditingQueue { get; private set; }
     public string HostUrl { get; set; } = "";
     public string Query { get; set; } = "";
@@ -156,6 +157,7 @@ public sealed class DataSourcesViewModel(IDispatcher dispatcher, PortalUiState u
         QueueId = null;
         RequiredFields = RedactedFields = "";
         TrimText = true;
+        BatchSize = 10;
         EditingQueue = false;
         SetProvider(provider);
         Error = Notice = null;
@@ -316,6 +318,7 @@ public sealed class DataSourcesViewModel(IDispatcher dispatcher, PortalUiState u
         RequiredFields = string.Join(", ", source.Queue?.RequiredFields ?? []);
         RedactedFields = string.Join(", ", source.Queue?.RedactedFields ?? []);
         TrimText = source.Queue?.TrimText ?? true;
+        BatchSize = source.Queue?.BatchSize ?? 10;
         EditingQueue = true;
         await LoadQueuesAsync();
     }
@@ -323,7 +326,7 @@ public sealed class DataSourcesViewModel(IDispatcher dispatcher, PortalUiState u
     public void CloseQueueEditor() => EditingQueue = false;
 
     private SourceQueueConfiguration QueueConfiguration() => new(QueueId ?? throw new ArgumentException("Choose a destination queue."),
-        Split(RequiredFields), Split(RedactedFields), TrimText);
+        Split(RequiredFields), Split(RedactedFields), TrimText, BatchSize: BatchSize);
 
     public Task SaveQueueAsync() => PerformAsync(async () =>
     {

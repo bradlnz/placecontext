@@ -195,7 +195,9 @@ confirmation. This deletes imported records, the retrieval index and saved crede
 it leaves the original data intact. Messages already committed to a queue follow that queue's
 retention policy; deleting a source does not recall them or downstream workflow outputs.
 
-Sources currently retain up to 1,000 records per source and 10 sources per project. Queue intake
+Sources retain up to 1,000 records per source, or 100,000 for PostgreSQL sources connected to a
+workflow queue, and 25 sources per project. Set **Records per batch** to 1–250 (default 10);
+large records are split into smaller batches to fit workflow review. Queue intake
 has a 1 MiB message limit and no fixed backlog count cap. Workflow concurrency defaults to 2
 per app instance (`PlaceContext:Scheduling:MaxConcurrentChains`). Message TTL defaults to
 24 hours, configurable up to 7 days. Storage and worker throughput determine practical capacity;
@@ -328,7 +330,9 @@ credentials. Jev conversations retain deliberately retrieved evidence for the us
 asked. Source removal deletes live documents and vectors together; project deletion cascades.
 Backups retain data until their retention expires; protect and retain the encryption key ring.
 
-Current bounded ingestion limits: 10 sources per project, 1,000 records per source, 40 fields,
-16,000 characters per record and 8 million characters per snapshot. Database discovery is
+Current bounded ingestion limits: 25 sources per project, 1,000 records per source, 40 fields,
+16,000 characters per record and 8 million characters per snapshot. Queued PostgreSQL sources
+allow 100,000 records and 32 million characters per snapshot, with atomic source/queue commits.
+Changing batch size does not requeue unchanged records. Database discovery is
 limited to 8,000 fields and lists datasets with at most 40 fields. Retrieval scans encrypted
 datasets in memory. This is snapshot/push ingestion, not database CDC or a large-scale lake engine.

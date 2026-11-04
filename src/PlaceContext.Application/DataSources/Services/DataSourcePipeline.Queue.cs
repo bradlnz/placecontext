@@ -11,7 +11,7 @@ public sealed partial class DataSourcePipeline
             : await PrepareSnapshotAsync(source, now, ct);
         prepared = prepared.Select(document => existing.TryGetValue(document.Key, out var old) && old.Fingerprint == document.Fingerprint
             ? old : document).ToArray();
-        if (prepared.Count > DataSourceRules.MaxRecords || prepared.Sum(document => (long)document.Json.Length) > 8_000_000)
+        if (prepared.Count > DataSourceRules.RecordLimit(source) || prepared.Sum(document => (long)document.Json.Length) > DataSourceRules.SnapshotCharLimit(source))
         {
             throw new InvalidOperationException("Prepared data exceeds source limits. Previous data was retained.");
         }
@@ -36,7 +36,7 @@ public sealed partial class DataSourcePipeline
     {
         var rows = await reader.ReadAsync(source, ct);
         // Readers fetch one extra row to detect truncation; deduplication must not hide an incomplete snapshot.
-        if (rows.Count > DataSourceRules.MaxRecords)
+        if (rows.Count > DataSourceRules.RecordLimit(source))
         {
             throw new InvalidOperationException("Source exceeds the snapshot limit. Previous data was retained.");
         }

@@ -12,7 +12,7 @@ public sealed class DataSourcePipelineTests
     public async Task Queue_deduplication_cannot_hide_a_truncated_snapshot()
     {
         var store = new Store { Source = Definition() with { Queue = new(Guid.NewGuid(), [], []) } };
-        var reader = new Reader { Rows = Enumerable.Repeat(new SourceRecord("1", "{\"id\":1}"), DataSourceRules.MaxRecords + 1).ToArray() };
+        var reader = new Reader { Rows = Enumerable.Repeat(new SourceRecord("1", "{\"id\":1}"), DataSourceRules.RecordLimit(store.Source) + 1).ToArray() };
         await Assert.ThrowsAsync<InvalidOperationException>(() => Create(store, reader, new()).SyncAsync(store.Source.ProjectId, store.Source.Id, Ct));
         Assert.Equal(0, store.Commits);
     }
@@ -40,6 +40,33 @@ public sealed class DataSourcePipelineTests
     }
 
     private static readonly CancellationToken Ct = CancellationToken.None;
+
+    [Fact]
+    public async Task Queued_postgres_accepts_100k_records_and_unchanged_sync_does_not_requeue()
+    {
+        var store = new Store { Source = Definition() with { Queue = new(Guid.NewGuid(), [], [], BatchSize: 250) } };
+        var reader = new Reader
+        {
+            Rows = Enumerable.Range(1, 100000).Select(id => new SourceRecord(id.ToString(), $"{{\"id\":{id}}}")).ToArray()
+        };
+        var pipeline = Create(store, reader, new());
+        Assert.Equal(100000, (await pipeline.SyncAsync(store.Source.ProjectId, store.Source.Id, Ct)).Queued);
+        Assert.Equal(100000, store.Documents.Count);
+        Assert.Equal(0, (await pipeline.SyncAsync(store.Source.ProjectId, store.Source.Id, Ct)).Queued);
+        store.Source = store.Source with { Queue = store.Source.Queue! with { BatchSize = 10 } };
+        Assert.Equal(0, (await pipeline.SyncAsync(store.Source.ProjectId, store.Source.Id, Ct)).Queued);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(251)]
+    public void Queue_batch_size_is_bounded(int size)
+    {
+        Assert.Throws<ArgumentException>(() => DataSourceRules.Validate(Definition() with
+        {
+            Queue = new(Guid.NewGuid(), [], [], BatchSize: size)
+        }));
+    }
 
     [Fact]
     public async Task Snapshots_reconcile_changes_and_deletions_with_stable_citations()

@@ -16,6 +16,7 @@
     <label for="source-required-fields">Required fields<input id="source-required-fields" class="dcinput" @bind="Vm.RequiredFields" placeholder="e.g. title, content" /><small>Comma-separated approved field names. Missing or empty values hold the record for review.</small></label>
     <label for="source-redacted-fields">Redact fields<input id="source-redacted-fields" class="dcinput" @bind="Vm.RedactedFields" placeholder="e.g. email, phone" /><small>Replace these entire fields with [REDACTED] before storage and queueing. The unique key must remain intact.</small></label>
     <label class="trim-option"><input type="checkbox" @bind="Vm.TrimText" /> Trim whitespace from text fields</label>
+    <label for="source-batch-size">Records per batch<input id="source-batch-size" class="dcinput" type="number" min="1" max="250" @bind="Vm.BatchSize" /><small>Up to 250 records. Large records use smaller batches to fit workflow review.</small></label>
     <p>Only approved fields are kept. Identical records are deduplicated; conflicting keys and invalid records are held. The queue's workflow handles further processing and RAG.</p>
 </div>
 

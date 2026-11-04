@@ -6,20 +6,28 @@ public static partial class DataSourceRules
 {
     // shortcut: bounded snapshots and in-process ranking, use streaming ingestion and an indexed store above these limits.
     public const int MaxRecords = 1000;
+    public const int MaxQueuedPostgresRecords = 100000;
+    public const int MaxSources = 25;
     public const int MaxRecordChars = 16000;
     public const int ChunkChars = 2000;
+
+    public static int RecordLimit(DataSourceDefinition source)
+        => source.Provider == "postgres" && source.Queue is not null ? MaxQueuedPostgresRecords : MaxRecords;
+
+    public static int SnapshotCharLimit(DataSourceDefinition source)
+        => source.Provider == "postgres" && source.Queue is not null ? 32_000_000 : 8_000_000;
 
     public static void Validate(DataSourceDefinition source)
     {
         SourceProviders.Get(source.Provider);
         if (source.Queue is { } queue)
         {
-            if (queue.QueueId == Guid.Empty || queue.RequiredFields is null || queue.RedactedFields is null
+            if (queue.QueueId == Guid.Empty || queue.BatchSize is < 1 or > 250 || queue.RequiredFields is null || queue.RedactedFields is null
                 || queue.RequiredFields.Count > 40 || queue.RedactedFields.Count > 40
                 || source.Columns is null || queue.RequiredFields.Concat(queue.RedactedFields).Any(field => !source.Columns.Contains(field))
                 || queue.RedactedFields.Contains(source.KeyColumn))
             {
-                throw new ArgumentException("Choose a queue and approved fields for validation/redaction. The unique key cannot be redacted.");
+                throw new ArgumentException("Choose a queue, a batch size of 1–250, and approved fields for validation/redaction. The unique key cannot be redacted.");
             }
             if (source.EnableEmbeddings || source.Processing is not null)
             {

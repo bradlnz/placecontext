@@ -12,6 +12,7 @@ public sealed partial class BuildTools
         await RequireAsync(Permission.DataRead, ct);
         return new { Providers = SourceProviders.All.Where(provider => provider.Id != "email").Select(provider => new { provider.Id, provider.Name, provider.Kind }),
             MaxRecordsPerSource = DataSourceRules.MaxRecords, MaxRecordCharacters = DataSourceRules.MaxRecordChars,
+            MaxQueuedPostgresRecords = DataSourceRules.MaxQueuedPostgresRecords, MaxSourcesPerProject = DataSourceRules.MaxSources,
             Email = "Authenticated plain-text inbound webhook with MessageID deduplication; requires an email forwarding integration. Attachments are not imported.",
             Pipeline = "Pull approved fields, normalise text, redact configured fields, validate and deduplicate, then enqueue valid changes. Required fields, redaction and destination queue are configured in Sources. The queue's workflow handles processing and RAG; held records are excluded. Existing sources without a queue retain their retrieval configuration." };
     }

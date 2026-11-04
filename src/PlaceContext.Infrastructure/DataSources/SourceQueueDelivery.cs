@@ -43,23 +43,13 @@ public sealed class SourceQueueDelivery(AppDbContext db, DbChainQueueService que
                 throw new UnauthorizedAccessException("The source approver no longer has data and workflow access.");
             }
             var batch = 0;
-            foreach (var documents in changed.Chunk(10))
+            foreach (var payload in RecordPayloads(source, changed))
             {
-                var payload = JsonSerializer.SerializeToElement(new
-                {
-                    sourceId = source.Id, sourceName = source.Name, projectId = source.ProjectId, schema = source.Schema, table = source.Table,
-                    tags = source.Tags, records = documents.Select(document => JsonSerializer.Deserialize<JsonElement>(document.Json)).ToArray(),
-                    deletedKeys = Array.Empty<string>()
-                });
                 await queues.SubmitAuthorizedAsync(queue.Id, payload, $"source:{source.Id:N}:{source.Version:N}:{batch++}", null, ct);
             }
             foreach (var keys in deletedKeys.Chunk(100))
             {
-                var payload = JsonSerializer.SerializeToElement(new
-                {
-                    sourceId = source.Id, sourceName = source.Name, projectId = source.ProjectId, schema = source.Schema, table = source.Table,
-                    tags = source.Tags, records = Array.Empty<object>(), deletedKeys = keys
-                });
+                var payload = Payload(source, [], keys);
                 await queues.SubmitAuthorizedAsync(queue.Id, payload, $"source:{source.Id:N}:{source.Version:N}:{batch++}", null, ct);
             }
         }
@@ -72,4 +62,41 @@ public sealed class SourceQueueDelivery(AppDbContext db, DbChainQueueService que
             }
         }
     }
+
+    internal static IEnumerable<JsonElement> RecordPayloads(DataSourceDefinition source, IReadOnlyList<SourceDocument> documents)
+    {
+        var envelopeChars = Payload(source, [], []).GetRawText().Length;
+        var provenanceChars = JsonSerializer.Serialize(new { input_source_id = source.Id, input_source_name = source.Name }).Length;
+        var batch = new List<SourceDocument>();
+        var chars = envelopeChars;
+        foreach (var document in documents)
+        {
+            // Include provenance added by validation and leave headroom below the 65,536-character review limit.
+            var recordChars = document.Json.Length + provenanceChars + 1;
+            if (envelopeChars + recordChars > 60_000)
+            {
+                throw new InvalidOperationException("Prepared record exceeds the workflow review budget.");
+            }
+            if (batch.Count > 0 && (batch.Count >= source.Queue!.BatchSize || chars + recordChars > 60_000))
+            {
+                yield return Payload(source, batch, []);
+                batch.Clear();
+                chars = envelopeChars;
+            }
+            batch.Add(document);
+            chars += recordChars;
+        }
+        if (batch.Count > 0)
+        {
+            yield return Payload(source, batch, []);
+        }
+    }
+
+    private static JsonElement Payload(DataSourceDefinition source, IReadOnlyList<SourceDocument> documents, IReadOnlyList<string> deletedKeys)
+        => JsonSerializer.SerializeToElement(new
+        {
+            sourceId = source.Id, sourceName = source.Name, projectId = source.ProjectId, schema = source.Schema, table = source.Table,
+            tags = source.Tags, records = documents.Select(document => JsonSerializer.Deserialize<JsonElement>(document.Json)).ToArray(),
+            deletedKeys
+        });
 }

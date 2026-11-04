@@ -32,7 +32,7 @@ public sealed class DatabaseSourceReader(AppDbContext db, IDataEncryptor encrypt
                 await setup.ExecuteNonQueryAsync(ct);
             }
             var columns = string.Join(", ", source.Columns.Select(Quote));
-            await using var command = new NpgsqlCommand($"SELECT t.{Quote(source.KeyColumn)}::text, row_to_json(t)::text FROM (SELECT {columns} FROM {Quote(source.Schema)}.{Quote(source.Table)}) t ORDER BY t.{Quote(source.KeyColumn)} LIMIT {DataSourceRules.MaxRecords + 1}", connection, transaction);
+            await using var command = new NpgsqlCommand($"SELECT t.{Quote(source.KeyColumn)}::text, row_to_json(t)::text FROM (SELECT {columns} FROM {Quote(source.Schema)}.{Quote(source.Table)}) t ORDER BY t.{Quote(source.KeyColumn)} LIMIT {DataSourceRules.RecordLimit(source) + 1}", connection, transaction);
             var result = new List<SourceRecord>();
             long chars = 0;
             await using var reader = await command.ExecuteReaderAsync(ct);
@@ -41,9 +41,9 @@ public sealed class DatabaseSourceReader(AppDbContext db, IDataEncryptor encrypt
                 var key = reader.IsDBNull(0) ? "" : reader.GetString(0);
                 var json = reader.GetString(1);
                 chars += json.Length;
-                if (json.Length > DataSourceRules.MaxRecordChars || chars > 8_000_000)
+                if (json.Length > DataSourceRules.MaxRecordChars || chars > DataSourceRules.SnapshotCharLimit(source))
                 {
-                    throw new InvalidOperationException("Source snapshot exceeds the 16,000-character record or 8-million-character snapshot limit.");
+                    throw new InvalidOperationException("Source snapshot exceeds its record or total character limit.");
                 }
                 result.Add(new(key, json));
             }

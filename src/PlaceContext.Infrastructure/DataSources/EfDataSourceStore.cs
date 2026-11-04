@@ -24,9 +24,9 @@ public sealed class EfDataSourceStore(AppDbContext db, IDataEncryptor encryption
     {
         DataSourceRules.Validate(source);
         var connection = SourceSettings.Validate(source.Provider, connectionString);
-        if (await db.DataSources.CountAsync(row => row.ProjectId == source.ProjectId, ct) >= 10)
+        if (await db.DataSources.CountAsync(row => row.ProjectId == source.ProjectId, ct) >= DataSourceRules.MaxSources)
         {
-            throw new InvalidOperationException("Sources support up to 10 sources per project.");
+            throw new InvalidOperationException($"Sources support up to {DataSourceRules.MaxSources} sources per project.");
         }
         var row = new DataSourceRow
         {
@@ -41,10 +41,10 @@ public sealed class EfDataSourceStore(AppDbContext db, IDataEncryptor encryption
 
     public async Task<IReadOnlyList<SourceDocument>> ReadDocumentsAsync(Guid projectId, Guid sourceId, CancellationToken ct)
     {
-        await FindAsync(projectId, sourceId, ct);
+        var source = View(await FindAsync(projectId, sourceId, ct));
         var rows = await db.SourceDocuments.AsNoTracking().Where(row => row.SourceId == sourceId)
-            .Take(DataSourceRules.MaxRecords + 1).ToListAsync(ct);
-        if (rows.Count > DataSourceRules.MaxRecords)
+            .Take(DataSourceRules.RecordLimit(source) + 1).ToListAsync(ct);
+        if (rows.Count > DataSourceRules.RecordLimit(source))
         {
             throw new InvalidOperationException("Source exceeds the supported record limit.");
         }
@@ -97,6 +97,11 @@ public sealed class EfDataSourceStore(AppDbContext db, IDataEncryptor encryption
             {
                 var deleted = existing.Values.Select(value => Decode<SourceDocument>(value.ContentCipher, source.Id))
                     .Select(document => document.Key).ToArray();
+                // Queue submissions save repeatedly; do not rescan the saved snapshot on every batch.
+                foreach (var entry in db.ChangeTracker.Entries<SourceDocumentRow>().ToArray())
+                {
+                    entry.State = EntityState.Detached;
+                }
                 await (delivery ?? throw new InvalidOperationException("Queue delivery is unavailable."))
                     .PublishAsync(source with { Version = row.Version }, changed, deleted, ct);
                 await transaction!.CommitAsync(ct);

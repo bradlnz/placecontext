@@ -19,6 +19,25 @@ namespace PlaceContext.Infrastructure.Tests;
 
 public sealed class SourceQueueDeliveryTests
 {
+    [Theory]
+    [InlineData(10, 0, 26)]
+    [InlineData(250, 0, 2)]
+    [InlineData(250, 15000, 84)]
+    public void Queue_batches_preserve_all_records_and_fit_review_context(int size, int textLength, int expectedBatches)
+    {
+        var source = new DataSourceDefinition(Guid.NewGuid(), Guid.NewGuid(), "Orders", "public", "orders", "id",
+            ["id", "body"], [], false, Guid.NewGuid(), Queue: new(Guid.NewGuid(), [], [], BatchSize: size));
+        var rows = Enumerable.Range(1, 251).Select(id => new SourceRecord(id.ToString(),
+            JsonSerializer.Serialize(new { id, body = new string('x', textLength) }))).ToArray();
+        var documents = SourcePreparation.Prepare(source, rows, DateTimeOffset.UtcNow);
+        var payloads = SourceQueueDelivery.RecordPayloads(source, documents).ToArray();
+        Assert.Equal(expectedBatches, payloads.Length);
+        Assert.Equal(251, payloads.Sum(payload => payload.GetProperty("records").GetArrayLength()));
+        Assert.Equal(Enumerable.Range(1, 251), payloads.SelectMany(payload => payload.GetProperty("records").EnumerateArray())
+            .Select(record => record.GetProperty("id").GetInt32()));
+        Assert.All(payloads, payload => Assert.InRange(payload.GetRawText().Length, 1, 60000));
+    }
+
     [AgentPostgresFact]
     public async Task Prepared_records_and_queue_messages_commit_atomically_with_encryption_and_retry_deduplication()
     {

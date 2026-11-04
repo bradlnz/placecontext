@@ -72,7 +72,13 @@ public static class SourcePreparation
         => Document(source, key, JsonSerializer.Serialize(new Dictionary<string, string> { [source.KeyColumn] = key }), error, now);
 
     private static SourceDocument Document(DataSourceDefinition source, string key, string json, string? error, DateTimeOffset now)
-        => new(key, json, Hash(JsonSerializer.Serialize(new { json, error, source.Queue, source.Tags })), [], now, ValidationError: error);
+        => new(key, json, Hash(JsonSerializer.Serialize(new
+        {
+            json, error,
+            // Delivery batch size must not change content identity or requeue existing records.
+            Queue = source.Queue is { } queue ? new { queue.QueueId, queue.RequiredFields, queue.RedactedFields, queue.TrimText, queue.ApprovedBy } : null,
+            source.Tags
+        })), [], now, ValidationError: error);
 
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
