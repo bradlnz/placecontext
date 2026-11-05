@@ -5,34 +5,26 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class RunOutputViewModelTests
 {
-    [Fact]
-    public async Task Large_output_is_bounded_before_js_interop_and_changes_outside_the_preview_do_not_reload_it()
+    [Theory]
+    [InlineData("json")]
+    [InlineData("plaintext")]
+    public async Task Large_output_is_complete_and_updates_when_only_the_tail_changes(string language)
     {
         var js = new Js();
-        var value = new string('x', 1_000_000);
-        var vm = new RunOutputViewModel(js) { Value = value };
+        var value = "{\"result\":\"" + new string('x', 1_000_000) + "\"}";
+        var vm = new RunOutputViewModel(js) { Value = value, Language = language };
         await vm.AfterRenderAsync();
-        Assert.True(vm.Truncated);
-        Assert.Equal(value[..RunOutputViewModel.MaxPreviewChars], js.Calls[0].Args[1]);
-        Assert.Equal("plaintext", js.Calls[0].Args[2]);
+        Assert.Equal(value, js.Calls[0].Args[1]);
+        Assert.Equal(language, js.Calls[0].Args[2]);
         Assert.Equal(value, vm.Value);
-        vm.Value += "tail update";
+        vm.Value = value.Replace("\"}", "😀tail update\"}");
         await vm.AfterRenderAsync();
-        Assert.Single(js.Calls);
+        Assert.Equal(vm.Value, js.Calls[1].Args[1]);
+        Assert.Equal(language, js.Calls[1].Args[2]);
         vm.Value = "{\"short\":true}";
         await vm.AfterRenderAsync();
-        Assert.False(vm.Truncated);
-        Assert.Equal(vm.Value, js.Calls[1].Args[1]);
-        Assert.Equal("json", js.Calls[1].Args[2]);
-    }
-
-    [Fact]
-    public async Task Preview_does_not_split_a_surrogate_pair()
-    {
-        var js = new Js();
-        var vm = new RunOutputViewModel(js) { Value = new string('x', RunOutputViewModel.MaxPreviewChars - 1) + "😀tail" };
-        await vm.AfterRenderAsync();
-        Assert.Equal(new string('x', RunOutputViewModel.MaxPreviewChars - 1), js.Calls[0].Args[1]);
+        Assert.Equal(vm.Value, js.Calls[2].Args[1]);
+        Assert.Equal(language, js.Calls[2].Args[2]);
     }
 
     [Theory]

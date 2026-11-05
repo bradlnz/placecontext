@@ -132,7 +132,6 @@ public sealed partial class BuildChatViewModel
             return;
         }
         OpenWorkspace();
-        ShowOverview = false;
         PreviewChart = null;
         var version = ++_previewVersion;
         var projectId = Conversation.ProjectId;

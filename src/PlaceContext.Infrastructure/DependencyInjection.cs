@@ -83,7 +83,6 @@ public static class DependencyInjection
             configuration.GetSection("PlaceContext:OpenSearch"));
 
         services.AddScoped<PlaceContext.Application.Build.IBuildChatStore, Build.DbBuildChatStore>();
-        services.AddSingleton<Build.LocalModelDiscovery>();
         services.AddScoped<Build.LocalCliModels>();
         services.AddScoped<Build.ModelConnections>();
         services.AddScoped<PlaceContext.Application.Build.IModelConnections>(sp => sp.GetRequiredService<Build.ModelConnections>());
@@ -295,18 +294,12 @@ public static class DependencyInjection
         services.AddScoped<IChainRunRepository, EfChainRunRepository>();
         services.AddScoped<IEventRepository, EfEventRepository>();
 
-        // Embeddings: Voyage AI when a key is configured, else the cluster shard server
-        // (self-hosted, vectors from the chat model's hidden states), else a no-op.
+        // Embeddings require an explicitly configured provider.
         void ConfigureEmbeddings()
         {
             if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:Voyage:ApiKey"]))
             {
                 services.AddSingleton<IEmbeddingGateway, Embeddings.RemoteEmbeddingGateway>();
-                return;
-            }
-            if (!string.IsNullOrWhiteSpace(configuration["PlaceContext:ClusterChat:Endpoint"]))
-            {
-                services.AddSingleton<IEmbeddingGateway, Embeddings.ClusterEmbeddingGateway>();
                 return;
             }
             services.AddSingleton<IEmbeddingGateway, Embeddings.NullEmbeddingGateway>();

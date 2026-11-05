@@ -318,6 +318,7 @@ public sealed class DataSourcePipelineTests
 
     private sealed class Reviewer : PlaceContext.Application.Build.IOutcomeReviewer
     {
+        public Task<System.Text.Json.Nodes.JsonObject> ScoreAsync(IReadOnlyList<PlaceContext.Domain.ValueObjects.ScoreCriterion> criteria, string state, CancellationToken ct, Guid? projectId = null) => throw new NotSupportedException();
         public List<string> States { get; } = [];
         public string? Failure { get; set; }
         public CancellationTokenSource? Cancellation { get; set; }

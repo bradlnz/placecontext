@@ -70,6 +70,15 @@ jobs:
             --configuration Release --no-restore \
             --filter "FullyQualifiedName~JobTemplateCatalogTests|FullyQualifiedName~DataWorkflowSaasFoundationTests|FullyQualifiedName~WorkflowConditionalPathTests|FullyQualifiedName~ManagedWorkflowQueueContractTests|FullyQualifiedName~ManagedJobSubmissionContractTests|FullyQualifiedName~RpcChainIngestionContractTests"
 
+      - name: Run workflow recovery and concurrency checks
+        run: |
+          dotnet test tests/PlaceContext.Application.Tests/PlaceContext.Application.Tests.csproj \
+            --configuration Release --no-restore \
+            --filter "FullyQualifiedName~JobChainTests|FullyQualifiedName~CancelChainRunTests|FullyQualifiedName~RunStatusWatchServiceTests"
+          dotnet test tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj \
+            --configuration Release --no-restore \
+            --filter "FullyQualifiedName~ChainInputResumeTests|FullyQualifiedName~ChainRunCancellationTests|FullyQualifiedName~RunStatusReconciliationTests|FullyQualifiedName~TypeSafeRateLimitTests|FullyQualifiedName~RpcChainSubmissionBackgroundServiceTests|FullyQualifiedName~ClusterWorkloadAdmissionTests"
+
       - name: Validate SaaS allowance, signed billing and OAuth
         run: |
           dotnet test tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj \

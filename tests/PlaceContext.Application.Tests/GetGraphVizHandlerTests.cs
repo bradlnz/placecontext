@@ -1,102 +1,69 @@
+using System.Reflection;
+using PlaceContext.Application.Access;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.TestSupport;
 
 namespace PlaceContext.Application.Tests;
 
 public sealed class GetGraphVizHandlerTests
 {
-    [Fact]
-    public async Task Artifact_nodes_include_metadata_required_for_inline_preview()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Graph_contains_only_tables_and_mappings_for_job_and_workflow_sources(bool enabled)
     {
-        var projectId = Guid.NewGuid();
-        var runId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var projects = new InMemoryProjectRepository();
+        var project = Project.Discover(ProjectPath.From("/repo/graph"), ProjectName.From("Graph"), now);
+        await projects.AddAsync(project);
+        var projectId = project.Id.Value;
         var jobId = Guid.NewGuid();
-        var createdAt = new DateTimeOffset(2026, 8, 18, 1, 2, 3, TimeSpan.Zero);
-        var artifact = RunArtifactLink.Create(
-            runId,
-            jobId,
-            projectId,
-            PostJobActionKind.RawBundle,
-            "site-plan.pdf",
-            "artifacts",
-            "runs/site-plan.pdf",
-            "application/pdf",
-            1234,
-            createdAt
-        );
-        var tree = DecisionTree.Of(
-            [new DecisionTreeNode($"artifact:{artifact.Id:N}", artifact.Title, TreeNodeKind.Artifact, 0, false)],
-            []
-        );
-        var handler = new GetGraphVizHandler(
-            new StubTreeProvider(tree),
-            new StubArtifactRepository([artifact])
-        );
+        var chainId = Guid.NewGuid();
+        var mappings = new InMemoryDataMappingRepository();
+        var mapping = DataMapping.Create(projectId, jobId, "orders", "rows", [new("id", "order_id", "text")], now, enabled);
+        await mappings.AddAsync(mapping);
+        var chainMapping = DataMapping.Create(projectId, chainId, "pending_table", null, [new("$", "payload", "text")], now, sourceKind: "chain");
+        await mappings.AddAsync(chainMapping);
+        await mappings.AddAsync(DataMapping.Create(Guid.NewGuid(), jobId, "other_project", null, [new("$", "payload", "text")], now));
+        var store = DispatchProxy.Create<IProjectDataStore, MetadataStore>();
+        ((MetadataStore)(object)store).ProjectId = projectId;
+        var handler = new GetGraphVizHandler(projects, store, mappings);
 
-        var graph = await handler.HandleAsync(new GetGraphVizQuery(projectId));
+        var graph = await handler.HandleAsync(new(projectId));
 
-        var reference = Assert.Single(graph.Nodes).Artifact;
-        Assert.NotNull(reference);
-        Assert.Equal(artifact.Id, reference.Id);
-        Assert.Equal(runId, reference.RunId);
-        Assert.Equal("site-plan.pdf", reference.Title);
-        Assert.Equal("application/pdf", reference.ContentType);
-        Assert.Equal(createdAt, reference.CreatedAt);
+        Assert.Equal(5, graph.NodeCount);
+        Assert.Equal(2, graph.LinkCount);
+        Assert.All(graph.Nodes, node => Assert.Contains(node.Kind, new[] { "Mapping", "Table" }));
+        Assert.Contains(graph.Nodes, node => node.Id == "table:unmapped" && node.Degree == 0);
+        Assert.Contains(graph.Nodes, node => node.Id == "table:pending_table" && node.Content!.Contains("not been created"));
+        var mapped = Assert.Single(graph.Nodes, node => node.Id == $"mapping:{mapping.Id:N}");
+        Assert.Equal(1, mapped.Degree);
+        Assert.Contains("id → order_id (text)", mapped.Content);
+        var confidence = enabled ? "Direct" : "Ambiguous";
+        Assert.Contains(graph.Links, link => link.Source == mapped.Id && link.Target == "table:orders" && link.Confidence == confidence);
+        Assert.DoesNotContain(graph.Nodes, node => node.Id.Contains("other_project"));
     }
 
-    private sealed class StubTreeProvider(DecisionTree tree) : IDecisionTreeProvider
+    [Fact]
+    public async Task Unknown_project_is_rejected_before_reading_metadata()
     {
-        public Task<DecisionTree> BuildAsync(
-            ProjectId projectId,
-            CancellationToken ct = default
-        ) => Task.FromResult(tree);
+        var handler = new GetGraphVizHandler(new InMemoryProjectRepository(), null!, null!);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(new(Guid.NewGuid())));
+        Assert.Equal(Permission.DataRead, new GetGraphVizQuery(Guid.NewGuid()).RequiredPermission);
+        Assert.Equal(Permission.ArtifactsView, new ListProjectArtifactsQuery(Guid.NewGuid()).RequiredPermission);
     }
 
-    private sealed class StubArtifactRepository(IReadOnlyList<RunArtifactLink> artifacts)
-        : IRunArtifactLinkRepository
+    public class MetadataStore : DispatchProxy
     {
-        public Task<IReadOnlyList<RunArtifactLink>> ListForProjectAsync(
-            Guid projectId,
-            int take,
-            string? search = null,
-            CancellationToken ct = default, int skip = 0
-        ) => Task.FromResult(artifacts);
-
-        public Task AddAsync(RunArtifactLink link, CancellationToken ct = default) =>
-            Task.CompletedTask;
-
-        public Task<IReadOnlyList<RunArtifactLink>> ListForRunAsync(
-            Guid runId,
-            CancellationToken ct = default
-        ) => Task.FromResult<IReadOnlyList<RunArtifactLink>>([]);
-
-        public Task<RunArtifactLink?> GetByIdAsync(Guid id, CancellationToken ct = default) =>
-            Task.FromResult<RunArtifactLink?>(null);
-
-        public Task<IReadOnlyList<RunArtifactLink>> ListForJobAsync(
-            Guid jobId,
-            CancellationToken ct = default
-        ) => Task.FromResult<IReadOnlyList<RunArtifactLink>>([]);
-
-        public Task<IReadOnlyList<RunArtifactLink>> ListRecentAsync(
-            int take,
-            CancellationToken ct = default, int skip = 0, string? search = null
-        ) => Task.FromResult<IReadOnlyList<RunArtifactLink>>([]);
-
-        public Task<IReadOnlyList<RunArtifactLink>> ListPendingOcrAsync(
-            int take,
-            CancellationToken ct = default
-        ) => Task.FromResult<IReadOnlyList<RunArtifactLink>>([]);
-
-        public Task MarkOcrProcessedAsync(
-            Guid artifactId,
-            DateTimeOffset processedAt,
-            string? error,
-            CancellationToken ct = default
-        ) => Task.CompletedTask;
-
-        public Task RemoveAsync(Guid id, CancellationToken ct = default) => Task.CompletedTask;
+        public Guid ProjectId { get; set; }
+        protected override object? Invoke(MethodInfo? method, object?[]? args)
+        {
+            Assert.Equal(nameof(IProjectDataStore.ListTablesAsync), method!.Name);
+            Assert.Equal(ProjectId, args![0]);
+            return Task.FromResult<IReadOnlyList<ProjectTableInfo>>([new("orders", 500), new("unmapped", 0)]);
+        }
     }
 }

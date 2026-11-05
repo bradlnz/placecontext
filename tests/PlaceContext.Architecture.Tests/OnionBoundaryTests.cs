@@ -7,7 +7,6 @@ public sealed class OnionBoundaryTests
 {
     [Theory]
     [InlineData("PlaceContext.Host")]
-    [InlineData("PlaceContext.ClusterHost")]
     public void Presentation_uses_application_contracts_and_only_composition_references_infrastructure(string project)
     {
         var violations = new List<string>();
@@ -35,7 +34,7 @@ public sealed class OnionBoundaryTests
     {
         string[] vendors = ["OpenSearch", "Slack", "Stripe", "Kubernetes", "Docker", "Qemu", "Qdrant", "Voyage", "Redis", "Npgsql", "Tailscale", "Postmark", "SendGrid", "Twilio", "TypeSafe", "Jev", "Codex", "Anthropic", "OpenAi", "ChatGpt"];
         var violations = new List<string>();
-        foreach (var project in new[] { "PlaceContext.Domain", "PlaceContext.Application", "PlaceContext.Infrastructure", "PlaceContext.Host", "PlaceContext.ClusterHost" })
+        foreach (var project in new[] { "PlaceContext.Domain", "PlaceContext.Application", "PlaceContext.Infrastructure", "PlaceContext.Host" })
         {
             foreach (var path in SourceFiles(project).Where(path => !path.Split(Path.DirectorySeparatorChar).Contains("Migrations")))
             {

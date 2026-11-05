@@ -4,13 +4,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Access;
 using PlaceContext.Application.Billing;
+using PlaceContext.Application.Build;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Operations;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application.Workload.VirtualMachines;
-using PlaceContext.Application.Workload;
 using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
@@ -21,7 +21,6 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly PlaceContextService _svc;
     private readonly OperationCenter _opCenter;
     private readonly BackgroundOperationRunner _ops;
-    private readonly IWorkloadOutputBuffer _outputBuffer;
     private readonly IPermissionService _permissions;
     private readonly NavigationManager _navigation;
     private readonly ParameterPromptState _runPrompt = new();
@@ -31,29 +30,29 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly IVirtualMachineEnvironmentCatalog? _qemuCatalog;
     private readonly IVirtualMachineLoginStore? _qemuLogins;
     private readonly ICurrentTenant? _tenant;
+    private readonly IModelConnections? _modelConnections;
     private IDisposable? _operationSubscription;
 
     public JobChainsViewModel(
         PlaceContextService svc,
         OperationCenter opCenter,
-        IWorkloadOutputBuffer outputBuffer,
         IPermissionService permissions,
         NavigationManager navigation,
         IJobChainSubmissionQueue? submissions = null,
         IVirtualMachineEnvironmentCatalog? qemuCatalog = null,
         ICurrentTenant? tenant = null,
         IVirtualMachineLoginStore? qemuLogins = null,
-        IOptions<RunBillingDeploymentOptions>? hosting = null
+        IOptions<RunBillingDeploymentOptions>? hosting = null, IModelConnections? modelConnections = null
     )
     {
         _svc = svc;
+        _modelConnections = modelConnections;
         _submissions = submissions;
         _managedHosting = hosting?.Value.ManagedHosting ?? false;
         _qemuCatalog = qemuCatalog;
         _qemuLogins = qemuLogins;
         _tenant = tenant;
         _opCenter = opCenter;
-        _outputBuffer = outputBuffer;
         _permissions = permissions;
         _navigation = navigation;
         _ops = new BackgroundOperationRunner(opCenter);

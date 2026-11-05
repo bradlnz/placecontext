@@ -86,7 +86,7 @@ public static class WorkloadDependencies
             SetupTemplate: WorkloadScriptLoader.Load("python/setup.sh"),
             EnvTemplate: WorkloadScriptLoader.Load("python/env.sh"),
             InstallTemplate: WorkloadScriptLoader.Load("python/install.sh"),
-            Companions: Array.Empty<string>(),
+            Companions: new[] { "requirements.lock" },
             BakeInstall: WorkloadScriptLoader.Load("python/bake.sh"),
             BakeEnv: WorkloadScriptLoader.Load("python/bake.env")),
         // HOME points into the deps root: the image's real home (/root) is read-only under the

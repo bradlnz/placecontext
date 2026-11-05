@@ -313,11 +313,6 @@ else
                             @if (shard.Artifact is not null)
                             {
                                 <RunOutput Value="@(Vm.Presentation.Json(shard.Artifact))" />
-                                @if (Vm.TryArtifactSvg(shard.Artifact, out var shardChart))
-                                {
-                                    <div class="chart-label">chart <span class="text-3">(from the artifact's JSON)</span></div>
-                                    @((MarkupString)shardChart)
-                                }
                             }
                             else
                             {
@@ -348,11 +343,6 @@ else
                             @if (reduce.Artifact is not null)
                             {
                                 <RunOutput Value="@(JobsViewModel.PrettyJson(reduce.Artifact))" />
-                                @if (Vm.TryArtifactSvg(reduce.Artifact, out var reduceChart))
-                                {
-                                    <div class="chart-label">chart <span class="text-3">(from the artifact's JSON)</span></div>
-                                    @((MarkupString)reduceChart)
-                                }
                             }
                             @if (reduce.Artifacts.Count > 0)
                             {

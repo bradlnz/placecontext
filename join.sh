@@ -115,8 +115,8 @@ while [ $# -gt 0 ]; do
 done
 
 case "$NODE_TYPE" in
-  standard-worker|ai-shard) ;;
-  *) die "Unsupported node type: $NODE_TYPE (expected standard-worker or ai-shard)" ;;
+  standard-worker) ;;
+  *) die "Unsupported node type: $NODE_TYPE (expected standard-worker)" ;;
 esac
 
 # Exchange a one-time agent token for a real join code via the portal API.

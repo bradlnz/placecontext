@@ -50,7 +50,7 @@ The script forwards arguments to `dotnet run`, for example `./run.sh --no-build`
   integration. `Mcp` contains the MCP tool/prompt adapters. `Auth` separates authentication,
   authorization, OAuth, SSO, options, models, and standalone pages/templates. Reusable backup archive
   generation belongs with `Application/Backup`, not in Host.
-- `src/PlaceContext.ClusterHost` and `src/PlaceContext.DesktopAgent`: cluster proxy and VM guest agent.
+- `src/PlaceContext.DesktopAgent`: VM guest agent.
 - `tests`: tests grouped by layer, plus browser and deployment checks.
 - `deploy`, `examples`, and `docs`: deployment assets, runnable examples, and development notes.
   Operator documentation is embedded from `src/PlaceContext.Host/Wiki`.
@@ -67,7 +67,7 @@ Dependencies point inward: Host composes Application and Infrastructure; Infrast
 contracts owned by Application or Domain; Application depends on Domain. Domain owns business rules
 and invariants, with no dependency on the web framework, database, or external service clients.
 Use the existing feature folders and CQRS dispatcher rather than adding another service layer.
-Both web hosts may reference Infrastructure only from `Program.cs` for composition. Endpoints and
+The web host may reference Infrastructure only from `Program.cs` for composition. Endpoints and
 view models call application services or ports; they do not use EF, persistence rows, repositories,
 or units of work. Background workers and protocol clients live in Infrastructure. Build and agent
 workflow orchestration, communications use cases, tenant context, and operation tracking live in Application.

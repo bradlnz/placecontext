@@ -14,19 +14,15 @@ It verifies a source-free release bundle, provisions Docker with passwordless `s
 Linux, installs the remaining tools in user space, creates a local
 k3d cluster, pulls the versioned multi-architecture
 [PlaceContext image from GHCR](https://github.com/bradlnz/placecontext/pkgs/container/placecontext),
-and starts the portal. Local AI is disabled by default and can be enabled from the portal after
-installation; scripted installs can opt in with `--ai`. This path is deliberately not HA and is not the
+and starts the portal. Configure AI providers in **Settings → Models**. The bundle does not include
+an inference worker. This path is deliberately not HA and is not the
 production path. Object storage is disabled unless an operator supplies the optional
 `placecontext-object-store` secret.
 
-AI shards can be installed independently:
-
-```bash
-curl -fsSL https://get.placecontext.io/install.sh | \
-  bash -s -- --ai-shard --shard-index 0 --total-shards 2
-```
-
-Use the same private `--ai-token` for every worker and the controller.
+When upgrading an installation that used bundled AI, stop its old `placecontext-ai` user service
+or `io.placecontext.ai-worker` launch agent and remove the `placecontext-cluster-host` Kubernetes
+deployment/service separately. The new release does not uninstall existing services or model files.
+Saved model connections and indexed data are retained; new embeddings require a configured provider.
 
 ## Production on Kubernetes
 

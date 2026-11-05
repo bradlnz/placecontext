@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Components;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.DataSources;
 using PlaceContext.Application.Features;
@@ -7,7 +8,8 @@ using PlaceContext.Host.Components.Models;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class DataSourcesViewModel(IDispatcher dispatcher, PortalUiState ui) : PageViewModel
+public sealed class DataSourcesViewModel(IDispatcher dispatcher, PortalUiState ui,
+    IConfiguration configuration, NavigationManager navigation) : PageViewModel
 {
     public IReadOnlyList<SourceProvider> ConnectableProviders { get; } = SourceProviders.All
         .Where(provider => provider.Id != "email")
@@ -121,7 +123,6 @@ public sealed class DataSourcesViewModel(IDispatcher dispatcher, PortalUiState u
     public bool TrimText { get; set; } = true;
     public int BatchSize { get; set; } = 10;
     public bool EditingQueue { get; private set; }
-    public string HostUrl { get; set; } = "";
     public string Query { get; set; } = "";
     public Guid SelectedSourceId { get; set; }
     public bool ShowConnect { get; private set; }
@@ -486,7 +487,9 @@ public sealed class DataSourcesViewModel(IDispatcher dispatcher, PortalUiState u
     public Task CreateWorkflowAsync(Guid id) => PerformAsync(async () =>
     {
         var projectId = ProjectId;
-        var workflow = await dispatcher.Send(new CreateSourceWorkflowCommand(projectId, id, HostUrl));
+        var configuredUrl = configuration["PlaceContext:PublicBaseUrl"];
+        var hostUrl = string.IsNullOrWhiteSpace(configuredUrl) ? navigation.BaseUri : configuredUrl.Trim();
+        var workflow = await dispatcher.Send(new CreateSourceWorkflowCommand(projectId, id, hostUrl));
         if (projectId != ProjectId)
         {
             return;

@@ -12,6 +12,7 @@ public sealed class ChainRunRow : ITenantOwned
     {
         get; set;
     }
+    public Guid? InitiatedBy { get; set; }
     public Guid ChainId
     {
         get; set;

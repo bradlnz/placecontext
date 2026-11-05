@@ -1,0 +1,25 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div id="@_id" class="workflow-instructions-editor" style="flex:1; min-height:0; height:100%; width:100%"></div>
+
+@code {
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "Agent task instructions in Markdown";
+    private readonly string _id = "workflow-instructions-" + Guid.NewGuid().ToString("N");
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("pcmonaco.init", _id, Value, "markdown", null, "instructions.md", false, Label);
+    }
+
+    public async Task<string> ReadAsync() => await JS.InvokeAsync<string?>("pcmonaco.getValue", _id) ?? Value;
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("pcmonaco.destroy", _id); }
+        catch (JSDisconnectedException) { }
+        catch (TaskCanceledException) { }
+    }
+}

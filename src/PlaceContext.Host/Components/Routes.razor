@@ -4,6 +4,11 @@
 <Router AppAssembly="@typeof(Program).Assembly">
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+            <Authorizing>
+                <div role="status" aria-label="Loading view" aria-busy="true">
+                    <Skeleton Kind="detail" Rows="6" Padded />
+                </div>
+            </Authorizing>
             <NotAuthorized>
                 @{ Vm.NavigateToLocked(); }
             </NotAuthorized>

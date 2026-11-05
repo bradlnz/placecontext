@@ -32,15 +32,6 @@ public sealed class DashboardObservabilityClusterAnalyticsMvvmTests
     }
 
     [Theory]
-    [InlineData("Succeeded", "var(--good)")]
-    [InlineData("Failed", "var(--bad)")]
-    [InlineData("Running", "var(--good)")]
-    public void Dashboard_status_colors_are_view_model_decisions(string status, string expected)
-    {
-        Assert.Equal(expected, DashboardViewModel.StatusColor(status));
-    }
-
-    [Theory]
     [InlineData(0, "0 ms")]
     [InlineData(999, "999 ms")]
     [InlineData(1000, "1 s")]
@@ -74,19 +65,6 @@ public sealed class DashboardObservabilityClusterAnalyticsMvvmTests
                 + "https://portal.example --token token --node-type standard-worker",
             ClusterViewModel.BuildJoinCommand("https://portal.example/", "token")
         );
-    }
-
-    [Fact]
-    public void Cluster_formats_ai_shard_join_and_runtime_command()
-    {
-        var command = ClusterViewModel.BuildAiShardJoinCommand(
-            "https://portal.example/",
-            "token",
-            shardIndex: 1,
-            totalShards: 3);
-
-        Assert.Contains("--node-type ai-shard", command, StringComparison.Ordinal);
-        Assert.Contains("--ai-shard --shard-index 1 --total-shards 3", command, StringComparison.Ordinal);
     }
 
     [Fact]

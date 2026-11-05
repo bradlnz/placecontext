@@ -93,14 +93,21 @@ public sealed class ChainContinuationBackgroundService : BackgroundService
                 {
                     return;
                 }
+                Guid? executionUser = persisted.InitiatedBy;
                 if (persisted.InputRequest is { } protectedRequest)
                 {
                     var inputRequest = System.Text.Json.JsonSerializer.Deserialize<ChainInputRequest>(
                         encryptor.Unprotect(protectedRequest, PlaceContext.Application.Secrets.IDataEncryptor.Purpose.ChainRun));
-                    if (inputRequest?.SubmittedBy is { } userId)
+                    executionUser = inputRequest?.SubmittedBy ?? executionUser;
+                }
+                if (executionUser is { } userId)
+                {
+                    if (userId == PlaceContext.Application.Auth.TrustedServicePrincipals.ManagementApiUserId)
+                        CurrentUser.Set(new UserIdentity(userId, nameof(PlaceContext.Application.Access.UserRole.Owner)));
+                    else
                     {
                         var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(row => row.Id == userId, ct)
-                            ?? throw new InvalidOperationException("The input submitter no longer exists.");
+                            ?? throw new InvalidOperationException("The workflow's executing user no longer exists.");
                         CurrentUser.Set(new UserIdentity(user.Id, user.Role));
                     }
                 }
@@ -155,17 +162,14 @@ public sealed class ChainContinuationBackgroundService : BackgroundService
             return;
         }
         await using var tenantDb = new AppDbContext(db.ContextOptions, new TenantInfo(tenantId.Value, "", "", "UTC"));
-        var row = await tenantDb.ChainRuns.FirstOrDefaultAsync(x => x.Id == runId, ct);
         // Dispatch can fail after Resume has marked the run Running. Keep its checkpoint
-        // retryable, without reviving cancellation, completion, or a new input request.
-        if (row is null || row.Status is not ("Waiting" or "Running"))
-        {
-            return;
-        }
-        row.Status = "Waiting";
-        row.ContinuationClaimedAt = null;
-        row.ContinuationClaimedBy = null;
-        await tenantDb.SaveChangesAsync(ct);
+        // retryable only while we still own it, without reviving terminal runs or input holds.
+        await tenantDb.ChainRuns
+            .Where(row => row.Id == runId && row.ContinuationClaimedBy == _instanceId
+                && (row.Status == "Waiting" || row.Status == "Running"))
+            .ExecuteUpdateAsync(update => update.SetProperty(row => row.Status, "Waiting")
+                .SetProperty(row => row.ContinuationClaimedAt, (DateTimeOffset?)null)
+                .SetProperty(row => row.ContinuationClaimedBy, (string?)null), ct);
     }
 
     private sealed record Continuation(Guid RunId, Guid TenantId, Guid ChainId, int StageIndex);

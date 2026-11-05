@@ -495,12 +495,6 @@
     overflow-y: auto;
 }
 
-.chart-label {
-    font-size: 11px;
-    color: var(--text-3);
-    margin-top: 8px;
-}
-
 .text-dim {
     color: var(--text-3);
 }

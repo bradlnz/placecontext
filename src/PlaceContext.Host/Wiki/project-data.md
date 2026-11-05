@@ -16,8 +16,7 @@ Each project has an isolated SQL workspace. Open **Data → Tables** to:
 - create a table with the table builder;
 - run SQL in the editor;
 - browse table rows;
-- rename or remove tables;
-- export query results to CSV.
+- rename or remove tables.
 
 Project database roles keep one project's tables separate from another project's data and from
 PlaceContext's system tables.
@@ -33,7 +32,7 @@ aggregate and order the results in SQL before charting. Saving reads the current
 The chart query runs in a read-only project transaction with a 10-second statement timeout and a
 500-row result limit; charts display up to 24 labels.
 
-Analytics and the dashboard's **Charts** view refresh queries every 10 seconds while open. This is
+Analytics refreshes queries every 10 seconds while open. This is
 polling, so changes appear on the next completed refresh. In Analytics, turn off **Live** to pause
 updates or select **Refresh now**. Refreshes do not rewrite saved chart definitions. Query failures
 show an error and the saved snapshot; other charts continue updating. Older snapshots without SQL
@@ -58,9 +57,14 @@ Use **Suggest from last run** to prefill fields for a job with a recent result.
 
 ## Data graph
 
-Open **Data → Graph** to follow project relationships between tables, entities, jobs, runs,
-decisions, and artifacts. Clicking a previewable artifact or attachment renders it in the graph
-detail panel, so supporting files can be inspected without leaving the graph.
+Open **Data → Graph** to explore project tables and their data mappings.
+Disabled mappings have dashed links. Select a table to open its data.
+Jobs, workflows, their outputs, and individual runs are not graph nodes. The graph loads only
+table and mapping metadata.
+
+The **Artifacts** table loads stored files in pages when requested. Open a file for its preview,
+or choose **Map source output** to map that job's primary JSON output into a table. This does not
+import arbitrary file contents; artifact files stay in artifact storage.
 
 ## Good practice
 
@@ -279,8 +283,9 @@ rules, then **Rebuild retrieval** to reevaluate retained records. Sources may ex
 turn Jev off; existing sources keep that behavior until configured.
 
 Create an ingestion workflow from **Automate ingestion**, then extend it with processing
-jobs on the canvas. Supply the worker-reachable portal URL. Source credentials
-remain in the portal. Jobs receive short-lived tokens tied to their active run and project.
+jobs on the canvas. The workflow uses `PlaceContext:PublicBaseUrl` when configured, otherwise
+the current portal base address. Configure the public URL to be reachable from workers. Source
+credentials remain in the portal. Jobs receive short-lived tokens tied to their active run and project.
 Set `PC_USE_PROJECT_DATA=true`; read approved records with
 `GET /api/v1/job-data/sources/{sourceId}/records?offset=0&take=100` using `PC_DATA_TOKEN`
 as a bearer credential. Page until an empty result. Responses contain `key` and `json`.

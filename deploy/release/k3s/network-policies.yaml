@@ -27,14 +27,3 @@ spec:
     - from:
         - podSelector: { matchLabels: { app: placecontext } }
       ports: [{ protocol: TCP, port: 5432 }]
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata: { name: cluster-host-ingress, namespace: placecontext }
-spec:
-  podSelector: { matchLabels: { app: placecontext-cluster-host } }
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - podSelector: { matchLabels: { app: placecontext } }
-      ports: [{ protocol: TCP, port: 8081 }]

@@ -5,6 +5,17 @@ namespace PlaceContext.Domain.Tests;
 public class LoopChainActionTests
 {
     [Fact]
+    public void Automatic_execution_requires_a_model_and_is_never_allowed_for_humans()
+    {
+        var connection = Guid.NewGuid();
+        Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.TaskType, "Build", "result", agentProvider: LoopChainAction.AutomaticAgent));
+        Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.TaskType, "Build", "result", agentProvider: LoopChainAction.AutomaticAgent, connectionId: connection, model: " "));
+        Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.HumanType, "Review", "result", agentProvider: LoopChainAction.AutomaticAgent, connectionId: connection, model: "test"));
+        Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.TaskType, "Build", "result", connectionId: connection, model: "test"));
+        Assert.Equal("test", new LoopChainAction(LoopChainAction.TaskType, "Build", "result", agentProvider: LoopChainAction.AutomaticAgent, connectionId: connection, model: "test").Model);
+    }
+
+    [Fact]
     public void Jev_is_an_explicit_agent_choice_and_existing_steps_remain_external()
     {
         Assert.Equal(LoopChainAction.ExternalAgent, new LoopChainAction(LoopChainAction.AgentType, "Review", "answer").AgentProvider);

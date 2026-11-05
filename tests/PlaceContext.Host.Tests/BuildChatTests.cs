@@ -6,11 +6,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
@@ -19,7 +15,6 @@ using PlaceContext.Application.Build;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Membership;
 using PlaceContext.Application.Operations;
 using PlaceContext.Application.Secrets;
@@ -99,14 +94,6 @@ public sealed class BuildChatTests
         fixture.Tenant.Slug = "other-workspace";
         Assert.Empty(await fixture.Connections.ListAsync());
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Connections.CompleteAsync(id, "test", [], [], default));
-    }
-
-    [Fact]
-    public void Images_reject_mislabeled_content_and_oversize_uploads()
-    {
-        Assert.Throws<ArgumentException>(() => new BuildImage("x.png", "image/png", "<svg>not a png</svg>"u8.ToArray()).Validate());
-        Assert.Throws<ArgumentException>(() => new BuildImage("x.png", "image/png", new byte[2_000_001]).Validate());
-        new BuildImage("x.png", "image/png", [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]).Validate();
     }
 
     [Fact]
@@ -203,6 +190,25 @@ public sealed class BuildChatTests
     }
 
     [Fact]
+    public async Task New_messages_require_text_and_enforce_the_length_limit()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var agent = fixture.Provider.GetRequiredService<BuildChatAgent>();
+        var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        foreach (var invalid in new[] { "", " \t\n", new string('x', 16001) })
+        {
+            await Assert.ThrowsAsync<ArgumentException>(() => agent.QueueAsync(conversation, invalid));
+        }
+        Assert.Empty(conversation.Messages);
+        var text = new string('x', 16000);
+        await agent.QueueAsync(conversation, text);
+        var content = conversation.Messages[0]!["content"]!.AsArray();
+        Assert.Equal("text", Assert.Single(content)!["type"]!.GetValue<string>());
+        Assert.Equal(text, content[0]!["text"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Agent_executes_tool_round_trip_and_persists_history()
     {
         await using var fixture = new Fixture();
@@ -212,7 +218,7 @@ public sealed class BuildChatTests
         var agent = new BuildChatAgent(fixture.Store, gateway, fixture.Service, fixture.Permissions, fixture.Tenant,
             operations: operations, user: fixture.User);
         var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "How do jobs work?", []);
+        await agent.QueueAsync(conversation, "How do jobs work?");
         Assert.Equal(BuildRunStatus.Queued, (await fixture.Store.LoadAsync(fixture.ProjectId, conversation.Id)).Status);
         var operation = Assert.Single(operations.ListForTenant(fixture.Tenant.TenantId, fixture.User.UserId));
         Assert.Contains($"conversation={conversation.Id}", operation.Link);
@@ -246,7 +252,7 @@ public sealed class BuildChatTests
         var gateway = new ScriptedModel("""{"tool_calls":[{"id":"q","type":"function","function":{"name":"ask_user","arguments":"{\"question\":\"Which language?\",\"answers\":[\" Use C# \",\"Use Python\"]}"}}]}""");
         var agent = new BuildChatAgent(fixture.Store, gateway, fixture.Service, fixture.Permissions, fixture.Tenant);
         var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "Help me choose a language", []);
+        await agent.QueueAsync(conversation, "Help me choose a language");
         await agent.RunAsync(conversation, default);
         Assert.Equal(1, gateway.Requests);
         Assert.Equal(BuildRunStatus.Completed, conversation.Status);
@@ -304,7 +310,7 @@ public sealed class BuildChatTests
         var gateway = new ScriptedModel("""{"tool_calls":[{"id":"q","function":{"name":"ask_user","arguments":"{\"question\":\"Proceed?\",\"answers\":[\"Yes\",\"No\"]}"}},{"id":"m","function":{"name":"remember","arguments":"{\"memory\":\"Must not be saved\"}"}}]}""");
         var agent = new BuildChatAgent(fixture.Store, gateway, fixture.Service, fixture.Permissions, fixture.Tenant);
         var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "Ask before proceeding", []);
+        await agent.QueueAsync(conversation, "Ask before proceeding");
         await agent.RunAsync(conversation, default);
         Assert.Equal(BuildRunStatus.Failed, conversation.Status);
         Assert.Equal("", await fixture.Store.GetMemoryAsync(fixture.ProjectId));
@@ -320,7 +326,7 @@ public sealed class BuildChatTests
         await fixture.SeedAsync();
         var agent = new BuildChatAgent(fixture.Store, new FailingModel(cancelled), fixture.Service, fixture.Permissions, fixture.Tenant);
         var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "Help", []);
+        await agent.QueueAsync(conversation, "Help");
         await agent.RunAsync(conversation, default);
         var saved = await fixture.Store.LoadAsync(fixture.ProjectId, conversation.Id);
         Assert.Equal("user", saved.Messages[0]!["role"]!.GetValue<string>());
@@ -388,28 +394,25 @@ public sealed class BuildChatTests
     }
 
     [Fact]
-    public void Quick_picks_fill_an_editable_draft_without_sending_or_overwriting_work()
+    public void Task_hints_fill_an_editable_draft_without_sending_or_overwriting_work()
     {
         var vm = new BuildChatViewModel(null!, null!, null!, new PortalUiState(), new NoJs(), null!, null!);
-        foreach (var pick in BuildChatViewModel.QuickPicks)
-        {
-            vm.Draft = "";
-            Assert.True(vm.UseQuickPick(pick.Prompt));
-            Assert.Equal(pick.Prompt, vm.Draft);
-            Assert.Empty(vm.Conversation.Messages);
-            Assert.False(vm.Busy);
-            vm.Draft += " My extra instructions.";
-            Assert.False(vm.UseQuickPick("A different task"));
-            Assert.EndsWith(" My extra instructions.", vm.Draft);
-        }
+        const string prompt = "Help me connect a data source.";
+        Assert.True(vm.ApplyTaskHint(prompt));
+        Assert.Equal(prompt, vm.Draft);
+        Assert.Empty(vm.Conversation.Messages);
+        Assert.False(vm.Busy);
+        vm.Draft += " My extra instructions.";
+        Assert.False(vm.ApplyTaskHint("A different task"));
+        Assert.EndsWith(" My extra instructions.", vm.Draft);
         vm.Draft = "";
         vm.Conversation.Status = BuildRunStatus.Running;
-        Assert.False(vm.UseQuickPick(BuildChatViewModel.QuickPicks[0].Prompt));
+        Assert.False(vm.ApplyTaskHint(prompt));
         Assert.Equal("", vm.Draft);
     }
 
     [Fact]
-    public async Task New_chat_renders_quick_picks_with_edit_before_send_guidance()
+    public async Task New_chat_renders_a_plain_composer_without_dashboard_extras()
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
@@ -424,11 +427,13 @@ public sealed class BuildChatTests
             return rendered.ToHtmlString();
         });
         Assert.Contains("What do you need to do?", html);
-        Assert.Contains("Choose a starting point, then edit and send.", html);
-        foreach (var pick in BuildChatViewModel.QuickPicks)
-        {
-            Assert.Contains(pick.Title, html);
-        }
+        Assert.Contains("aria-label=\"Message assistant\"", html);
+        Assert.DoesNotContain("Quick picks", html);
+        Assert.DoesNotContain("aria-label=\"Runs\"", html);
+        Assert.DoesNotContain("aria-label=\"Charts\"", html);
+        Assert.DoesNotContain("aria-label=\"Data\"", html);
+        Assert.DoesNotContain("aria-label=\"Project memory\"", html);
+        Assert.DoesNotContain("MCP tools", html);
         await vm.DisposePageAsync();
     }
 
@@ -580,6 +585,7 @@ public sealed class BuildChatTests
         await vm.LoadAsync(fixture.ProjectId);
         vm.SelectConnection(connectionId.ToString());
         vm.Conversation.Messages.Add(new JsonObject { ["role"] = "user", ["content"] = "**Keep my input literal**" });
+        vm.Conversation.Messages.Add(JsonNode.Parse("""{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}}]}"""));
         vm.Conversation.Messages.Add(new JsonObject { ["role"] = "assistant", ["content"] = "Please send the **reporting date range**.\n\n- Onboarding status\n- Missing documents" });
         vm.Conversation.Messages.Add(new JsonObject
         {
@@ -605,10 +611,19 @@ public sealed class BuildChatTests
         });
         Assert.Contains("Test provider", html);
         Assert.Contains("test-model", html);
-        Assert.Contains("Attach images", html);
+        Assert.DoesNotContain("Attach images", html);
+        Assert.DoesNotContain("type=\"file\"", html);
+        Assert.Contains("src=\"data:image/png;base64,AAAA\"", html);
+        Assert.Contains("class=\"chat-input\"", html);
+        Assert.Contains("aria-label=\"Message assistant\"", html);
+        Assert.DoesNotContain("contenteditable", html);
+        Assert.DoesNotContain("MCP tools", html);
         Assert.DoesNotContain("class=\"quick-picks\"", html);
         Assert.Contains("Dictate", html);
-        Assert.Contains("Project memory", html);
+        Assert.DoesNotContain("aria-label=\"Project memory\"", html);
+        Assert.DoesNotContain("aria-label=\"Runs\"", html);
+        Assert.DoesNotContain("aria-label=\"Charts\"", html);
+        Assert.DoesNotContain("aria-label=\"Data\"", html);
         Assert.DoesNotContain("<aside", html);
         Assert.Contains("aria-label=\"History\"", html);
         Assert.DoesNotContain("<script>", html);
@@ -756,7 +771,7 @@ public sealed class BuildChatTests
         await fixture.SeedAsync();
         var agent = fixture.Provider.GetRequiredService<BuildChatAgent>();
         var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "Help", []);
+        await agent.QueueAsync(conversation, "Help");
         var run = agent.RunAsync(conversation, default);
         await model.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var before = (await CandidateAsync(fixture, conversation.Id)).LeaseUntil;
@@ -781,7 +796,7 @@ public sealed class BuildChatTests
         await fixture.SeedAsync();
         var agent = fixture.Provider.GetRequiredService<BuildChatAgent>();
         var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "Help", []);
+        await agent.QueueAsync(conversation, "Help");
         var lease = await fixture.Store.AcquireAsync(conversation);
         Assert.True(await fixture.Store.RenewAsync(fixture.ProjectId, conversation.Id, lease));
         Assert.False(await fixture.Store.RenewAsync(Guid.NewGuid(), conversation.Id, lease));
@@ -807,8 +822,8 @@ public sealed class BuildChatTests
         await fixture.SeedAsync();
         var agent = fixture.Provider.GetRequiredService<BuildChatAgent>();
         var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "Help", []);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => agent.QueueAsync(conversation, "Duplicate", []));
+        await agent.QueueAsync(conversation, "Help");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => agent.QueueAsync(conversation, "Duplicate"));
         var worker = new BuildChatBackgroundService(fixture.Provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BuildChatBackgroundService>.Instance);
         var candidate = await CandidateAsync(fixture, conversation.Id);
         var run = worker.ProcessAsync(candidate, default);
@@ -828,14 +843,14 @@ public sealed class BuildChatTests
         await fixture.SeedAsync();
         var agent = fixture.Provider.GetRequiredService<BuildChatAgent>();
         var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "Help", []);
+        await agent.QueueAsync(conversation, "Help");
         var worker = new BuildChatBackgroundService(fixture.Provider.GetRequiredService<IServiceScopeFactory>(), NullLogger<BuildChatBackgroundService>.Instance);
         var candidate = await CandidateAsync(fixture, conversation.Id);
         fixture.Permissions.Allowed = false;
         await worker.ProcessAsync(candidate, default);
         fixture.Permissions.Allowed = true;
         Assert.Equal(BuildRunStatus.Failed, (await fixture.Store.LoadAsync(fixture.ProjectId, conversation.Id)).Status);
-        await agent.QueueAsync(conversation, "Try again", []);
+        await agent.QueueAsync(conversation, "Try again");
         await fixture.Store.RequestStopAsync(fixture.ProjectId, conversation.Id);
         await worker.ProcessAsync(await CandidateAsync(fixture, conversation.Id), default);
         Assert.Equal(BuildRunStatus.Stopped, (await fixture.Store.LoadAsync(fixture.ProjectId, conversation.Id)).Status);
@@ -849,7 +864,7 @@ public sealed class BuildChatTests
         await fixture.SeedAsync();
         var agent = fixture.Provider.GetRequiredService<BuildChatAgent>();
         var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "Help", []);
+        await agent.QueueAsync(conversation, "Help");
         var lease = await fixture.Store.AcquireAsync(conversation);
         conversation.Messages.Add(JsonNode.Parse("""{"role":"assistant","tool_calls":[{"id":"unknown-action","function":{"name":"run_job","arguments":"{}"}}]}"""));
         await fixture.Store.SaveAsync(conversation, lease, false);
@@ -874,34 +889,51 @@ public sealed class BuildChatTests
     }
 
     [Fact]
-    public async Task Local_discovery_detects_models_without_keys_and_preserves_manual_configuration()
+    public async Task Dashboard_loads_saved_models_without_probing_providers_and_discovery_is_explicit()
     {
         await using var fixture = new Fixture();
+        await fixture.SeedAsync();
         fixture.Http.ModelsResponse = """{"data":[{"id":"local-model"},{"id":"local-model"},{"id":""}]}""";
-        var config = new ConfigurationBuilder().Build();
-        LocalModelDiscovery Discovery(string environment = "Development") => new(
-            fixture.Provider.GetRequiredService<IServiceScopeFactory>(), fixture.Tenant, fixture.Http,
-            new TestEnvironment { EnvironmentName = environment }, config);
-        await Discovery("Production").DetectAsync();
-        Assert.Empty(await fixture.Connections.ListAsync());
-        await Discovery().DetectAsync();
-        var connections = await fixture.Connections.ListAsync();
-        Assert.Equal(2, connections.Count);
-        Assert.All(connections, c =>
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new PortalUiState(),
+            new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        Assert.Equal(new[] { "test" }, Assert.Single(vm.Connections).Models);
+        Assert.Equal(0, fixture.Http.Requests);
+        Assert.Null(vm.Error);
+
+        Assert.Equal(new[] { "local-model" }, await fixture.Connections.DiscoverAsync(fixture.ConnectionId));
+        Assert.Equal(1, fixture.Http.Requests);
+        Assert.Equal(new[] { "test" }, Assert.Single(await fixture.Connections.ListAsync()).Models);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Dashboard_loads_history_without_fetching_memory_for_a_removed_editor()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var store = DispatchProxy.Create<IBuildChatStore, DelayedChatStore>();
+        var proxy = (DelayedChatStore)store;
+        proxy.Inner = fixture.Store;
+        proxy.PendingHistory = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var vm = new BuildChatViewModel(store, fixture.Connections, null!, new PortalUiState(),
+            new NoJs(), fixture.Service, fixture.Permissions);
+        var loading = vm.LoadAsync(fixture.ProjectId);
+        try
         {
-            Assert.Equal(new[] { "local-model" }, c.Models);
-            Assert.False(c.HasApiKey);
-        });
-        var manual = connections[0];
-        await fixture.Connections.SaveAsync(new(manual.Id, "Custom local provider", "openai", manual.BaseUrl, ["manual-model"], false));
-        fixture.Http.ModelsResponse = """{"data":[{"id":"new-model"}]}""";
-        await Discovery().DetectAsync();
-        connections = await fixture.Connections.ListAsync();
-        Assert.Equal(2, connections.Count);
-        var preserved = connections.Single(x => x.Id == manual.Id);
-        Assert.False(preserved.Enabled);
-        Assert.Equal(new[] { "manual-model" }, preserved.Models);
-        Assert.Equal(new[] { "new-model" }, connections.Single(x => x.Id != manual.Id).Models);
+            Assert.False(loading.IsCompleted);
+            Assert.True(vm.Loading);
+            Assert.Equal(0, proxy.MemoryLoads);
+        }
+        finally
+        {
+            proxy.PendingHistory.SetResult([]);
+            await loading;
+            await vm.DisposePageAsync();
+        }
+        Assert.False(vm.Loading);
+        Assert.Null(vm.Error);
+        Assert.Equal(0, proxy.MemoryLoads);
     }
 
     private static async Task<BuildConversationRow> CandidateAsync(Fixture fixture, Guid id)
@@ -915,7 +947,7 @@ public sealed class BuildChatTests
         public int Requests;
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public async Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct)
+        public async Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null)
         {
             Requests++;
             Started.TrySetResult();
@@ -928,14 +960,6 @@ public sealed class BuildChatTests
         }
     }
 
-    private sealed class TestEnvironment : IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = "Development";
-        public string ApplicationName { get; set; } = "test";
-        public string ContentRootPath { get; set; } = "/tmp";
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
-
     private sealed class NoJs : IJSRuntime
     {
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => ValueTask.FromResult(default(TValue)!);
@@ -943,16 +967,18 @@ public sealed class BuildChatTests
     }
     private sealed class FailingModel(bool cancelled) : IBuildModelGateway
     {
-        public Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct) =>
+        public Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null) =>
             throw (cancelled ? new OperationCanceledException(ct) : new InvalidOperationException("Provider unavailable."));
     }
 
     private sealed class ScriptedModel(string? firstReply = null) : IBuildModelGateway
     {
         public int Requests;
-        public Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct)
+        public string? SystemPrompt;
+        public Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null)
         {
             Requests++;
+            SystemPrompt = messages[0]!["content"]!.GetValue<string>();
             Assert.All(messages.OfType<JsonObject>(), message => Assert.False(message.ContainsKey("suggested_answers")));
             if (Requests == 2)
             {
@@ -995,7 +1021,6 @@ public sealed class BuildChatTests
         Assert.Contains("review_workflow_result", names);
         Assert.DoesNotContain(names, name => name.Contains("service") || name.Contains("database"));
         Assert.DoesNotContain("Hosting", JsonSerializer.Serialize(await tools.project_context(default)));
-        Assert.DoesNotContain(BuildChatViewModel.QuickPicks, pick => pick.Title.Contains("app"));
     }
 
     [Fact]
@@ -1017,114 +1042,6 @@ public sealed class BuildChatTests
         await vm.LoadAsync(fixture.ProjectId, chat.Id);
         Assert.Equal(fresh, vm.Conversation.Id);
         await vm.DisposePageAsync();
-    }
-
-    [Fact]
-    public async Task Mcp_menu_lists_only_enabled_servers_in_the_current_project_and_refreshes()
-    {
-        await using var fixture = new Fixture();
-        await fixture.SeedAsync();
-        var dispatcher = new ToolDispatcher(fixture.ProjectId);
-        var service = new PlaceContextService(dispatcher, null!, null!, null!);
-        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new PortalUiState(), new NoJs(), service, fixture.Permissions);
-        await vm.LoadAsync(fixture.ProjectId);
-        McpConnectionView Server(string name, Guid project, bool enabled = true) =>
-            new(Guid.NewGuid(), project, name, "http", null, null, null, null, enabled, null, null, DateTimeOffset.UtcNow);
-        dispatcher.Mcps = project =>
-        {
-            Assert.Equal(fixture.ProjectId, project);
-            return [Server("Zulu", project), Server("alpha", project), Server("Disabled", project, false), Server("Other project", Guid.NewGuid())];
-        };
-        vm.Draft = "Keep my question";
-        await vm.OpenMcpMenuAsync();
-        Assert.True(vm.ShowMcpMenu);
-        Assert.False(vm.LoadingMcps);
-        Assert.Equal(new[] { "alpha", "Zulu" }, vm.AvailableMcps.Select(x => x.Name));
-        Assert.Equal("Keep my question", vm.Draft);
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>();
-        await using var provider = services.BuildServiceProvider();
-        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
-        var html = await renderer.Dispatcher.InvokeAsync(async () =>
-        {
-            var rendered = await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.BuildChat>(
-                ParameterView.FromDictionary(new Dictionary<string, object?> { ["ProjectId"] = fixture.ProjectId }));
-            return rendered.ToHtmlString();
-        });
-        Assert.Contains("Available MCP servers", html);
-        Assert.Contains("alpha", html);
-        Assert.DoesNotContain("Other project", html);
-        var selected = vm.AvailableMcps[0];
-        Assert.True(await vm.SelectMcpAsync(selected.Id));
-        Assert.Equal("@alpha Keep my question", vm.Draft);
-        Assert.True(await vm.SelectMcpAsync(selected.Id));
-        Assert.Equal("@alpha Keep my question", vm.Draft);
-        Assert.False(await vm.SelectMcpAsync(Guid.NewGuid()));
-        vm.Conversation.Status = BuildRunStatus.Running;
-        Assert.False(await vm.SelectMcpAsync(selected.Id));
-        vm.Conversation.Status = BuildRunStatus.Idle;
-        dispatcher.Mcps = project => [Server("New server", project)];
-        await vm.OpenMcpMenuAsync();
-        Assert.Equal("New server", Assert.Single(vm.AvailableMcps).Name);
-    }
-
-    [Fact]
-    public async Task Typed_mcp_mentions_filter_servers_and_replace_only_the_partial_token()
-    {
-        await using var fixture = new Fixture();
-        await fixture.SeedAsync();
-        var server = new McpConnectionView(Guid.NewGuid(), fixture.ProjectId, "Commerce MCP", "http",
-            null, null, null, null, true, null, null, DateTimeOffset.UtcNow);
-        var dispatcher = new ToolDispatcher(fixture.ProjectId)
-        {
-            Mcps = _ => [server, server with { Id = Guid.NewGuid(), Name = "Warehouse" }]
-        };
-        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new PortalUiState(),
-            new NoJs(), new PlaceContextService(dispatcher, null!, null!, null!), fixture.Permissions);
-        await vm.LoadAsync(fixture.ProjectId);
-        await vm.UpdateMcpMention("Ask @Com for orders", 4, 8);
-        Assert.True(vm.ShowMcpMenu);
-        Assert.Equal(server.Id, Assert.Single(vm.MatchingMcps).Id);
-        Assert.True(await vm.SelectMcpAsync(server.Id));
-        Assert.Equal("Ask @\"Commerce MCP\" for orders", vm.Draft);
-        Assert.False(vm.ShowMcpMenu);
-        await vm.UpdateMcpMention("@missing", 0, 8);
-        Assert.Empty(vm.MatchingMcps);
-        await vm.UpdateMcpMention("No mention", -1, -1);
-        Assert.False(vm.ShowMcpMenu);
-        dispatcher.Mcps = _ => [];
-        await vm.UpdateMcpMention("@", 0, 1);
-        Assert.Empty(vm.MatchingMcps);
-        Assert.False(vm.ShowAddMcp);
-        Assert.True(vm.ShowMcpMenu);
-    }
-
-    [Fact]
-    public async Task Mcp_menu_failure_can_retry_and_show_an_empty_list()
-    {
-        await using var fixture = new Fixture();
-        await fixture.SeedAsync();
-        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Mcps = _ => throw new InvalidOperationException("Private connection details") };
-        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new PortalUiState(), new NoJs(),
-            new PlaceContextService(dispatcher, null!, null!, null!), fixture.Permissions);
-        await vm.LoadAsync(fixture.ProjectId);
-        try
-        {
-            await vm.OpenMcpMenuAsync();
-            Assert.False(vm.LoadingMcps);
-            Assert.Equal("Could not load MCP servers. Please try again.", vm.McpError);
-            Assert.Empty(vm.AvailableMcps);
-            dispatcher.Mcps = _ => [];
-            await vm.OpenMcpMenuAsync();
-            Assert.Null(vm.McpError);
-            Assert.Empty(vm.AvailableMcps);
-            Assert.True(vm.ShowAddMcp);
-            vm.CloseAddMcp();
-            Assert.False(vm.ShowAddMcp);
-        }
-        finally
-        {
-            await vm.DisposePageAsync();
-        }
     }
 
     [Fact]
@@ -1205,9 +1122,9 @@ public sealed class BuildChatTests
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
             (await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.Dashboard>()).ToHtmlString());
         Assert.Contains("What do you need to do?", html);
-        Assert.Contains("aria-label=\"Runs\"", html);
-        Assert.Contains("aria-label=\"Charts\"", html);
-        Assert.Contains("aria-label=\"Data\"", html);
+        Assert.DoesNotContain("aria-label=\"Runs\"", html);
+        Assert.DoesNotContain("aria-label=\"Charts\"", html);
+        Assert.DoesNotContain("aria-label=\"Data\"", html);
         Assert.Equal(fixture.ProjectId, vm.Conversation.ProjectId);
         Assert.DoesNotContain("Workflow overview", html);
     }
@@ -1284,10 +1201,20 @@ public sealed class BuildChatTests
     {
         public IBuildChatStore Inner = null!;
         public TaskCompletionSource<BuildConversation>? Pending;
+        public TaskCompletionSource<IReadOnlyList<BuildConversationSummary>>? PendingHistory;
+        public int MemoryLoads;
         public int Loads;
         public int TotalLoads;
         protected override object? Invoke(MethodInfo? method, object?[]? args)
         {
+            if (method!.Name == nameof(IBuildChatStore.ListAsync) && PendingHistory is not null)
+            {
+                return PendingHistory.Task;
+            }
+            if (method.Name == nameof(IBuildChatStore.GetMemoryAsync))
+            {
+                MemoryLoads++;
+            }
             if (method!.Name == nameof(IBuildChatStore.LoadAsync))
             {
                 TotalLoads++;
@@ -1342,16 +1269,14 @@ public sealed class BuildChatTests
         Assert.Matches("<figcaption[^>]*>User supplied example values</figcaption>", html);
         Assert.Contains("&lt;script&gt;bad&lt;/script&gt;", html);
         Assert.DoesNotContain("<script>", html);
-        vm.OpenOverview("running");
-        Assert.Null(vm.PreviewChart);
-        Assert.True(vm.ShowOverview);
         vm.CloseWorkspace();
         Assert.False(vm.WorkspaceOpen);
         Assert.False(vm.WorkspaceVisible);
+        Assert.Null(vm.PreviewChart);
         vm.OpenChart(preview);
         Assert.True(vm.WorkspaceVisible);
         vm.CloseWorkspace();
-        vm.OpenOverview();
+        vm.OpenWorkspace();
         Assert.True(vm.WorkspaceVisible);
         message["content"] = "{bad";
         Assert.Null(vm.ResultChart(message));
@@ -1360,91 +1285,51 @@ public sealed class BuildChatTests
         Assert.Null(vm.ResultChart(message));
     }
 
-    [Theory]
-    [InlineData("Warehouse")]
-    [InlineData("Commerce MCP")]
-    [InlineData("API.v2")]
-    [InlineData("MCP \"quoted\"")]
-    [InlineData("倉庫")]
-    public void Mcp_mentions_round_trip_names_and_ignore_email_addresses(string name)
-    {
-        var mention = BuildMcpTools.Mention(name);
-        Assert.Equal(name, Assert.Single(BuildMcpTools.MentionNames($"Ask {mention} for stock. Email user@example.test. {mention}")));
-        Assert.Empty(BuildMcpTools.MentionNames("Email user@example.test"));
-    }
-
     [Fact]
-    public async Task Mcp_mentions_route_the_current_message_through_selected_tools_and_survive_storage()
+    public async Task Conversation_preferences_can_be_saved_by_the_agent_and_used_in_another_chat()
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
-        var server = new McpConnectionView(Guid.NewGuid(), fixture.ProjectId, "Commerce MCP", "http",
-            "https://private.test/mcp", null, null, null, true, null, null, DateTimeOffset.UtcNow, "private-token");
-        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Mcps = _ => [server] };
-        var service = new PlaceContextService(dispatcher, null!, null!, null!);
-        var client = new McpClient();
-        var tools = new BuildMcpTools(service, client, fixture.Permissions, fixture.Members, fixture.User);
-        var gateway = new McpModel(server.Id);
-        var agent = new BuildChatAgent(fixture.Store, gateway, service, fixture.Permissions, fixture.Tenant, mcps: tools);
+        var service = new PlaceContextService(new ToolDispatcher(fixture.ProjectId), null!, null!, null!);
+        var model = new ScriptedModel("""{"tool_calls":[{"id":"memory","function":{"name":"remember","arguments":"{\"memory\":\"Prefer Python for data jobs.\"}"}}]}""");
+        var agent = new BuildChatAgent(fixture.Store, model, service, fixture.Permissions, fixture.Tenant);
         var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "@\"Commerce MCP\" How many orders?", []);
-        var stored = await fixture.Store.LoadAsync(fixture.ProjectId, conversation.Id);
-        Assert.Equal(server.Id, stored.Messages[0]!["mcp_connections"]![0]!.GetValue<Guid>());
-        await agent.RunAsync(stored, default);
-        Assert.Equal(BuildRunStatus.Completed, stored.Status);
-        Assert.Equal(1, client.Lists);
-        Assert.Equal(1, client.Calls);
-        Assert.Equal("orders", client.ToolName);
-        Assert.Equal("There are 3 orders.", stored.Messages.Last()!["content"]!.GetValue<string>());
-        Assert.DoesNotContain("private-token", gateway.LastMessages);
-        Assert.DoesNotContain("private.test", gateway.LastMessages);
+        await agent.QueueAsync(conversation, "I prefer Python for data jobs.");
+        await agent.RunAsync(conversation, default);
+        Assert.Equal(BuildRunStatus.Completed, conversation.Status);
+        Assert.Equal("Prefer Python for data jobs.", await fixture.Store.GetMemoryAsync(fixture.ProjectId));
 
-        gateway.ExpectMcp = false;
-        await agent.QueueAsync(stored, "Thanks", []);
-        await agent.RunAsync(stored, default);
-        Assert.Equal(BuildRunStatus.Completed, stored.Status);
-        Assert.Equal(1, client.Calls);
+        var nextModel = new ScriptedModel("""{"content":"I will use your Python preference."}""");
+        var nextAgent = new BuildChatAgent(fixture.Store, nextModel, service, fixture.Permissions, fixture.Tenant);
+        var next = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await nextAgent.QueueAsync(next, "Help me plan a data job.");
+        await nextAgent.RunAsync(next, default);
+        Assert.Equal(BuildRunStatus.Completed, next.Status);
+        Assert.Contains("Prefer Python for data jobs.", nextModel.SystemPrompt);
     }
 
-    [Fact]
-    public async Task Mcp_selection_rejects_unknown_ambiguous_disabled_foreign_and_unauthorized_servers()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task At_mentions_are_plain_text_and_legacy_mcp_selection_is_ignored(bool legacySelection)
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
-        var server = new McpConnectionView(Guid.NewGuid(), fixture.ProjectId, "Warehouse", "http", null, null, null,
-            null, true, null, null, DateTimeOffset.UtcNow);
-        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Mcps = _ => [server] };
-        var client = new McpClient();
-        var tools = new BuildMcpTools(new PlaceContextService(dispatcher, null!, null!, null!), client,
-            fixture.Permissions, fixture.Members, fixture.User);
-        Assert.Equal(server.Id, Assert.Single(await tools.ResolveAsync(fixture.ProjectId, "@warehouse stock?", default)).Id);
-        await Assert.ThrowsAsync<ArgumentException>(() => tools.ResolveAsync(fixture.ProjectId, "@Unknown stock?", default));
-        await Assert.ThrowsAsync<ArgumentException>(() => tools.ResolveAsync(fixture.ProjectId, "@Warehouse", default));
-        dispatcher.Mcps = _ => [server, server with { Id = Guid.NewGuid() }];
-        await Assert.ThrowsAsync<ArgumentException>(() => tools.ResolveAsync(fixture.ProjectId, "@Warehouse stock?", default));
-
-        var function = tools.Functions(fixture.ProjectId, [server.Id]).Single(f => f.Name == "call_mcp_tool");
-        var args = new AIFunctionArguments(new Dictionary<string, object?>
+        var service = new PlaceContextService(new ToolDispatcher(fixture.ProjectId), null!, null!, null!);
+        var model = new PlainTextModel();
+        var agent = new BuildChatAgent(fixture.Store, model, service, fixture.Permissions, fixture.Tenant);
+        var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        const string text = "@Warehouse ask @\"Commerce MCP\" about user@example.test";
+        await agent.QueueAsync(conversation, text);
+        Assert.Null(conversation.Messages[0]!["mcp_connections"]);
+        if (legacySelection)
         {
-            ["connectionId"] = server.Id,
-            ["toolName"] = "orders",
-            ["arguments"] = JsonSerializer.SerializeToElement(new { })
-        });
-        foreach (var unavailable in new[] { server with { Enabled = false }, server with { ProjectId = Guid.NewGuid() } })
-        {
-            dispatcher.Mcps = _ => [unavailable];
-            await Assert.ThrowsAsync<ArgumentException>(() => tools.ResolveAsync(fixture.ProjectId, "@Warehouse stock?", default));
-            await Assert.ThrowsAnyAsync<Exception>(async () => await function.InvokeAsync(args));
+            conversation.Messages[0]!["mcp_connections"] = new JsonArray(Guid.NewGuid().ToString());
         }
-        dispatcher.Mcps = _ => [server];
-        args["connectionId"] = Guid.NewGuid();
-        await Assert.ThrowsAnyAsync<Exception>(async () => await function.InvokeAsync(args));
-        args["connectionId"] = server.Id;
-        ((MembersProxy)(object)fixture.Members).Allowed = false;
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.ResolveAsync(fixture.ProjectId, "@Warehouse stock?", default));
-        await Assert.ThrowsAnyAsync<Exception>(async () => await function.InvokeAsync(args));
-        Assert.Equal(0, client.Calls);
-        Assert.Equal(0, client.Lists);
+        await agent.RunAsync(conversation, default);
+        Assert.Equal(BuildRunStatus.Completed, conversation.Status);
+        Assert.Equal(text, model.UserText);
+        Assert.Equal("Done.", conversation.Messages.Last()!["content"]!.GetValue<string>());
     }
 
     [Theory]
@@ -1482,60 +1367,15 @@ public sealed class BuildChatTests
         Assert.Contains("Tool result", isError ? result.Error : result.Content);
     }
 
-    private sealed class McpClient : IMcpClientService
+    private sealed class PlainTextModel : IBuildModelGateway
     {
-        public int Lists, Calls;
-        public string? ToolName;
-        public Task<IReadOnlyList<McpToolDefinition>> ListToolsAsync(Guid id, CancellationToken ct = default)
+        public string? UserText;
+        public Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null)
         {
-            Lists++;
-            return Task.FromResult<IReadOnlyList<McpToolDefinition>>([new("orders", "Read order counts", JsonSerializer.SerializeToElement(new { type = "object" }))]);
-        }
-        public Task<McpToolResult> CallToolAsync(Guid id, string name, JsonElement? arguments = null, CancellationToken ct = default)
-        {
-            Calls++;
-            ToolName = name;
-            return Task.FromResult(new McpToolResult(true, "3 orders", null));
-        }
-        public Task<IReadOnlyList<McpConnectionInfo>> ListConnectionsAsync(Guid id, CancellationToken ct = default) => throw new NotSupportedException();
-    }
-
-    private sealed class McpModel(Guid id) : IBuildModelGateway
-    {
-        private int _requests;
-        public bool ExpectMcp = true;
-        public string LastMessages = "";
-        public Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct)
-        {
-            LastMessages = messages.ToJsonString();
             Assert.All(messages.OfType<JsonObject>(), message => Assert.False(message.ContainsKey("mcp_connections")));
-            Assert.Equal(ExpectMcp, tools.Any(tool => tool?["function"]?["name"]?.ToString() == "call_mcp_tool"));
-            if (!ExpectMcp || ++_requests > 2)
-            {
-                return Task.FromResult(new JsonObject { ["content"] = "There are 3 orders." });
-            }
-            var function = _requests == 1 ? "list_mcp_tools" : "call_mcp_tool";
-            var arguments = _requests == 1 ? JsonSerializer.Serialize(new
-            {
-                connectionId = id
-            })
-                : JsonSerializer.Serialize(new
-                {
-                    connectionId = id,
-                    toolName = "orders",
-                    arguments = new
-                    {
-                    }
-                });
-            return Task.FromResult(new JsonObject
-            {
-                ["tool_calls"] = new JsonArray(new JsonObject
-                {
-                    ["id"] = "mcp-" + _requests,
-                    ["type"] = "function",
-                    ["function"] = new JsonObject { ["name"] = function, ["arguments"] = arguments }
-                })
-            });
+            Assert.DoesNotContain(tools, tool => tool?["function"]?["name"]?.ToString() is "list_mcp_tools" or "call_mcp_tool");
+            UserText = messages.Last()!["content"]![0]!["text"]!.GetValue<string>();
+            return Task.FromResult(new JsonObject { ["content"] = "Done." });
         }
     }
 
@@ -1544,7 +1384,6 @@ public sealed class BuildChatTests
         public int Commands;
         public ChainRunView? Run;
         public JobChainView? Workflow;
-        public Func<Guid, IReadOnlyList<McpConnectionView>> Mcps = _ => [];
         public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
         {
             Commands++;
@@ -1555,7 +1394,6 @@ public sealed class BuildChatTests
             object result = query switch
             {
                 GetProjectByIdQuery => new ProjectSummaryView(projectId, "test", "/tmp", "Registered", false, 0, 0, 0),
-                ListMcpConnectionsQuery mcp => Mcps(mcp.ProjectId),
                 ListJobsQuery => Array.Empty<JobView>(),
                 ListJobChainsQuery => Workflow is null ? Array.Empty<JobChainView>() : new[] { Workflow },
                 ListTriggersQuery => Array.Empty<TriggerView>(),
@@ -1606,6 +1444,7 @@ public sealed class BuildChatTests
     {
         public int Calls;
         public string? State, Question;
+        public Task<JsonObject> ScoreAsync(IReadOnlyList<PlaceContext.Domain.ValueObjects.ScoreCriterion> criteria, string state, CancellationToken ct, Guid? projectId = null) => throw new NotSupportedException();
         public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null)
         {
             Calls++;
@@ -1636,12 +1475,14 @@ public sealed class BuildChatTests
     }
     private sealed class Http : HttpMessageHandler, IHttpClientFactory
     {
+        public int Requests;
         public string? Authorization;
         public string ModelsResponse = """{"data":[]}""";
         public string PostResponse = """{"choices":[{"message":{"role":"assistant","content":"OK"}}]}""";
         public HttpClient CreateClient(string name) => new(this, disposeHandler: false);
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
+            Requests++;
             Authorization = request.Headers.Authorization?.ToString();
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(request.Method == HttpMethod.Get ? ModelsResponse : PostResponse) });
         }

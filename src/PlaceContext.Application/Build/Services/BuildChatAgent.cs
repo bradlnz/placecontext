@@ -10,43 +10,17 @@ using PlaceContext.Application;
 namespace PlaceContext.Application.Build;
 
 public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway model, PlaceContextService service,
-    IPermissionService permissions, ICurrentTenant tenant, IOutcomeReviewer? reviewer = null, OperationCenter? operations = null, ICurrentUser? user = null,
-    BuildMcpTools? mcps = null)
+    IPermissionService permissions, ICurrentTenant tenant, IOutcomeReviewer? reviewer = null, OperationCenter? operations = null, ICurrentUser? user = null)
 {
-    public async Task QueueAsync(BuildConversation conversation, string text, IReadOnlyList<BuildImage> images, CancellationToken ct = default)
+    public async Task QueueAsync(BuildConversation conversation, string text, CancellationToken ct = default)
     {
-        if (text.Length > 16000 || (string.IsNullOrWhiteSpace(text) && images.Count == 0))
+        if (text.Length > 16000 || string.IsNullOrWhiteSpace(text))
         {
-            throw new ArgumentException("Enter a message of up to 16,000 characters or attach an image.");
+            throw new ArgumentException("Enter a message of up to 16,000 characters.");
         }
-        if (images.Count > 4)
-        {
-            throw new ArgumentException("Attach up to four images per message.");
-        }
-        foreach (var image in images)
-        {
-            image.Validate();
-        }
-        var selectedMcps = mcps is not null ? await mcps.ResolveAsync(conversation.ProjectId, text, ct) : [];
-        if (mcps is null && BuildMcpTools.MentionNames(text).Count > 0)
-        {
-            throw new InvalidOperationException("MCP tools are unavailable. Please try again.");
-        }
-        var content = new JsonArray();
-        if (!string.IsNullOrWhiteSpace(text))
-        {
-            content.Add(new JsonObject { ["type"] = "text", ["text"] = text });
-        }
-        foreach (var image in images)
-        {
-            content.Add(new JsonObject { ["type"] = "image_url", ["image_url"] = new JsonObject { ["url"] = image.DataUrl } });
-        }
+        var content = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text });
         var pending = JsonSerializer.Deserialize<BuildConversation>(JsonSerializer.Serialize(conversation))!;
         var message = new JsonObject { ["role"] = "user", ["content"] = content };
-        if (selectedMcps.Count > 0)
-        {
-            message["mcp_connections"] = JsonSerializer.SerializeToNode(selectedMcps.Select(server => server.Id));
-        }
         await store.QueueAsync(pending, message, ct);
         conversation.Messages = pending.Messages;
         conversation.Title = pending.Title;
@@ -84,18 +58,6 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
             RepairInterruptedCalls(conversation.Messages);
             var tools = new BuildTools(conversation.ProjectId, service, permissions, store, reviewer);
             var functions = tools.Functions().ToDictionary(x => x.Name);
-            var selectedIds = conversation.Messages.LastOrDefault(message => message?["role"]?.GetValue<string>() == "user")?
-                ["mcp_connections"]?.Deserialize<Guid[]>() ?? [];
-            var selectedMcps = selectedIds.Length == 0 ? [] : await (mcps
-                ?? throw new InvalidOperationException("MCP tools are unavailable."))
-                .ResolveIdsAsync(conversation.ProjectId, selectedIds, deadline.Token);
-            if (selectedIds.Length > 0)
-            {
-                foreach (var function in mcps!.Functions(conversation.ProjectId, selectedIds))
-                {
-                    functions.Add(function.Name, function);
-                }
-            }
             var context = await tools.project_context(deadline.Token);
             var toolSchema = new JsonArray(functions.Values.Select(f => (JsonNode)new JsonObject
             {
@@ -116,7 +78,6 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                     ["role"] = "system",
                     ["content"] = PromptText.Render("Build.Prompts.ProjectAssistant",
                         ("projectId", conversation.ProjectId.ToString()),
-                        ("selectedServers", JsonSerializer.Serialize(selectedMcps.Select(server => new { server.Id, server.Name }))),
                         ("projectContext", JsonSerializer.Serialize(context)),
                         ("utcNow", DateTimeOffset.UtcNow.ToString("O")),
                         ("timeZone", tenant.TimeZoneId),

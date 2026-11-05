@@ -114,6 +114,8 @@ public sealed class ModelChainQuestionGenerator(IHttpClientFactory clients, IOpt
         {
             throw new InvalidOperationException("The model returned an empty or oversized validation question.");
         }
-        return question;
+        return action.Type == LoopChainAction.AgentType
+            ? $"{action.Instructions}\n\nReview question: {question}"
+            : question;
     }
 }

@@ -41,9 +41,9 @@ public sealed class ChainStage
         _elseBranch = elseBranch?.ToList();
         // shortcut: durable input resumes top-level stages; add a branch cursor before allowing nested hand-offs.
         if ((_elseBranch ?? []).Concat((gate as ConditionGate)?.ElseBranch ?? [])
-            .Any(stage => stage.Action is LoopChainAction))
+            .Any(stage => stage.Action is LoopChainAction or RepeatFlowChainAction or ScoringGateChainAction or QueryDataChainAction))
         {
-            throw new ArgumentException("Human and agent steps must be top-level stages. Use a condition gate on the step instead.");
+            throw new ArgumentException("Human, agent, scoring, query and repeat steps must be top-level stages. Use a condition gate on the step instead.");
         }
         Gate = gate;
         Action = action;

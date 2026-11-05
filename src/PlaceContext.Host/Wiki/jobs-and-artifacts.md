@@ -51,9 +51,8 @@ The run detail shows:
 Log tables preview the newest 100 matching events, with up to 2,000 characters per message.
 Job log filters search the full text of the newest 2,000 loaded events; container log filters search
 all loaded events. **Download logs** retrieves the full available log, including text omitted from
-the preview. Output editors preview the first 32,000 characters and offer **Download full output**
-for larger results. Downloads load only when clicked, keeping large log and file contents out of
-the pane's initial display.
+the preview. Pipeline output shows the complete saved result in a JSON editor with word wrapping.
+Downloads load only when clicked, keeping large log and file contents out of the pane's initial display.
 
 ## Workflows
 
@@ -260,6 +259,22 @@ It waits at least two minutes beyond the job's retry delay and checks active wor
 heartbeats, execution leases, and newer job attempts before correcting the workflow.
 Waiting retries and human-input holds stay paused. Corrections update the stored steps
 and workflow state; the notification watcher then updates the existing notification.
+If a continuation claim expires and another worker takes over, cleanup from the old worker
+cannot clear the new claim or reset its workflow to waiting.
 An abandoned workflow whose child job was cancelled also becomes cancelled, and its queue receipt
 is closed without retrying. A failed sibling retains the workflow's failed outcome.
 Each reconciliation sweep logs how many records it repaired and queues it retried or closed.
+
+### Agent tasks and repeat flow
+
+**Agent task** assigns requirements or work to a connected external agent and waits for its response.
+Its instructions are preserved exactly. The agent uses its own tools; this step does not launch a local model.
+
+Add **Repeat flow** as the final stage to repeat all preceding steps with their accumulated output until
+its completion condition passes. It allows 1–10 total attempts (default 3), persists its attempt count
+across restarts and input handoffs, and fails when the last attempt does not meet the condition.
+Use conditions and evidence-producing jobs to distinguish failed quality assertions from execution errors,
+which stop the workflow. Repeated stages run again, including any external side effects.
+
+The `examples/real-estate-sdlc` template combines these steps with independent agent review, QEMU UI
+checks, source archive artifacts and a weighted production-readiness gate.

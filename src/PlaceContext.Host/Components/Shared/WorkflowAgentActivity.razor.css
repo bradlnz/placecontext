@@ -1,0 +1,16 @@
+.agent-activity { --font-mono:ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; display:flex; flex-direction:column; flex:1; min-height:0; color:var(--text-2); font-family:var(--font-mono) }
+.agent-terminal { flex:1; min-height:180px; overflow:auto; padding:4px 0 16px; overscroll-behavior:contain; overflow-anchor:none }
+.agent-terminal:focus-visible { outline:1px solid var(--brand-2); outline-offset:-1px }
+.terminal-line { padding:3px 0; font-size:12px; line-height:1.7; white-space:pre-wrap; overflow-wrap:anywhere }
+.terminal-line time, .terminal-meta { color:var(--text-3); font-size:10px }
+.terminal-tag { color:var(--text-3) }
+.terminal-message { color:var(--text-2) }
+.update .terminal-message { color:var(--text) }
+.tool_completed .terminal-message, .completed .terminal-message { color:var(--good) }
+.failed, .failed .terminal-message, .tool_failed .terminal-message { color:var(--bad) }
+.system { color:var(--text-3) }
+.terminal-link { border:0; background:transparent; color:var(--text-2); font:10px var(--font-mono, monospace); padding:3px 6px; cursor:pointer; text-decoration:underline; text-underline-offset:3px }
+.terminal-link:hover { color:var(--text) }
+.terminal-link:focus-visible { outline:1px solid var(--brand-2) }
+.terminal-cursor { margin-left:6px; color:var(--text) }
+.terminal-footer { display:flex; justify-content:space-between; flex-wrap:wrap; align-items:center; gap:8px; border-top:1px solid var(--border); padding-top:8px; color:var(--text-3); font-size:10px }

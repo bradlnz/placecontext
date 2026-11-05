@@ -108,6 +108,9 @@ public sealed class EfJobChainRepository : IJobChainRepository
             pauseForLogin = vm.PauseForLogin,
             loginProfileId = vm.LoginProfileId,
         },
+        QueryDataChainAction query => new { type = query.Type, sql = query.Sql, outputField = query.OutputField },
+        ScoringGateChainAction score => new { type = score.Type, inputField = score.InputField, outputField = score.OutputField, criteria = score.Criteria, passScore = score.PassScore, minimumConfidence = score.MinimumConfidence, stopOnFailure = score.StopOnFailure },
+        RepeatFlowChainAction repeat => new { type = repeat.Type, untilCondition = repeat.UntilCondition, maxAttempts = repeat.MaxAttempts },
         LoopChainAction loop => new
         {
             type = loop.Type,
@@ -115,6 +118,7 @@ public sealed class EfJobChainRepository : IJobChainRepository
             responseField = loop.ResponseField,
             responseType = loop.ResponseType,
             agentProvider = loop.AgentProvider,
+            connectionId = loop.ConnectionId, model = loop.Model,
         },
         SendEmailChainAction email => new
         {
@@ -214,12 +218,17 @@ public sealed class EfJobChainRepository : IJobChainRepository
                 element.GetProperty("allowNetwork").GetBoolean(),
                 element.TryGetProperty("pauseForLogin", out var pause) && pause.GetBoolean(),
                 element.TryGetProperty("loginProfileId", out var login) && login.ValueKind == JsonValueKind.String ? login.GetGuid() : null),
-            LoopChainAction.HumanType or LoopChainAction.AgentType => new LoopChainAction(
+            QueryDataChainAction.ActionType => new QueryDataChainAction(element.GetProperty("sql").GetString()!, element.GetProperty("outputField").GetString()!),
+            ScoringGateChainAction.ActionType => new ScoringGateChainAction(element.GetProperty("inputField").GetString()!, element.GetProperty("outputField").GetString()!, JsonSerializer.Deserialize<ScoreCriterion[]>(element.GetProperty("criteria"))!, element.GetProperty("passScore").GetDouble(), element.GetProperty("minimumConfidence").GetDouble(), element.GetProperty("stopOnFailure").GetBoolean()),
+            RepeatFlowChainAction.ActionType => new RepeatFlowChainAction(element.GetProperty("untilCondition").GetString()!, element.GetProperty("maxAttempts").GetInt32()),
+            LoopChainAction.HumanType or LoopChainAction.AgentType or LoopChainAction.TaskType => new LoopChainAction(
                 type.GetString()!,
                 element.GetProperty("instructions").GetString() ?? "",
                 element.GetProperty("responseField").GetString() ?? "",
                 element.TryGetProperty("responseType", out var responseType) ? responseType.GetString() ?? LoopChainAction.TextResponse : LoopChainAction.TextResponse,
-                element.TryGetProperty("agentProvider", out var agentProvider) ? agentProvider.GetString() ?? LoopChainAction.ExternalAgent : LoopChainAction.ExternalAgent),
+                element.TryGetProperty("agentProvider", out var agentProvider) ? agentProvider.GetString() ?? LoopChainAction.ExternalAgent : LoopChainAction.ExternalAgent,
+                element.TryGetProperty("connectionId", out var connection) && connection.ValueKind == JsonValueKind.String ? connection.GetGuid() : null,
+                element.TryGetProperty("model", out var model) && model.ValueKind == JsonValueKind.String ? model.GetString() : null),
             SendEmailChainAction.ActionType => new SendEmailChainAction(
                 element.TryGetProperty("recipient", out var recipient) ? recipient.GetString() ?? "" : "",
                 element.TryGetProperty("recipientName", out var name) ? name.GetString() ?? "" : "",

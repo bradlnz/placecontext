@@ -19,7 +19,7 @@ public sealed class WorkflowConditionalPathTests
     public async Task Qemu_dialog_saves_updated_task_through_the_workflow_service()
     {
         var dispatcher = new RecordingDispatcher();
-        var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!, null!);
+        var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!);
         await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Browser task", null,
             [new([], Action: new VirtualMachineChainActionView("browser-linux", "Original task", "browser", 2048, 2, 600, true))], DateTimeOffset.UtcNow));
         vm.EditQemuAction(0);
@@ -44,7 +44,7 @@ public sealed class WorkflowConditionalPathTests
     public async Task Qemu_save_validation_and_failure_keep_the_task_and_allow_retry_without_duplicate_steps()
     {
         var dispatcher = new RecordingDispatcher { SaveError = "Storage unavailable" };
-        var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!, null!);
+        var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!);
         await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Browser task", null, [], DateTimeOffset.UtcNow));
         vm.OpenQemuActionAt(0);
         vm.VirtualMachineImageProfile = "browser-linux";
@@ -76,7 +76,7 @@ public sealed class WorkflowConditionalPathTests
             [new([new(fallback, "Needs review")], new ConditionGateView("exists:backup"),
                 [new([], Action: email)])]);
         var dispatcher = new RecordingDispatcher();
-        var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!, null!);
+        var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!);
         await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Review", null, [stage], DateTimeOffset.UtcNow));
         vm.OpenGateEditor(0);
         vm.GateEditorValue = "0.9";
@@ -98,7 +98,7 @@ public sealed class WorkflowConditionalPathTests
     [Fact]
     public async Task False_path_edits_are_cancelable_and_follow_the_stage_when_moved()
     {
-        var vm = new JobChainsViewModel(null!, null!, null!, null!, null!);
+        var vm = new JobChainsViewModel(null!, null!, null!, null!);
         vm.NewChain();
         vm.AddStage(Guid.NewGuid());
         vm.AddStage(Guid.NewGuid());
@@ -115,7 +115,7 @@ public sealed class WorkflowConditionalPathTests
         vm.OpenGateEditor(1);
         Assert.Equal(other, Assert.Single(Assert.Single(vm.GateEditorElseStages).JobIds));
         var stages = vm.BuildCanvasStageViews();
-        var reopened = new JobChainsViewModel(null!, null!, null!, null!, null!);
+        var reopened = new JobChainsViewModel(null!, null!, null!, null!);
         await reopened.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Review", null, stages, DateTimeOffset.UtcNow));
         reopened.OpenGateEditor(1);
         reopened.RemoveElseStage(0);

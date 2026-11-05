@@ -25,15 +25,29 @@ public sealed partial class JobChainsViewModel
     {
         get; private set;
     }
+    private int? _executionStepIndex;
+    public ChainStepRunView? ExecutionStep => OpenRun?.Steps.FirstOrDefault(step => step.Index == _executionStepIndex);
+    public IReadOnlyList<ChainStepRunView> ExecutionLogSteps => LogSteps.Where(step => step.Index == _executionStepIndex).ToArray();
+
+    public async Task OpenExecutionStepAsync(ChainStepRunView step)
+    {
+        if (OpenRun?.Steps.Any(candidate => candidate.Index == step.Index) != true) return;
+        _executionStepIndex = step.Index;
+        SelectedStepRunId = null;
+        StepRunDetail = null;
+        StepOutputError = null;
+        NotifyStateChanged();
+        await RefreshStepOutputAsync(OpenRun);
+        NotifyStateChanged();
+    }
+
+    public void CloseExecutionStep()
+    {
+        _executionStepIndex = null;
+        NotifyStateChanged();
+    }
+
     public Guid? SelectedStepRunId
-    {
-        get; private set;
-    }
-    public DateTimeOffset? LiveOutputUpdatedAt
-    {
-        get; private set;
-    }
-    public string? LiveOutputText
     {
         get; private set;
     }
@@ -200,6 +214,32 @@ public sealed partial class JobChainsViewModel
 
     public void SetResumeArg(int index, string name, string value) => _resumePrompt.Set(ArgKey(index, name), value);
 
+    public bool CanResumeAgentAutomatically
+    {
+        get
+        {
+            if (OpenRun is not { Status: "AwaitingInput", InputRequest: { Steps.Count: 1 } request } run) return false;
+            var stageIndex = run.Steps.FirstOrDefault(step => step.Index == request.Steps[0].Index)?.StageIndex;
+            var stages = Chains?.FirstOrDefault(chain => chain.Id == run.ChainId)?.Stages;
+            return stageIndex is { } index && stages is not null && index >= 0 && index < stages.Count
+                && stages[index].Action is LoopChainActionView { AgentProvider: LoopChainAction.AutomaticAgent };
+        }
+    }
+
+    public async Task ResumeAgentAutomaticallyAsync()
+    {
+        if (!CanResumeAgentAutomatically || OpenRun?.InputRequest is not { } request || _submissions is null || Resuming) return;
+        Resuming = true;
+        ResumeError = null;
+        try
+        {
+            await _submissions.ResumeAgentAsync(OpenRun.Id, request.Id);
+            await RefreshRunsAsync(OpenRun.ChainId);
+        }
+        catch (Exception ex) { ResumeError = ex.Message; }
+        finally { Resuming = false; NotifyStateChanged(); }
+    }
+
     public Task ResumeWithInputsAsync() => ResumeWithInputsCoreAsync(null);
     public Task RespondYesNoAsync(bool answer) => ResumeWithInputsCoreAsync(answer);
 
@@ -351,6 +391,7 @@ public sealed partial class JobChainsViewModel
         EditorTab = "runs";
         EditorView = "runs";
         ShowEditor = true;
+        _executionStepIndex = null;
         OpenRun = null;
         StopPolling();
         await RefreshRunsAsync(chain.Id, pendingChainRunId: chainRunId);
@@ -411,10 +452,10 @@ public sealed partial class JobChainsViewModel
         StopPolling();
         StepOutputError = null;
         ClearHumanConfirmation();
+        _executionStepIndex = null;
         OpenRun = run;
         StepRunDetail = null;
         SelectedStepRunId = null;
-        LiveOutputText = null;
         await RefreshStepOutputAsync(run);
         if (!IsTerminal(run.Status))
         {
@@ -428,10 +469,10 @@ public sealed partial class JobChainsViewModel
         ClearHumanConfirmation();
         StopPolling();
         StepOutputError = null;
+        _executionStepIndex = null;
         OpenRun = null;
         StepRunDetail = null;
         SelectedStepRunId = null;
-        LiveOutputText = null;
         NotifyStateChanged();
     }
 
@@ -439,7 +480,6 @@ public sealed partial class JobChainsViewModel
     {
         StepOutputError = null;
         StepRunDetail = null;
-        LiveOutputText = null;
         SelectedStepRunId = step.RunId;
         try
         {
@@ -451,8 +491,6 @@ public sealed partial class JobChainsViewModel
                     return;
                 }
                 StepRunDetail = detail;
-                UpdateLiveOutput(rid);
-                LiveOutputUpdatedAt = DateTimeOffset.UtcNow;
             }
         }
         catch
@@ -466,10 +504,23 @@ public sealed partial class JobChainsViewModel
         NotifyStateChanged();
     }
 
+    public IReadOnlyList<ChainStepRunView> LogSteps => OpenRun is null ? [] : OpenRun.Steps
+        .Where(step => step.RunId.HasValue)
+        .Concat(OpenRun.Steps.SelectMany(step => (step.AgentActivity ?? [])
+            .Reverse().DistinctBy(activity => activity.RunId)
+            .Where(activity => activity.RunId.HasValue)
+            .Select(activity => new ChainStepRunView(step.Index, step.StageIndex, step.BranchIndex,
+                activity.JobId ?? Guid.Empty, $"{step.JobName} · {activity.Tool}", activity.RunId,
+                activity.Kind == "job_started" ? "Running" : activity.Kind == "tool_failed" ? "Failed" : "Completed",
+                activity.At, activity.Kind == "job_started" ? null : activity.At))))
+        .DistinctBy(step => step.RunId).ToArray();
+
+    public Task OpenAgentJobRunAsync(Guid runId) => SelectLogStepAsync(runId.ToString());
+
     public Task SelectLogStepAsync(string? runId)
     {
         var step = Guid.TryParse(runId, out var id)
-            ? OpenRun?.Steps.FirstOrDefault(step => step.RunId == id) : null;
+            ? LogSteps.FirstOrDefault(step => step.RunId == id) : null;
         if (step is not null)
         {
             return OpenStepRunAsync(step);
@@ -483,7 +534,6 @@ public sealed partial class JobChainsViewModel
         StepOutputError = null;
         StepRunDetail = null;
         SelectedStepRunId = null;
-        LiveOutputText = null;
         NotifyStateChanged();
     }
 
@@ -582,17 +632,18 @@ public sealed partial class JobChainsViewModel
 
     private async Task RefreshStepOutputAsync(ChainRunView run)
     {
+        var logSteps = ExecutionStep is null ? LogSteps : ExecutionLogSteps;
         var runId = SelectedStepRunId;
-        if (runId is null || run.Steps.All(s => s.RunId != runId))
+        if (runId is null || logSteps.All(s => s.RunId != runId))
         {
             runId =
-                run.Steps.Where(s => s.RunId.HasValue && s.Status == "Running")
+                logSteps.Where(s => s.RunId.HasValue && s.Status == "Running")
                     .OrderByDescending(s => s.StartedAt)
                     .Select(s => s.RunId)
                     .FirstOrDefault()
-                ?? run.Steps.Where(s =>
+                ?? logSteps.Where(s =>
                         s.RunId.HasValue
-                        && s.Status is "Succeeded" or "Partial" or "Failed" or "Cancelled"
+                        && s.Status is "Succeeded" or "Partial" or "Failed" or "Cancelled" or "Completed"
                     )
                     .OrderByDescending(s => s.FinishedAt ?? s.StartedAt)
                     .Select(s => s.RunId)
@@ -603,7 +654,6 @@ public sealed partial class JobChainsViewModel
         if (runId is null)
         {
             StepRunDetail = null;
-            LiveOutputText = null;
             return;
         }
 
@@ -616,7 +666,6 @@ public sealed partial class JobChainsViewModel
             }
             StepRunDetail = detail;
             StepOutputError = null;
-            UpdateLiveOutput(runId.Value);
         }
         catch
         {
@@ -626,13 +675,6 @@ public sealed partial class JobChainsViewModel
                 StepOutputError = "Log refresh failed. Showing the last available output; retrying while the run is active.";
             }
         }
-    }
-
-    private void UpdateLiveOutput(Guid runId)
-    {
-        var live = _outputBuffer.Snapshot(runId);
-        LiveOutputText = live?.Text;
-        LiveOutputUpdatedAt = live?.UpdatedAt ?? DateTimeOffset.UtcNow;
     }
 
     private void StartPolling(Guid chainId)

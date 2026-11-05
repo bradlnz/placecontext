@@ -13,9 +13,7 @@ COPY . .
 COPY --from=qemu-agent /agent/target/x86_64-unknown-linux-gnu/release/pc-jev /src/dist/qemu-agent-build/x86_64-unknown-linux-gnu/release/pc-jev
 RUN arch="$TARGETARCH"; [ "$arch" != amd64 ] || arch=x64; \
     dotnet restore src/PlaceContext.Host/PlaceContext.Host.csproj -a "$arch" && \
-    dotnet publish src/PlaceContext.Host/PlaceContext.Host.csproj -c Release -o /app/host -a "$arch" --no-restore -p:QemuAgentPrebuilt=true && \
-    dotnet restore src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -a "$arch" && \
-    dotnet publish src/PlaceContext.ClusterHost/PlaceContext.ClusterHost.csproj -c Release -o /app/cluster -a "$arch" --no-restore -p:QemuAgentPrebuilt=true
+    dotnet publish src/PlaceContext.Host/PlaceContext.Host.csproj -c Release -o /app/host -a "$arch" --no-restore -p:QemuAgentPrebuilt=true
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.14 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/bradlnz/placecontext" \
@@ -24,7 +22,6 @@ LABEL org.opencontainers.image.source="https://github.com/bradlnz/placecontext" 
 RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/host ./host/
-COPY --from=build /app/cluster ./cluster/
-EXPOSE 7700 8081
+EXPOSE 7700
 USER $APP_UID
-ENTRYPOINT ["sh", "-c", "if [ \"$CLUSTER\" = \"1\" ]; then exec dotnet cluster/PlaceContext.ClusterHost.dll --urls=http://+:8081; else exec dotnet host/PlaceContext.Host.dll; fi"]
+ENTRYPOINT ["dotnet", "host/PlaceContext.Host.dll"]

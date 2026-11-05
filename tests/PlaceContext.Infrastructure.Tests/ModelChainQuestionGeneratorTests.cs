@@ -39,7 +39,9 @@ public sealed class ModelChainQuestionGeneratorTests
         }));
         var generator = new ModelChainQuestionGenerator(api, Options.Create(VirtualMachinePromptAgentTests.OptionsForAgent()));
         var question = await generator.GenerateAsync(new(kind, "Validate the total", "review", responseType), "{\"total\":42}", default);
-        Assert.Equal("Is the reported total of 42 correct?", question);
+        Assert.Equal(kind == LoopChainAction.AgentType
+            ? "Validate the total\n\nReview question: Is the reported total of 42 correct?"
+            : "Is the reported total of 42 correct?", question);
         var request = Assert.Single(api.Requests);
         var system = request["messages"]![0]!["content"]!.GetValue<string>();
         Assert.Contains(audience, system);

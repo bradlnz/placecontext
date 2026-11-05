@@ -5,7 +5,7 @@
 ## What the integration provides
 
 OpenSearch powers **Data → Search**, field discovery, bounded document search, aggregations, saved
-dashboards, exports, and OpenSearch SQL. A project table can also be materialised into an index.
+dashboards, exports, and OpenSearch SQL.
 PlaceContext makes these requests server-side, so cluster credentials are never returned to the
 browser.
 

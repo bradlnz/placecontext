@@ -64,7 +64,7 @@ jobs:
           bash -n deploy/release/install.sh
           bash -n deploy/release/install-production.sh
           bash -n deploy/release/package.sh
-          python3 -c "compile(open('deploy/release/local-ai/worker.py', encoding='utf-8').read(), 'worker.py', 'exec')"
+          python3 -m unittest discover -s tests/deploy -p 'test_release_package.py'
 
       - name: Prepare release metadata
         shell: bash

@@ -4,9 +4,9 @@
 
 ## Install locally
 
-Python 3.11+, curl, and OpenSSL are required. The release installer never invokes `sudo`; it uses an
-accessible Docker daemon or verified rootless Docker, downloads its own `k3d` and `kubectl`, creates
-the local cluster and secrets, starts local AI, and deploys the portal:
+curl and OpenSSL are required. The release installer uses an accessible Docker daemon or installs
+Docker with passwordless `sudo` on Linux. It downloads `k3d` and `kubectl`, creates the local cluster
+and secrets, and deploys the portal. Configure AI providers in **Settings → Models**:
 
 ```bash
 curl -fsSL https://get.placecontext.io/install.sh | bash
@@ -36,7 +36,6 @@ A practical Proxmox layout is:
 
 - one VM for the PlaceContext portal and local lab cluster;
 - separate worker VMs for CPU-heavy, memory-heavy, or GPU-backed local jobs;
-- optional Apple Silicon machines joined as AI shards; and
 - [Tailscale](https://tailscale.com/kb/1017/install) when a worker or operator is outside the home LAN.
 
 This works well for backup verification, media processing, document indexing, sensor rollups, and

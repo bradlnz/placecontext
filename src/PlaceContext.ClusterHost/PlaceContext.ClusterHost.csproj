@@ -1,9 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
-  <PropertyGroup>
-    <RootNamespace>PlaceContext.ClusterHost</RootNamespace>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="../PlaceContext.Application/PlaceContext.Application.csproj" />
-    <ProjectReference Include="../PlaceContext.Infrastructure/PlaceContext.Infrastructure.csproj" />
-  </ItemGroup>
-</Project>

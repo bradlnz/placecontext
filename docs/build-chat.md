@@ -1,16 +1,23 @@
 # Build chat and model connections
 
-Select a project and open **Build**. The assistant can inspect, create, replace, delete, and run jobs and workflows, and create, update, pause, or delete job schedules and event triggers. It uses your permissions and checks that referenced resources belong to the selected project. Existing job and workflow validation still applies.
+Select a project and open **Dashboard**. The assistant can inspect, create, replace, delete, and run jobs and workflows, and create, update, pause, or delete job schedules and event triggers. It uses your permissions and checks that referenced resources belong to the selected project. Existing job and workflow validation still applies.
 
 Build can also deploy apps and workers into **Services**, inspect their source/status/logs, update source apps, and provision app-owned PostgreSQL or Redis databases. It defaults to the built-in hosting environment rather than asking for an external provider. Hosting tools require Settings management permission. Apps retain platform SSO, namespace isolation and non-root containers; database credentials are generated and injected automatically.
 
 Source deployments support Python and Node with up to 100 files / 400 KB. The entrypoint runs from `/work` and web apps listen on `0.0.0.0:$PORT`. Dependency manifests use the existing pip/npm setup and require explicit public egress in the source definition; private networks remain blocked except the platform and owned databases. Source updates retain the app ID and database bindings. Larger apps use prebuilt images. `/work` and `/tmp` are ephemeral, so durable data belongs in the owned database. A deployment receipt means submitted, not ready; Build checks status and logs before reporting readiness.
 
+The dashboard focuses on conversations. Run monitoring, saved charts, and data remain on their dedicated pages and are not loaded in the dashboard. Chat has no MCP mention picker or special `@MCP` routing; mentions are ordinary text. Platform MCP endpoints and connection settings remain available.
+
 ## Connect models
 
-Local development automatically probes Ollama at `127.0.0.1:11434/v1` and LM Studio at `127.0.0.1:1234/v1` when models are listed. Running servers with available models appear without API keys. The open chat refreshes discovery every 30 seconds. Detection does not install servers or download models. These addresses refer to the application host, not the browser machine. Production detection is off by default; set `PlaceContext:Build:DetectLocalModels` explicitly to override. Manually edited or disabled connections are preserved.
+Add a provider under **Settings → Models**, choose a preset, and use **Discover models** or enter
+model IDs manually. Existing saved connections load directly on the dashboard; opening it does not
+probe local servers or launch CLI discovery. Local endpoints refer to the application host.
 
-The default workspace administrator also gets automatic detection of **Codex** and **Claude Code** on the app host's `PATH`. Codex uses its signed-in account and the app-server model catalog. Claude Code checks its login and offers its configured `default` plus the `sonnet`, `opus`, and `haiku` aliases; availability depends on the account. Installed but signed-out CLIs appear with no models and a sign-in hint. Run `codex login` or `claude auth login` on the host, then refresh Build or discover models in Settings. The CLI must support the isolation flags used by this integration (validated with Codex 0.153.1 and Claude Code 2.1.259). Gemini and other CLI adapters are not implemented; compatible HTTP providers can still be configured manually.
+For **Codex** or **Claude Code**, sign in on the app host with `codex login` or `claude auth login`,
+then add the matching preset and discover models. These connections are available only to the
+default workspace administrator. The bundled local inference worker and AI shard coordinator have
+been removed; externally managed model servers remain supported.
 
 CLI inference runs remotely and consumes the host account's usage allowance. Host CLI accounts are restricted to the default workspace administrator at both listing and execution. Credentials stay with the CLI. Runs use private temporary working directories; host tools, MCP servers, skills, hooks and plugins are disabled. Codex returns dynamic tool requests and retains its session through the tool loop; Claude returns structured requests with the conversation history and images supplied each call. Both go through the existing Build tool validation and permissions. Temporary sessions are removed after completion or cancellation.
 
@@ -27,23 +34,24 @@ Supported protocols are OpenAI-compatible Chat Completions and Anthropic Message
 
 The URL is the API base (for example `https://api.anthropic.com/v1`), not the individual completion route. Local URLs resolve from the PlaceContext server, including its container network. Redirects are not followed. Changing a saved endpoint or protocol requires re-entering or explicitly removing its key. Saved keys are encrypted and are never returned to the browser or the model.
 
-Use models with function/tool calling. Image input additionally requires vision support. Model discovery verifies the provider's model-list endpoint; it does not prove every returned model supports chat, tools, or images. API billing and quotas belong to the connected provider. Browser-based subscription sign-in, Azure-specific authentication, and native Bedrock/Vertex adapters are not included; local Codex and Claude Code reuse their own sign-ins.
+Use models with function/tool calling. Model discovery verifies the provider's model-list endpoint; it does not prove every returned model supports chat, tools, or images. API billing and quotas belong to the connected provider. Browser-based subscription sign-in, Azure-specific authentication, and native Bedrock/Vertex adapters are not included; local Codex and Claude Code reuse their own sign-ins.
 
 ## Conversations and memory
 
-Conversations, image attachments, titles, and memory are encrypted in PostgreSQL using the existing Data Protection key ring. They are scoped to the signed-in user, tenant, and project. Switching models preserves the conversation. Disabled or deleted connections require selecting another model.
+Conversations, legacy image attachments, titles, and memory are encrypted in PostgreSQL using the existing Data Protection key ring. They are scoped to the signed-in user, tenant, and project. Switching models preserves the conversation. Disabled or deleted connections require selecting another model.
 
-Project memory carries across conversations. Ask the assistant to remember a preference, or open **Project memory** to review, edit, or clear it. Do not put credentials in memory; use the vault. Deleting a chat deletes its attachments but keeps project memory and any jobs, workflows, or schedules created through it.
+The assistant uses its existing memory tool to retain durable project facts and preferences from conversations automatically. Saved memory carries across your chats in the same project; ask the assistant to review, correct, or forget it. Do not put credentials in memory; use the vault. Deleting a chat deletes its attachments but keeps project memory and any jobs, workflows, or schedules created through it.
 
-When the assistant asks a question with concrete choices, it can present clickable answers. Selecting one sends that answer and resumes the conversation; you can also type a custom reply. Buttons are disabled for earlier questions, while work is running, or while you have a draft, attachment, or active dictation. Questions and choices remain available after reopening the conversation.
+When the assistant asks a question with concrete choices, it can present clickable answers. Selecting one sends that answer and resumes the conversation; you can also type a custom reply. Buttons are disabled for earlier questions, while work is running, or while you have a draft or active dictation. Questions and choices remain available after reopening the conversation.
 
 The selected provider receives the conversation, attachments, saved memory, project dependency map, and tool results. Conversation history is sent in full, bounded by storage and message limits; model context limits can be lower. Start another chat when needed. There is no silent history truncation or automatic summarization.
 
 ## Inputs and execution
 
+New messages are text-only. Previously saved images remain visible in conversation history.
+
 - Text: compose a message and select **Send** or press Enter; Shift+Enter creates a new line.
-- Images: attach up to four PNG, JPEG, or WebP files, no larger than 2 MB each. Remove them before sending using the preview's remove button.
-- Speech: **Dictate** fills the text composer; stop dictation and review the transcript before sending. It uses browser speech recognition, which may send audio to the browser vendor. A supported browser, microphone permission, and HTTPS (or localhost) are required. Text and image input remain available when speech is unsupported.
+- Speech: **Dictate** fills the text composer; stop dictation and review the transcript before sending. It uses browser speech recognition, which may send audio to the browser vendor. A supported browser, microphone permission, and HTTPS (or localhost) are required. Text input remains available when speech is unsupported.
 - Tool activity: expand actions and results to inspect what the assistant did. Replies appear after a model response completes; tool progress updates between calls.
 - Stop: cancels further work. Completed changes remain applied. If interrupted during an action, its result may be unknown; inspect the resource before retrying.
 

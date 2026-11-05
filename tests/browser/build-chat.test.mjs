@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { supportsSpeech, startSpeech, stopSpeech, mountChat, unmountChat, mountWorkspaceResize, setComposerMenu } from '../../src/PlaceContext.Host/wwwroot/build-chat.js';
+import { supportsSpeech, startSpeech, stopSpeech, mountChat, unmountChat, mountWorkspaceResize } from '../../src/PlaceContext.Host/wwwroot/build-chat.js';
 
 test('workspace divider supports bounded dragging, keyboard resizing and cleanup', () => {
     const divider = new EventTarget();
@@ -39,17 +39,6 @@ test('workspace divider supports bounded dragging, keyboard resizing and cleanup
     assert.equal(size, '30%');
 });
 
-test('MCP modal hides and restores its own composer menu', () => {
-    const source = {};
-    let visible = true;
-    const menu = { hidePopover: () => visible = false, showPopover: options => { assert.equal(options.source, source); visible = true; } };
-    globalThis.document = { getElementById: id => { assert.equal(id, 'build-test'); return { querySelector: selector => selector === '.composer-menu' ? menu : source }; } };
-    setComposerMenu('build-test', false);
-    assert.equal(visible, false);
-    setComposerMenu('build-test', true);
-    assert.equal(visible, true);
-});
-
 test('dictation checks support, accepts final text, and releases the microphone', async () => {
     let active;
     class Speech {
@@ -78,6 +67,7 @@ test('composer sends Enter, preserves Shift+Enter and composition, and respects 
     const messages = new EventTarget();
     Object.assign(messages, { scrollHeight: 1000, scrollTop: 0, clientHeight: 200 });
     let submits = 0, enabled = true, changed, disconnected = false;
+    input.value = '@Warehouse ask user@example.test';
     input.form = { querySelector: () => enabled, requestSubmit: () => submits++ };
     globalThis.document = { querySelector: selector => selector === '.chat-input' ? input : selector === '.chat-messages' ? messages : null };
     globalThis.MutationObserver = class { constructor(callback) { changed = callback; } observe() {} disconnect() { disconnected = true; } };
@@ -116,39 +106,4 @@ test('a Build blade mounts and unmounts without taking over the page composer', 
     enter(inputs[0]); enter(inputs[1]);
     assert.deepEqual(submits, [2, 1]);
     unmountChat('0');
-});
-
-test('MCP completion finds the token at the caret without treating emails or completed quotes as mentions', async () => {
-    const { activeMcpMention } = await import('../../src/PlaceContext.Host/wwwroot/build-chat.js');
-    assert.deepEqual(activeMcpMention('Ask @Ware for orders', 9), { start: 4, end: 9 });
-    assert.deepEqual(activeMcpMention('@', 1), { start: 0, end: 1 });
-    assert.deepEqual(activeMcpMention('@"Commerce M', 12), { start: 0, end: 12 });
-    assert.deepEqual(activeMcpMention('user@example.test', 12), { start: -1, end: -1 });
-    assert.deepEqual(activeMcpMention('@"Commerce MCP" ', 16), { start: -1, end: -1 });
-});
-
-test('typing an MCP mention opens suggestions and Enter selects without submitting the message', async () => {
-    const input = new EventTarget(), messages = new EventTarget();
-    Object.assign(input, { value: 'Ask @Ware', selectionStart: 9 });
-    let submits = 0, selected = 0, visible = true;
-    const calls = [];
-    const menu = { matches: () => visible, hidePopover: () => visible = false,
-        querySelectorAll: () => [{ click: () => selected++, focus() {} }] };
-    input.form = { querySelector: () => true, requestSubmit: () => submits++ };
-    const root = { querySelector: selector => ({ '.chat-input': input, '.chat-messages': messages, '.composer-menu': menu })[selector] };
-    globalThis.document = { getElementById: () => root };
-    globalThis.MutationObserver = class { observe() {} disconnect() {} };
-    mountChat('mentions', { invokeMethodAsync: (...args) => { calls.push(args); return Promise.resolve(); } });
-    input.dispatchEvent(new Event('input'));
-    await Promise.resolve();
-    assert.deepEqual(calls[0], ['UpdateMcpMention', 'Ask @Ware', 4, 9]);
-    const press = key => { const event = new Event('keydown', { cancelable: true }); Object.assign(event, { key }); input.dispatchEvent(event); return event; };
-    assert.equal(press('Enter').defaultPrevented, true);
-    assert.equal(selected, 1);
-    assert.equal(submits, 0);
-    press('Escape');
-    assert.equal(visible, false);
-    unmountChat('mentions');
-    input.dispatchEvent(new Event('input'));
-    assert.equal(calls.length, 2);
 });

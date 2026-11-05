@@ -15,7 +15,7 @@ namespace PlaceContext.Infrastructure.Build;
 
 public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser user, ICurrentTenant tenant,
     IPermissionService permissions, IMembershipService members, IDataEncryptor encryption,
-    IHttpClientFactory clients, LocalModelDiscovery? local = null, LocalCliModels? cli = null) : IModelConnections, IBuildModelGateway, IAgentModelGateway
+    IHttpClientFactory clients, LocalCliModels? cli = null) : IModelConnections, IBuildModelGateway, IAgentModelGateway
 {
     private const string Purpose = "model.credentials.v1";
     private async Task CheckAsync(bool admin, CancellationToken ct)
@@ -42,10 +42,6 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
     public async Task<IReadOnlyList<ModelConnection>> ListAsync(CancellationToken ct = default)
     {
         await CheckAsync(false, ct);
-        if (local is not null)
-        {
-            await local.DetectAsync(ct);
-        }
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var canUseCli = await CanUseLocalCliAsync(ct);
@@ -162,8 +158,10 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
             .Select(x => x?["id"]?.GetValue<string>()).OfType<string>().Where(x => x.Length is > 0 and <= 200)
             .Distinct().Order().Take(500).ToArray();
     }
-    public async Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct)
-        => (await CompleteCoreAsync(connectionId, model, messages, tools, ct)).Message;
+    public ValueTask ResetSessionAsync() => cli?.DisposeAsync() ?? ValueTask.CompletedTask;
+
+    public async Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null)
+        => (await CompleteCoreAsync(connectionId, model, messages, tools, ct, report: report)).Message;
 
     public async Task<AgentCompletion> CompleteMeteredAsync(Guid connectionId, string model, string instruction, string input, CancellationToken ct)
     {
@@ -174,7 +172,7 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
     }
 
     private async Task<(JsonObject Message, long? InputTokens, long? OutputTokens)> CompleteCoreAsync(
-        Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, bool isolated = false)
+        Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, bool isolated = false, Action<string>? report = null)
     {
         await CheckAsync(false, ct);
         if (!await permissions.HasAsync(Permission.ProjectsView, ct))
@@ -197,9 +195,9 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
             {
                 // Library runs must not inherit a Build conversation's model session.
                 await using var session = new LocalCliModels();
-                return (await session.CompleteAsync(row.Protocol, model, messages, tools, ct), null, null);
+                return (await session.CompleteAsync(row.Protocol, model, messages, tools, ct, report), null, null);
             }
-            return (await cli.CompleteAsync(row.Protocol, model, messages, tools, ct), null, null);
+            return (await cli.CompleteAsync(row.Protocol, model, messages, tools, ct, report), null, null);
         }
         var protocol = ModelProtocols.Get(row.Protocol);
         var body = await SendAsync(row, protocol.CompletionPath, protocol.Request(model, messages, tools), ct);

@@ -23,4 +23,5 @@ public sealed record ChainStepRun(
     string? Provider = null,
     string? ExternalId = null,
     string? Error = null,
-    int RetryCount = 0);
+    int RetryCount = 0,
+    IReadOnlyList<AgentActivity>? AgentActivity = null);

@@ -105,7 +105,7 @@
                             {
                                 @foreach (var step in RunSteps.GetValueOrDefault(stageIndex.ToString()) ?? [])
                                 {
-                                    <WorkflowRunStep Step="step" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+                                    <WorkflowRunStep Step="step" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
                                 }
                             }
                             else
@@ -134,6 +134,28 @@
                                 </button>
                                 <div class="node-output"><span>Result</span><code>@vm.OutputField</code></div>
                             }
+                            else if (stage.Action is QueryDataChainActionView query)
+                            {
+                                <button disabled="@ReadOnly" class="job-path" title="Edit data query" @onclick="@(() => OnEditQueryDataAction.InvokeAsync(stageIndex))">
+                                    <span class="job-icon"><AppIcon Kind="database" /></span>
+                                    <span class="node-copy"><strong>Query data</strong><small>@query.Sql</small></span>
+                                </button>
+                                <div class="node-output"><span>Rows</span><code>@(query.OutputField).rows</code></div>
+                            }
+                            else if (stage.Action is ScoringGateChainActionView score)
+                            {
+                                <button disabled="@ReadOnly" class="job-path" title="Edit scoring gate" @onclick="@(() => OnEditScoringAction.InvokeAsync(stageIndex))">
+                                    <span class="job-icon"><AppIcon Kind="check" /></span>
+                                    <span class="node-copy"><strong>Scoring gate</strong><small>@score.InputField · ≥ @score.PassScore/100 · confidence ≥ @score.MinimumConfidence</small></span>
+                                </button>
+                                <div class="node-output"><span>Result</span><code>@score.OutputField</code></div>
+                            }
+                            else if (stage.Action is RepeatFlowChainActionView repeat)
+                            {
+                                <button disabled="@ReadOnly" class="job-path" title="Edit repeat settings" @onclick="@(() => OnEditRepeatAction.InvokeAsync(stageIndex))">
+                                    <span class="node-copy"><strong>Repeat flow</strong><small>Up to @repeat.MaxAttempts attempts · @repeat.UntilCondition</small></span>
+                                </button>
+                            }
                             else if (stage.Action is LoopChainActionView loop)
                             {
                                 <button disabled="@ReadOnly" class="job-path loop-path @(loop.Kind == "humanInput" ? "human-path" : "agent-path")"
@@ -142,7 +164,7 @@
                                     <span class="node-copy"><strong>@loop.DisplayName</strong><small>@loop.Instructions</small></span>
                                 </button>
                                 <div class="node-output"><span>Response</span><code>@loop.ResponseField</code></div>
-                                <span class="handoff-badge">Waits for a response</span>
+                                <span class="handoff-badge">@(loop.AgentProvider == "automatic" ? $"Automatic · {loop.Model}" : loop.AgentProvider == "jev" ? "Automatic verification" : "Waits for a response")</span>
                             }
                             @foreach (var (job, branchIndex) in stage.Jobs.Select((job, index) => (job, index)))
                             {
@@ -208,7 +230,7 @@
                             <div class="canvas-stage false-route">
                                 @if ((stage.ElseBranch ?? condition.ElseBranch) is { Count: > 0 } other)
                                 {
-                                    <WorkflowBranchPreview Jobs="@(ReadOnly ? Array.Empty<JobView>() : Jobs)" OnOpenJob="OnOpenJob" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{stageIndex}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+                                    <WorkflowBranchPreview Jobs="@(ReadOnly ? Array.Empty<JobView>() : Jobs)" OnOpenJob="OnOpenJob" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{stageIndex}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
                                 }
                                 else
                                 {
@@ -251,6 +273,7 @@
     [Parameter, EditorRequired] public IReadOnlyList<JobChainStageView> Stages { get; set; } = Array.Empty<JobChainStageView>();
     [Parameter] public IReadOnlyList<JobView> Jobs { get; set; } = Array.Empty<JobView>();
     [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps { get; set; }
+    [Parameter] public bool InspectActions { get; set; }
     [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
     [Parameter] public EventCallback<ChainStepRunView> OnStepCancel { get; set; }
     [Parameter] public Dictionary<int, ChainGateView> Gates { get; set; } = new();
@@ -258,6 +281,9 @@
     [Parameter] public EventCallback<(int StageIndex, ChainGateView Gate)> OnEditGate { get; set; }
     [Parameter] public EventCallback<int> OnEditEmailAction { get; set; }
     [Parameter] public EventCallback<int> OnEditSmsAction { get; set; }
+    [Parameter] public EventCallback<int> OnEditQueryDataAction { get; set; }
+    [Parameter] public EventCallback<int> OnEditScoringAction { get; set; }
+    [Parameter] public EventCallback<int> OnEditRepeatAction { get; set; }
     [Parameter] public EventCallback<int> OnEditLoopAction { get; set; }
     [Parameter] public EventCallback<int> OnEditQemuAction { get; set; }
     [Parameter] public EventCallback<(int StageIndex, Guid JobId)> OnAddPath { get; set; }

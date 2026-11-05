@@ -218,6 +218,8 @@ public sealed partial class JobChainsViewModel
         ShowEmailActionEditor = false;
         ShowSmsActionEditor = false;
         ShowLoopEditor = false;
+        ShowScoringEditor = false;
+        ShowQueryDataEditor = false;
         ShowQemuEditor = false;
         ShowStageNodePicker = false;
         EditorError = null;
@@ -884,8 +886,18 @@ public sealed partial class JobChainsViewModel
                 OpenQemuActionAt(StageNodePickerIndex);
                 break;
             case LoopChainAction.HumanType:
+            case LoopChainAction.TaskType:
             case LoopChainAction.AgentType:
-                OpenLoopActionAt(type, StageNodePickerIndex);
+                await OpenLoopActionAt(type, StageNodePickerIndex);
+                break;
+            case QueryDataChainAction.ActionType:
+                OpenQueryDataAction(StageNodePickerIndex);
+                break;
+            case ScoringGateChainAction.ActionType:
+                OpenScoringAction(StageNodePickerIndex);
+                break;
+            case RepeatFlowChainAction.ActionType:
+                OpenRepeatAction();
                 break;
             case "email":
                 await OpenEmailActionAt(StageNodePickerIndex);
@@ -1030,7 +1042,10 @@ public sealed partial class JobChainsViewModel
         action switch
         {
             VirtualMachineChainAction vm => new VirtualMachineChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork, vm.PauseForLogin, vm.LoginProfileId),
-            LoopChainAction loop => new LoopChainActionView(loop.Type, loop.Instructions, loop.ResponseField, loop.ResponseType, loop.AgentProvider),
+            QueryDataChainAction query => new QueryDataChainActionView(query.Sql, query.OutputField),
+        ScoringGateChainAction score => new ScoringGateChainActionView(score.InputField, score.OutputField, score.Criteria, score.PassScore, score.MinimumConfidence, score.StopOnFailure),
+        RepeatFlowChainAction repeat => new RepeatFlowChainActionView(repeat.UntilCondition, repeat.MaxAttempts),
+            LoopChainAction loop => new LoopChainActionView(loop.Type, loop.Instructions, loop.ResponseField, loop.ResponseType, loop.AgentProvider, loop.ConnectionId, loop.Model),
             SendEmailChainAction email => new SendEmailChainActionView(email.Recipient, email.RecipientName, email.Subject, email.Body, email.AttachmentPath),
             SendSmsChainAction sms => new SendSmsChainActionView(sms.Recipient, sms.Body),
             null => null,

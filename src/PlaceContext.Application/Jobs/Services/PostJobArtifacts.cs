@@ -275,7 +275,7 @@ public static class PostJobArtifacts
             }
             foreach (var a in s.Artifacts)
             {
-                yield return RawFile($"raw/shard-{s.Index}/{a.Name}", a.Content);
+                yield return RawFile($"raw/shard-{s.Index}/{a.Name}", a.GetBytes());
             }
         }
         if (run.ReduceResult is { } r)
@@ -286,14 +286,17 @@ public static class PostJobArtifacts
             }
             foreach (var a in r.Artifacts)
             {
-                yield return RawFile($"raw/reduce/{a.Name}", a.Content);
+                yield return RawFile($"raw/reduce/{a.Name}", a.GetBytes());
             }
         }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────────────────────────────
     private static BuiltFile RawFile(string path, string content)
-        => new(path, Encoding.UTF8.GetBytes(content), ContentTypeFor(path), path[(path.LastIndexOf('/') + 1)..]);
+        => RawFile(path, Encoding.UTF8.GetBytes(content));
+
+    private static BuiltFile RawFile(string path, byte[] content)
+        => new(path, content, ContentTypeFor(path), path[(path.LastIndexOf('/') + 1)..]);
 
     // A horizontal bar chart of shard outcomes as inline SVG — self-contained, opens offline.
     private static string OutcomeChartSvg(JobRun run)
@@ -362,6 +365,7 @@ public static class PostJobArtifacts
         return ext switch
         {
             "json" => "application/json",
+            "zip" => "application/zip",
             "csv" => "text/csv; charset=utf-8",
             "html" or "htm" => "text/html; charset=utf-8",
             "png" => "image/png",

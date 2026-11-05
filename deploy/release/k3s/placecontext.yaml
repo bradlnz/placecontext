@@ -195,19 +195,6 @@ spec:
             # plane and queue until a standard worker is online.
             - name: PlaceContext__WorkloadRunner__RequireWorkerNodes
               value: "false"
-            # Configure PlaceContext__ClusterChat__* or PlaceContext__Voyage__* only when an
-            # operator has provisioned the corresponding local shards or external provider.
-            - name: PlaceContext__ClusterChat__Endpoint
-              value: "__CLUSTER_ENDPOINT__"
-            - name: PlaceContext__ClusterChat__ApiToken
-              valueFrom:
-                secretKeyRef:
-                  name: placecontext-ai
-                  key: api-token
-                  optional: true
-            # Kept for reference if Voyage is unset and cluster embeddings are used instead.
-            - name: PlaceContext__ClusterChat__EmbeddingDimensions
-              value: "2560"
             # Slack Events API → agent (optional). Create secret placecontext-slack with
             # signing-secret, bot-token, project-id to enable POST /slack/events.
             - name: PlaceContext__Slack__SigningSecret

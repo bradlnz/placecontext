@@ -34,24 +34,13 @@ trap cleanup EXIT
 STAGE="$TEMP/placecontext-deploy"
 mkdir -p "$STAGE"
 cp -R "$ROOT/deploy/release/k3s" "$STAGE/k3s"
-cp -R "$ROOT/deploy/release/local-ai" "$STAGE/local-ai"
-# Never ship interpreter cache files accidentally left by local validation.
-rm -rf "$STAGE/local-ai/__pycache__"
 cp "$ROOT/deploy/release/install.sh" "$STAGE/install.sh"
 cp "$ROOT/deploy/release/install-production.sh" "$STAGE/install-production.sh"
 cp "$ROOT/LICENSE" "$STAGE/LICENSE"
 printf '%s\n' "$VERSION" > "$STAGE/VERSION"
+printf '%s\n' "$IMAGE" > "$STAGE/RUNTIME_IMAGE"
 chmod 0755 "$STAGE/install.sh"
 chmod 0755 "$STAGE/install-production.sh"
-
-sed -i \
-  "s|__PLACECONTEXT_RUNTIME_IMAGE__|$IMAGE|g" \
-  "$STAGE/local-ai/config.yaml" \
-  "$STAGE/local-ai/runtime.yaml"
-if rg -n '__PLACECONTEXT_RUNTIME_IMAGE__' "$STAGE" >/dev/null; then
-  printf 'Runtime image placeholder was not resolved\n' >&2
-  exit 1
-fi
 
 RELEASE_DIR="$OUTPUT_DIR/releases/$VERSION"
 ASSET="placecontext-deploy.tar.gz"

@@ -1,29 +1,33 @@
 namespace PlaceContext.Domain.ValueObjects;
 
-/// <summary>A durable hand-off to a human or an external agent.</summary>
+/// <summary>A human hand-off or an agent step with external, automatic, or verification execution.</summary>
 public sealed class LoopChainAction : ChainAction
 {
     public const string HumanType = "humanInput";
     public const string AgentType = "agentInput";
+    public const string TaskType = "agentTask";
     public const string TextResponse = "text";
     public const string YesNoResponse = "yesNo";
     public const string ExternalAgent = "external";
     public const string JevAgent = "jev";
+    public const string AutomaticAgent = "automatic";
 
     public LoopChainAction(string type, string instructions, string responseField, string responseType = TextResponse,
-        string agentProvider = ExternalAgent)
+        string agentProvider = ExternalAgent, Guid? connectionId = null, string? model = null)
     {
-        if (type is not (HumanType or AgentType))
+        if (type is not (HumanType or AgentType or TaskType))
         {
             throw new ArgumentException("Choose a human or agent step.", nameof(type));
         }
-        if (responseType is not (TextResponse or YesNoResponse) || type == AgentType && responseType != TextResponse)
+        if (responseType is not (TextResponse or YesNoResponse) || type != HumanType && responseType != TextResponse)
         {
             throw new ArgumentException("Choose a text response, or Yes/No for a human step.", nameof(responseType));
         }
-        if (agentProvider is not (ExternalAgent or JevAgent) || type == HumanType && agentProvider != ExternalAgent)
+        if (agentProvider is not (ExternalAgent or JevAgent or AutomaticAgent)
+            || type == HumanType && agentProvider != ExternalAgent
+            || type == TaskType && agentProvider == JevAgent)
         {
-            throw new ArgumentException("Choose an external agent or Jev for an agent step.", nameof(agentProvider));
+            throw new ArgumentException("Choose automatic execution, an external agent, or AI verification for an agent step.", nameof(agentProvider));
         }
         if (string.IsNullOrWhiteSpace(instructions) || instructions.Trim().Length > 4000)
         {
@@ -35,6 +39,13 @@ public sealed class LoopChainAction : ChainAction
         {
             throw new ArgumentException("Response field must start with a letter and contain only letters, numbers or underscores (up to 80 characters).", nameof(responseField));
         }
+        if (agentProvider == AutomaticAgent && (connectionId is null || connectionId == Guid.Empty
+            || string.IsNullOrWhiteSpace(model) || model.Length > 200))
+            throw new ArgumentException("Choose a model connection and model for automatic execution.");
+        if (agentProvider != AutomaticAgent && (connectionId is not null || model is not null))
+            throw new ArgumentException("Model selection is only used by automatic execution.");
+        ConnectionId = connectionId;
+        Model = model?.Trim();
         Type = type;
         Instructions = instructions.Trim();
         ResponseField = responseField;
@@ -46,7 +57,7 @@ public sealed class LoopChainAction : ChainAction
     {
         get;
     }
-    public override string DisplayName => Type == HumanType ? "Human in the loop" : "Agent in the loop";
+    public override string DisplayName => Type == TaskType ? "Agent task" : Type == HumanType ? "Human in the loop" : "Agent in the loop";
     public string Instructions
     {
         get;
@@ -59,6 +70,8 @@ public sealed class LoopChainAction : ChainAction
     {
         get;
     }
+    public Guid? ConnectionId { get; }
+    public string? Model { get; }
     public string AgentProvider
     {
         get;

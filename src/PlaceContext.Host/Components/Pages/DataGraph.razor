@@ -12,6 +12,10 @@
 
 <div class="page graph-page">
     <DataTabs ProjectId="ProjectId" Active="@DataSection.Graph" />
+    <header class="data-graph-heading">
+        <div><h1>Data graph</h1><p>Project tables and their data mappings. Disabled mappings use dashed links.</p></div>
+        <a class="dcbtn" href="@($"/project/{ProjectId}/datamap")">Manage mappings</a>
+    </header>
 
     @if (Vm.Loading)
     {
@@ -24,7 +28,7 @@
     else if (Vm.Graph is { Nodes.Count: 0 })
     {
         <div class="dccard empty-note">
-            No graph yet — record decisions, run jobs and ingest data to build the project knowledge graph.
+            No data graph yet. Create a table or add a data mapping to connect source outputs to tables.
         </div>
     }
     else if (Vm.Graph is not null)
@@ -33,7 +37,7 @@
             <aside class="graph-sidebar">
                 <div class="graph-sidebar-head">
                     <input class="dcinput graph-search"
-                           placeholder="Search nodes…"
+                           placeholder="Search tables and mappings…"
                            @bind="Vm.SearchTerm"
                            @bind:event="oninput" />
                     @if (Vm.SelectedNodeId is not null)
@@ -70,6 +74,7 @@
             <main class="graph-main">
                 <GraphCanvas @ref="_canvas"
                              Graph="Vm.Graph"
+                             NodeUrl="Vm.NodeUrl"
                              Height="640"
                              Searchable="true"
                              AllowFullscreen="true"
@@ -79,6 +84,38 @@
             </main>
         </div>
     }
+    @if (Vm.CanViewArtifacts)
+    {
+        <section class="dccard artifact-catalog" aria-labelledby="artifact-catalog-title">
+            <header><div><h2 id="artifact-catalog-title">Artifacts</h2><p>Stored files from this project. Map the source's primary JSON output into tables; files stay in artifact storage.</p></div></header>
+            @if (Vm.ArtifactsError is not null) { <p role="alert">@Vm.ArtifactsError</p> }
+            @if (Vm.Artifacts.Count > 0)
+            {
+                <div class="artifact-table-scroll">
+                    <table>
+                        <thead><tr><th>Artifact</th><th>Type</th><th>Size</th><th>Created</th><th>Data mapping</th></tr></thead>
+                        <tbody>
+                            @foreach (var artifact in Vm.Artifacts)
+                            {
+                                <tr @key="artifact.Id">
+                                    <td><a href="@($"/artifacts?artifact={artifact.Id}")">@artifact.Title</a></td>
+                                    <td>@artifact.ContentType</td>
+                                    <td>@Vm.Presentation.Bytes(artifact.SizeBytes)</td><td>@Vm.Presentation.Format(artifact.CreatedAt, "g")</td>
+                                    <td><a href="@Vm.MappingUrl(artifact.JobId)">Map source output</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else if (!Vm.HasMoreArtifacts) { <p>No stored artifacts in this project.</p> }
+            @if (Vm.HasMoreArtifacts)
+            {
+                <button class="dcbtn" disabled="@Vm.ArtifactsLoading" @onclick="Vm.LoadArtifactsAsync">@(Vm.ArtifactsLoading ? "Loading…" : Vm.Artifacts.Count == 0 ? "Load artifacts" : "Load more artifacts")</button>
+            }
+        </section>
+    }
+
 </div>
 
 @code {

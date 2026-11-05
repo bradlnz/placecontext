@@ -5,13 +5,14 @@
 @if (Vm.Layout is { } layout)
 {
     <p class="run-layout-note">@(Vm.UsesRecordedLayout
-        ? "Recorded execution order · select a job to inspect its output. Historical conditions are not recorded."
-        : "Current workflow layout · recorded results from this run. Select a job to inspect its output.")</p>
-    <ChainCanvas Stages="layout" RunSteps="Vm.RunSteps" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+        ? "Recorded execution order · select a step to inspect its activity and logs. Historical conditions are not recorded."
+        : "Current workflow layout · recorded results from this run. Select a step to inspect its activity and logs.")</p>
+    <ChainCanvas Stages="layout" RunSteps="Vm.RunSteps" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
 }
 
 @code {
     [Parameter, EditorRequired] public ChainRunView Run { get; set; } = null!;
+    [Parameter] public bool InspectActions { get; set; }
     [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
     [Parameter] public EventCallback<ChainStepRunView> OnStepCancel { get; set; }
 

@@ -65,7 +65,7 @@ public sealed class LocalCliModels : IAsyncDisposable
         }
     }
 
-    public async Task<JsonObject> CompleteAsync(string protocol, string model, JsonArray messages, JsonArray tools, CancellationToken ct)
+    public async Task<JsonObject> CompleteAsync(string protocol, string model, JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(BuildExecutionLimits.ModelResponse);
@@ -83,7 +83,7 @@ public sealed class LocalCliModels : IAsyncDisposable
                     _codex = new CliAgentSession(model);
                     _codexModel = model;
                 }
-                return await _codex!.NextAsync(first ? Transcript(messages) : messages, tools, timeout.Token);
+                return await _codex!.NextAsync(first ? Transcript(messages) : messages, tools, timeout.Token, report);
             }
             if (protocol != "claude-code")
             {

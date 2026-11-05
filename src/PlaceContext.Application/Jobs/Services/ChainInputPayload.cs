@@ -98,7 +98,7 @@ public static class ChainInputPayload
             {
                 throw new ArgumentException("Unknown input field.");
             }
-            if (request.Kind is Domain.ValueObjects.LoopChainAction.HumanType or Domain.ValueObjects.LoopChainAction.AgentType)
+            if (request.Kind is Domain.ValueObjects.LoopChainAction.HumanType or Domain.ValueObjects.LoopChainAction.AgentType or Domain.ValueObjects.LoopChainAction.TaskType)
             {
                 foreach (var field in step.Parameters)
                 {

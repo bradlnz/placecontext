@@ -7,6 +7,23 @@ namespace PlaceContext.Infrastructure.Tests;
 
 public sealed class ModelOutcomeReviewerTests
 {
+    [Fact]
+    public async Task Scores_use_one_typed_batch_with_descriptive_levels_and_complete_evidence()
+    {
+        using var api = new ModelReviewTestApi(async (request, ct) =>
+        {
+            var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!;
+            Assert.Equal("complete evidence", body["state"]!.GetValue<string>());
+            Assert.Equal("score", body["questions"]!["security"]!["type"]!.GetValue<string>());
+            Assert.Equal("No vulnerabilities found by executed checks", body["questions"]!["security"]!["criteria"]![1]!.GetValue<string>());
+            Assert.Null(body["questions"]!["security"]!["weight"]);
+            return new(HttpStatusCode.OK) { Content = new StringContent("""{"model":"test","answers":{"security":{"type":"score","score":1,"confidence":0.95,"probabilities":{"0":0,"1":1}}}}""") };
+        });
+        var reviewer = new ModelOutcomeReviewer(api, Options.Create(new ModelReviewOptions { ApiKey = "test-key" }));
+        var response = await reviewer.ScoreAsync([new("security", "Are checks passing?", ["Missing checks", "No vulnerabilities found by executed checks"])], "complete evidence", default);
+        Assert.Equal(.95, response["answers"]!["security"]!["confidence"]!.GetValue<double>()); Assert.Equal(1, api.Requests);
+    }
+
     [Theory]
     [InlineData(429)]
     [InlineData(529)]

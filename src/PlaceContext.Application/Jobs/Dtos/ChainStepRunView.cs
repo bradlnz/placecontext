@@ -1,3 +1,5 @@
+using PlaceContext.Domain.ValueObjects;
+
 namespace PlaceContext.Application.Dtos;
 
 /// <summary>One step of a chain run: Pending/Running/Succeeded/Partial/Failed/Skipped, and the
@@ -20,4 +22,5 @@ public sealed record ChainStepRunView(
     string? Provider = null,
     string? ExternalId = null,
     string? Error = null,
-    int RetryCount = 0);
+    int RetryCount = 0,
+    IReadOnlyList<AgentActivity>? AgentActivity = null);

@@ -13,6 +13,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Observability;
 using PlaceContext.Application.Shared;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Application.Workload.VirtualMachines;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
@@ -68,6 +69,9 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     private readonly IOutcomeReviewer? _jev;
     private readonly IRunAllowance? _allowance;
     private readonly IExecutionCapacity? _capacity;
+    private readonly IWorkflowAgentRunner? _agentRunner;
+    private readonly ICurrentUser? _currentUser;
+    private readonly PlaceContext.Application.ProjectData.IProjectDataReader? _dataReader;
 
     public RunJobChainHandler(IJobChainRepository chains, IJobRepository jobs, IChainRunRepository runs,
         IUnitOfWork uow, IClock clock, IJobRunner jobRunner,
@@ -80,9 +84,10 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         IVirtualMachineEnvironmentRunner? qemu = null, IVirtualMachineReplayStore? qemuReplay = null,
         IChainQuestionGenerator? questions = null, IOutcomeReviewer? jev = null,
         IRunAllowance? allowance = null,
-        IExecutionCapacity? capacity = null)
+        IExecutionCapacity? capacity = null, IWorkflowAgentRunner? agentRunner = null, ICurrentUser? currentUser = null, PlaceContext.Application.ProjectData.IProjectDataReader? dataReader = null)
     {
         _dataMappings = dataMappings;
+        _dataReader = dataReader;
         _chains = chains;
         _jobs = jobs;
         _runs = runs;
@@ -99,6 +104,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         _jev = jev;
         _allowance = allowance;
         _capacity = capacity;
+        _agentRunner = agentRunner;
+        _currentUser = currentUser;
     }
 
     private readonly DataMappingIngestionService? _dataMappings;
@@ -172,7 +179,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             }
             // Reserve before side effects and before creating any durable chain-run row.
             // A replay is a new billable execution; a continuation does not reserve again.
-            resolvedChainRun = ChainRun.Start(chain, names, chainStartedAt, executionId);
+            resolvedChainRun = ChainRun.Start(chain, names, chainStartedAt, executionId, _currentUser is { IsAuthenticated: true } ? _currentUser.UserId : null);
             await _runs.AddAsync(resolvedChainRun, ct);
             await _uow.SaveChangesAsync(ct);
             return resolvedChainRun;
@@ -193,6 +200,17 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             : command.InputPayload; // first/resumed stage input
         await SaveContextAsync(chainRun, payload, ct);
         var flatIndex = chain.Stages.Take(startStageIndex).Sum(stage => stage.ExecutionCount);
+
+        // A repeat continuation resumes at its own marker, then starts a fresh pass including gates.
+        if (command.ResumeFromStageIndex is not null
+            && chain.Stages[startStageIndex].Action is RepeatFlowChainAction
+            && chainRun.Steps[flatIndex].Status == ChainStepStatus.Pending
+            && chainRun.Steps[flatIndex].RetryCount > 0)
+        {
+            startStageIndex = 0;
+            flatIndex = 0;
+            status = ChainRunStatus.Succeeded;
+        }
 
         for (var stageIndex = startStageIndex; stageIndex < chain.Stages.Count; stageIndex++)
         {
@@ -260,8 +278,183 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 }
             }
 
+            if (stage.Action is RepeatFlowChainAction repeat)
+            {
+                ct.ThrowIfCancellationRequested();
+                chainRun.MarkStepRunning(flatIndex, null, _clock.UtcNow);
+                if (new ConditionGate(repeat.UntilCondition).Evaluate(payload).Proceed)
+                {
+                    chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow);
+                    await SaveProgressAsync(chainRun, ct);
+                    continue;
+                }
+                if (chainRun.Steps[flatIndex].RetryCount + 1 >= repeat.MaxAttempts)
+                {
+                    chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Failed, _clock.UtcNow,
+                        error: $"Quality condition was not met after {repeat.MaxAttempts} attempt(s): {repeat.UntilCondition}");
+                    status = ChainRunStatus.Failed;
+                    break;
+                }
+                chainRun.RepeatFlow(flatIndex, payload, _clock.UtcNow,
+                    command.StepPayloadOverrides is null ? null : JsonSerializer.Serialize(command.StepPayloadOverrides));
+                await SaveProgressAsync(chainRun, ct);
+                return ChainRunMapper.ToView(chainRun);
+            }
+
+            if (stage.Action is QueryDataChainAction queryData)
+            {
+                ct.ThrowIfCancellationRequested();
+                chainRun.MarkStepRunning(flatIndex, null, _clock.UtcNow);
+                chainRun.AppendAgentActivity(flatIndex, new(_clock.UtcNow, "started", $"Reading project data into {queryData.OutputField}.rows"));
+                var envelope = ChainInputPayload.Object(payload);
+                envelope[queryData.OutputField] = null;
+                payload = envelope.ToJsonString();
+                chainRun.SetCurrentPayload(payload);
+                await SaveProgressAsync(chainRun, ct);
+                try
+                {
+                    if (_permissions is null || !await _permissions.HasAsync(Permission.DataRead, ct))
+                        throw new UnauthorizedAccessException("Data read permission is required for Query data steps.");
+                    var data = await (_dataReader ?? throw new InvalidOperationException("Project data queries are not configured."))
+                        .QueryAsync(chain.ProjectId, queryData.Sql, ct);
+                    ct.ThrowIfCancellationRequested();
+                    if (await IsCancelledAsync(chainRun.Id, progressLock, ct))
+                    {
+                        chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Cancelled, _clock.UtcNow);
+                        status = ChainRunStatus.Cancelled;
+                        break;
+                    }
+                    if (data.Truncated) throw new InvalidOperationException("Query results exceed the row limit. Add a LIMIT or narrower filter; incomplete data was not passed to the job.");
+                    if (data.Columns.Distinct(StringComparer.Ordinal).Count() != data.Columns.Count)
+                        throw new InvalidOperationException("Query column names must be unique. Give duplicate columns SQL aliases.");
+                    var rows = new System.Text.Json.Nodes.JsonArray();
+                    foreach (var row in data.Rows)
+                    {
+                        if (row.Count != data.Columns.Count) throw new InvalidOperationException("Query returned an invalid row.");
+                        var item = new System.Text.Json.Nodes.JsonObject();
+                        for (var column = 0; column < data.Columns.Count; column++) item[data.Columns[column]] = row[column];
+                        rows.Add(item);
+                    }
+                    var result = new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["columns"] = JsonSerializer.SerializeToNode(data.Columns), ["rows"] = rows,
+                        ["row_count"] = rows.Count, ["truncated"] = false
+                    };
+                    if (Encoding.UTF8.GetByteCount(result.ToJsonString()) > 1_048_576)
+                        throw new InvalidOperationException("Query results exceed the 1 MiB pipeline limit. Select fewer rows or columns.");
+                    envelope[queryData.OutputField] = result;
+                    payload = envelope.ToJsonString(); chainRun.SetCurrentPayload(payload);
+                    chainRun.AppendAgentActivity(flatIndex, new(_clock.UtcNow, "completed", $"Read {rows.Count} row(s), {data.Columns.Count} column(s). Available at {queryData.OutputField}.rows."));
+                    chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow);
+                    await SaveProgressAsync(chainRun, ct); await SaveContextAsync(chainRun, payload, ct);
+                    continue;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    // Database exceptions can contain row values or connection details.
+                    var error = ex is InvalidOperationException or UnauthorizedAccessException
+                        ? ShortError(ex.Message) : "Data query failed. Check the SQL and project database connection.";
+                    chainRun.AppendAgentActivity(flatIndex, new(_clock.UtcNow, "failed", error));
+                    chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Failed, _clock.UtcNow, error: error);
+                    status = ChainRunStatus.Failed; break;
+                }
+            }
+
+            if (stage.Action is ScoringGateChainAction scoring)
+            {
+                ct.ThrowIfCancellationRequested();
+                chainRun.MarkStepRunning(flatIndex, null, _clock.UtcNow);
+                chainRun.AppendAgentActivity(flatIndex, new(_clock.UtcNow, "started", $"Scoring {scoring.InputField} · pass {scoring.PassScore}/100 · confidence ≥ {scoring.MinimumConfidence}"));
+                var envelope = ChainInputPayload.Object(payload);
+                envelope[scoring.OutputField] = new System.Text.Json.Nodes.JsonObject { ["passed"] = false, ["error"] = "Evaluation not completed." };
+                payload = envelope.ToJsonString();
+                chainRun.SetCurrentPayload(payload);
+                await SaveProgressAsync(chainRun, ct);
+                try
+                {
+                    var evidence = ChainInputPayload.Get(envelope, scoring.InputField);
+                    if (ChainInputPayload.Missing(evidence)) throw new InvalidOperationException($"Evidence field '{scoring.InputField}' is missing or empty.");
+                    var state = evidence!.ToJsonString();
+                    var response = await (_jev ?? throw new InvalidOperationException("AI verification is not configured."))
+                        .ScoreAsync(scoring.Criteria, state, ct, chain.ProjectId);
+                    ct.ThrowIfCancellationRequested();
+                    if (await IsCancelledAsync(chainRun.Id, progressLock, ct))
+                    {
+                        chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Cancelled, _clock.UtcNow);
+                        status = ChainRunStatus.Cancelled;
+                        break;
+                    }
+                    var result = ScoringGateEvaluator.Evaluate(scoring, response);
+                    result["evaluated_at"] = _clock.UtcNow.ToString("O");
+                    result["evidence_sha256"] = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(state))).ToLowerInvariant();
+                    envelope[scoring.OutputField] = result;
+                    payload = envelope.ToJsonString();
+                    chainRun.SetCurrentPayload(payload);
+                    var passed = result["passed"]!.GetValue<bool>();
+                    foreach (var (id, item) in (System.Text.Json.Nodes.JsonObject)result["criteria"]!)
+                        chainRun.AppendAgentActivity(flatIndex, new(_clock.UtcNow, "update", $"{id}: {item!["score"]!.GetValue<double>():F1}/100 · confidence {item["confidence"]!.GetValue<double>():F2} · minimum {item["minimum_score"]}"));
+                    chainRun.AppendAgentActivity(flatIndex, new(_clock.UtcNow, passed ? "completed" : "failed",
+                        $"Gate {(passed ? "passed" : "blocked")}: {result["score"]!.GetValue<double>():F1}/100. {string.Join(" ", ((System.Text.Json.Nodes.JsonArray)result["blockers"]!).Select(x => x!.ToString()))}"));
+                    chainRun.MarkStepFinished(flatIndex++, null, passed ? ChainStepStatus.Succeeded : scoring.StopOnFailure ? ChainStepStatus.Failed : ChainStepStatus.Partial,
+                        _clock.UtcNow, provider: result["model"]!.GetValue<string>(), error: !passed && scoring.StopOnFailure ? "Scoring gate did not pass. See pipeline output for criterion results." : null);
+                    await SaveProgressAsync(chainRun, ct);
+                    await SaveContextAsync(chainRun, payload, ct);
+                    if (!passed && scoring.StopOnFailure) { status = ChainRunStatus.Failed; break; }
+                    if (!passed) status = ChainRunStatus.Partial;
+                    continue;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    var error = ShortError("Scoring gate failed: " + ex.Message);
+                    envelope[scoring.OutputField] = new System.Text.Json.Nodes.JsonObject { ["passed"] = false, ["error"] = error };
+                    payload = envelope.ToJsonString();
+                    chainRun.SetCurrentPayload(payload);
+                    chainRun.AppendAgentActivity(flatIndex, new(_clock.UtcNow, "failed", error));
+                    chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Failed, _clock.UtcNow, error: error);
+                    status = ChainRunStatus.Failed;
+                    break;
+                }
+            }
+
             if (stage.Action is LoopChainAction loop)
             {
+                if (loop.AgentProvider == LoopChainAction.AutomaticAgent)
+                {
+                    chainRun.ClearInputRequest();
+                    chainRun.MarkStepRunning(flatIndex, null, _clock.UtcNow);
+                    chainRun.AppendAgentActivity(flatIndex, new(_clock.UtcNow, "started", $"Starting agent · {loop.Model}"));
+                    await SaveProgressAsync(chainRun, ct);
+                    try
+                    {
+                        var result = await RunAgentUntilCancelledAsync(loop, chainRun, flatIndex, payload, ct);
+                        if (result is null)
+                        {
+                            chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Cancelled, _clock.UtcNow);
+                            status = ChainRunStatus.Cancelled;
+                            break;
+                        }
+                        // Replace this step's result so a new review cannot inherit stale fields.
+                        var envelope = ChainInputPayload.Object(payload);
+                        envelope[loop.ResponseField] = result;
+                        payload = envelope.ToJsonString();
+                        chainRun.SetCurrentPayload(payload);
+                        chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow,
+                            provider: loop.Model);
+                        await SaveProgressAsync(chainRun, ct);
+                        await SaveContextAsync(chainRun, payload, ct);
+                        continue;
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                    catch (Exception ex)
+                    {
+                        chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Failed, _clock.UtcNow,
+                            error: ShortError("Automatic agent failed: " + ex.Message));
+                        status = ChainRunStatus.Failed;
+                        break;
+                    }
+                }
                 var request = chainRun.InputRequestJson is null ? null
                     : JsonSerializer.Deserialize<ChainInputRequest>(chainRun.InputRequestJson);
                 if (command.ResumeFromStageIndex == stageIndex
@@ -286,7 +479,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 await SaveProgressAsync(chainRun, ct);
                 try
                 {
-                    question = _questions is null ? loop.Instructions : await _questions.GenerateAsync(loop, payload, ct);
+                    question = loop.Type == LoopChainAction.TaskType || _questions is null ? loop.Instructions : await _questions.GenerateAsync(loop, payload, ct);
                     if (loop.AgentProvider == LoopChainAction.JevAgent)
                     {
                         verification = await (_jev ?? throw new InvalidOperationException("AI verification is not configured."))
@@ -985,6 +1178,43 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 await task;
             }
             catch { /* Preserve the result or exception from the execution above. */ }
+        }
+    }
+
+    private async Task<System.Text.Json.Nodes.JsonNode?> RunAgentUntilCancelledAsync(
+        LoopChainAction action, ChainRun run, int step, string? payload, CancellationToken ct)
+    {
+        if (_agentRunner is null) throw new InvalidOperationException("Automatic workflow agents are not configured.");
+        using var execution = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var progress = new System.Collections.Concurrent.ConcurrentQueue<AgentActivity>();
+        var task = _agentRunner.RunAsync(run.ProjectId, run.ChainId, run.Id, step, action, payload, execution.Token, progress.Enqueue);
+        async Task FlushAsync()
+        {
+            var changed = false;
+            while (progress.TryDequeue(out var activity))
+            {
+                run.AppendAgentActivity(step, activity);
+                changed = true;
+            }
+            if (changed) await SaveProgressAsync(run, ct);
+        }
+        try
+        {
+            while (!task.IsCompleted)
+            {
+                await Task.WhenAny(task, Task.Delay(1000, ct));
+                ct.ThrowIfCancellationRequested();
+                if ((await _runs.GetByIdAsync(run.Id, ct))?.Status == ChainRunStatus.Cancelled) return null;
+                await FlushAsync();
+            }
+            if ((await _runs.GetByIdAsync(run.Id, ct))?.Status == ChainRunStatus.Cancelled) return null;
+            await FlushAsync();
+            return await task;
+        }
+        finally
+        {
+            await execution.CancelAsync();
+            try { await task; } catch { /* Preserve the result or failure above. */ }
         }
     }
 

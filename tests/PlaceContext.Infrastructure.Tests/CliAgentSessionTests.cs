@@ -27,6 +27,19 @@ public sealed class CliAgentSessionTests
         Assert.Equal("A real answer.", response["content"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task Public_messages_arrive_before_the_turn_finishes_and_reasoning_is_excluded()
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await using var session = new CliAgentSession("test-model", Fake("progress"));
+        var update = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var task = session.NextAsync(Messages(), Tools(), timeout.Token, text => update.TrySetResult(text));
+        Assert.Equal("Checking requirements", await update.Task.WaitAsync(timeout.Token));
+        Assert.False(task.IsCompleted);
+        timeout.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+    }
+
     private static ProcessStartInfo Fake(string mode)
     {
         var start = CliAgentSession.BuildStartInfo(Path.GetTempPath());
@@ -53,6 +66,7 @@ public sealed class CliAgentSessionTests
         await using var session = new CliAgentSession("test-model", Fake("actions"));
         var messages = Messages();
         var command = await session.NextAsync(messages, Tools(), timeout.Token);
+        Assert.Contains("Checking the guest now.", command["content"]!.GetValue<string>());
         Assert.Equal("guest_shell", command["tool_calls"]![0]!["function"]!["name"]!.GetValue<string>());
         messages.Add(command);
         messages.Add(new JsonObject { ["role"] = "tool", ["content"] = "HELLO" });

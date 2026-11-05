@@ -23,7 +23,7 @@ public sealed class ChainRun
     private ChainRun(Guid id, Guid chainId, Guid projectId, string chainName, ChainRunStatus status,
         List<ChainStepRun> steps, string? finalOutput, DateTimeOffset startedAt, DateTimeOffset? finishedAt,
         DateTimeOffset? resumeAt = null, int? resumeStageIndex = null,
-        string? continuationOverridesJson = null, string? inputRequestJson = null)
+        string? continuationOverridesJson = null, string? inputRequestJson = null, Guid? initiatedBy = null)
     {
         Id = id;
         ChainId = chainId;
@@ -38,7 +38,10 @@ public sealed class ChainRun
         ResumeStageIndex = resumeStageIndex;
         ContinuationOverridesJson = continuationOverridesJson;
         InputRequestJson = inputRequestJson;
+        InitiatedBy = initiatedBy;
     }
+
+    public Guid? InitiatedBy { get; }
 
     public Guid Id
     {
@@ -111,7 +114,7 @@ public sealed class ChainRun
     /// required per job across every stage, in stage order then branch order within a stage (i.e.
     /// the same flattening as <see cref="JobChain.StepJobIds"/>).</summary>
     public static ChainRun Start(JobChain chain, IReadOnlyList<string> stepJobNames, DateTimeOffset now,
-        Guid? id = null)
+        Guid? id = null, Guid? initiatedBy = null)
     {
         if (stepJobNames.Count != chain.ExecutionStepCount)
         {
@@ -142,7 +145,7 @@ public sealed class ChainRun
             }
         }
         return new ChainRun(id ?? Guid.NewGuid(), chain.Id, chain.ProjectId, chain.Name, ChainRunStatus.Running,
-            steps, null, now, null);
+            steps, null, now, null, initiatedBy: initiatedBy);
     }
 
     public void Pause(int resumeStageIndex, string? payload, DateTimeOffset resumeAt,
@@ -190,6 +193,24 @@ public sealed class ChainRun
         };
     }
 
+    public void RepeatFlow(int repeatIndex, string? payload, DateTimeOffset resumeAt, string? overridesJson = null)
+    {
+        if (repeatIndex <= 0 || repeatIndex >= _steps.Count || _steps[repeatIndex].ActionType != RepeatFlowChainAction.ActionType)
+            throw new ArgumentException("A repeat step after at least one stage is required.", nameof(repeatIndex));
+        Pause(_steps[repeatIndex].StageIndex, payload, resumeAt, overridesJson);
+        InputRequestJson = null;
+        for (var index = 0; index <= repeatIndex; index++)
+        {
+            var step = _steps[index];
+            _steps[index] = step with
+            {
+                Status = ChainStepStatus.Pending, RunId = null, StartedAt = null, FinishedAt = null,
+                Provider = null, ExternalId = null, Error = null,
+                RetryCount = index == repeatIndex ? step.RetryCount + 1 : 0
+            };
+        }
+    }
+
     /// <summary>Appends a placeholder step to this chain run and returns its flat index.</summary>
     public int AppendStep(string actionType, int stageIndex)
         => AppendStep(actionType, stageIndex, 0, Guid.Empty, actionType);
@@ -209,6 +230,7 @@ public sealed class ChainRun
 
     /// <summary>Persists the latest accumulated envelope as a crash-recovery checkpoint.</summary>
     public void SetCurrentPayload(string? payload) => FinalOutput = payload;
+    public void ClearInputRequest() => InputRequestJson = null;
 
     /// <summary>Marks a step running. <paramref name="runId"/> is the step's pre-allocated job-run
     /// id, recorded up front so a live pipeline can link to the run while it executes. Steps within
@@ -223,6 +245,16 @@ public sealed class ChainRun
             FinishedAt = null,
             Error = null
         };
+
+    public void AppendAgentActivity(int index, AgentActivity activity)
+    {
+        var step = _steps[index];
+        var bounded = activity with { Message = activity.Message.Length > 2000 ? activity.Message[..2000] + "…" : activity.Message };
+        _steps[index] = step with
+        {
+            AgentActivity = (step.AgentActivity ?? []).Append(bounded).TakeLast(AgentActivity.RetainedEvents).ToArray()
+        };
+    }
 
     public void MarkStepFinished(int index, Guid? runId, ChainStepStatus outcome, DateTimeOffset now,
         string? provider = null, string? externalId = null, string? error = null)
@@ -288,7 +320,7 @@ public sealed class ChainRun
     public static ChainRun Rehydrate(Guid id, Guid chainId, Guid projectId, string chainName,
         ChainRunStatus status, IReadOnlyList<ChainStepRun> steps, string? finalOutput,
         DateTimeOffset startedAt, DateTimeOffset? finishedAt, DateTimeOffset? resumeAt = null,
-        int? resumeStageIndex = null, string? continuationOverridesJson = null, string? inputRequestJson = null)
+        int? resumeStageIndex = null, string? continuationOverridesJson = null, string? inputRequestJson = null, Guid? initiatedBy = null)
         => new(id, chainId, projectId, chainName, status, steps.ToList(), finalOutput, startedAt,
-            finishedAt, resumeAt, resumeStageIndex, continuationOverridesJson, inputRequestJson);
+            finishedAt, resumeAt, resumeStageIndex, continuationOverridesJson, inputRequestJson, initiatedBy);
 }

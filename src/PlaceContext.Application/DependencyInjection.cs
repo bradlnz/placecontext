@@ -76,7 +76,7 @@ public static class DependencyInjection
         services.AddScoped<Jobs.JobInputFileService>();
         services.AddScoped<Mcp.McpOAuthService>();
         services.AddScoped<Build.BuildChatAgent>();
-        services.AddScoped<Build.BuildMcpTools>();
+        services.AddScoped<Build.IWorkflowAgentRunner, Build.WorkflowAgentRunner>();
 
         // Commands.
         services.AddScoped<ICommandHandler<CreateProjectCommand, ProjectSummaryView>, CreateProjectHandler>();

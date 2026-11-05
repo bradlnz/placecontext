@@ -40,9 +40,6 @@ public sealed partial class JobChainsViewModel
             ScopedPresentationCatalog.StepStatus(s.Status) == ChainStepStatus.Succeeded
         );
 
-    public string StepOutputTitle(string? status) =>
-        IsRunningStep(status) ? "Live output" : "Job output";
-
     public bool IsDeletedJob(string? name) =>
         string.Equals(name, "(deleted)", StringComparison.Ordinal);
 
@@ -50,8 +47,6 @@ public sealed partial class JobChainsViewModel
         IsDeletedJob(name) ? "var(--bad)" : "var(--brand-2)";
 
     public string ChainStatusAria(bool running) => running ? "Running" : "Pipeline";
-
-    public string ReduceStatusLabel(bool succeeded) => succeeded ? "Succeeded" : "Failed";
 
     public Task ChooseConditionNode() => ChooseStageNode("condition");
 

@@ -48,8 +48,6 @@ public sealed class PagePresentationCatalog
     public bool IsExpired(DateTimeOffset? value) =>
         value.HasValue && value.Value <= DateTimeOffset.UtcNow;
 
-    public bool TrySvg(string? artifact, out string svg) => ArtifactChart.TrySvg(artifact, out svg);
-
     public string Bytes(long value) => Helpers.FormatHelper.Bytes(value);
 
     public string Duration(DateTimeOffset start, DateTimeOffset end) =>

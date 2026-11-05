@@ -11,6 +11,39 @@ namespace PlaceContext.Infrastructure.Tests;
 public class ClusterWorkloadRunnerTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Dependency_uploader_finishes_for_success_and_failed_preparation(bool fail)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var directory = Path.Combine(Path.GetTempPath(), "pc-bake-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var curl = Path.Combine(directory, "curl");
+            await File.WriteAllTextAsync(curl, "#!/bin/sh\ntouch '" + directory + "/uploaded'\n");
+            File.SetUnixFileMode(curl, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            async Task<int> RunShell(string script)
+            {
+                var start = new System.Diagnostics.ProcessStartInfo("sh") { UseShellExecute = false };
+                start.ArgumentList.Add("-c");
+                start.ArgumentList.Add(script.Replace("/out", directory).Replace("/stage", directory + "/stage"));
+                start.Environment["PATH"] = directory + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
+                using var process = System.Diagnostics.Process.Start(start)!;
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                try { await process.WaitForExitAsync(timeout.Token); }
+                finally { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+                return process.ExitCode;
+            }
+            Assert.Equal(fail ? 17 : 0, await RunShell(WorkloadScriptLoader.Load("k8s/bake-header.sh")
+                + (fail ? "exit 17\n" : "touch /out/.done\n")));
+            Assert.Equal(fail ? 1 : 0, await RunShell(WorkloadScriptLoader.Load("k8s/upload.sh")));
+            Assert.Equal(!fail, File.Exists(Path.Combine(directory, "uploaded")));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Theory]
     [InlineData(0, 1800, 60)]
     [InlineData(40, 1800, 100)]
     [InlineData(1780, 1800, 1800)]

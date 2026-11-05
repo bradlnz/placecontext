@@ -417,21 +417,4 @@ public sealed partial class ProjectDataViewModel
         }
     }
 
-    // ── Export ────────────────────────────────────────────────────────────────────────────────
-    public async Task ExportAsync(string table, Func<string, string, Task> download)
-    {
-        try
-        {
-            var csv = await _svc.ExportProjectTableCsvAsync(ProjectId, table);
-            var uri =
-                "data:text/csv;charset=utf-8;base64,"
-                + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(csv));
-            await download($"{table}.csv", uri);
-        }
-        catch (Exception ex)
-        {
-            Error = Trim(ex.Message);
-            NotifyStateChanged();
-        }
-    }
 }

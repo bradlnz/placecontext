@@ -347,6 +347,9 @@ namespace PlaceContext.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("InitiatedBy")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("ChainId")
                         .HasColumnType("uuid");
 

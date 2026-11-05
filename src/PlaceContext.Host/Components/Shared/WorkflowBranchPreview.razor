@@ -17,7 +17,7 @@
             {
                 @foreach (var step in RunSteps.GetValueOrDefault(path) ?? [])
                 {
-                    <WorkflowRunStep Step="step" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+                    <WorkflowRunStep Step="step" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
                 }
             }
             else
@@ -41,7 +41,7 @@
             @if ((stage.ElseBranch ?? (stage.Gate as ConditionGateView)?.ElseBranch) is { Count: > 0 } other)
             {
                 <div class="branch-condition">If false</div>
-                <WorkflowBranchPreview Jobs="Jobs" OnOpenJob="OnOpenJob" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{path}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" />
+                <WorkflowBranchPreview Jobs="Jobs" OnOpenJob="OnOpenJob" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{path}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
             }
         </li>
     }
@@ -52,6 +52,7 @@
     [Parameter] public EventCallback<Guid> OnOpenJob { get; set; }
     [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps { get; set; }
     [Parameter] public string PathPrefix { get; set; } = "";
+    [Parameter] public bool InspectActions { get; set; }
     [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
     [Parameter] public EventCallback<ChainStepRunView> OnStepCancel { get; set; }
     [Parameter, EditorRequired] public IReadOnlyList<JobChainStageView> Stages { get; set; } = [];

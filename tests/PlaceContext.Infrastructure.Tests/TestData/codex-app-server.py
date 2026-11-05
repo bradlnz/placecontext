@@ -54,6 +54,10 @@ if mode == 'answer':
     send({'method': 'item/completed', 'params': {'item': {'type': 'agentMessage', 'text': 'A real answer.'}}})
     send({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})
     time.sleep(30)
+elif mode == 'progress':
+    send({'method': 'item/completed', 'params': {'item': {'type': 'reasoning', 'text': 'private reasoning'}}})
+    send({'method': 'item/completed', 'params': {'item': {'type': 'agentMessage', 'text': 'Checking requirements'}}})
+    time.sleep(30)
 elif mode == 'cancel':
     time.sleep(30)
 elif mode == 'approval':
@@ -63,6 +67,7 @@ elif mode == 'failed':
     send({'method': 'turn/completed', 'params': {'turn': {'status': 'failed', 'error': {'message': 'secret upstream details'}}}})
     time.sleep(30)
 else:
+    send({'method': 'item/completed', 'params': {'item': {'type': 'agentMessage', 'text': 'Checking the guest now.'}}})
     call(100, 'guest_shell', {'command': 'echo HELLO', 'description': 'Check guest'})
     output = read()
     assert output['id'] == 100 and output['result']['contentItems'][0]['text'] == 'HELLO'

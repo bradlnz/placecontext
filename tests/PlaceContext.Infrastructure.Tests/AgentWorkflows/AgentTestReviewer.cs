@@ -9,6 +9,7 @@ internal sealed class AgentTestReviewer : IOutcomeReviewer
     {
         get; set;
     }
+    public Task<JsonObject> ScoreAsync(IReadOnlyList<PlaceContext.Domain.ValueObjects.ScoreCriterion> criteria, string state, CancellationToken ct, Guid? projectId = null) => throw new NotSupportedException();
     public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null) => Fail
         ? throw new InvalidOperationException("Private upstream error must not leak.")
         : Task.FromResult(new JsonObject { ["noul"] = Score });

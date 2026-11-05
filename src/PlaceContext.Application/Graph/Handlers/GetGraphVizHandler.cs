@@ -1,68 +1,48 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Domain.Entities;
+using PlaceContext.Application.ProjectData;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Domain.Services;
-using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 
-public sealed class GetGraphVizHandler : IQueryHandler<GetGraphVizQuery, GraphVizView>
+public sealed class GetGraphVizHandler(IProjectRepository projects, IProjectDataStore data,
+    IDataMappingRepository mappings)
+    : IQueryHandler<GetGraphVizQuery, GraphVizView>
 {
-    private readonly IDecisionTreeProvider _tree;
-    private readonly IRunArtifactLinkRepository _artifacts;
-
-    public GetGraphVizHandler(IDecisionTreeProvider tree, IRunArtifactLinkRepository artifacts) =>
-        (_tree, _artifacts) = (tree, artifacts);
-
     public async Task<GraphVizView> HandleAsync(GetGraphVizQuery query, CancellationToken ct = default)
     {
-        var tree = await _tree.BuildAsync(ProjectId.From(query.ProjectId), ct);
-        var g = tree.ToGraphView();
-        IReadOnlyDictionary<Guid, RunArtifactLink> artifacts;
-        try
-        {
-            artifacts = (await _artifacts.ListForProjectAsync(query.ProjectId, take: 200, ct: ct))
-                .ToDictionary(artifact => artifact.Id);
-        }
-        catch
-        {
-            // The structural graph remains usable if the artifact store is temporarily unavailable.
-            artifacts = new Dictionary<Guid, RunArtifactLink>();
-        }
+        await ProjectDataGuard.EnsureExistsAsync(projects, query.ProjectId, ct);
+        var tables = await data.ListTablesAsync(query.ProjectId, ct);
+        var rules = await mappings.ListForProjectAsync(query.ProjectId, ct);
+        var nodes = new Dictionary<string, GraphNodeView>(StringComparer.Ordinal);
+        var links = new List<GraphLinkView>();
 
-        var nodes = g.Nodes.Select(n => new GraphNodeView(
-            n.Id,
-            n.Label,
-            n.Degree,
-            n.IsGod,
-            n.Content,
-            n.Kind?.ToString(),
-            Artifact: ArtifactReference(n.Id, artifacts)
-        )).ToList();
-        var links = g.Links.Select(l => new GraphLinkView(l.Source, l.Target, l.Confidence.ToString())).ToList();
-        return new GraphVizView(query.ProjectId, nodes.Count, links.Count, nodes, links);
-    }
-
-    private static GraphNodeArtifactRef? ArtifactReference(
-        string nodeId,
-        IReadOnlyDictionary<Guid, RunArtifactLink> artifacts
-    )
-    {
-        const string prefix = "artifact:";
-        if (!nodeId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-            || !Guid.TryParse(nodeId[prefix.Length..], out var artifactId)
-            || !artifacts.TryGetValue(artifactId, out var artifact))
+        foreach (var table in tables)
         {
-            return null;
+            var id = "table:" + table.Name;
+            nodes[id] = new(id, table.Name, 0, false,
+                $"{(table.IsView ? "View" : "Table")} · approximately {table.RowEstimate:N0} rows",
+                Kind: "Table", Labeled: true);
         }
-        return new GraphNodeArtifactRef(
-            artifact.Id,
-            artifact.RunId,
-            artifact.Kind.ToString(),
-            artifact.Title,
-            artifact.ContentType,
-            artifact.CreatedAt
-        );
+        foreach (var rule in rules)
+        {
+            var tableId = "table:" + rule.TargetTable;
+            if (!nodes.ContainsKey(tableId))
+            {
+                nodes[tableId] = new(tableId, rule.TargetTable, 0, false,
+                    "Mapping target · table has not been created.", Kind: "Table", Labeled: true);
+            }
+            var mappingId = $"mapping:{rule.Id:N}";
+            nodes[mappingId] = new(mappingId, rule.TargetTable + (rule.Enabled ? " mapping" : " mapping (disabled)"),
+                0, false, $"Rows: {rule.RowsPath ?? "(root)"}\n" +
+                string.Join("\n", rule.Fields.Select(field => $"{field.SourcePath} → {field.Column} ({field.Type})")),
+                Kind: "Mapping", Labeled: true);
+            var confidence = rule.Enabled ? "Direct" : "Ambiguous";
+            links.Add(new(mappingId, tableId, confidence));
+        }
+        var degrees = links.SelectMany(link => new[] { link.Source, link.Target })
+            .GroupBy(id => id).ToDictionary(group => group.Key, group => group.Count());
+        var result = nodes.Values.Select(node => node with { Degree = degrees.GetValueOrDefault(node.Id) }).ToArray();
+        return new(query.ProjectId, result.Length, links.Count, result, links);
     }
 }

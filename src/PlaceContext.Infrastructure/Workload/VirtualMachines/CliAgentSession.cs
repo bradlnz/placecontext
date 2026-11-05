@@ -114,7 +114,7 @@ internal sealed class CliAgentSession(string model, ProcessStartInfo? testStart 
         return models.Take(500).ToArray();
     }
 
-    public async Task<JsonObject> NextAsync(JsonArray messages, JsonArray tools, CancellationToken ct)
+    public async Task<JsonObject> NextAsync(JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null)
     {
         await InitializeAsync(ct);
         if (_threadId is null)
@@ -214,11 +214,13 @@ internal sealed class CliAgentSession(string model, ProcessStartInfo? testStart 
             var method = notification["method"]?.GetValue<string>();
             if (method == "item/completed" && notification["params"]?["item"]?["type"]?.GetValue<string>() == "agentMessage")
             {
-                answer.AppendLine(notification["params"]!["item"]!["text"]?.GetValue<string>());
+                var text = notification["params"]!["item"]!["text"]?.GetValue<string>();
+                answer.AppendLine(text);
                 if (answer.Length > 2_000_000)
                 {
                     throw new InvalidOperationException("Codex returned an oversized answer.");
                 }
+                if (!string.IsNullOrWhiteSpace(text)) report?.Invoke(text);
             }
             if (method == "item/tool/call")
             {
@@ -231,6 +233,7 @@ internal sealed class CliAgentSession(string model, ProcessStartInfo? testStart 
                 return new JsonObject
                 {
                     ["role"] = "assistant",
+                    ["content"] = answer.ToString(),
                     ["tool_calls"] = new JsonArray(new JsonObject
                     {
                         ["id"] = call["callId"]!.GetValue<string>(),

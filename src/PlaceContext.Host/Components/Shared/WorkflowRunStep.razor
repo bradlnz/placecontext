@@ -1,7 +1,7 @@
 @inject ChainPipelineViewModel Vm
 
 <div class="run-step" data-status="@Step.Status" style="border-color:@Vm.Border(Step.Status); background:@Vm.Background(Step.Status)">
-    <button class="run-step-link" disabled="@(!Vm.HasRun(Step))" @onclick="@(() => OnStepClick.InvokeAsync(Step))"
+    <button class="run-step-link" disabled="@(!OnStepClick.HasDelegate || (!Vm.HasRun(Step) && !InspectActions))" @onclick="@(() => OnStepClick.InvokeAsync(Step))"
             aria-label="@($"{Step.JobName}: {Vm.Summary(Step)}")">
         <span class="run-step-title" style="color:@Vm.Color(Step.Status)"><AppIcon Kind="@Vm.Icon(Step.Status)" /> @Step.JobName</span>
         <span class="run-step-status">@Vm.Summary(Step)</span>
@@ -21,6 +21,7 @@
 </div>
 
 @code {
+    [Parameter] public bool InspectActions { get; set; }
     [Parameter, EditorRequired] public ChainStepRunView Step { get; set; } = null!;
     [Parameter] public EventCallback<ChainStepRunView> OnStepClick { get; set; }
     [Parameter] public EventCallback<ChainStepRunView> OnStepCancel { get; set; }

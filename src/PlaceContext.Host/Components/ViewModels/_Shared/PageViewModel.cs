@@ -16,9 +16,6 @@ public abstract class PageViewModel
 {
     public PagePresentationCatalog Presentation { get; } = new();
 
-    public bool TryArtifactSvg(string? artifact, out string svg) =>
-        ArtifactChart.TrySvg(artifact, out svg);
-
     private Func<Task>? _stateHasChanged;
 
     /// <summary>Wire the component's <c>StateHasChanged</c> into the ViewModel.</summary>

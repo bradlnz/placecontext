@@ -12,6 +12,18 @@ public class WorkloadDependenciesTests
     private static IReadOnlyList<(string, string)> Files(params string[] names) =>
         names.Select(n => (n, "content")).ToList();
 
+    [Fact]
+    public void Python_lockfile_is_materialized_and_changes_the_cache_key()
+    {
+        var files = new[] { ("requirements.txt", "-r requirements.lock"), ("requirements.lock", "Django==5.2.19") };
+        var recipe = WorkloadDependencies.For("python", files)!;
+        Assert.Equal(files, WorkloadDependencies.ManifestFiles(recipe, files));
+        Assert.Contains("COPY requirements.lock", WorkloadDependencies.Dockerfile("python:3.12-slim", recipe, files));
+        var changed = new[] { files[0], ("requirements.lock", "Django==5.2.20") };
+        Assert.NotEqual(WorkloadDependencies.BakeKey("python", "python:3.12-slim", recipe, files),
+            WorkloadDependencies.BakeKey("python", "python:3.12-slim", recipe, changed));
+    }
+
     [Theory]
     [InlineData("python", "requirements.txt")]
     [InlineData("node", "package.json")]

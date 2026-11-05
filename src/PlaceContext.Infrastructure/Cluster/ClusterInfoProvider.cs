@@ -14,7 +14,6 @@ public sealed class ClusterInfoProvider : IClusterInfoProvider, IClusterAdminPor
 {
     public const string ClusterConfigMap = "placecontext-cluster";
     public const string JoinSecret = "placecontext-cluster-join";
-    public const string NodeTypeLabel = "placecontext.io/node-type";
     private const string TailscaleIpAnnotation = "placecontext.io/tailscale-ip";
     private const string LegacyTailscaleIpAnnotation = "placecontext.ai/tailscale-ip";
     private const string MasterKey = "designatedMaster";
@@ -240,10 +239,10 @@ public sealed class ClusterInfoProvider : IClusterInfoProvider, IClusterAdminPor
             .Where(r => r.Length > 0)
             .ToList() ?? new List<string>();
         var controlPlane = IsControlPlane(node);
-        var nodeType = ReadNodeType(labels, controlPlane);
+        var nodeType = controlPlane ? ClusterNodeType.ControlPlane : ClusterNodeType.StandardWorker;
         if (roles.Count == 0)
         {
-            roles.Add(nodeType == ClusterNodeType.AiShard ? "ai-shard" : controlPlane ? "control-plane" : "worker");
+            roles.Add(controlPlane ? "control-plane" : "worker");
         }
         var ready = node.Status?.Conditions?.Any(c => c.Type == "Ready" && c.Status == "True") ?? false;
         var info = node.Status?.NodeInfo;
@@ -282,21 +281,6 @@ public sealed class ClusterInfoProvider : IClusterInfoProvider, IClusterAdminPor
             IsDesignatedMaster: isDesignated,
             TailscaleIp: tsIp,
             NodeType: nodeType);
-    }
-
-    private static ClusterNodeType ReadNodeType(IDictionary<string, string>? labels, bool controlPlane)
-    {
-        if (controlPlane)
-        {
-            return ClusterNodeType.ControlPlane;
-        }
-        if (labels is not null
-                    && labels.TryGetValue(NodeTypeLabel, out var value)
-                    && string.Equals(value, "ai-shard", StringComparison.OrdinalIgnoreCase))
-        {
-            return ClusterNodeType.AiShard;
-        }
-        return ClusterNodeType.StandardWorker;
     }
 
     private static bool IsControlPlane(V1Node node)

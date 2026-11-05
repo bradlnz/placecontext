@@ -1,0 +1,14 @@
+@inject WorkflowDialogHandleViewModel Vm
+@implements IAsyncDisposable
+
+<button type="button" class="dialog-window-move" data-window-handle @ref="_handle"
+        title="Drag to move; use arrow keys when focused" aria-label="Move dialog">
+    <AppIcon Kind="@Icon" />
+</button>
+
+@code {
+    [Parameter] public string Icon { get; set; } = "code";
+    private ElementReference _handle;
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync(firstRender, _handle);
+    public ValueTask DisposeAsync() => Vm.DisposeAsync();
+}

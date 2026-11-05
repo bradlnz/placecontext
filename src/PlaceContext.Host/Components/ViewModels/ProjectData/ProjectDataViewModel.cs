@@ -168,12 +168,6 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     public Task SaveViewFromEditorAsync() =>
         SaveViewAsync(id => _js.InvokeAsync<string>("pcmonaco.getValue", id).AsTask());
 
-    public Task ExportWithBrowserAsync(string table) =>
-        ExportAsync(
-            table,
-            (name, uri) => _js.InvokeVoidAsync("pcdata.download", name, uri).AsTask()
-        );
-
     public async Task ImportCsvAsync(IBrowserFile file)
     {
         try
@@ -367,19 +361,4 @@ public sealed partial class ProjectDataViewModel : PageViewModel
         }
     }
 
-    public string ModalResultCsvUri()
-    {
-        if (ModalResult is null)
-        {
-            return "";
-        }
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine(string.Join(",", ModalResult.Columns.Select(CsvEscape)));
-        foreach (var row in ModalResult.Rows)
-        {
-            sb.AppendLine(string.Join(",", row.Select(v => CsvEscape(v ?? ""))));
-        }
-        return "data:text/csv;charset=utf-8;base64,"
-                    + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
-    }
 }

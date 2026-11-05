@@ -74,7 +74,6 @@ done
 kubectl apply -f "$ROOT/k3s/network-policies.yaml" >/dev/null
 kubectl apply -f "$ROOT/k3s/hosted-services.yaml" >/dev/null
 sed -e "s|__IMAGE__|$IMAGE|g" -e 's|__IMAGE_PULL_POLICY__|IfNotPresent|g' \
-  -e 's|__CLUSTER_ENDPOINT__||g' \
   "$ROOT/k3s/placecontext.yaml" | kubectl apply -f - >/dev/null
 sed -e "s|__HOSTNAME__|$HOSTNAME|g" -e "s|__TLS_SECRET__|$TLS_SECRET|g" \
   "$ROOT/k3s/production-ingress.yaml" | kubectl apply -f - >/dev/null

@@ -1,3 +1,5 @@
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Features;
 using Microsoft.JSInterop;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application;
@@ -8,11 +10,15 @@ public sealed class DataGraphViewModel : PageViewModel
 {
     private readonly PlaceContextService _service;
     private readonly IJSRuntime _js;
+    private readonly IPermissionService _permissions;
+    private int _generation;
+    private int _artifactSkip;
 
-    public DataGraphViewModel(PlaceContextService service, IJSRuntime js)
+    public DataGraphViewModel(PlaceContextService service, IJSRuntime js, IPermissionService permissions)
     {
         _service = service;
         _js = js;
+        _permissions = permissions;
     }
 
     public Guid ProjectId
@@ -58,7 +64,14 @@ public sealed class DataGraphViewModel : PageViewModel
 
     public async Task LoadAsync(Guid projectId)
     {
+        var generation = ++_generation;
         ProjectId = projectId;
+        Artifacts = [];
+        _artifactSkip = 0;
+        ArtifactsError = null;
+        ArtifactsLoading = false;
+        HasMoreArtifacts = true;
+        CanViewArtifacts = false;
         Loading = true;
         Error = null;
         Graph = null;
@@ -68,17 +81,86 @@ public sealed class DataGraphViewModel : PageViewModel
 
         try
         {
-            Graph = await _service.GetGraphVizAsync(projectId);
+            var graph = await _service.GetGraphVizAsync(projectId);
+            var canViewArtifacts = await _permissions.HasAsync(Permission.ArtifactsView);
+            if (generation != _generation)
+            {
+                return;
+            }
+            Graph = graph;
+            CanViewArtifacts = canViewArtifacts;
         }
         catch (Exception ex)
         {
-            Error = ex.Message;
+            if (generation == _generation)
+            {
+                Error = ex.Message;
+            }
         }
         finally
         {
-            Loading = false;
-            NotifyStateChanged();
+            if (generation == _generation)
+            {
+                Loading = false;
+                NotifyStateChanged();
+            }
         }
+    }
+
+    private const int ArtifactPageSize = 50;
+    public IReadOnlyList<ArtifactFileView> Artifacts { get; private set; } = [];
+    public bool CanViewArtifacts { get; private set; }
+    public bool ArtifactsLoading { get; private set; }
+    public bool HasMoreArtifacts { get; private set; } = true;
+    public string? ArtifactsError { get; private set; }
+
+    public async Task LoadArtifactsAsync()
+    {
+        if (!CanViewArtifacts || ArtifactsLoading || !HasMoreArtifacts)
+        {
+            return;
+        }
+        var generation = _generation;
+        ArtifactsLoading = true;
+        ArtifactsError = null;
+        try
+        {
+            var files = await _service.ListProjectArtifactsAsync(ProjectId, ArtifactPageSize + 1, skip: _artifactSkip);
+            if (generation != _generation)
+            {
+                return;
+            }
+            HasMoreArtifacts = files.Count > ArtifactPageSize;
+            _artifactSkip += Math.Min(files.Count, ArtifactPageSize);
+            Artifacts = Artifacts.Concat(files.Take(ArtifactPageSize)).DistinctBy(file => file.Id).ToArray();
+        }
+        catch (Exception ex)
+        {
+            if (generation == _generation)
+            {
+                ArtifactsError = ex.Message;
+            }
+        }
+        finally
+        {
+            if (generation == _generation)
+            {
+                ArtifactsLoading = false;
+                NotifyStateChanged();
+            }
+        }
+    }
+
+    public string MappingUrl(Guid jobId) => $"/project/{ProjectId}/datamap?job={jobId}";
+
+    public string? NodeUrl(GraphNodeView node)
+    {
+        if (node.Id.StartsWith("table:", StringComparison.Ordinal))
+        {
+            return $"/project/{ProjectId}/data?table={Uri.EscapeDataString(node.Id[6..])}";
+        }
+        return node.Id.StartsWith("mapping:", StringComparison.Ordinal)
+            ? $"/project/{ProjectId}/datamap" : null;
     }
 
     public void Search(string? term)

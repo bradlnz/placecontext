@@ -360,9 +360,12 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
     {
         VirtualMachineChainAction.ActionType => new VirtualMachineChainAction(action.ImageProfile ?? "", action.Command ?? "",
             action.OutputField ?? "qemu_result", action.MemoryMb, action.Cpus, action.TimeoutSeconds, action.AllowNetwork, action.PauseForLogin),
-        LoopChainAction.HumanType or LoopChainAction.AgentType => new LoopChainAction(
+        QueryDataChainAction.ActionType => new QueryDataChainAction(action.Sql ?? "", action.OutputField ?? "query_data"),
+        ScoringGateChainAction.ActionType => new ScoringGateChainAction(action.InputField ?? "", action.OutputField ?? "", action.Criteria ?? [], action.PassScore, action.MinimumConfidence, action.StopOnFailure),
+        RepeatFlowChainAction.ActionType => new RepeatFlowChainAction(action.UntilCondition ?? "", action.MaxAttempts),
+        LoopChainAction.HumanType or LoopChainAction.AgentType or LoopChainAction.TaskType => new LoopChainAction(
             action.Type, action.Instructions ?? "", action.ResponseField ?? "", action.ResponseType ?? LoopChainAction.TextResponse,
-            action.AgentProvider ?? LoopChainAction.ExternalAgent),
+            action.AgentProvider ?? LoopChainAction.ExternalAgent, action.ConnectionId, action.Model),
         SendEmailChainAction.ActionType => new SendEmailChainAction(
             action.Recipient ?? "",
             action.RecipientName ?? "",

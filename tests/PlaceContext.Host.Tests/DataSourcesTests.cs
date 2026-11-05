@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Configuration;
 using PlaceContext.Application.Activity;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.DataSources;
@@ -18,7 +20,7 @@ public sealed class DataSourcesTests
     [Fact]
     public void Source_picker_omits_email_but_existing_email_sources_remain_supported()
     {
-        var vm = new DataSourcesViewModel(new Queries(), new PortalUiState());
+        var vm = new DataSourcesViewModel(new Queries(), new PortalUiState(), null!, null!);
         Assert.Equal(9, vm.ConnectableProviders.Count);
         Assert.DoesNotContain(vm.ConnectableProviders, provider => provider.Id == "email");
         Assert.Contains(vm.ConnectableProviders, provider => provider.Id == "feed");
@@ -29,7 +31,7 @@ public sealed class DataSourcesTests
     public async Task Navigation_does_not_show_a_previous_projects_pending_search()
     {
         var dispatcher = new Queries();
-        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState());
+        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState(), null!, null!);
         await vm.InitializeAsync(Guid.NewGuid());
         vm.SelectedSourceId = Guid.NewGuid();
         vm.FieldsApproved = true;
@@ -52,7 +54,7 @@ public sealed class DataSourcesTests
         var first = new DataSourceDefinition(Guid.NewGuid(), projectId, "Notes", "public", "notes", "id", ["id", "body", "optional"], [], false, Guid.NewGuid());
         dispatcher.Sources = [first, first with { Id = Guid.NewGuid(), Name = "Other" }];
         dispatcher.Records = [new("1", "{\"body\":\"<script>untrusted</script>\",\"id\":1,\"optional\":null}")];
-        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState());
+        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState(), null!, null!);
         await vm.InitializeAsync(projectId);
         await vm.PreviewAsync(first.Id);
         Assert.Equal(dispatcher.Records, vm.Preview);
@@ -76,7 +78,7 @@ public sealed class DataSourcesTests
         var source = new DataSourceDefinition(Guid.NewGuid(), projectId, "Notes", "public", "notes", "id", ["id", "body"], [], false, Guid.NewGuid());
         dispatcher.Sources = [source];
         dispatcher.Records = [new("1", "{\"id\":1,\"body\":\"kiwi\"}")];
-        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState());
+        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState(), null!, null!);
         await vm.InitializeAsync(projectId);
         await vm.PreviewAsync(source.Id);
         var preview = vm.Preview;
@@ -148,7 +150,7 @@ public sealed class DataSourcesTests
     public async Task Failed_save_preserves_setup_so_the_user_can_correct_and_retry()
     {
         var dispatcher = new Queries { RejectCreate = true };
-        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState());
+        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState(), null!, null!);
         await vm.InitializeAsync(Guid.NewGuid());
         vm.OpenConnect("feed");
         vm.FieldsApproved = true;
@@ -173,7 +175,7 @@ public sealed class DataSourcesTests
     public async Task Setup_creates_a_source_without_model_processing_and_requires_field_approval()
     {
         var dispatcher = new Queries();
-        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState());
+        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState(), null!, null!);
         await vm.InitializeAsync(Guid.NewGuid());
         vm.OpenConnect("email");
         Assert.Equal(3, vm.SetupTiles.Count);
@@ -218,7 +220,7 @@ public sealed class DataSourcesTests
         var projectId = Guid.NewGuid();
         var source = new DataSourceDefinition(Guid.NewGuid(), projectId, "Notes", "public", "notes", "id", ["id"], [], false, Guid.NewGuid(),
             SyncedAt: DateTimeOffset.UtcNow, RecordCount: 1, Execution: new(Guid.NewGuid(), status, "Processing", DateTimeOffset.UtcNow.AddMinutes(startedMinutesAgo), Held: 1));
-        var vm = new DataSourcesViewModel(new Queries { Sources = [source] }, new PortalUiState());
+        var vm = new DataSourcesViewModel(new Queries { Sources = [source] }, new PortalUiState(), null!, null!);
         await vm.InitializeAsync(projectId);
         Assert.Equal(expected, vm.ExecutionStatus);
     }
@@ -229,7 +231,7 @@ public sealed class DataSourcesTests
         var projectId = Guid.NewGuid();
         var source = new DataSourceDefinition(Guid.NewGuid(), projectId, "Notes", "public", "notes", "id", ["id"], [], false, Guid.NewGuid());
         var dispatcher = new Queries { Sources = [source] };
-        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState());
+        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState(), null!, null!);
         await vm.InitializeAsync(projectId);
         var original = vm.Sources;
         dispatcher.Sources = [source with { Columns = source.Columns.ToArray() }];
@@ -272,7 +274,7 @@ public sealed class DataSourcesTests
     public async Task Delete_confirmation_can_be_cancelled_and_success_clears_feed_credentials()
     {
         var dispatcher = new Queries();
-        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState());
+        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState(), null!, null!);
         await vm.InitializeAsync(Guid.NewGuid());
         vm.OpenConnect("email");
         vm.FieldsApproved = true;
@@ -295,6 +297,32 @@ public sealed class DataSourcesTests
         Assert.Null(vm.PendingDelete);
         Assert.Null(vm.FeedToken);
         Assert.Null(vm.FeedSourceId);
+    }
+
+    [Theory]
+    [InlineData(" https://workers.example.test/portal/ ", "https://workers.example.test/portal/")]
+    [InlineData("", "https://browser.example.test/portal/")]
+    [InlineData("   ", "https://browser.example.test/portal/")]
+    [InlineData(null, "https://browser.example.test/portal/")]
+    public async Task Creating_a_workflow_uses_the_configured_portal_or_current_base_address(string? configured, string expected)
+    {
+        var dispatcher = new Queries();
+        var configuration = new ConfigurationManager { ["PlaceContext:PublicBaseUrl"] = configured };
+        var vm = new DataSourcesViewModel(dispatcher, new PortalUiState(), configuration, new Navigation());
+        var projectId = Guid.NewGuid();
+        var sourceId = Guid.NewGuid();
+        await vm.InitializeAsync(projectId);
+
+        await vm.CreateWorkflowAsync(sourceId);
+
+        Assert.Equal(new CreateSourceWorkflowCommand(projectId, sourceId, expected), dispatcher.Workflow);
+        Assert.Equal($"/project/{projectId}/workflows?chain={dispatcher.WorkflowId}", vm.WorkflowUrl);
+        Assert.False(vm.Busy);
+    }
+
+    private sealed class Navigation : NavigationManager
+    {
+        public Navigation() => Initialize("https://browser.example.test/portal/", "https://browser.example.test/portal/project/sources");
     }
 
     private static DataSourceHit Hit() => new("citation", Guid.NewGuid(), "source", "public.notes", "1", 0, "private-marker", [], 1, DateTimeOffset.UtcNow);
@@ -327,11 +355,18 @@ public sealed class DataSourcesTests
             };
             return (T)result;
         }
+        public Guid WorkflowId { get; } = Guid.NewGuid();
+        public CreateSourceWorkflowCommand? Workflow { get; private set; }
         public bool RejectCreate { get; set; }
         public CreateDataSourceCommand? Created { get; private set; }
         public DeleteDataSourceCommand? Deleted { get; private set; }
         public Task<T> Send<T>(ICommand<T> command, CancellationToken ct = default)
         {
+            if (command is CreateSourceWorkflowCommand workflow)
+            {
+                Workflow = workflow;
+                return Task.FromResult((T)(object)WorkflowId);
+            }
             if (command is DeleteDataSourceCommand delete)
             {
                 Deleted = delete;

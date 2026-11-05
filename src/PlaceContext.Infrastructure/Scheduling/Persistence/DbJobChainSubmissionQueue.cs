@@ -268,7 +268,13 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         return await reader.ReadAsync(ct) ? Read(reader) : null;
     }
 
-    public async Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default)
+    public Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default)
+        => ResumeCoreAsync(chainRunId, inputRequestId, valuesJson, false, ct);
+
+    public Task<string> ResumeAgentAsync(Guid chainRunId, Guid inputRequestId, CancellationToken ct = default)
+        => ResumeCoreAsync(chainRunId, inputRequestId, null, true, ct);
+
+    private async Task<string> ResumeCoreAsync(Guid chainRunId, Guid inputRequestId, string? valuesJson, bool automatic, CancellationToken ct)
     {
         if (!_tenant.IsResolved || !_user.IsAuthenticated || !await _permissions.HasAsync(Permission.JobsRun, ct))
         {
@@ -288,9 +294,26 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         {
             throw new InvalidOperationException("This input request is no longer current.");
         }
+        if (automatic)
+        {
+            var chain = await new EfJobChainRepository(_db).GetByIdAsync(row.ChainId, ct);
+            if (chain is null || chain.ProjectId != row.ProjectId || row.ResumeStageIndex is not { } stageIndex
+                || stageIndex < 0 || stageIndex >= chain.Stages.Count
+                || chain.Stages[stageIndex].Action is not PlaceContext.Domain.ValueObjects.LoopChainAction
+                    { AgentProvider: PlaceContext.Domain.ValueObjects.LoopChainAction.AutomaticAgent } action
+                || action.Type != request.Kind || request.Steps.Count != 1
+                || request.Steps[0].Index != chain.Stages.Take(stageIndex).Sum(stage => stage.ExecutionCount))
+                throw new InvalidOperationException("Save automatic execution settings for this paused agent step first.");
+        }
+        if (request.RunAutomatically)
+        {
+            if (!automatic) throw new InvalidOperationException("This step was already submitted for automatic execution.");
+            return row.Status;
+        }
         if (request.SubmittedValues is not null)
         {
-            if (!JsonNode.DeepEquals(JsonNode.Parse(request.SubmittedValues), JsonNode.Parse(valuesJson)))
+            if (automatic) throw new InvalidOperationException("An external response was already submitted.");
+            if (!JsonNode.DeepEquals(JsonNode.Parse(request.SubmittedValues), JsonNode.Parse(valuesJson!)))
             {
                 throw new InvalidOperationException("Different values were already submitted for this input request.");
             }
@@ -300,14 +323,19 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         {
             throw new InvalidOperationException("Chain run is not waiting for input.");
         }
-        var overrides = ChainInputPayload.Apply(request, valuesJson,
-                    row.ContinuationOverrides is null ? null : _encryptor.Unprotect(row.ContinuationOverrides, purpose),
-                    row.FinalOutput is null ? null : _encryptor.Unprotect(row.FinalOutput, purpose));
-        row.ContinuationOverrides = _encryptor.Protect(JsonSerializer.Serialize(overrides), purpose);
+        if (!automatic)
+        {
+            var overrides = ChainInputPayload.Apply(request, valuesJson!,
+                row.ContinuationOverrides is null ? null : _encryptor.Unprotect(row.ContinuationOverrides, purpose),
+                row.FinalOutput is null ? null : _encryptor.Unprotect(row.FinalOutput, purpose));
+            row.ContinuationOverrides = _encryptor.Protect(JsonSerializer.Serialize(overrides), purpose);
+        }
+        row.InitiatedBy ??= _user.UserId;
         row.InputRequest = _encryptor.Protect(JsonSerializer.Serialize(request with
         {
             SubmittedBy = _user.UserId,
-            SubmittedValues = valuesJson
+            SubmittedValues = valuesJson,
+            RunAutomatically = automatic
         }), purpose);
         row.Status = "Waiting";
         row.ResumeAt = DateTimeOffset.UtcNow;

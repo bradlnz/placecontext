@@ -76,6 +76,7 @@ public sealed class EfChainRunRepository : IChainRunRepository
     {
         Id = r.Id,
         ChainId = r.ChainId,
+        InitiatedBy = r.InitiatedBy,
         ProjectId = r.ProjectId,
         ChainName = r.ChainName,
         Status = r.Status.ToString(),
@@ -97,7 +98,7 @@ public sealed class EfChainRunRepository : IChainRunRepository
         return ChainRun.Rehydrate(r.Id, r.ChainId, r.ProjectId, r.ChainName,
             Enum.Parse<ChainRunStatus>(r.Status), steps, DecryptNullable(r.FinalOutput),
             r.StartedAt, r.FinishedAt, r.ResumeAt, r.ResumeStageIndex,
-            DecryptNullable(r.ContinuationOverrides), DecryptNullable(r.InputRequest));
+            DecryptNullable(r.ContinuationOverrides), DecryptNullable(r.InputRequest), r.InitiatedBy);
     }
 
     private string Encrypt(string value) => _encryptor.Protect(value, Purpose);
@@ -161,6 +162,7 @@ public sealed class EfChainRunRepository : IChainRunRepository
             get; set;
         }
         public int RetryCount { get; set; }
+        public IReadOnlyList<AgentActivity>? AgentActivity { get; set; }
 
         public static StepJson From(ChainStepRun s) => new()
         {
@@ -178,11 +180,12 @@ public sealed class EfChainRunRepository : IChainRunRepository
             ExternalId = s.ExternalId,
             Error = s.Error,
             RetryCount = s.RetryCount,
+            AgentActivity = s.AgentActivity,
         };
 
         public ChainStepRun ToDomain() => new(
             Index, StageIndex ?? Index, BranchIndex ?? 0, JobId, JobName, RunId,
             Enum.Parse<ChainStepStatus>(Status), StartedAt, FinishedAt,
-            ActionType, Provider, ExternalId, Error, RetryCount);
+            ActionType, Provider, ExternalId, Error, RetryCount, AgentActivity);
     }
 }

@@ -448,16 +448,17 @@ public sealed partial class ClusterWorkloadRunner : IWorkloadRunner
         var key = $"{ns}/{runtimeId}/{WorkloadDependencies.BakeKey(runtimeId, baseImage, recipe, request.CodeFiles!)}.tar.gz";
         var lazy = _bakes.GetOrAdd(key, k => new Lazy<Task<string?>>(
             () => BakeAsync(ns, client, k, runtimeId, baseImage, recipe, request, ct)));
-        return AwaitBakeAsync(key, lazy);
+        return AwaitBakeAsync(key, lazy, ct);
     }
 
-    private async Task<string?> AwaitBakeAsync(string key, Lazy<Task<string?>> lazy)
+    private async Task<string?> AwaitBakeAsync(string key, Lazy<Task<string?>> lazy, CancellationToken ct)
     {
         string? result;
         try
         {
-            result = await lazy.Value;
+            result = await lazy.Value.WaitAsync(ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch
         {
             result = null;
@@ -531,6 +532,7 @@ public sealed partial class ClusterWorkloadRunner : IWorkloadRunner
             _log?.LogWarning("Dependency bake for {Key} did not produce a cache object; shards run cold.", key);
             return null;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _log?.LogWarning(ex, "Dependency bake for {Key} failed; shards run cold.", key);

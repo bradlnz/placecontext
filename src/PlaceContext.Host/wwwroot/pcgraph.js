@@ -38,6 +38,7 @@
       run: '#95e1d3',
       job: '#f59e0b',
       table: '#a8d8ea',
+      mapping: col.brand,
       good: '#96ceb4',
       artifact: col.good,
       jobrun: '#e0a458',

@@ -167,12 +167,6 @@ builder.Services.AddRateLimiter(options =>
             });
     });
 });
-// Log retained local-AI cluster configuration at startup.
-var localAiSection = builder.Configuration.GetSection("PlaceContext:ClusterChat");
-var localAiEndpoint = localAiSection["Endpoint"];
-var localAiModel = localAiSection["Model"];
-var shardEndpoints = localAiSection.GetSection("ShardEndpoints").Get<List<string>>() ?? new();
-Console.WriteLine($"[startup] LocalAI.Endpoint='{localAiEndpoint}'  Model='{localAiModel}'  ShardEndpoints=[{string.Join(", ", shardEndpoints)}]");
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<PortalUiState>();
 

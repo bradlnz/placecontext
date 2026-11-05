@@ -240,11 +240,19 @@ else
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "job")] public Guid? SourceJobId { get; set; }
 
     protected override async Task OnParametersSetAsync()
     {
         Vm.Initialize(ProjectId);
         await Vm.LoadAsync();
+        if (SourceJobId is { } jobId && Vm.Jobs?.FirstOrDefault(job => job.Id == jobId) is { } source)
+        {
+            if (Vm.Mappings?.FirstOrDefault(mapping => mapping.JobId == jobId) is { } mapping)
+                Vm.OpenEditor(mapping);
+            else
+                Vm.OpenEditorForJob(source);
+        }
     }
 
     public void Dispose() => Vm.Detach();

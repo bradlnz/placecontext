@@ -1,13 +1,6 @@
 @implements IAsyncDisposable
 @inject RunOutputViewModel Vm
 
-@if (Vm.Truncated)
-{
-    <div class="output-preview-note">
-        <span>Preview shortened to the first 32,000 characters.</span>
-        <ArtifactDownload Label="Download full output" GetArtifact="@(() => new RunArtifactView(Language == "json" ? "output.json" : "output.txt", Value))" />
-    </div>
-}
 <div id="@Vm.EditorId" class="run-output" aria-label="@Label"></div>
 
 @code {

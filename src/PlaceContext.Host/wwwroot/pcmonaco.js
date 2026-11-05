@@ -488,7 +488,7 @@ window.pcmonaco = (function () {
           readOnly,
           minimap: { enabled: !readOnly && language !== 'logquery' },
           ariaLabel: label,
-          wordWrap: readOnly || language === 'logquery' ? 'on' : 'off',
+          wordWrap: 'on',
           fontSize: 12.5,
           lineNumbers: 'on',
           scrollBeyondLastLine: false,

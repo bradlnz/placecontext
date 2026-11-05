@@ -46,7 +46,11 @@ public sealed class ChainInputResumeTests
               "ChainName" text NOT NULL, "Status" text NOT NULL, "StepsJson" text NOT NULL, "FinalOutput" text,
               "StartedAt" timestamptz NOT NULL, "FinishedAt" timestamptz, "ResumeAt" timestamptz,
               "ResumeStageIndex" integer, "ContinuationClaimedBy" text, "ContinuationClaimedAt" timestamptz,
-              "ContinuationOverrides" text, "InputRequest" text);
+              "ContinuationOverrides" text, "InputRequest" text, "InitiatedBy" uuid);
+            CREATE TABLE job_chains (
+              "Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "ProjectId" uuid NOT NULL,
+              "Name" text NOT NULL, "Description" text, "StagesJson" text NOT NULL,
+              "CreatedAt" timestamptz NOT NULL, "UpdatedAt" timestamptz NOT NULL);
             """, connection))
         {
             await setup.ExecuteNonQueryAsync();
@@ -119,18 +123,64 @@ public sealed class ChainInputResumeTests
                 Assert.Contains("Verified", saved!.ContinuationOverridesJson);
                 Assert.Equal(next.Id, JsonSerializer.Deserialize<ChainInputRequest>(saved.InputRequestJson!)!.Id);
             }
+            var automaticRequest = new ChainInputRequest(Guid.NewGuid(),
+                [new ChainInputStep(0, "Agent task", [])], Kind: LoopChainAction.TaskType);
+            await using (var db = new AppDbContext(options, tenant))
+            {
+                var row = await db.ChainRuns.SingleAsync();
+                row.Status = "AwaitingInput";
+                row.InputRequest = encryptor.Protect(JsonSerializer.Serialize(automaticRequest), IDataEncryptor.Purpose.ChainRun);
+                db.JobChains.Add(new JobChainRow { Id = chain.Id, ProjectId = chain.ProjectId, Name = chain.Name,
+                    StagesJson = """[{"jobs":[],"action":{"type":"humanInput","instructions":"Review","responseField":"answer"}}]""",
+                    CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow });
+                await db.SaveChangesAsync();
+                var queue = new DbJobChainSubmissionQueue(db, tenant, new CurrentUser(), encryptor, new Permissions());
+                await Assert.ThrowsAsync<InvalidOperationException>(() => queue.ResumeAgentAsync(run.Id, automaticRequest.Id));
+                var savedChain = await db.JobChains.SingleAsync();
+                savedChain.StagesJson = $$$"""[{"jobs":[],"action":{"type":"agentTask","instructions":"Build","responseField":"answer","agentProvider":"automatic","connectionId":"{{{Guid.NewGuid()}}}","model":"test"}}]""";
+                await db.SaveChangesAsync();
+            }
+            async Task<string> StartAgent()
+            {
+                await using var db = new AppDbContext(options, tenant);
+                return await new DbJobChainSubmissionQueue(db, tenant, new CurrentUser(), encryptor, new Permissions())
+                    .ResumeAgentAsync(run.Id, automaticRequest.Id);
+            }
+            Assert.All(await Task.WhenAll(StartAgent(), StartAgent()), status => Assert.Equal("Waiting", status));
+            await using (var db = new AppDbContext(options, tenant))
+            {
+                var loaded = (await new EfChainRunRepository(db, encryptor).GetByIdAsync(run.Id))!;
+                var saved = JsonSerializer.Deserialize<ChainInputRequest>(loaded.InputRequestJson!)!;
+                Assert.True(saved.RunAutomatically);
+                Assert.Null(saved.SubmittedValues);
+                Assert.Equal(new CurrentUser().UserId, loaded.InitiatedBy);
+                var queue = new DbJobChainSubmissionQueue(db, tenant, new CurrentUser(), encryptor, new Permissions());
+                await Assert.ThrowsAsync<InvalidOperationException>(() => queue.ResumeAsync(run.Id, automaticRequest.Id, "{}"));
+            }
             await using var services = new ServiceCollection()
                 .AddScoped(_ => new AppDbContext(options, new CurrentTenant())).BuildServiceProvider();
             using var worker = new ChainContinuationBackgroundService(services.GetRequiredService<IServiceScopeFactory>(),
                 NullLogger<ChainContinuationBackgroundService>.Instance);
+            using var staleWorker = new ChainContinuationBackgroundService(services.GetRequiredService<IServiceScopeFactory>(),
+                NullLogger<ChainContinuationBackgroundService>.Instance);
             var claim = typeof(ChainContinuationBackgroundService).GetMethod("ClaimAsync",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            await (Task)claim.Invoke(staleWorker, new object[] { CancellationToken.None })!;
+            await using (var expiredDb = new AppDbContext(options, tenant))
+            {
+                var expired = await expiredDb.ChainRuns.SingleAsync();
+                Assert.NotNull(expired.ContinuationClaimedBy);
+                expired.ContinuationClaimedAt = DateTimeOffset.UtcNow.AddMinutes(-6);
+                await expiredDb.SaveChangesAsync();
+            }
             await (Task)claim.Invoke(worker, new object[] { CancellationToken.None })!;
+            string owner;
             await using (var claimedDb = new AppDbContext(options, tenant))
             {
                 var claimed = await claimedDb.ChainRuns.SingleAsync();
                 Assert.NotNull(claimed.ContinuationClaimedAt);
                 Assert.NotNull(claimed.ContinuationClaimedBy);
+                owner = claimed.ContinuationClaimedBy;
             }
             var release = typeof(ChainContinuationBackgroundService).GetMethod("ReleaseAsync",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
@@ -141,15 +191,23 @@ public sealed class ChainInputResumeTests
                 {
                     var row = await db.ChainRuns.SingleAsync();
                     row.Status = before;
-                    row.ContinuationClaimedBy = "failed-dispatch";
+                    row.ContinuationClaimedBy = owner;
                     row.ContinuationClaimedAt = DateTimeOffset.UtcNow;
                     await db.SaveChangesAsync();
+                }
+                await (Task)release.Invoke(staleWorker, new object[] { run.Id, CancellationToken.None })!;
+                await using (var staleCheck = new AppDbContext(options, tenant))
+                {
+                    var untouched = await staleCheck.ChainRuns.SingleAsync();
+                    Assert.Equal(before, untouched.Status);
+                    Assert.Equal(owner, untouched.ContinuationClaimedBy);
+                    Assert.NotNull(untouched.ContinuationClaimedAt);
                 }
                 await (Task)release.Invoke(worker, new object[] { run.Id, CancellationToken.None })!;
                 await using var check = new AppDbContext(options, tenant);
                 var released = await check.ChainRuns.SingleAsync();
                 Assert.Equal(after, released.Status);
-                Assert.Equal(after == "Waiting" ? null : "failed-dispatch", released.ContinuationClaimedBy);
+                Assert.Equal(after == "Waiting" ? null : owner, released.ContinuationClaimedBy);
                 Assert.Equal(0, released.ResumeStageIndex);
                 Assert.NotNull(released.InputRequest);
             }

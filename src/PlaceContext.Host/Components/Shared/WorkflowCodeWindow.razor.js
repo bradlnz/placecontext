@@ -1,10 +1,24 @@
 const windows = new WeakMap();
+const dialogs = new WeakMap();
+
+export function attachDialog(handle) {
+  const dialog = handle?.closest('.dcmodal');
+  if (!dialog) return;
+  attach(dialog);
+  dialogs.set(handle, dialog);
+}
+
+export function detachDialog(handle) {
+  detach(dialogs.get(handle));
+  dialogs.delete(handle);
+}
 
 export function attach(element) {
   if (!element || windows.has(element)) {
     return;
   }
   const handle = element.querySelector('[data-window-handle]');
+  const header = handle.closest('.dcmodal-head, .code-window-head') ?? handle;
   const events = new AbortController();
   const options = { signal: events.signal };
   let drag = null;
@@ -14,8 +28,9 @@ export function attach(element) {
     element.style.right = 'auto';
     element.style.transform = 'none';
   };
-  handle.addEventListener('pointerdown', event => {
-    if (event.button !== 0) {
+  header.addEventListener('pointerdown', event => {
+    const control = event.target?.closest('button, input, select, textarea, a, summary');
+    if (event.button !== 0 || (control && control !== handle)) {
       return;
     }
     const rect = element.getBoundingClientRect();
@@ -24,12 +39,12 @@ export function attach(element) {
     handle.focus();
     event.preventDefault();
   }, options);
-  handle.addEventListener('pointermove', event => {
+  header.addEventListener('pointermove', event => {
     if (drag) {
       move(event.clientX - drag.x, event.clientY - drag.y);
     }
   }, options);
-  handle.addEventListener('lostpointercapture', () => { drag = null; }, options);
+  header.addEventListener('lostpointercapture', () => { drag = null; }, options);
   handle.addEventListener('keydown', event => {
     const delta = { ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] }[event.key];
     if (!delta) {

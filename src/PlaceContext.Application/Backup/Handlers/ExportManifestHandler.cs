@@ -127,8 +127,11 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             {
                 VirtualMachineChainAction vm => new ChainActionManifest(vm.Type, ImageProfile: vm.ImageProfile, Command: vm.Command,
                     OutputField: vm.OutputField, MemoryMb: vm.MemoryMb, Cpus: vm.Cpus, TimeoutSeconds: vm.TimeoutSeconds, AllowNetwork: vm.AllowNetwork, PauseForLogin: vm.PauseForLogin || vm.LoginProfileId is not null),
+                QueryDataChainAction query => new ChainActionManifest(query.Type, Sql: query.Sql, OutputField: query.OutputField),
+                ScoringGateChainAction score => new ChainActionManifest(score.Type, InputField: score.InputField, OutputField: score.OutputField, Criteria: score.Criteria, PassScore: score.PassScore, MinimumConfidence: score.MinimumConfidence, StopOnFailure: score.StopOnFailure),
+                RepeatFlowChainAction repeat => new ChainActionManifest(repeat.Type, UntilCondition: repeat.UntilCondition, MaxAttempts: repeat.MaxAttempts),
                 LoopChainAction loop => new ChainActionManifest(loop.Type,
-                    Instructions: loop.Instructions, ResponseField: loop.ResponseField, ResponseType: loop.ResponseType, AgentProvider: loop.AgentProvider),
+                    Instructions: loop.Instructions, ResponseField: loop.ResponseField, ResponseType: loop.ResponseType, AgentProvider: loop.AgentProvider, ConnectionId: loop.ConnectionId, Model: loop.Model),
                 SendEmailChainAction email => new ChainActionManifest(
                     SendEmailChainAction.ActionType,
                     email.Recipient,

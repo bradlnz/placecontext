@@ -28,9 +28,8 @@ curl -fsSL https://get.placecontext.io/install.sh | bash
 
 Requires Linux or macOS with `curl`. On Linux it uses an accessible system Docker daemon or uses
 passwordless `sudo` to install and start Docker, then activates Docker-group access for the invoking
-user. On macOS it uses Docker/Colima through Homebrew. Local AI is disabled by default and can be
-enabled from the portal after installation. Scripted installs can opt in with `--ai`; local AI also
-requires Python 3.11+.
+user. On macOS it uses Docker/Colima through Homebrew. AI features use model connections configured
+in **Settings → Models**; the installer does not install an inference worker.
 PlaceContext uses [k3s](https://k3s.io), a lightweight Kubernetes distribution, to schedule isolated jobs
 across the fleet. For the quick start, [k3d](https://k3d.io) runs k3s inside Docker so no existing Kubernetes
 cluster is required. The installer pulls the versioned multi-architecture
@@ -208,8 +207,6 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
 
 ## Screenshots
 
-![PlaceContext dashboard with populated charts](docs/images/dashboard-charts.png)
-
 ![Job code editor](docs/images/job-code-editor.png)
 
 ![Job chain with parallel collection and report publishing stages](docs/images/job-chain.png)
@@ -238,7 +235,6 @@ them. k3s schedules the work; Tailscale can privately connect nodes that are on 
 
 - Run the quick-start installer on an always-on Apple Silicon Mac mini.
 - Use the generated command in **Cluster → Add node** to join MacBooks or Linux workstations as workers.
-- Add another Apple Silicon Mac as an AI shard when you want local model capacity.
 - Tailscale lets machines participate from different networks without opening worker ports publicly.
 
 ### Single cloud server

@@ -221,19 +221,24 @@ public class BackupTests
             ChainStage.ForAction(new LoopChainAction(LoopChainAction.HumanType, "Review the draft", "human_review", LoopChainAction.YesNoResponse)),
             ChainStage.ForAction(new LoopChainAction(LoopChainAction.AgentType, "Check the sources", "agent_review", agentProvider: LoopChainAction.JevAgent)),
             ChainStage.ForAction(new VirtualMachineChainAction("browser", "cat", "vm_result", 2048, 2, 600, true, loginProfileId: Guid.NewGuid())),
+            ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Define requirements", "requirements")),
+            ChainStage.ForAction(new QueryDataChainAction("SELECT id FROM listings LIMIT 10", "listings")),
+            ChainStage.ForAction(new ScoringGateChainAction("review", "quality", [new ScoreCriterion("security", "Safe?", ["Fail", "Pass"], 2, 85)], 95, .9, false)),
+            ChainStage.ForAction(new RepeatFlowChainAction("eq:ready:true", 3)),
         }, T0.AddMinutes(1));
 
         var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
         var exported = Assert.Single(manifest.JobChains);
-        Assert.Equal(5, exported.Stages!.Count);
+        Assert.Equal(9, exported.Stages!.Count);
         Assert.Equal(SendEmailChainAction.ActionType, exported.Stages[1].Action!.Type);
 
+        manifest = System.Text.Json.JsonSerializer.Deserialize<BackupManifest>(System.Text.Json.JsonSerializer.Serialize(manifest))!;
         var target = new Ctx();
         await target.Importer().HandleAsync(new ImportManifestCommand(manifest));
 
         var importedProject = Assert.Single(await target.Projects.ListAsync());
         var imported = Assert.Single(await target.Chains.ListForProjectAsync(importedProject.Id.Value));
-        Assert.Equal(5, imported.Stages.Count);
+        Assert.Equal(9, imported.Stages.Count);
         var email = Assert.IsType<SendEmailChainAction>(imported.Stages[1].Action);
         Assert.Equal("{{client.email}}", email.Recipient);
         Assert.IsType<ConditionGate>(imported.Stages[1].Gate);
@@ -257,6 +262,15 @@ public class BackupTests
         Assert.True(vm.AllowNetwork);
         Assert.True(vm.PauseForLogin);
         Assert.Null(vm.LoginProfileId);
+        Assert.Equal(LoopChainAction.TaskType, Assert.IsType<LoopChainAction>(imported.Stages[5].Action).Type);
+        var query = Assert.IsType<QueryDataChainAction>(imported.Stages[6].Action);
+        Assert.Equal("listings", query.OutputField); Assert.Equal("SELECT id FROM listings LIMIT 10", query.Sql);
+        var scoring = Assert.IsType<ScoringGateChainAction>(imported.Stages[7].Action);
+        Assert.Equal(95, scoring.PassScore); Assert.Equal(.9, scoring.MinimumConfidence); Assert.False(scoring.StopOnFailure);
+        Assert.Equal(85, scoring.Criteria[0].MinimumScore);
+        var repeat = Assert.IsType<RepeatFlowChainAction>(imported.Stages[8].Action);
+        Assert.Equal("eq:ready:true", repeat.UntilCondition);
+        Assert.Equal(3, repeat.MaxAttempts);
     }
 
     [Fact]

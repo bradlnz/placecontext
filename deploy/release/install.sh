@@ -4,7 +4,7 @@
 #   curl -fsSL https://get.placecontext.io/install.sh | bash
 #
 # The GitHub release bundle contains deployment files only; the runtime is pulled from GHCR.
-# The installer provisions its tools and Python environment, creates k3d, and applies the manifests.
+# The installer provisions its tools, creates k3d, and applies the manifests.
 set -euo pipefail
 
 # Non-interactive SSH sessions on minimal Linux images often omit sbin directories.
@@ -13,18 +13,9 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH
 VERSION="${PLACECONTEXT_VERSION:-latest}"
 BASE_URL="${PLACECONTEXT_BASE_URL:-https://github.com/bradlnz/placecontext/releases}"
 INSTALL_DIR="${PLACECONTEXT_HOME:-$HOME/.local/share/placecontext}"
-MODEL="${PLACECONTEXT_MODEL:-Qwen/Qwen3.5-4B}"
-SHARD_ENDPOINTS="${PLACECONTEXT_SHARD_ENDPOINTS:-}"
-AI_TOKEN="${PLACECONTEXT_AI_TOKEN:-}"
-AI_TOKEN_PROVIDED=0
-[[ -z "$AI_TOKEN" ]] || AI_TOKEN_PROVIDED=1
 PORT="${PLACECONTEXT_PORT:-7700}"
 CLUSTER_NAME="${PLACECONTEXT_CLUSTER:-placecontext-local}"
 NAMESPACE="placecontext"
-INSTALL_AI=0
-AI_SHARD_ONLY=0
-SHARD_INDEX=0
-TOTAL_SHARDS=1
 WAIT=1
 FROM_BUNDLE="${PLACECONTEXT_FROM_BUNDLE:-0}"
 
@@ -32,15 +23,8 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) VERSION="$2"; shift 2 ;;
     --install-dir) INSTALL_DIR="$2"; shift 2 ;;
-    --model) MODEL="$2"; shift 2 ;;
-    --shard-endpoints) SHARD_ENDPOINTS="$2"; shift 2 ;;
-    --ai-token) AI_TOKEN="$2"; AI_TOKEN_PROVIDED=1; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
-    --ai) INSTALL_AI=1; shift ;;
-    --ai-shard) AI_SHARD_ONLY=1; shift ;;
-    --shard-index) SHARD_INDEX="$2"; shift 2 ;;
-    --total-shards) TOTAL_SHARDS="$2"; shift 2 ;;
-    --no-ai) INSTALL_AI=0; shift ;;
+    --no-ai) shift ;; # Retain existing installs that explicitly opted out.
     --no-wait) WAIT=0; shift ;;
     --from-bundle) FROM_BUNDLE=1; shift ;;
     -h|--help)
@@ -49,36 +33,18 @@ while [[ $# -gt 0 ]]; do
         'Linux may use sudo to install and start Docker for the local k3s cluster.' \
         '' \
         'Usage:' \
-        '  install.sh [--version TAG] [--ai] [--model ID] [--shard-endpoints URL,URL]' \
+        '  install.sh [--version TAG] [--port PORT]' \
         '' \
         'Options:' \
         '  --version TAG          GitHub release version (default: latest)' \
         '  --install-dir DIR      Install location' \
-        '  --model ID             Hugging Face model ID' \
-        '  --shard-endpoints LIST Ordered comma-separated worker URLs' \
-        '  --ai-token TOKEN       Shared controller/worker token for remote shards' \
         '  --port PORT            Local portal port (default: 7700)' \
-        '  --ai                   Install the local AI worker and coordinator' \
-        '  --ai-shard            Install only an MLX/Torch AI shard worker' \
-        '  --shard-index N       Zero-based shard index (default: 0)' \
-        '  --total-shards N      Number of ordered shards (default: 1)' \
-        '  --no-ai                Do not install AI (default; retained for compatibility)' \
         '  --no-wait              Return before the Host rollout completes'
       exit 0
       ;;
     *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
-
-[[ "$SHARD_INDEX" =~ ^[0-9]+$ ]] || { printf 'Invalid --shard-index: %s\n' "$SHARD_INDEX" >&2; exit 2; }
-[[ "$TOTAL_SHARDS" =~ ^[1-9][0-9]*$ ]] || { printf 'Invalid --total-shards: %s\n' "$TOTAL_SHARDS" >&2; exit 2; }
-(( SHARD_INDEX < TOTAL_SHARDS )) || { printf '%s\n' '--shard-index must be less than --total-shards' >&2; exit 2; }
-[[ "$MODEL" =~ ^[A-Za-z0-9._/-]+$ ]] || { printf 'Invalid --model: %s\n' "$MODEL" >&2; exit 2; }
-if [[ "$AI_TOKEN_PROVIDED" == 1 && ! "$AI_TOKEN" =~ ^[A-Za-z0-9._~-]{32,256}$ ]]; then
-  printf '%s\n' 'Invalid --ai-token: expected 32-256 URL-safe characters' >&2
-  exit 2
-fi
-[[ "$AI_SHARD_ONLY" == 0 ]] || INSTALL_AI=1
 
 say() { printf '==> %s\n' "$*"; }
 ok() { printf '  ✓ %s\n' "$*"; }
@@ -100,18 +66,9 @@ build_install_args() {
   INSTALL_ARGS=(
     --version "$VERSION"
     --install-dir "$INSTALL_DIR"
-    --model "$MODEL"
     --port "$PORT"
   )
-  if [[ "$INSTALL_AI" == 1 ]]; then
-    INSTALL_ARGS+=(--ai)
-  else
-    INSTALL_ARGS+=(--no-ai)
-  fi
-  [[ "$AI_SHARD_ONLY" == 0 ]] || INSTALL_ARGS+=(--ai-shard --shard-index "$SHARD_INDEX" --total-shards "$TOTAL_SHARDS")
   [[ "$WAIT" == 1 ]] || INSTALL_ARGS+=(--no-wait)
-  [[ -z "$SHARD_ENDPOINTS" ]] || INSTALL_ARGS+=(--shard-endpoints "$SHARD_ENDPOINTS")
-  [[ "$AI_TOKEN_PROVIDED" == 0 ]] || INSTALL_ARGS+=(--ai-token "$AI_TOKEN")
 }
 
 download() {
@@ -208,7 +165,7 @@ if [[ "$FROM_BUNDLE" != 1 ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-[[ -d "$SCRIPT_DIR/k3s" && -f "$SCRIPT_DIR/local-ai/runtime.yaml" ]] \
+[[ -d "$SCRIPT_DIR/k3s" && -f "$SCRIPT_DIR/RUNTIME_IMAGE" ]] \
   || die "installer must run from a PlaceContext release bundle"
 
 mkdir -p "$INSTALL_DIR"
@@ -285,34 +242,6 @@ install_system_requirements() {
   have openssl || die "openssl is required"
 }
 
-install_python() {
-  [[ "$INSTALL_AI" == 1 && -z "$SHARD_ENDPOINTS" ]] || return 0
-  if have python3 \
-    && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' 2>/dev/null \
-    && python3 -m ensurepip --version >/dev/null 2>&1; then
-    return
-  fi
-
-  say "Installing Python 3.11+ with venv support"
-  if [[ "$TOOL_OS" == darwin ]]; then
-    have brew || die "Homebrew is required to install Python on macOS"
-    brew install python
-  elif have apt-get; then
-    as_root apt-get update
-    as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y \
-      python3 python3-venv
-  elif have dnf; then
-    as_root dnf install -y python3 python3-pip
-  elif have pacman; then
-    as_root pacman -Sy --noconfirm python python-pip
-  else
-    die "Python 3.11+ with venv is required for local AI"
-  fi
-  have python3 && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' \
-    && python3 -m ensurepip --version >/dev/null 2>&1 \
-    || die "Python 3.11+ with venv is unavailable"
-}
-
 install_k3d() {
   have k3d && return
   local release="${K3D_VERSION:-v5.8.3}" name sums expected actual
@@ -372,21 +301,6 @@ configure_secrets() {
       --from-literal="password=$pg_password" \
       --from-literal="connection-string=$connection" >/dev/null
   fi
-  if [[ "$INSTALL_AI" == 1 ]]; then
-    if [[ "$AI_TOKEN_PROVIDED" == 1 ]]; then
-      kubectl -n "$NAMESPACE" create secret generic placecontext-ai \
-        --from-literal="api-token=$AI_TOKEN" \
-        --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-    elif kubectl -n "$NAMESPACE" get secret placecontext-ai >/dev/null 2>&1; then
-      AI_TOKEN="$(kubectl -n "$NAMESPACE" get secret placecontext-ai \
-        -o go-template='{{index .data "api-token" | base64decode}}')"
-    else
-      AI_TOKEN="$(random_hex 32)"
-      kubectl -n "$NAMESPACE" create secret generic placecontext-ai \
-        --from-literal="api-token=$AI_TOKEN" >/dev/null
-    fi
-  fi
-
   if ! kubectl -n "$NAMESPACE" get secret placecontext-ca >/dev/null 2>&1; then
     cert_dir="$(mktemp -d "${TMPDIR:-/tmp}/placecontext-ca.XXXXXX")"
     openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
@@ -399,111 +313,12 @@ configure_secrets() {
   ok "secrets ready"
 }
 
-start_worker() {
-  [[ "$INSTALL_AI" == 1 ]] || return 0
-  [[ -z "$SHARD_ENDPOINTS" ]] || return 0
-  have python3 || die "Python 3.11+ is required for the local inference worker"
-  have openssl || die "openssl is required to generate the AI authentication token"
-  python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' \
-    || die "Python 3.11+ is required for the local inference worker"
-
-  [[ -n "$AI_TOKEN" ]] || AI_TOKEN="$(random_hex 32)"
-  local venv="$ROOT/ai/venv" worker="$ROOT/local-ai/worker.py" shard_spec="$SHARD_INDEX/$TOTAL_SHARDS"
-  [[ -f "$worker" ]] || die "release does not contain the inference worker"
-  mkdir -p "$ROOT/ai"
-  if [[ ! -x "$venv/bin/python" ]] \
-    || ! "$venv/bin/python" -m pip --version >/dev/null 2>&1; then
-    say "Creating local AI environment"
-    rm -rf "$venv"
-    python3 -m venv "$venv"
-  fi
-  "$venv/bin/python" -m pip install --quiet --upgrade pip
-  if [[ "$TOOL_OS/$TOOL_ARCH" == "darwin/arm64" ]]; then
-    "$venv/bin/python" -m pip install --quiet mlx-lm fastapi uvicorn pydantic numpy
-  else
-    "$venv/bin/python" -m pip install --quiet torch transformers accelerate safetensors fastapi uvicorn pydantic numpy
-  fi
-
-  say "Starting local AI worker"
-  if [[ "$TOOL_OS" == darwin ]]; then
-    local plist="$HOME/Library/LaunchAgents/io.placecontext.ai-worker.plist"
-    mkdir -p "$(dirname "$plist")"
-    sed \
-      -e "s|__PYTHON__|$venv/bin/python|g" \
-      -e "s|__WORKER__|$worker|g" \
-      -e "s|__MODEL__|$MODEL|g" \
-      -e "s|__SHARD_SPEC__|$shard_spec|g" \
-      -e "s|__AI_TOKEN__|$AI_TOKEN|g" \
-      -e "s|__LOG_DIR__|$ROOT/logs|g" \
-      "$ROOT/local-ai/io.placecontext.ai-worker.plist" > "$plist"
-    launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1 || true
-    launchctl bootstrap "gui/$(id -u)" "$plist"
-  elif have systemctl && systemctl --user show-environment >/dev/null 2>&1; then
-    local unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-    mkdir -p "$unit_dir"
-    sed \
-      -e "s|__PYTHON__|$venv/bin/python|g" \
-      -e "s|__WORKER__|$worker|g" \
-      -e "s|__MODEL__|$MODEL|g" \
-      -e "s|__SHARD_SPEC__|$shard_spec|g" \
-      -e "s|__AI_TOKEN__|$AI_TOKEN|g" \
-      -e "s|__STATE_DIR__|$ROOT/ai|g" \
-      -e "s|__LOG_DIR__|$ROOT/logs|g" \
-      "$ROOT/local-ai/placecontext-ai.service" > "$unit_dir/placecontext-ai.service"
-    systemctl --user daemon-reload
-    systemctl --user enable --now placecontext-ai.service
-  else
-    SHARD_SPEC="$shard_spec" PLACECONTEXT_AI_TOKEN="$AI_TOKEN" \
-      nohup "$venv/bin/python" "$worker" --model "$MODEL" --host 0.0.0.0 --port 8080 \
-      >"$ROOT/logs/ai-worker.log" 2>&1 &
-    printf '%s\n' "$!" > "$ROOT/state/ai-worker.pid"
-  fi
-  SHARD_ENDPOINTS="http://host.k3d.internal:8080"
-  ok "AI shard $shard_spec configured (model downloads on first start)"
-  if [[ "$AI_SHARD_ONLY" == 1 ]]; then
-    printf '    Controller token: %s\n' "$AI_TOKEN"
-    printf '    Keep this token private and configure the controller with --ai-token.\n'
-  fi
-}
-
-configure_cluster_ai() {
-  [[ "$INSTALL_AI" == 1 ]] || return 0
-  local -a endpoints=()
-  local endpoint index=0 args=()
-  IFS=',' read -r -a endpoints <<< "$SHARD_ENDPOINTS"
-  [[ "${#endpoints[@]}" -gt 0 && -n "${endpoints[0]}" ]] || die "no shard endpoints were configured"
-  [[ -n "$AI_TOKEN" ]] || die "an AI token is required to configure shard endpoints"
-  args+=(--from-literal="PlaceContext__ClusterChat__Model=$MODEL")
-  for endpoint in "${endpoints[@]}"; do
-    endpoint="${endpoint%/}"
-    args+=(--from-literal="PlaceContext__ClusterChat__ShardEndpoints__${index}=$endpoint")
-    index=$((index + 1))
-  done
-  kubectl -n "$NAMESPACE" create configmap placecontext-local-ai "${args[@]}" \
-    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-  kubectl -n "$NAMESPACE" apply -f "$ROOT/local-ai/runtime.yaml" >/dev/null
-  kubectl -n "$NAMESPACE" rollout restart deployment/placecontext-cluster-host >/dev/null
-  ok ".NET shard coordinator configured (${#endpoints[@]} endpoint(s))"
-}
-
 deploy_local() {
   detect_platform
-  install_python
-  if [[ "$AI_SHARD_ONLY" == 1 ]]; then
-    start_worker
-    ok "AI shard is listening on port 8080"
-    printf '    Configure the controller with this machine\047s reachable URL.\n'
-    return
-  fi
-
   install_system_requirements
   export PATH="$ROOT/bin:$PATH"
   install_k3d
   install_kubectl
-
-  if [[ -n "$SHARD_ENDPOINTS" && "$AI_TOKEN_PROVIDED" == 0 ]]; then
-    die "--ai-token is required with --shard-endpoints (use the token printed by the shard installer)"
-  fi
 
   say "Starting local k3s cluster"
   if k3d cluster list 2>/dev/null | awk 'NR > 1 {print $1}' | grep -qx "$CLUSTER_NAME"; then
@@ -516,7 +331,7 @@ deploy_local() {
   export KUBECONFIG
   KUBECONFIG="$(k3d kubeconfig write "$CLUSTER_NAME")"
 
-  local api_binding api_port runtime_image cluster_endpoint
+  local api_binding api_port runtime_image
   api_binding="$(docker port "k3d-$CLUSTER_NAME-serverlb" 6443/tcp 2>/dev/null | head -n1 || true)"
   [[ "$api_binding" == 127.0.0.1:* ]] \
     || die "cluster API port is unavailable; rerun with a new PLACECONTEXT_CLUSTER name"
@@ -526,25 +341,20 @@ deploy_local() {
     "$KUBECONFIG" > "$KUBECONFIG.tmp"
   mv "$KUBECONFIG.tmp" "$KUBECONFIG"
 
-  runtime_image="$(awk -F'"' '/runtime_image:/ {print $2; exit}' "$ROOT/local-ai/config.yaml")"
+  runtime_image="$(cat "$ROOT/RUNTIME_IMAGE")"
   [[ "$runtime_image" == ghcr.io/* ]] || die "release does not contain a valid GHCR runtime image"
 
   configure_secrets
-  start_worker
   say "Applying PlaceContext"
   kubectl -n "$NAMESPACE" apply -f "$ROOT/k3s/postgres.yaml" >/dev/null
   say "Waiting for PostgreSQL"
   kubectl -n "$NAMESPACE" rollout status deployment/placecontext-db --timeout=10m
   kubectl apply -f "$ROOT/k3s/network-policies.yaml" >/dev/null
   kubectl apply -f "$ROOT/k3s/hosted-services.yaml" >/dev/null
-  cluster_endpoint="http://placecontext-cluster-host:8081/api/cluster"
-  [[ "$INSTALL_AI" == 1 ]] || cluster_endpoint=""
   sed -e "s|__IMAGE__|$runtime_image|g" \
       -e 's|__IMAGE_PULL_POLICY__|IfNotPresent|g' \
-      -e "s|__CLUSTER_ENDPOINT__|$cluster_endpoint|g" \
       "$ROOT/k3s/placecontext.yaml" | kubectl apply -f - >/dev/null
   kubectl apply -f "$ROOT/k3s/local-ingress.yaml" >/dev/null
-  configure_cluster_ai
 
   if [[ "$WAIT" == 1 ]]; then
     say "Waiting for PlaceContext"

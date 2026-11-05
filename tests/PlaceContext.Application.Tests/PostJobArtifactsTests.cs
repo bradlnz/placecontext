@@ -88,6 +88,24 @@ public class PostJobArtifactsTests
     }
 
     [Fact]
+    public void RawBundle_preserves_binary_and_text_bytes_from_shards_and_reduce()
+    {
+        var (job, _) = Sample();
+        var run = JobRun.Start(job.Id, job.ProjectId, T0, WorkloadSnapshot.From(new MapSpec("img", ["{}"], new Dictionary<string, string>()), null, 1));
+        byte[] bytes = [0x50, 0x4b, 0x03, 0x04, 0xff, 0x00, 0xfe];
+        var binary = new RunArtifact("source.zip", Convert.ToBase64String(bytes), isBinary: true);
+        var text = new RunArtifact("notes.txt", "A café");
+        run.Complete([new ShardResult(0, 0, WorkloadOutcome.Succeeded, null, null, [binary, text])],
+            new ReduceResult(0, true, null, null, [binary]), T0.AddSeconds(1));
+        var files = PostJobArtifacts.RawBundle(run).ToArray();
+        Assert.Equal(3, files.Length);
+        Assert.Equal(bytes, files[0].Content);
+        Assert.Equal("application/zip", files[0].ContentType);
+        Assert.Equal(Encoding.UTF8.GetBytes("A café"), files[1].Content);
+        Assert.Equal(bytes, files[2].Content);
+    }
+
+    [Fact]
     public void RawBundle_yields_one_file_per_produced_artifact()
     {
         var (_, run) = Sample();

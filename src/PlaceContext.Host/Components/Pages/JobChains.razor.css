@@ -92,24 +92,15 @@
 .chain-json-modal { width:min(840px, 100vw); }
 .chain-json-body { min-height:0; }
 .chain-json-body .json-pre { margin:0; max-height:68vh; }
-.stage-detail { border-top:1px solid var(--border); padding-top:10px }
-.live-output-panel { margin-top:2px; padding:12px; border:1px solid var(--border); border-radius:10px; background:var(--card) }
-.stage-detail-head { font-size:12px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:8px }
-.live-output-title { display:flex; align-items:center; gap:6px; color:var(--text-3); font-size:10px; text-transform:uppercase; letter-spacing:.05em }
-.live-output-title b { color:var(--text-2); font-size:11.5px; text-transform:none; letter-spacing:0 }
-.output-live-dot { width:7px; height:7px; border-radius:50%; background:var(--good); box-shadow:0 0 0 4px var(--good-bg); animation:outputPulse 1.3s ease-in-out infinite }
-.output-updated { color:var(--text-3); font-size:9px; font-weight:400 }
 .output-waiting { min-height:78px; display:flex; align-items:center; justify-content:center; gap:7px; border:1px dashed var(--border); border-radius:8px; background:var(--bg); color:var(--text-3); font:10.5px var(--font-mono) }
 .output-cursor { width:6px; height:13px; background:var(--brand-2); animation:cursorBlink .8s steps(2) infinite }
 .live-log { padding:9px; border:1px solid var(--border); border-radius:7px; background:var(--bg); color:var(--text-2) }
 .streaming-log { min-height:90px; max-height:280px; margin:0; color:var(--good); white-space:pre-wrap; overflow-wrap:anywhere }
-@keyframes outputPulse { 50% { opacity:.45; transform:scale(.85) } }
 @keyframes cursorBlink { 50% { opacity:0 } }
 .status-chip-sm { font-size:11px; padding:2px 7px; border-radius:4px }
 .flex-1 { flex:1 }
 .btn-xs { padding:2px 10px; font-size:11px }
 .mb-8 { margin-bottom:8px }
-.shard-head { font-size:11px; color:var(--text-3); margin-bottom:3px }
 .artifact-pre { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:10.5px; font-family:var(--font-mono); white-space:pre-wrap; word-break:break-all; color:var(--text-2); max-height:160px; overflow-y:auto }
 .log-details { margin-top:3px }
 .log-summary { font-size:10.5px; color:var(--text-3); cursor:pointer }
@@ -210,8 +201,10 @@
 .job-picker-empty { padding:14px; border:1px dashed var(--border); border-radius:8px; color:var(--text-3); font-size:11px; text-align:center; }
 .node-picker-divider { margin:4px 0 0; padding-top:12px; border-top:1px solid var(--border); color:var(--text-3); font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
 
-.pipeline-modal-close {
+.dcmodal-head > .dcslide-x {
     margin-left: auto;
+    flex: none;
+    align-self: flex-start;
 }
 
 .node-picker-tile {
@@ -350,6 +343,10 @@
 .workflow-readiness-findings li.info { border-left:3px solid var(--brand-2); }
 .workflow-readiness-findings li span, .workflow-readiness-note { color:var(--text-3); font-size:10.5px; line-height:1.5; }
 
+/* Keep workflow dialogs floating above the canvas instead of docking as side panes. */
+.dcmodal-overlay:not(.workflow-canvas-overlay) { align-items:center; justify-content:center; padding:16px; }
+.dcmodal-overlay:not(.workflow-canvas-overlay) > .dcmodal { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); height:auto; max-height:calc(100dvh - 32px); max-width:calc(100vw - 32px); border:1px solid var(--border-2); border-radius:10px; box-shadow:0 16px 60px #0005; }
+
 /* The editor canvas fills the screen; step choices remain in its Add step menu. */
 .workflow-canvas-overlay { z-index:45; padding:0 }
 .workflow-canvas-dialog { width:100%; max-width:none; height:100dvh; border-radius:0 }
@@ -425,3 +422,78 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
     .stage-branch-row { flex-wrap:wrap }
     .branch-select { flex-basis:100%; max-width:none }
 }
+
+.execution-overlay { z-index:70 }
+.dcmodal-overlay > .execution-modal {
+    width:min(1080px, calc(100vw - 32px)); height:min(760px, calc(100dvh - 48px));
+    display:flex; flex-direction:column; background:var(--panel); color:var(--text);
+    font-family:var(--font-sans);
+}
+.execution-modal .dcmodal-head { align-items:flex-start; gap:10px; padding:13px 16px; border-bottom:1px solid var(--border); background:var(--panel) }
+.execution-heading { flex:1; min-width:0 }
+.execution-heading .workflow-eyebrow { font-size:9px; color:var(--text-3) }
+.execution-heading h3 { margin:4px 0 7px; font:600 14px var(--font-sans); overflow-wrap:anywhere }
+.execution-meta { display:flex; flex-wrap:wrap; align-items:center; gap:10px; color:var(--text-3); font-size:10px }
+.execution-tabs { display:flex; gap:4px; padding:0 16px; background:var(--panel); border-bottom:1px solid var(--border) }
+.execution-tabs button { display:flex; align-items:center; gap:8px; min-height:40px; padding:9px 13px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--text-3); font:500 13px var(--font-sans); cursor:pointer }
+.execution-tabs button[aria-pressed="true"] { color:var(--text); border-bottom-color:var(--brand) }
+.execution-tabs button:hover { background:var(--hover); color:var(--text) }
+.execution-tabs button:focus-visible { outline:2px solid var(--brand-2); outline-offset:-3px }
+.execution-tabs span { font-size:10px; color:var(--text-3) }
+.execution-modal .execution-body { display:flex; flex:1; flex-direction:column; gap:12px; min-height:0; overflow:auto; padding:14px 16px; background:var(--bg) }
+.execution-body ::deep .agent-activity { min-height:0 }
+.execution-body ::deep .job-log-viewer { border:0; border-radius:0; background:transparent }
+.execution-body ::deep .log-toolbar { padding:0 0 12px; gap:8px }
+.execution-body ::deep .log-heading strong { font:600 12px var(--font-mono, monospace) }
+.execution-body ::deep .log-actions { gap:10px; font-size:10px }
+.execution-body ::deep .log-actions .dcbtn { font-size:10px; padding:5px 8px }
+.execution-body ::deep .log-filters { padding:10px 0; background:transparent; gap:8px }
+.execution-body ::deep .log-filters .dcinput { font:11px var(--font-mono, monospace); padding:7px 9px; background:var(--panel); color:var(--text-2); border-color:var(--border) }
+.execution-body ::deep .log-events { min-height:200px; max-height:none; overflow:auto; background:transparent }
+.execution-body ::deep .log-events th { background:var(--panel); font:10px var(--font-mono, monospace) }
+.execution-body ::deep .log-events td, .execution-body ::deep .log-events th { padding:6px 9px; border-bottom:0; line-height:1.65 }
+.execution-body ::deep .log-footer { padding:12px 0 0; border-top:1px solid var(--border); font-size:9px }
+.execution-body .job-log-selector { margin-bottom:12px; gap:8px }
+.console-stream { font-size:10px; color:var(--text-3) }
+.execution-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 16px; border-top:1px solid var(--border); background:var(--panel) }
+.execution-footer > span { color:var(--text-3); font-size:10px }
+.execution-empty { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; min-height:140px; gap:10px; padding:16px 0; color:var(--text-3) }
+.execution-empty ::deep svg { width:20px; height:20px; color:var(--brand-2) }
+.execution-empty strong { color:var(--text-2); font-size:12px; font-weight:400 }
+.execution-empty p { max-width:520px; margin:0; font-size:11px; line-height:1.7 }
+.execution-error { margin:0; padding:10px; border-left:2px solid var(--bad); background:var(--bad-bg); color:var(--bad); font-size:12px; overflow-wrap:anywhere }
+@media (max-width:640px) {
+    .execution-modal .dcmodal-head, .execution-modal .execution-body { padding:12px }
+    .execution-meta { gap:6px }
+    .execution-footer { flex-wrap:wrap; padding:10px 12px }
+}
+.run-detail-fold { border:1px solid var(--border); border-radius:10px; padding:12px; background:var(--card) }
+.run-detail-fold > summary { cursor:pointer; color:var(--text-2); font-size:12px; font-weight:600 }
+.run-detail-fold[open] > summary { margin-bottom:12px }
+
+/* Match the code editor's title bar across the canvas dialogs. */
+.dcmodal-overlay:not(.workflow-canvas-overlay) > .dcmodal > .dcmodal-head {
+    display:flex; align-items:center; gap:8px; padding:6px 10px;
+    background:var(--card); border-bottom:1px solid var(--border); cursor:move; touch-action:none;
+}
+.dcmodal-overlay:not(.workflow-canvas-overlay) > .dcmodal > .dcmodal-head h3 { margin:3px 0; font-size:14px }
+.dcmodal-overlay:not(.workflow-canvas-overlay) > .dcmodal > .dcmodal-head > .dcslide-x { margin-left:auto; align-self:flex-start; flex:none; cursor:pointer }
+
+
+.loop-settings { display:flex; flex-direction:column; gap:20px; min-width:0 }
+.dcmodal-overlay > .agent-instructions-modal { width:min(1280px, calc(100vw - 32px)); height:min(820px, calc(100dvh - 32px)); display:flex; flex-direction:column }
+.agent-instructions-modal .loop-editor-body { display:grid; grid-template-columns:300px minmax(0, 1fr); flex:1; min-height:0; padding:0; gap:0; overflow:hidden }
+.agent-instructions-modal .loop-settings { padding:20px; overflow:auto; border-right:1px solid var(--border) }
+.loop-instructions-pane { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden }
+.loop-instructions-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:12px 16px; border-bottom:1px solid var(--border); font-size:12px }
+.loop-instructions-toolbar span { color:var(--text-3); font-size:11px }
+@media (max-width:760px) {
+    .agent-instructions-modal .loop-editor-body { grid-template-columns:1fr; grid-template-rows:minmax(120px, 35%) minmax(200px, 1fr) }
+    .agent-instructions-modal .loop-settings { border-right:0; border-bottom:1px solid var(--border) }
+}
+
+.score-slider-row { display:grid; grid-template-columns:minmax(0, 1fr) 82px; gap:12px; align-items:center }
+.score-slider-row input[type="range"] { width:100%; min-width:0; accent-color:var(--brand); cursor:pointer }
+.score-slider-row input[type="range"]:focus-visible { outline:2px solid var(--brand); outline-offset:3px }
+.score-criterion-actions { display:flex; gap:8px; flex-wrap:wrap }
+.score-editor-tabs { flex:none }

@@ -72,7 +72,7 @@ public sealed class WorkflowRunCountTests
         new(Guid.NewGuid(), chain.Id, chain.Name, "Succeeded", [], null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
 
     private static JobChainsViewModel CreateVm(IDispatcher dispatcher) =>
-        new(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!, null!);
+        new(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, null!);
 
     private sealed class Dispatcher(Func<ListChainRunsQuery, Task<IReadOnlyList<ChainRunView>>> runs) : IDispatcher
     {

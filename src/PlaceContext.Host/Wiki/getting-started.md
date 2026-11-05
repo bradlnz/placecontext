@@ -55,7 +55,7 @@ search.
 
 | Area | Purpose |
 |---|---|
-| **Dashboard** | Workspace totals, recent runs, charts, and pinned entities |
+| **Dashboard** | Project assistant conversations and workspace previews |
 | **Project overview** | Project activity, decisions, and dependency graph |
 | **Jobs** | Create, edit, run, and monitor jobs |
 | **Tests** | Check a job with saved example inputs before using it in a workflow |

@@ -1,6 +1,6 @@
 # Cluster and nodes
 
-*Check the k3s cluster health and add standard workers or local-AI shards.*
+*Check the k3s cluster health and add job workers.*
 
 PlaceContext runs jobs on [k3s](https://k3s.io), a lightweight Kubernetes distribution. The local
 installer creates it inside Docker with [k3d](https://k3d.io); larger installations use k3s directly
@@ -11,7 +11,7 @@ across server and worker nodes.
 Open **Settings → Cluster** (the existing **Cluster** shortcut also works) to see:
 
 - total and healthy node counts;
-- control-plane, standard-worker, and AI-shard nodes;
+- control-plane and standard-worker nodes;
 - node address, platform, Kubernetes version, CPU, and memory;
 - which node is the fleet master.
 
@@ -45,12 +45,7 @@ does not replace PlaceContext sign-in, permissions, TLS, or each job's network-e
 
 ## Add a node
 
-Click **Add node** and choose one of two roles:
-
-- **Standard worker** runs normal PlaceContext jobs and workload shards.
-- **AI shard** runs an ordered slice of a local model through MLX on Apple Silicon or Torch on
-  Linux. Select its zero-based shard index and the total number of shards.
-
+Click **Add node** to join a machine that runs jobs and workload shards.
 PlaceContext creates a short-lived join token and displays a one-time command. Run that command in
 a terminal on the new machine.
 
@@ -59,7 +54,7 @@ address for the worker. Without an embedded key, install and connect Tailscale o
 running the command.
 
 Generate a new command for each node. Kubernetes labels record
-`placecontext.io/node-type=standard-worker` or `placecontext.io/node-type=ai-shard`, which drives
+`placecontext.io/node-type=standard-worker`, which drives
 the role shown on this page.
 
 ## Check the cluster

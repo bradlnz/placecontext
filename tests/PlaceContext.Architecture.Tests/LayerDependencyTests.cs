@@ -15,7 +15,6 @@ public class LayerDependencyTests
     private const string Application = "PlaceContext.Application";
     private const string Infrastructure = "PlaceContext.Infrastructure";
     private const string Host = "PlaceContext.Host";
-    private const string ClusterHost = "PlaceContext.ClusterHost";
 
     private static readonly Assembly DomainAsm = typeof(Project).Assembly;
     private static readonly Assembly ApplicationAsm = Load(Application);
@@ -23,15 +22,15 @@ public class LayerDependencyTests
 
     [Fact]
     public void Domain_depends_on_nothing_outward()
-        => AssertNoDependency(DomainAsm, Application, Infrastructure, Host, ClusterHost);
+        => AssertNoDependency(DomainAsm, Application, Infrastructure, Host);
 
     [Fact]
     public void Application_does_not_depend_on_infrastructure_or_host()
-        => AssertNoDependency(ApplicationAsm, Infrastructure, Host, ClusterHost);
+        => AssertNoDependency(ApplicationAsm, Infrastructure, Host);
 
     [Fact]
     public void Infrastructure_does_not_depend_on_host()
-        => AssertNoDependency(InfrastructureAsm, Host, ClusterHost);
+        => AssertNoDependency(InfrastructureAsm, Host);
 
     [Fact]
     public void Inner_layers_are_free_of_infrastructure_concerns()

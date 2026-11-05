@@ -727,7 +727,7 @@ public class JobChainTests
         public FakePermissionService(bool allowed) => _allowed = allowed;
         public Task<bool> HasAsync(string permission, CancellationToken ct = default)
             => Task.FromResult(_allowed
-                && permission is Permission.EmailSend or Permission.SmsSend or Permission.JobsRun);
+                && permission is Permission.EmailSend or Permission.SmsSend or Permission.JobsRun or Permission.DataRead);
         public Task<IReadOnlySet<string>> GetEffectivePermissionsAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
         public Task<IReadOnlySet<string>> GetEffectivePermissionsForUserAsync(
@@ -1298,8 +1298,74 @@ public class JobChainTests
         }
     }
 
+    [Theory]
+    [InlineData(true, 2, false, "Succeeded", true)]
+    [InlineData(true, 1, false, "Failed", false)]
+    [InlineData(false, 1, false, "Partial", true)]
+    [InlineData(false, 2, true, "Failed", false)]
+    public async Task Scoring_records_results_and_controls_downstream_execution(bool stop, double score, bool missing, string expected, bool downstream)
+    {
+        var jobs = new InMemoryJobRepository();
+        var job = MakeJob("downstream"); await jobs.AddAsync(job);
+        var action = new ScoringGateChainAction("evidence", "gate", [ScoringGateTests.Criterion("quality")], stopOnFailure: stop);
+        var chain = JobChain.Create(ProjectId, "scoring", null, [ChainStage.ForAction(action), ChainStage.Of(job.Id)], T0);
+        var chains = new InMemoryJobChainRepository(); await chains.AddAsync(chain);
+        var dispatcher = new FakeRunDispatcher(); dispatcher.Results[job.Id] = Run(job.Id, "Succeeded");
+        var reviewer = new ScoringReviewer(score);
+        var handler = new RunJobChainHandler(chains, jobs, new InMemoryChainRunRepository(), new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(dispatcher), jev: reviewer);
+        var run = await handler.HandleAsync(new RunJobChainCommand(chain.Id, InputPayload: missing ? "{\"gate\":{\"passed\":true}}" : "{\"evidence\":{\"tests\":\"passing\"}}"), default);
+        Assert.Equal(expected, run.Status);
+        Assert.Equal(downstream, run.Steps[1].Status == "Succeeded");
+        var result = System.Text.Json.Nodes.JsonNode.Parse(run.FinalOutput!)!["gate"]!;
+        Assert.Equal(!missing && score == 2, result["passed"]!.GetValue<bool>());
+        Assert.NotEmpty(run.Steps[0].AgentActivity!);
+        if (!missing) { Assert.NotNull(result["evidence_sha256"]); Assert.Equal("{\"tests\":\"passing\"}", reviewer.State); }
+    }
+    [Theory]
+    [InlineData(true, false, false, "Succeeded")]
+    [InlineData(true, false, true, "Succeeded")]
+    [InlineData(false, false, false, "Failed")]
+    [InlineData(true, true, false, "Failed")]
+    public async Task Data_query_passes_rows_to_job_and_fails_closed_on_denied_or_truncated(bool allowed, bool truncated, bool empty, string expected)
+    {
+        var jobs = new InMemoryJobRepository(); var job = MakeJob("consume data"); await jobs.AddAsync(job);
+        var chain = JobChain.Create(ProjectId, "query", null, [ChainStage.ForAction(new QueryDataChainAction("SELECT id, title FROM listings LIMIT 10", "listings")), ChainStage.Of(job.Id)], T0);
+        var chains = new InMemoryJobChainRepository(); await chains.AddAsync(chain);
+        var reader = new QueryReader(truncated, empty); var dispatcher = new FakeRunDispatcher(); dispatcher.Results[job.Id] = Run(job.Id, "Succeeded");
+        var handler = new RunJobChainHandler(chains, jobs, new InMemoryChainRunRepository(), new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(dispatcher), permissions: new FakePermissionService(allowed), dataReader: reader);
+        var result = await handler.HandleAsync(new RunJobChainCommand(chain.Id, InputPayload: "{\"keep\":42,\"listings\":{\"stale\":true}}"));
+        Assert.Equal(expected, result.Status); Assert.Equal(allowed, reader.ProjectId.HasValue);
+        if (expected == "Succeeded")
+        {
+            Assert.Equal(ProjectId, reader.ProjectId);
+            var input = System.Text.Json.Nodes.JsonNode.Parse(Assert.Single(dispatcher.Payloads)!)!;
+            Assert.Equal(42, input["keep"]!.GetValue<int>());
+            Assert.Equal(empty ? 0 : 1, input["listings"]!["row_count"]!.GetValue<int>());
+            if (!empty) { Assert.Equal("7", input["listings"]!["rows"]![0]!["id"]!.GetValue<string>()); Assert.Null(input["listings"]!["rows"]![0]!["title"]); }
+        }
+        else { Assert.Empty(dispatcher.Payloads); Assert.Null(System.Text.Json.Nodes.JsonNode.Parse(result.FinalOutput!)!["listings"]); }
+    }
+    private sealed class QueryReader(bool truncated, bool empty) : PlaceContext.Application.ProjectData.IProjectDataReader
+    {
+        public Guid? ProjectId;
+        public Task<PlaceContext.Application.ProjectData.ProjectQueryResult> QueryAsync(Guid projectId, string sql, CancellationToken ct = default)
+        {
+            ProjectId = projectId; Assert.Contains("SELECT", sql);
+            return Task.FromResult(new PlaceContext.Application.ProjectData.ProjectQueryResult(["id", "title"], empty ? [] : [new string?[] { "7", null }], 0, truncated));
+        }
+    }
+
+    private sealed class ScoringReviewer(double score) : IOutcomeReviewer
+    {
+        public string? State;
+        public Task<System.Text.Json.Nodes.JsonObject> ScoreAsync(IReadOnlyList<ScoreCriterion> criteria, string state, CancellationToken ct, Guid? projectId = null)
+        { State = state; return Task.FromResult(ScoringGateTests.Response(("quality", score, .95))); }
+        public Task<System.Text.Json.Nodes.JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null) => throw new NotSupportedException();
+    }
+
     private sealed class ThrottledReviewer : IOutcomeReviewer
     {
+        public Task<System.Text.Json.Nodes.JsonObject> ScoreAsync(IReadOnlyList<ScoreCriterion> criteria, string state, CancellationToken ct, Guid? projectId = null) => throw new NotSupportedException();
         public bool Succeed;
         public List<string?> States { get; } = [];
         public Task<System.Text.Json.Nodes.JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null)
@@ -1322,6 +1388,140 @@ public class JobChainTests
             Outputs.Add(output);
             return Task.FromResult($"Validate: {action.Instructions}?");
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Repeat_persists_attempts_and_rechecks_gates_after_resume(bool passOnSecondAttempt)
+    {
+        var job = MakeJob("quality");
+        var jobs = new InMemoryJobRepository();
+        await jobs.AddAsync(job);
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "repeat", null,
+            [new ChainStage([job.Id], new ConditionGate("eq:run:true")),
+             ChainStage.ForAction(new RepeatFlowChainAction("eq:ready:true", 2))], T0);
+        await chains.AddAsync(chain);
+        var runs = new InMemoryChainRunRepository();
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[job.Id] = Run(job.Id, "Succeeded", ["{\"ready\":false,\"run\":false}"]);
+        var handler = new RunJobChainHandler(chains, jobs, runs, new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(dispatcher));
+        var first = await handler.HandleAsync(new RunJobChainCommand(chain.Id, "{\"run\":true}"));
+        Assert.Equal("Waiting", first.Status);
+        var stored = (await runs.GetByIdAsync(first.Id))!;
+        Assert.Equal(1, stored.Steps[1].RetryCount);
+        Assert.Equal(1, stored.ResumeStageIndex);
+        if (passOnSecondAttempt) stored.SetCurrentPayload("{\"run\":true}");
+        dispatcher.Results[job.Id] = Run(job.Id, "Succeeded", ["{\"ready\":true}"]);
+        var second = await handler.HandleAsync(new RunJobChainCommand(chain.Id, ChainRunId: first.Id, ResumeFromStageIndex: 1));
+        Assert.Equal(passOnSecondAttempt ? "Succeeded" : "Failed", second.Status);
+        Assert.Equal(passOnSecondAttempt ? 2 : 1, dispatcher.DispatchedJobIds.Count);
+        Assert.Equal(1, stored.Steps[1].RetryCount);
+        Assert.Null(stored.ResumeAt);
+    }
+
+    [Fact]
+    public async Task Agent_task_waits_with_exact_requirements_without_generating_a_review_question()
+    {
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "requirements", null,
+            [ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Define listing requirements", "requirements"))], T0);
+        await chains.AddAsync(chain);
+        var handler = new RunJobChainHandler(chains, new InMemoryJobRepository(), new InMemoryChainRunRepository(),
+            new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(new FakeRunDispatcher()));
+        var result = await handler.HandleAsync(new RunJobChainCommand(chain.Id));
+        Assert.Equal("AwaitingInput", result.Status);
+        Assert.Equal(LoopChainAction.TaskType, result.InputRequest!.Kind);
+        Assert.Equal("Define listing requirements", result.InputRequest.Instructions);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Automatic_agent_continues_with_structured_output_or_fails_without_pausing(bool fail)
+    {
+        var chains = new InMemoryJobChainRepository();
+        var jobs = new InMemoryJobRepository();
+        var next = MakeJob("after-agent");
+        await jobs.AddAsync(next);
+        var chain = JobChain.Create(ProjectId, "automatic", null,
+            [ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Build", "result",
+                agentProvider: LoopChainAction.AutomaticAgent, connectionId: Guid.NewGuid(), model: "test")),
+             ChainStage.Of(next.Id)], T0);
+        await chains.AddAsync(chain);
+        var runs = new InMemoryChainRunRepository();
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[next.Id] = Run(next.Id, "Succeeded");
+        var agent = new TestWorkflowAgent(fail);
+        var handler = new RunJobChainHandler(chains, jobs, runs, new RecordingUnitOfWork(), new FakeClock(T0),
+            new FakeJobRunner(dispatcher), agentRunner: agent);
+        var result = await handler.HandleAsync(new RunJobChainCommand(chain.Id, InputPayload: "{\"result\":{\"stale\":true}}"));
+        Assert.Equal(fail ? "Failed" : "Succeeded", result.Status);
+        Assert.Null(result.InputRequest);
+        Assert.Equal(fail ? 0 : 1, dispatcher.DispatchedJobIds.Count);
+        var stored = (await runs.GetByIdAsync(result.Id))!;
+        Assert.Equal(fail ? ChainStepStatus.Failed : ChainStepStatus.Succeeded, stored.Steps[0].Status);
+        if (!fail)
+        {
+            Assert.Contains("done", stored.FinalOutput);
+            Assert.DoesNotContain("stale", stored.FinalOutput);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Agent_activity_is_saved_while_running_and_does_not_override_cancellation(bool cancel)
+    {
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "activity", null,
+            [ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Build", "result",
+                agentProvider: LoopChainAction.AutomaticAgent, connectionId: Guid.NewGuid(), model: "test"))], T0);
+        await chains.AddAsync(chain);
+        var runs = new InMemoryChainRunRepository();
+        var agent = new ProgressWorkflowAgent();
+        var handler = new RunJobChainHandler(chains, new InMemoryJobRepository(), runs, new RecordingUnitOfWork(),
+            new FakeClock(T0), new FakeJobRunner(new FakeRunDispatcher()), agentRunner: agent);
+        var id = Guid.NewGuid();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var execution = handler.HandleAsync(new RunJobChainCommand(chain.Id, ChainRunId: id), timeout.Token);
+        ChainRun? saved;
+        do
+        {
+            await Task.Delay(20, timeout.Token);
+            saved = await runs.GetByIdAsync(id);
+        } while (saved?.Steps[0].AgentActivity?.Any(e => e.Kind == "model") != true);
+        Assert.False(execution.IsCompleted);
+        Assert.Equal(ChainRunStatus.Running, saved.Status);
+        Assert.True(runs.SavedStepSnapshots.Count >= 3);
+        if (cancel) saved.Complete(ChainRunStatus.Cancelled, saved.FinalOutput, T0);
+        agent.Release.TrySetResult();
+        var result = await execution;
+        Assert.Equal(cancel ? "Cancelled" : "Succeeded", result.Status);
+        Assert.Contains(result.Steps[0].AgentActivity!, e => e.Kind == "model");
+        if (!cancel) Assert.Equal("completed", result.Steps[0].AgentActivity!.Last().Kind);
+    }
+
+    private sealed class ProgressWorkflowAgent : IWorkflowAgentRunner
+    {
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task<System.Text.Json.Nodes.JsonNode> RunAsync(Guid projectId, Guid workflowId, Guid runId,
+            int stepIndex, LoopChainAction action, string? payload, CancellationToken ct, Action<AgentActivity>? report = null)
+        {
+            report?.Invoke(new(T0, "model", "Waiting for model", Turn: 1));
+            await Release.Task.WaitAsync(ct);
+            report?.Invoke(new(T0, "completed", "Result ready"));
+            return new System.Text.Json.Nodes.JsonObject { ["done"] = true };
+        }
+    }
+
+    private sealed class TestWorkflowAgent(bool fail) : IWorkflowAgentRunner
+    {
+        public Task<System.Text.Json.Nodes.JsonNode> RunAsync(Guid projectId, Guid workflowId, Guid runId,
+            int stepIndex, LoopChainAction action, string? payload, CancellationToken ct, Action<AgentActivity>? report = null) => fail
+            ? throw new InvalidOperationException("Agent unavailable")
+            : Task.FromResult<System.Text.Json.Nodes.JsonNode>(new System.Text.Json.Nodes.JsonObject { ["done"] = true });
     }
 
     // ── fakes ───────────────────────────────────────────────────────────────────────────────────────

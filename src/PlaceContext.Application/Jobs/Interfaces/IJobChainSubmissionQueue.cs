@@ -18,5 +18,8 @@ public interface IJobChainSubmissionQueue
 
     Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default);
 
+    Task<string> ResumeAgentAsync(Guid chainRunId, Guid inputRequestId, CancellationToken ct = default)
+        => throw new NotSupportedException("Automatic agent resumption is unavailable.");
+
     Task<JobChainSubmission?> GetAsync(Guid trackingId, CancellationToken ct = default);
 }

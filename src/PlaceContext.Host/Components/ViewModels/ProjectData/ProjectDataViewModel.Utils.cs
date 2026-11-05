@@ -115,11 +115,6 @@ public sealed partial class ProjectDataViewModel
         return s.Length > 63 ? s[..63] : s;
     }
 
-    public static string CsvEscape(string s) =>
-        s.Contains(',') || s.Contains('"') || s.Contains('\n') || s.Contains('\r')
-            ? "\"" + s.Replace("\"", "\"\"") + "\""
-            : s;
-
     public static string Trim(string message) =>
         message.Length > 400 ? message[..400] + "…" : message;
 }

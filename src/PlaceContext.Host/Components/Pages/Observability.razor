@@ -680,11 +680,6 @@ else
                     @if (shard.Artifact is not null)
                     {
                         <RunOutput Value="@(Vm.Presentation.Json(shard.Artifact))" />
-                        @if (Vm.TryArtifactSvg(shard.Artifact, out var shardChart))
-                        {
-                            <div class="chart-label">chart <span class="text-dim">(from the artifact's JSON)</span></div>
-                            @((MarkupString)shardChart)
-                        }
                     }
                     @if (shard.Artifacts.Count > 0)
                     {

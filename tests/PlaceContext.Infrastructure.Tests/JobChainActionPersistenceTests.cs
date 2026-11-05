@@ -9,6 +9,51 @@ namespace PlaceContext.Infrastructure.Tests;
 public sealed class JobChainActionPersistenceTests
 {
     [Fact]
+    public async Task Query_data_preserves_SQL_and_output_field()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var repository = new EfJobChainRepository(db);
+        var chain = JobChain.Create(Guid.NewGuid(), "query", null, [ChainStage.ForAction(new QueryDataChainAction("SELECT id FROM listings LIMIT 10", "listings"))], T0);
+        await repository.AddAsync(chain); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        var loaded = Assert.IsType<QueryDataChainAction>((await repository.GetByIdAsync(chain.Id))!.Stages[0].Action);
+        Assert.Equal("SELECT id FROM listings LIMIT 10", loaded.Sql); Assert.Equal("listings", loaded.OutputField);
+    }
+
+    [Fact]
+    public async Task Scoring_gate_preserves_rubric_thresholds_and_failure_policy()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var repository = new EfJobChainRepository(db);
+        var action = new ScoringGateChainAction("review.security", "gate", [new ScoreCriterion("security", "Safe?", ["Fail", "Pass"], 50, 90)], 92, .85, false);
+        var chain = JobChain.Create(Guid.NewGuid(), "scoring", null, [ChainStage.ForAction(action)], T0);
+        await repository.AddAsync(chain); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        var loaded = Assert.IsType<ScoringGateChainAction>((await repository.GetByIdAsync(chain.Id))!.Stages[0].Action);
+        Assert.Equal("review.security", loaded.InputField); Assert.Equal(92, loaded.PassScore); Assert.Equal(.85, loaded.MinimumConfidence);
+        Assert.False(loaded.StopOnFailure); Assert.Equal(90, loaded.Criteria[0].MinimumScore); Assert.Equal(["Fail", "Pass"], loaded.Criteria[0].Levels);
+    }
+
+    [Fact]
+    public async Task Automatic_agent_model_selection_round_trips()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var repository = new EfJobChainRepository(db);
+        var connection = Guid.NewGuid();
+        var chain = JobChain.Create(Guid.NewGuid(), "agent", null,
+            [ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Build", "result",
+                agentProvider: LoopChainAction.AutomaticAgent, connectionId: connection, model: "test-model"))], T0);
+        await repository.AddAsync(chain);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var loaded = Assert.IsType<LoopChainAction>((await repository.GetByIdAsync(chain.Id))!.Stages[0].Action);
+        Assert.Equal(LoopChainAction.AutomaticAgent, loaded.AgentProvider);
+        Assert.Equal(connection, loaded.ConnectionId);
+        Assert.Equal("test-model", loaded.Model);
+    }
+
+    [Fact]
     public async Task Qemu_action_round_trips_through_stages_json()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
@@ -32,12 +77,30 @@ public sealed class JobChainActionPersistenceTests
         Assert.Equal(loginId, loaded.LoginProfileId);
     }
 
+    [Fact]
+    public async Task Repeat_action_round_trips_through_stages_json()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var repository = new EfJobChainRepository(db);
+        var chain = JobChain.Create(Guid.NewGuid(), "repeat", null,
+            [ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Build", "build")),
+             ChainStage.ForAction(new RepeatFlowChainAction("eq:ready:true", 3))], T0);
+        await repository.AddAsync(chain);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var loaded = Assert.IsType<RepeatFlowChainAction>((await repository.GetByIdAsync(chain.Id))!.Stages[1].Action);
+        Assert.Equal("eq:ready:true", loaded.UntilCondition);
+        Assert.Equal(3, loaded.MaxAttempts);
+    }
+
     private static readonly DateTimeOffset T0 = new(2026, 8, 1, 1, 0, 0, TimeSpan.Zero);
 
     [Theory]
     [InlineData(LoopChainAction.HumanType, LoopChainAction.TextResponse, LoopChainAction.ExternalAgent)]
     [InlineData(LoopChainAction.HumanType, LoopChainAction.YesNoResponse, LoopChainAction.ExternalAgent)]
     [InlineData(LoopChainAction.AgentType, LoopChainAction.TextResponse, LoopChainAction.ExternalAgent)]
+    [InlineData(LoopChainAction.TaskType, LoopChainAction.TextResponse, LoopChainAction.ExternalAgent)]
     [InlineData(LoopChainAction.AgentType, LoopChainAction.TextResponse, LoopChainAction.JevAgent)]
     public async Task Loop_action_round_trips_through_stages_json(string kind, string responseType, string agentProvider)
     {

@@ -5,6 +5,7 @@ namespace PlaceContext.Application.Tests;
 public sealed class FakeOutcomeReviewer(double probability = 0.95, bool fail = false) : IOutcomeReviewer
 {
     public List<(string Question, string? State)> Requests { get; } = [];
+    public Task<JsonObject> ScoreAsync(IReadOnlyList<PlaceContext.Domain.ValueObjects.ScoreCriterion> criteria, string state, CancellationToken ct, Guid? projectId = null) => throw new NotSupportedException();
     public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null)
     {
         ct.ThrowIfCancellationRequested();
