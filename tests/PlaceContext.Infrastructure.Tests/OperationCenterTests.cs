@@ -2,8 +2,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using PlaceContext.Application.Operations;
 using PlaceContext.Application.Tenancy;
-using PlaceContext.Infrastructure.Tenancy;
-using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
 

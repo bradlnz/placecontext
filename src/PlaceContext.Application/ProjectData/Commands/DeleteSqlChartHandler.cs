@@ -1,7 +1,5 @@
-using System.Text.Json.Nodes;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Shared;
-using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;

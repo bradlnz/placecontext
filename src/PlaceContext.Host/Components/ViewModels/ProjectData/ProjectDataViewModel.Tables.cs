@@ -1,7 +1,5 @@
 using PlaceContext.Application.ProjectData;
 using PlaceContext.Application.Shared;
-using PlaceContext.Application;
-using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

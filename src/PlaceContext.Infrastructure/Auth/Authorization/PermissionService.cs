@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Enums;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Auth;
 

@@ -1,5 +1,3 @@
-using PlaceContext.Application.Build;
-
 namespace PlaceContext.Infrastructure.Persistence;
 
 public sealed class ModelConnectionRow : ITenantOwned

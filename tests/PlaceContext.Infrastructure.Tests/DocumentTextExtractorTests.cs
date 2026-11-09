@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Text;
 using PlaceContext.Infrastructure.Documents;
-using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
 

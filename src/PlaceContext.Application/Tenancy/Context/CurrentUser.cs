@@ -1,4 +1,4 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Enums;
 namespace PlaceContext.Application.Tenancy;
 
 /// <summary>

@@ -1,6 +1,3 @@
-using PlaceContext.Application.Features;
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Dtos;
 
 /// <summary>Public read model for a job definition, including its full workload source.</summary>

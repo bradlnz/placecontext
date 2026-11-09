@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Host.Auth;
-using Xunit;
 
 namespace PlaceContext.Host.Tests;
 

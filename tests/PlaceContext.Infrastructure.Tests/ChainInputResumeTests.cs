@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
@@ -11,7 +10,6 @@ using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Scheduling;
-using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.TestSupport;
 
 namespace PlaceContext.Infrastructure.Tests;

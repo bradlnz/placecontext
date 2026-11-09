@@ -1,8 +1,6 @@
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Projects;
-using PlaceContext.Domain.Services;
 using PlaceContext.TestSupport;
-using Xunit;
 
 namespace PlaceContext.Application.Tests;
 

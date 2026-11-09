@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Enums;
 using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Infrastructure.Persistence;

@@ -4,9 +4,11 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application;
+
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class SearchDataViewModel : PageViewModel, IDisposable

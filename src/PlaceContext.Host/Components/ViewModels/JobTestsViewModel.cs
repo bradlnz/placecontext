@@ -1,9 +1,7 @@
-using System.Globalization;
 using Microsoft.AspNetCore.Components;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application;
-using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

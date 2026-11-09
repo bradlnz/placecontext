@@ -1,10 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
-using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
 

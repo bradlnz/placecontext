@@ -1,5 +1,3 @@
-using PlaceContext.Application.Dtos;
-
 namespace PlaceContext.Application.Search;
 
 public sealed record SearchConnection(

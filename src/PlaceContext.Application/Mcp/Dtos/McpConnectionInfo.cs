@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace PlaceContext.Application.Mcp;
 
 public sealed record McpConnectionInfo(

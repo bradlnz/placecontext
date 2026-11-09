@@ -1,6 +1,3 @@
-using System.Text;
-using PlaceContext.Application.Cqrs;
-
 namespace PlaceContext.Application.Features;
 
 /// <summary>

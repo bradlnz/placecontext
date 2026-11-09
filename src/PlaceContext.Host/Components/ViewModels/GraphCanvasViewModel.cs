@@ -1,7 +1,6 @@
 using Microsoft.JSInterop;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application;
-using PlaceContext.Domain.Entities;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

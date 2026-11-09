@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application.Access;
-using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application;
 using PlaceContext.Host.Auth;

@@ -1,4 +1,3 @@
-using System.Text;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Domain.Repositories;

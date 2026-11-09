@@ -1,6 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Access;
-
 namespace PlaceContext.Infrastructure.Persistence;
 
 public sealed class UserRow : ITenantOwned

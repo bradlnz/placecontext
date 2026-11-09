@@ -1,14 +1,12 @@
-using System.Net.Http.Headers;
 using System.Security.Cryptography;
-using System.Text.Json.Serialization;
 using System.Text.Json;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Auth;
+using PlaceContext.Application.Access.Enums;
 namespace PlaceContext.Host.Controllers;
 
 /// <summary>Provider-neutral OAuth 2.1/PKCE login backed by a configured identity authority.</summary>

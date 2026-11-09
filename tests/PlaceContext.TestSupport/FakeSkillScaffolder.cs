@@ -1,8 +1,4 @@
-using System.Collections.Concurrent;
-using PlaceContext.Application.Features;
 using PlaceContext.Application.Skills;
-using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.TestSupport;

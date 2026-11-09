@@ -1,4 +1,4 @@
-@using PlaceContext.Application.Access
+@using PlaceContext.Application.Access.Models
 @page "/project/{ProjectId:guid}/entity/{EntityName}"
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @attribute [Authorize(Policy = Permission.DataRead)]

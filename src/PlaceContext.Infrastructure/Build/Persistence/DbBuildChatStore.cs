@@ -2,11 +2,12 @@ using System.Text.Json.Nodes;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Build;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Build;
 

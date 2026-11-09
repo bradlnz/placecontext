@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Host.Auth;
 using PlaceContext.Host.Controllers;
 using Pages = PlaceContext.Host.Components.Pages;

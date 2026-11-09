@@ -2,11 +2,12 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Shared;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Auth;
 

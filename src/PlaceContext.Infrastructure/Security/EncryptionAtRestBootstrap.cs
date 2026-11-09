@@ -6,7 +6,6 @@ using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Shared;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Security;
 

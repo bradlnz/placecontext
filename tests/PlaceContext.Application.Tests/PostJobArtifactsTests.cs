@@ -2,7 +2,6 @@ using System.Text;
 using PlaceContext.Application.Features;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
-using Xunit;
 
 namespace PlaceContext.Application.Tests;
 

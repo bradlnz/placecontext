@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Billing;
 using PlaceContext.Application.Build;
 using PlaceContext.Application.Communications;

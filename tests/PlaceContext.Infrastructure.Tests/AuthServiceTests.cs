@@ -1,12 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Communications;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Comms;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
-using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
 

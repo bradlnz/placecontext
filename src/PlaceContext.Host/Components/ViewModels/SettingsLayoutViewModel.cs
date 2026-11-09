@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Components;
 using PlaceContext.Host.Components.Models;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Tenancy;
+
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class SettingsLayoutViewModel : PageViewModel

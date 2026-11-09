@@ -1,6 +1,5 @@
 using PlaceContext.Application.Observability;
 using PlaceContext.Infrastructure.Observability;
-using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
 

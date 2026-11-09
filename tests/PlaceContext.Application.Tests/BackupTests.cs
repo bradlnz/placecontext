@@ -1,4 +1,3 @@
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Networking;
@@ -6,7 +5,6 @@ using PlaceContext.Application.Organization;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
-using Xunit;
 
 namespace PlaceContext.Application.Tests;
 

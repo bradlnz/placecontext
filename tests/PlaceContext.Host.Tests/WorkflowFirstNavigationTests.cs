@@ -1,5 +1,4 @@
 using PlaceContext.Application.Build;
-using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Host.Tests;

@@ -1,5 +1,3 @@
-using PlaceContext.Host;
-
 namespace PlaceContext.Host.Tests;
 
 public sealed class LocalityTimeZonesTests

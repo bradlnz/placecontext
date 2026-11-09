@@ -1,4 +1,4 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 
@@ -13,5 +13,5 @@ namespace PlaceContext.Application.Features;
 public sealed record ImportManifestCommand(BackupManifest Manifest, ImportMode Mode = ImportMode.Merge)
     : ICommand<ImportResultView>, IRequiresPermission
 {
-    string IRequiresPermission.RequiredPermission => PlaceContext.Application.Access.Permission.BackupManage;
+    string IRequiresPermission.RequiredPermission => Permission.BackupManage;
 }

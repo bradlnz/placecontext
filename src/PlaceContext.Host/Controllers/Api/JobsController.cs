@@ -1,13 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Billing;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Jobs;
 using PlaceContext.Application;
-using PlaceContext.Host.Api;
 using PlaceContext.Host.Auth;
 
 namespace PlaceContext.Host.Controllers.Api;

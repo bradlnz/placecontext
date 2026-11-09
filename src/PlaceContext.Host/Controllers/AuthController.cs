@@ -7,12 +7,10 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Auth;
-using PlaceContext.Application.Features;
 using PlaceContext.Application.Membership;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application;
-using PlaceContext.Domain.Entities;
 using PlaceContext.Host.Auth;
 using PlaceContext.Host.Tenancy;
 

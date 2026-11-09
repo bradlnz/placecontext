@@ -1,5 +1,3 @@
-using PlaceContext.Application.Dtos;
-
 namespace PlaceContext.Application.Jobs;
 
 /// <summary>Tenant-scoped persistence for job verification cases and their latest result.</summary>

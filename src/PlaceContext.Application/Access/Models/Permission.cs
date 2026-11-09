@@ -1,4 +1,4 @@
-namespace PlaceContext.Application.Access;
+namespace PlaceContext.Application.Access.Models;
 
 /// <summary>
 /// The fine-grained permission catalog: every sensitive capability the product actually exposes,
@@ -7,6 +7,8 @@ namespace PlaceContext.Application.Access;
 /// authorization policy that enforces it (see Program.cs), so <c>[Authorize(Policy = Permission.X)]</c>
 /// is the pattern to follow when gating a new sensitive tool/endpoint/page.
 /// </summary>
+/// 
+//TODO: Why do we have a static class under the services folder what the hell. 
 public static class Permission
 {
     public const string ProjectsView = "projects.view";

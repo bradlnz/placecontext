@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Workload.VirtualMachines;
 using PlaceContext.Application;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.Shared;

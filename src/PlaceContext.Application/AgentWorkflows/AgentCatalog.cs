@@ -4,6 +4,7 @@ namespace PlaceContext.Application.AgentWorkflows;
 
 internal static class AgentCatalog
 {
+    //TODO: I do not think this is required anymore
     internal static readonly AgentDefinition[] Definitions =
     [
         Define("retail", "Retail", "Stock planning", ["products", "sales", "stock"],

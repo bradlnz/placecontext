@@ -1,8 +1,8 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 namespace PlaceContext.Host.Auth;
 
 /// <summary>Authorization policy names that are not themselves permission strings (for those the policy
-/// name IS the permission — see <see cref="PlaceContext.Application.Access.Permission"/>).</summary>
+/// name IS the permission — see <see cref="Permission"/>).</summary>
 public static class Policies
 {
     /// <summary>Persisted workspace owners and super admins can inspect application tables.</summary>

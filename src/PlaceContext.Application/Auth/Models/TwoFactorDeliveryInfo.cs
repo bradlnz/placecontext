@@ -1,6 +1,3 @@
-using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Auth;
 
 /// <summary>Delivery routing for the login verify page (see <see cref="IAuthService.GetTwoFactorDeliveryInfoAsync"/>).</summary>

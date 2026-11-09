@@ -24,7 +24,7 @@ public static class WorkspaceSignupValidation
             || Reserved.Contains(slug)
             || slug.Contains("--", StringComparison.Ordinal))
         {
-            return "Use 4–40 lowercase letters, numbers or hyphens; start with a letter and end with a letter or number.";
+            return "Use 4-40 lowercase letters, numbers or hyphens; start with a letter and end with a letter or number.";
         }
         return null;
     }

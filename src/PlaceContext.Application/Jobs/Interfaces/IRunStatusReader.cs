@@ -1,6 +1,3 @@
-using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Jobs;
 
 /// <summary>

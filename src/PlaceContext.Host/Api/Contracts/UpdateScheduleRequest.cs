@@ -1,5 +1,3 @@
-using PlaceContext.Application.Dtos;
-
 namespace PlaceContext.Host.Api;
 
 /// <summary>

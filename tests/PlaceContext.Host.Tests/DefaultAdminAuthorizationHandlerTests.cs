@@ -2,7 +2,6 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Host.Auth;
 using PlaceContext.Infrastructure.Persistence;

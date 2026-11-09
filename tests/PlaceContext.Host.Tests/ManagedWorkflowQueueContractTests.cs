@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Host.Controllers.Api;
 
 namespace PlaceContext.Host.Tests;

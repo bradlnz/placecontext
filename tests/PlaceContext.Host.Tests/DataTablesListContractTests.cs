@@ -1,7 +1,5 @@
 namespace PlaceContext.Host.Tests;
 
-using PlaceContext.Host.Components.ViewModels;
-
 public sealed class DataTablesListContractTests
 {
     [Fact]

@@ -2,7 +2,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text;
 using Microsoft.Extensions.Logging;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Shared;

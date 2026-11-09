@@ -1,7 +1,11 @@
+using PlaceContext.Application.Access.Models;
+
 namespace PlaceContext.Application.Access;
 
 /// <summary>Shared validation for role definitions: name shape and permission-catalog membership.
 /// Pure — safe to unit-test in isolation.</summary>
+/// 
+//TODO: Does not belong here
 public static class RoleDefinitionValidation
 {
     public const int MaxNameLength = 64;

@@ -3,13 +3,11 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Npgsql;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Billing;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Infrastructure.Tests.AgentWorkflows;
 
 namespace PlaceContext.Infrastructure.Tests.Auth;

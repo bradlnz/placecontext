@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Operations;
 using PlaceContext.Host.Components.ViewModels;
 

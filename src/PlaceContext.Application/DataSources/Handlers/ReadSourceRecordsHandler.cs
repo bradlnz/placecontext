@@ -1,7 +1,5 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.DataSources;
-using PlaceContext.Application.Jobs;
-using PlaceContext.Domain.Repositories;
 
 namespace PlaceContext.Application.Features;
 

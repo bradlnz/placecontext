@@ -1,5 +1,4 @@
 using PlaceContext.Infrastructure.Workload;
-using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
 

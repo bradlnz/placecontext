@@ -6,7 +6,6 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
-using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Caching;
 

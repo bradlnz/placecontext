@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PlaceContext.Application.Access.Enums;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
@@ -103,7 +104,9 @@ public sealed class ChainContinuationBackgroundService : BackgroundService
                 if (executionUser is { } userId)
                 {
                     if (userId == PlaceContext.Application.Auth.TrustedServicePrincipals.ManagementApiUserId)
-                        CurrentUser.Set(new UserIdentity(userId, nameof(PlaceContext.Application.Access.UserRole.Owner)));
+                    {
+                        CurrentUser.Set(new UserIdentity(userId, nameof(UserRole.Owner)));
+                    }
                     else
                     {
                         var user = await db.Users.AsNoTracking().SingleOrDefaultAsync(row => row.Id == userId, ct)

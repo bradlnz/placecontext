@@ -9,7 +9,6 @@ using PlaceContext.Application.Mcp;
 using PlaceContext.Application.ProjectData;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Shared;
-using PlaceContext.Infrastructure;
 
 namespace PlaceContext.Infrastructure.ProjectData;
 

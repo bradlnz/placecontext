@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.Json;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 namespace PlaceContext.Host.Components.ViewModels;

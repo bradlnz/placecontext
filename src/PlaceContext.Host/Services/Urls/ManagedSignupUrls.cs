@@ -1,6 +1,3 @@
-using PlaceContext.Application.Auth;
-using PlaceContext.Application.Billing;
-
 namespace PlaceContext.Host.Tenancy;
 
 /// <summary>Canonical signup origin and tenant URLs. Never create destinations from a

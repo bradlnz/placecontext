@@ -3,14 +3,16 @@ using System.Text.Json.Nodes;
 using System.Text.Json;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Build;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Shared;
 using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Access;
 namespace PlaceContext.Application.AgentWorkflows;
 
-public sealed class AgentWorkflowService(IServiceScopeFactory scopes, ICurrentTenant tenant, ICurrentUser user,
+public sealed class AgentWorkflowService(
+    IServiceScopeFactory scopes, ICurrentTenant tenant, ICurrentUser user,
     IPermissionService permissions, AgentWorkflowPolicy policy,
     IModelConnections connections, IAgentModelGateway model, IOutcomeReviewer reviewer, IDataEncryptor encryption,
     IClock clock) : IAgentWorkflows

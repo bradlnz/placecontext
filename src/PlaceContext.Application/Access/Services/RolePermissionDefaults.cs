@@ -1,3 +1,6 @@
+using PlaceContext.Application.Access.Enums;
+using PlaceContext.Application.Access.Models;
+
 namespace PlaceContext.Application.Access;
 
 /// <summary>
@@ -10,6 +13,8 @@ namespace PlaceContext.Application.Access;
 /// kept for the handful of whole-tenant actions that sit outside this fine-grained catalog entirely
 /// (e.g. anything that would touch the tenant record itself).
 /// </summary>
+/// 
+//TODO: Does not belong here, why is it a static class, omg.
 public static class RolePermissionDefaults
 {
     /// <summary>The administration bucket an ordinary Member does not get by default — an Admin/Owner

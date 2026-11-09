@@ -1,7 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application.Dtos;
-using PlaceContext.Application;
 namespace PlaceContext.Host.Controllers;
 
 public sealed record SearchProxySearchRequest(

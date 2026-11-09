@@ -1,4 +1,4 @@
-namespace PlaceContext.Application.Access;
+namespace PlaceContext.Application.Access.Enums;
 
 /// <summary>
 /// A member's role within an organisation.

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Access;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Enums;
 
 namespace PlaceContext.Infrastructure.Auth;
 

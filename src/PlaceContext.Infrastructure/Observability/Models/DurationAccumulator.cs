@@ -1,7 +1,3 @@
-using System.Collections.Concurrent;
-using System.Diagnostics.Metrics;
-using System.Diagnostics;
-using System.Text.Json;
 using PlaceContext.Application.Observability;
 namespace PlaceContext.Infrastructure.Observability;
 

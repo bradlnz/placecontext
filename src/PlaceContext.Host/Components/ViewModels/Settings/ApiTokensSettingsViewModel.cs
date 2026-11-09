@@ -1,6 +1,5 @@
 using Microsoft.JSInterop;
 using PlaceContext.Application.Auth;
-using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

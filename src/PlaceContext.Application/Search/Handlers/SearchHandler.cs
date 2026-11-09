@@ -1,4 +1,5 @@
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.DataEntities;

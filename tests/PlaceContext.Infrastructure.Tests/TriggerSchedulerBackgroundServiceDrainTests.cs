@@ -13,8 +13,6 @@ using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Scheduling;
 using PlaceContext.Infrastructure.Security;
-using PlaceContext.Infrastructure.Tenancy;
-using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
 

@@ -1,5 +1,3 @@
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Dtos;
 
 /// <summary>Version-2 staged chain shape. Null preserves version-1 flat-manifest compatibility.</summary>

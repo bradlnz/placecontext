@@ -1,6 +1,5 @@
 using System.Text.Json;
 using PlaceContext.Application.Features;
-using Xunit;
 
 namespace PlaceContext.Application.Tests;
 

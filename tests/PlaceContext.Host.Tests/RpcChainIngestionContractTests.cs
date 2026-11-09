@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
-using PlaceContext.Application.Access;
-using PlaceContext.Application.Jobs;
-using PlaceContext.Application.Secrets;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Host.Tools;
 
 namespace PlaceContext.Host.Tests;

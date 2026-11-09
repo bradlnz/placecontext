@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-
 namespace PlaceContext.Infrastructure.Persistence;
 
 public sealed class RequirementsRow : ITenantOwned

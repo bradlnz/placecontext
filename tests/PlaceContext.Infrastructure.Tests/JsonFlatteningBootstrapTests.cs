@@ -1,9 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Npgsql;
 using PlaceContext.Infrastructure.ProjectData;
-using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
 

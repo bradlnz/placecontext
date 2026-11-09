@@ -1,5 +1,4 @@
 using PlaceContext.Application.Artifacts;
-using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

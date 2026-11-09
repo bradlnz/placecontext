@@ -4,11 +4,12 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Scheduling;
 

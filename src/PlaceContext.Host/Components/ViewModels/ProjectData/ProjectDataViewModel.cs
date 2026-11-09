@@ -1,11 +1,9 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.DatabaseInspection;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using PlaceContext.Application.ProjectData;
 using PlaceContext.Application;
-using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

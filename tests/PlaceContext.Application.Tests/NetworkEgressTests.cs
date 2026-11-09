@@ -1,9 +1,6 @@
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Networking;
-using PlaceContext.Application.Workload;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
-using Xunit;
 
 namespace PlaceContext.Application.Tests;
 

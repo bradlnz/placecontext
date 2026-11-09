@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using PlaceContext.Application.Dtos;
 
 namespace PlaceContext.Host.Components.ViewModels;

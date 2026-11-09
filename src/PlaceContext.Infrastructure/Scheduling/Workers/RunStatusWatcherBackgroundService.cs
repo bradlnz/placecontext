@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Scheduling;
 

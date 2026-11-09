@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application;
-using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

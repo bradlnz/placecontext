@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Components;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.ProjectData;
 using PlaceContext.Application;
-using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

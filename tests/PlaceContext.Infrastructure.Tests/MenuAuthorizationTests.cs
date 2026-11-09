@@ -1,6 +1,5 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Organization;
-using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Tests;

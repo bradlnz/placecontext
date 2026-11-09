@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Features;
 namespace PlaceContext.Infrastructure.Persistence;
 
 /// <summary>Flat EF row for one record-link occurrence (table record_links).</summary>

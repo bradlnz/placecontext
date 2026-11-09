@@ -1,4 +1,4 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Build;
 using PlaceContext.Application.Communications;
 using PlaceContext.Application.Cqrs;
@@ -6,10 +6,8 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Workload.VirtualMachines;
 using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
-using Xunit;
 
 namespace PlaceContext.Application.Tests;
 

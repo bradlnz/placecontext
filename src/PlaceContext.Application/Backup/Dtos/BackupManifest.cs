@@ -1,6 +1,3 @@
-using PlaceContext.Application.Networking;
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Dtos;
 
 /// <summary>

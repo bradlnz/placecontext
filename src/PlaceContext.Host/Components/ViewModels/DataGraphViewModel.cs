@@ -1,8 +1,9 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Features;
 using Microsoft.JSInterop;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

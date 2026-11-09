@@ -1,6 +1,4 @@
-using PlaceContext.Application.Access;
-using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Application.Access.Enums;
 
 namespace PlaceContext.Application.Auth;
 

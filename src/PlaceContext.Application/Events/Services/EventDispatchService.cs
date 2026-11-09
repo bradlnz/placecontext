@@ -4,7 +4,6 @@ using PlaceContext.Application.Shared;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 

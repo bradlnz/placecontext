@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace PlaceContext.Application.Jobs;
 
 public sealed record ChainQueueDefinition(Guid Id, Guid ProjectId, Guid ChainId, string Name, bool Enabled,

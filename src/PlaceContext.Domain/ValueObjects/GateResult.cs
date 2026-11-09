@@ -1,6 +1,3 @@
-using System.Text.Json.Serialization;
-using System.Text.Json;
-
 namespace PlaceContext.Domain.ValueObjects;
 
 /// <summary>Result of evaluating a gate against the current pipeline payload.</summary>

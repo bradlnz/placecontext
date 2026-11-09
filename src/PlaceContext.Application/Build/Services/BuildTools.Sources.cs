@@ -1,5 +1,5 @@
 using System.ComponentModel;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.DataSources;
 
 namespace PlaceContext.Application.Build;

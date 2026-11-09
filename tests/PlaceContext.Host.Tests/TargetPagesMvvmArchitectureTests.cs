@@ -1,11 +1,3 @@
-using Microsoft.AspNetCore.Components;
-using PlaceContext.Application.Auth;
-using PlaceContext.Application.Tenancy;
-using PlaceContext.Host.Components.ViewModels;
-using PlaceContext.Host.Wiki;
-using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
-
 namespace PlaceContext.Host.Tests;
 
 public sealed class TargetPagesMvvmArchitectureTests

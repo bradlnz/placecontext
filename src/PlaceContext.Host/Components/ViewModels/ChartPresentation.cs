@@ -1,5 +1,3 @@
-using PlaceContext.Application.Dtos;
-
 namespace PlaceContext.Host.Components.ViewModels;
 
 internal static class ChartPresentation

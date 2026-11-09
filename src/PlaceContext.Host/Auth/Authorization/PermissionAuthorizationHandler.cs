@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
+
 namespace PlaceContext.Host.Auth;
 
 /// <summary>

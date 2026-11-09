@@ -1,5 +1,3 @@
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Dtos;
 
 /// <summary>Read model: the project overview page.</summary>

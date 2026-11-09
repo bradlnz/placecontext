@@ -21,17 +21,19 @@ namespace PlaceContext.Application.Cqrs;
 public sealed class Dispatcher : IDispatcher
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IPermissionService _permissionService;
 
-    public Dispatcher(IServiceScopeFactory scopeFactory) => _scopeFactory = scopeFactory;
-
+    public Dispatcher(IServiceScopeFactory scopeFactory, IPermissionService permissionService) {
+        _scopeFactory = scopeFactory;
+        _permissionService = permissionService;
+    }
     public async Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(command);
         await using var scope = _scopeFactory.CreateAsyncScope();
         if (command is IRequiresPermission gated)
         {
-            var permissions = scope.ServiceProvider.GetRequiredService<IPermissionService>();
-            if (!await permissions.HasAsync(gated.RequiredPermission, ct))
+            if (!await _permissionService.HasAsync(gated.RequiredPermission, ct))
             {
                 throw new UnauthorizedAccessException($"Missing permission '{gated.RequiredPermission}'.");
             }
@@ -47,8 +49,7 @@ public sealed class Dispatcher : IDispatcher
         await using var scope = _scopeFactory.CreateAsyncScope();
         if (query is IRequiresPermission gated)
         {
-            var permissions = scope.ServiceProvider.GetRequiredService<IPermissionService>();
-            if (!await permissions.HasAsync(gated.RequiredPermission, ct))
+            if (!await _permissionService.HasAsync(gated.RequiredPermission, ct))
             {
                 throw new UnauthorizedAccessException($"Missing permission '{gated.RequiredPermission}'.");
             }

@@ -1,4 +1,3 @@
-using PlaceContext.Application.Workload;
 namespace PlaceContext.Infrastructure.Workload;
 
 /// <summary>

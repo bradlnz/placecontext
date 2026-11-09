@@ -1,10 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
-using PlaceContext.Application.Access;
 
 namespace PlaceContext.Host.Auth;
 
 /// <summary>Authorization requirement for one fine-grained permission (see
-/// <see cref="PlaceContext.Application.Access.Permission"/>); registered under a same-named policy in
+/// <see cref="Permission"/>); registered under a same-named policy in
 /// Program.cs so the pattern to gate a new sensitive tool/endpoint/page is simply
 /// <c>[Authorize(Policy = Permission.X)]</c>.</summary>
 public sealed class PermissionRequirement : IAuthorizationRequirement

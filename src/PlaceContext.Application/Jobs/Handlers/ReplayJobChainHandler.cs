@@ -1,9 +1,7 @@
-using System.Diagnostics;
 using System.Text.Json;
 using PlaceContext.Application.Billing;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Observability;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;

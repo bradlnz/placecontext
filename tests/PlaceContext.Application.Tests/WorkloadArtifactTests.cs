@@ -1,6 +1,5 @@
 using System.Text;
 using PlaceContext.Application.Workload;
-using Xunit;
 
 namespace PlaceContext.Application.Tests;
 

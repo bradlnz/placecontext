@@ -1,4 +1,4 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 
 namespace PlaceContext.Application.Features;
@@ -6,5 +6,5 @@ namespace PlaceContext.Application.Features;
 /// <summary>Delete a vault secret. To rotate a secret, delete then add a new one.</summary>
 public sealed record DeleteProjectSecretCommand(Guid ProjectId, string Name) : ICommand<bool>, IRequiresPermission
 {
-    string IRequiresPermission.RequiredPermission => PlaceContext.Application.Access.Permission.SecretsManage;
+    string IRequiresPermission.RequiredPermission => Permission.SecretsManage;
 }

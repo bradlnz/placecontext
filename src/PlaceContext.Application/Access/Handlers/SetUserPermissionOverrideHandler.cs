@@ -1,9 +1,11 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
+using PlaceContext.Application.Access.Enums;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Membership;
 using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Application.Features;
 
@@ -20,15 +22,15 @@ public sealed class SetUserPermissionOverrideHandler : ICommandHandler<SetUserPe
 
     public async Task<UserPermissionsView> HandleAsync(SetUserPermissionOverrideCommand c, CancellationToken ct = default)
     {
-        if (!Permission.All.Contains(c.Permission))
+        if (!Permission.All.Contains(c.PermissionOverride))
         {
-            throw new ArgumentException($"Unknown permission '{c.Permission}'.");
+            throw new ArgumentException($"Unknown permission '{c.PermissionOverride}'.");
         }
         var member = await _members.GetMemberAsync(c.UserId, ct)
                     ?? throw new InvalidOperationException("No such member in this workspace.");
 
         // The default admin is the last line into /settings/* — never let an override lock them out.
-        if (member.IsDefaultAdmin && c.Permission == Permission.SettingsManage && c.Allowed == false)
+        if (member.IsDefaultAdmin && c.PermissionOverride == Permission.SettingsManage && c.Allowed == false)
         {
             throw new InvalidOperationException("Cannot revoke settings.manage from the default admin.");
         }
@@ -36,10 +38,10 @@ public sealed class SetUserPermissionOverrideHandler : ICommandHandler<SetUserPe
         {
             if (c.Allowed is { } allowed)
             {
-                await _grants.UpsertAsync(c.UserId, c.Permission, allowed, ct);
+                await _grants.UpsertAsync(c.UserId, c.PermissionOverride, allowed, ct);
                 return;
             }
-            await _grants.RemoveAsync(c.UserId, c.Permission, ct);
+            await _grants.RemoveAsync(c.UserId, c.PermissionOverride, ct);
         }
         await ApplyOverrideAsync();
         await _uow.SaveChangesAsync(ct);

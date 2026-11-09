@@ -1,12 +1,7 @@
-using System.Diagnostics;
-using System.Text.Json.Nodes;
-using System.Text.Json;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Jobs;
-using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
-using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 

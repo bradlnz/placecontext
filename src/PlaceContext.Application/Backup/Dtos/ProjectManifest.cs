@@ -1,5 +1,3 @@
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Dtos;
 
 /// <summary>A project registry record. Natural key on import is <see cref="Path"/> (matches

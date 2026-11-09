@@ -1,6 +1,3 @@
-using PlaceContext.Application.Features;
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Dtos;
 
 /// <summary>One source file in a code workload (map or reduce step).</summary>

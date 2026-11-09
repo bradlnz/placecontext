@@ -1,11 +1,10 @@
 using System.Text.Json.Nodes;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Operations;
 using PlaceContext.Application.Shared;
 using PlaceContext.Application.Tenancy;
-using PlaceContext.Application;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Application.Build;
 

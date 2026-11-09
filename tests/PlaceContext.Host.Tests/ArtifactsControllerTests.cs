@@ -6,7 +6,6 @@ using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Controllers;
-using Xunit;
 
 namespace PlaceContext.Host.Tests;
 

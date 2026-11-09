@@ -1,4 +1,4 @@
-@using PlaceContext.Application.Access
+@using PlaceContext.Application.Access.Models
 @page "/project/{ProjectId:guid}/jobs/{JobId:guid}"
 @attribute [Authorize(Policy = Permission.JobsEdit)]
 @using PlaceContext.Host.Components.ViewModels

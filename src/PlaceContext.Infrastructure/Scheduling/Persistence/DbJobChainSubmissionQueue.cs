@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
 using Npgsql;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Billing;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
@@ -15,6 +15,7 @@ using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Scheduling;
 

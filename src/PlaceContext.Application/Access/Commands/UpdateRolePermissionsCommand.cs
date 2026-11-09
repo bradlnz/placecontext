@@ -1,4 +1,4 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 
@@ -11,5 +11,5 @@ namespace PlaceContext.Application.Features;
 public sealed record UpdateRolePermissionsCommand(Guid RoleId, IReadOnlyList<string> Permissions)
     : ICommand<RoleView>, IRequiresPermission
 {
-    string IRequiresPermission.RequiredPermission => PlaceContext.Application.Access.Permission.MembersManage;
+    string IRequiresPermission.RequiredPermission => Permission.MembersManage;
 }

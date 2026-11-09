@@ -1,6 +1,3 @@
-using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Auth;
 
 /// <summary>Persistence of OAuth client registrations so they survive restarts (DCR clients are long-lived).</summary>

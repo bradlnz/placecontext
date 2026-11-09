@@ -1,13 +1,12 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Membership;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application;
-using PlaceContext.Host;
+using PlaceContext.Application.Access.Enums;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

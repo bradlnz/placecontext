@@ -1,6 +1,4 @@
 using Microsoft.JSInterop;
-using PlaceContext.Application;
-using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

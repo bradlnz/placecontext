@@ -1,6 +1,6 @@
 using Microsoft.JSInterop;
 using PlaceContext.Application;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;

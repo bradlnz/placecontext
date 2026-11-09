@@ -10,7 +10,6 @@ using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application;
 using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Scheduling;
 

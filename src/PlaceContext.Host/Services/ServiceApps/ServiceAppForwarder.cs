@@ -1,8 +1,5 @@
 using System.Net;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Net.Http.Headers;
-using PlaceContext.Application.Tenancy;
-using PlaceContext.Host.Tenancy;
 using Yarp.ReverseProxy.Forwarder;
 
 namespace PlaceContext.Host.Auth;

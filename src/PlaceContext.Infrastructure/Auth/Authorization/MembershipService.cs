@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Enums;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Membership;

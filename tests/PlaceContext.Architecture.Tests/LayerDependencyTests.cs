@@ -1,6 +1,5 @@
 using System.Reflection;
 using PlaceContext.Domain.Entities;
-using Xunit;
 
 namespace PlaceContext.Architecture.Tests;
 

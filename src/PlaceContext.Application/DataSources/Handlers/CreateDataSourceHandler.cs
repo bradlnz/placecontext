@@ -1,6 +1,5 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.DataSources;
-using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application.Shared;
 using PlaceContext.Domain.Repositories;

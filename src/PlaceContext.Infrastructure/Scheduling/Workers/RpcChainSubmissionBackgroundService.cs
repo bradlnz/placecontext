@@ -5,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
@@ -14,7 +13,7 @@ using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application;
 using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Application.Access.Enums;
 
 namespace PlaceContext.Infrastructure.Scheduling;
 

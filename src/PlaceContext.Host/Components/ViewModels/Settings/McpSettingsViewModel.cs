@@ -1,10 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Features;
 using PlaceContext.Application;
-using PlaceContext.Domain.Mcp;
-using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

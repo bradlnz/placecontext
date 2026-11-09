@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Configuration;
-using PlaceContext.Application.Access;
 using PlaceContext.Host.Controllers;
 
 namespace PlaceContext.Host.Tests;

@@ -1,4 +1,3 @@
-using PlaceContext.Application.Tenancy;
 namespace PlaceContext.Host.Tests;
 
 public sealed class MvvmArchitectureTests

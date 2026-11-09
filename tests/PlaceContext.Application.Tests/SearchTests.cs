@@ -1,4 +1,4 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.ProjectData;
@@ -6,7 +6,6 @@ using PlaceContext.Application.Search;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
-using Xunit;
 
 namespace PlaceContext.Application.Tests;
 

@@ -1,6 +1,5 @@
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application;
-using PlaceContext.Host;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

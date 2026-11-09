@@ -1,7 +1,5 @@
-using Microsoft.JSInterop;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
-using PlaceContext.Application;
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class DataMapViewModel

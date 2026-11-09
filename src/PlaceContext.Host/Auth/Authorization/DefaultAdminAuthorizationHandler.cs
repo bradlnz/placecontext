@@ -1,7 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
+
 namespace PlaceContext.Host.Auth;
 
 /// <summary>

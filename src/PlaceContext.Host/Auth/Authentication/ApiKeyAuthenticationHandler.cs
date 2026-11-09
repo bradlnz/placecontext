@@ -1,10 +1,9 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using System;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Auth;
+using PlaceContext.Application.Access.Enums;
 namespace PlaceContext.Host.Auth;
 
 /// <summary>

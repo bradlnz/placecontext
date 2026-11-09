@@ -2,12 +2,11 @@ using System.ComponentModel;
 using System.Reflection;
 using Microsoft.Extensions.AI;
 using PlaceContext.Application.Access;
-using PlaceContext.Application.AgentWorkflows;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Shared;
 using PlaceContext.Application.Workflows;
-using PlaceContext.Application;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Build;

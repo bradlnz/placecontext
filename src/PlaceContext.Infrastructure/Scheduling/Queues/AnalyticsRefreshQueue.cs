@@ -3,7 +3,6 @@ using System.Threading.Channels;
 using PlaceContext.Application.Operations;
 using PlaceContext.Application.ProjectData;
 using PlaceContext.Application.Tenancy;
-using PlaceContext.Infrastructure.Tenancy;
 
 namespace PlaceContext.Infrastructure.Scheduling;
 

@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-
 namespace PlaceContext.Infrastructure.Persistence;
 
 /// <summary>Tenant registry row. Not tenant-owned (it defines tenants).</summary>

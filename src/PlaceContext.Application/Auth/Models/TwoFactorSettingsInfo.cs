@@ -1,6 +1,3 @@
-using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Auth;
 
 /// <summary>Org-wide 2FA requirement plus the user's own delivery preferences.</summary>

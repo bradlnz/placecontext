@@ -1,12 +1,11 @@
 using PlaceContext.Application.Membership;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Auth;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.SignalR;
 using PlaceContext.Host;
 using PlaceContext.Host.Auth;
@@ -18,17 +17,12 @@ using PlaceContext.Host.CoreApi;
 using PlaceContext.Host.Tenancy;
 using PlaceContext.Host.Tools;
 using PlaceContext.Infrastructure;
-using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Application.Tenancy;
-using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Server.Circuits;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -39,8 +33,8 @@ using Microsoft.AspNetCore.DataProtection.XmlEncryption;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using PlaceContext.Infrastructure.Persistence;
 using Microsoft.AspNetCore.ResponseCompression;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.StaticFiles;
+using PlaceContext.Application.Access.Enums;
 
 // PlaceContext is a single hosted web app on http://localhost:7700, serving two surfaces from one
 // process and the same Postgres store:
@@ -367,7 +361,7 @@ builder.Services.AddAuthorization(o =>
     // Fine-grained permission policies — the policy name IS the permission string (see the Permission
     // catalog), so gating a new sensitive tool/endpoint/page is just [Authorize(Policy = Permission.X)].
     // Backed by PermissionAuthorizationHandler, which resolves role defaults + tenant-scoped overrides.
-    foreach (var permission in PlaceContext.Application.Access.Permission.All)
+    foreach (var permission in Permission.All)
     {
         o.AddPolicy(permission, p => p.RequireAuthenticatedUser()
                 .AddRequirements(new PermissionRequirement(permission)));
@@ -393,7 +387,7 @@ builder.Services.AddScoped<IAuthorizationHandler, DefaultAdminAuthorizationHandl
 builder.Services.AddSingleton<IAuthorizationHandler, CoreApiScopeAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, BlazorHubBypassHandler>();
 builder.Services.AddScoped<ICoreApiResourceResolver, CoreApiResourceResolver>();
-builder.Services.AddScoped<IOAuthAuthCodeStore, PlaceContext.Infrastructure.Persistence.EfOAuthAuthCodeStore>();
+builder.Services.AddScoped<IOAuthAuthCodeStore, EfOAuthAuthCodeStore>();
 builder.Services.AddSingleton<PortalToken>();
 
 // Exposes the current request's ClaimsPrincipal to MCP tools (e.g. whoami reads the bearer's claims).

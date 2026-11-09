@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
@@ -11,7 +11,6 @@ using PlaceContext.Application.Tenancy;
 using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels;
 using PlaceContext.Infrastructure.Observability;
-using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.TestSupport;
 
 namespace PlaceContext.Host.Tests;

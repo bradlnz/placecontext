@@ -4,15 +4,15 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Scheduling;
-using PlaceContext.Infrastructure.Tenancy;
 using k8s.Autorest;
 using k8s;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Workload;
 

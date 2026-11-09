@@ -3,7 +3,7 @@ using System.Net.WebSockets;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Workload.VirtualMachines;
 namespace PlaceContext.Host.Controllers;
 

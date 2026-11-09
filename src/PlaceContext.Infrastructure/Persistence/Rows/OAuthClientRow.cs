@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-
 namespace PlaceContext.Infrastructure.Persistence;
 
 /// <summary>OAuth client registration. Global (clients are not tenant-scoped); redirect URIs as JSON.</summary>

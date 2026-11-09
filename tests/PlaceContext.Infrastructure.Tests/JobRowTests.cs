@@ -1,5 +1,4 @@
 using PlaceContext.Infrastructure.Persistence;
-using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
 

@@ -2,15 +2,12 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Activity;
 using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Build;
 using PlaceContext.Application.Cluster;
 using PlaceContext.Application.Communications;
-using PlaceContext.Application.DataEntities;
-using PlaceContext.Application.DataLinks;
 using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Membership;
@@ -35,6 +32,7 @@ using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Skills;
 using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Infrastructure.Workload;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure;
 
@@ -92,7 +90,7 @@ public static class DependencyInjection
         services.AddSingleton(sp => new PlaceContext.Application.AgentWorkflows.AgentWorkflowPolicy(() =>
             sp.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>().EnvironmentName == "Development"
             && sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AgentWorkflows.AgentWorkflowOptions>>().Value.SimulateSubscriptions));
-        services.AddScoped<PlaceContext.Application.Build.IBuildModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
+        services.AddScoped<IBuildModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
         services.AddHttpClient("build-model", client => client.Timeout = Timeout.InfiniteTimeSpan)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
@@ -103,8 +101,8 @@ public static class DependencyInjection
         services.AddSingleton<IClock, SystemClock>();
         services.AddHostedService<Build.BuildChatBackgroundService>();
         services.AddScoped<IWorkspaceAdministratorReader, Auth.EfWorkspaceAdministratorReader>();
-        services.AddScoped<PlaceContext.Application.DatabaseInspection.IDatabaseInspector, DatabaseInspector>();
-        services.AddScoped<PlaceContext.Application.Auth.IExternalIdentityProvider, Auth.HttpExternalIdentityProvider>();
+        services.AddScoped<Application.DatabaseInspection.IDatabaseInspector, DatabaseInspector>();
+        services.AddScoped<IExternalIdentityProvider, Auth.HttpExternalIdentityProvider>();
         services.AddScoped<IPresignedUploadClient, Storage.HttpPresignedUploadClient>();
 
         // (Activation/licensing removed — subscriptions are managed by a separate billing portal.)

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using PlaceContext.Application.Dtos;
 using PlaceContext.Host.Components.ViewModels;
 
 namespace PlaceContext.Host.Tests;

@@ -1,5 +1,3 @@
-using PlaceContext.Application.Dtos;
-
 namespace PlaceContext.Host.Api;
 
 /// <summary>Public read model for a schedule (cron) or event trigger.</summary>

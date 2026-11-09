@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application.Workload.VirtualMachines;
-using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Workload;
 using PlaceContext.TestSupport;
 

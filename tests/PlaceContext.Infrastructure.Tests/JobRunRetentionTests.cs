@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Tenancy;
@@ -10,7 +9,6 @@ using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Caching;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
-using Xunit;
 
 namespace PlaceContext.Infrastructure.Tests;
 

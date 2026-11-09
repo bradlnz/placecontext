@@ -1,9 +1,8 @@
-using System.Linq;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Enums;
 using PlaceContext.Application.Auth;
 namespace PlaceContext.Host.Auth;
 
@@ -16,19 +15,15 @@ public sealed class CoreApiAuthenticationHandler : AuthenticationHandler<Authent
 
     private readonly CoreApiOptions _coreApiOptions;
 
-#pragma warning disable CS0618
     public CoreApiAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        ISystemClock clock,
         IOptions<CoreApiOptions> coreApiOptions)
-        : base(options, logger, encoder, clock)
+        : base(options, logger, encoder)
     {
         _coreApiOptions = coreApiOptions.Value;
     }
-#pragma warning restore CS0618
-
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (_coreApiOptions.Clients.Count == 0)

@@ -1,10 +1,9 @@
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Enums;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Communications;
-using PlaceContext.Infrastructure.Comms;
 using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Infrastructure.Auth;

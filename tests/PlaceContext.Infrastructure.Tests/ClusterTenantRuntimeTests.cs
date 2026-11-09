@@ -3,7 +3,6 @@ using System.Text.Json.Nodes;
 using System.Text;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
-using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Infrastructure.Workload;
 using PlaceContext.TestSupport;

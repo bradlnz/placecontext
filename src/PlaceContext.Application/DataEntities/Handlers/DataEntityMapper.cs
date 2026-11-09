@@ -1,7 +1,4 @@
-using PlaceContext.Application.Cqrs;
 using PlaceContext.Domain.Entities;
-using PlaceContext.Domain.Repositories;
-using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Features;
 

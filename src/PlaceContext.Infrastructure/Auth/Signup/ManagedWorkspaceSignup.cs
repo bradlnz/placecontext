@@ -1,18 +1,16 @@
-using System.Net.Mail;
 using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Npgsql;
-using PlaceContext.Application.Access;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Billing;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Application.Access.Enums;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Auth;
 

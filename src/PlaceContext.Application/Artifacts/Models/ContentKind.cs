@@ -4,6 +4,7 @@ namespace PlaceContext.Application.Artifacts;
 /// Stable kind strings for universal RAG content. Every kind is embeddable and its source text
 /// is encrypted at rest; vectors live in pgvector for cosine search.
 /// </summary>
+/// 
 public static class ContentKind
 {
     public const string RunOutput = "run_output";

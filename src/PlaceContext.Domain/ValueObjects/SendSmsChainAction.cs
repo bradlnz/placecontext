@@ -1,5 +1,3 @@
-using System.Net.Mail;
-
 namespace PlaceContext.Domain.ValueObjects;
 
 /// <summary>Sends one SMS through the tenant's configured SMS provider.</summary>

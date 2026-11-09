@@ -1,5 +1,3 @@
-using System.Text.Json.Nodes;
-
 namespace PlaceContext.Application.Build;
 
 public sealed record ModelConnection(Guid Id, string Name, string Protocol, string BaseUrl,

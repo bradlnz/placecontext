@@ -1,5 +1,4 @@
-using PlaceContext.Application.Access;
-using Xunit;
+using PlaceContext.Application.Access.Models;
 
 namespace PlaceContext.Application.Tests;
 

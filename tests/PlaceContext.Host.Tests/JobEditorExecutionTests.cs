@@ -11,7 +11,6 @@ using PlaceContext.Application;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.ViewModels;
-using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.TestSupport;
 
 namespace PlaceContext.Host.Tests;

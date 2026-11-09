@@ -1,4 +1,4 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 
@@ -7,5 +7,5 @@ namespace PlaceContext.Application.Features;
 /// <summary>Add a new vault secret to a project (value encrypted at rest). Fails if the name exists.</summary>
 public sealed record AddProjectSecretCommand(Guid ProjectId, string Name, string Value) : ICommand<ProjectSecretView>, IRequiresPermission
 {
-    string IRequiresPermission.RequiredPermission => PlaceContext.Application.Access.Permission.SecretsManage;
+    string IRequiresPermission.RequiredPermission => Permission.SecretsManage;
 }

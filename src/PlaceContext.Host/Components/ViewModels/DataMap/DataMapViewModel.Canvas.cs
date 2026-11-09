@@ -1,8 +1,5 @@
-using Microsoft.JSInterop;
 using PlaceContext.Application.Dtos;
-using PlaceContext.Application.Features;
 using PlaceContext.Application.Shared;
-using PlaceContext.Application;
 
 namespace PlaceContext.Host.Components.ViewModels;
 

@@ -1,4 +1,4 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 namespace PlaceContext.Application.Cqrs;
 
 /// <summary>
@@ -11,7 +11,7 @@ namespace PlaceContext.Application.Cqrs;
 /// </summary>
 public interface IRequiresPermission
 {
-    /// <summary>The permission string (see <see cref="PlaceContext.Application.Access.Permission"/>) required to run this request.</summary>
+    /// <summary>The permission string (see <see cref="Permission"/>) required to run this request.</summary>
     string RequiredPermission
     {
         get;

@@ -1,6 +1,4 @@
 using PlaceContext.Application.Auth;
-using PlaceContext.Infrastructure.Persistence;
-using PlaceContext.Infrastructure.Security;
 
 namespace PlaceContext.Infrastructure.Tests;
 

@@ -1,7 +1,6 @@
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Shared;
-using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.Mcp;
 using PlaceContext.Domain.Repositories;
 

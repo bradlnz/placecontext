@@ -1,6 +1,3 @@
-using PlaceContext.Application.Features;
-using PlaceContext.Domain.ValueObjects;
-
 namespace PlaceContext.Application.Dtos;
 
 /// <summary>A declared input field a job needs before it runs (prompted in a modal, or injected by an

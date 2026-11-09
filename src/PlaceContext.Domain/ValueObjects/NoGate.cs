@@ -1,6 +1,3 @@
-using System.Text.Json.Serialization;
-using System.Text.Json;
-
 namespace PlaceContext.Domain.ValueObjects;
 
 /// <summary>No gate — the stage runs unconditionally (the default, backward compatible).</summary>

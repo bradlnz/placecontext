@@ -1,7 +1,3 @@
-using PlaceContext.Application.Cqrs;
-using PlaceContext.Application.Dtos;
-using PlaceContext.Domain.Repositories;
-
 namespace PlaceContext.Application.Features;
 
 /// <summary>A stored artifact file with enough context to browse and open it (the file viewer).</summary>

@@ -1,4 +1,4 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 namespace PlaceContext.Infrastructure.Tests.AgentWorkflows;
 
 internal sealed class AgentTestPermissions : IPermissionService

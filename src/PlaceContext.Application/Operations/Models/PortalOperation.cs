@@ -1,7 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using PlaceContext.Application.Tenancy;
-
 namespace PlaceContext.Application.Operations;
 
 /// <summary>One background portal operation, shown in the notifications pane.</summary>

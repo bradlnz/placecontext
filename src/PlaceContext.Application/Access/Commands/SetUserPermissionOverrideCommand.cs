@@ -1,4 +1,4 @@
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 
@@ -11,8 +11,8 @@ namespace PlaceContext.Application.Features;
 /// inheriting the role default. Gated on <c>members.manage</c> — only someone who can manage members
 /// can reshape another member's permissions.
 /// </summary>
-public sealed record SetUserPermissionOverrideCommand(Guid UserId, string Permission, bool? Allowed)
+public sealed record SetUserPermissionOverrideCommand(Guid UserId, string PermissionOverride, bool? Allowed)
     : ICommand<UserPermissionsView>, IRequiresPermission
 {
-    string IRequiresPermission.RequiredPermission => PlaceContext.Application.Access.Permission.MembersManage;
+    string IRequiresPermission.RequiredPermission => Permission.MembersManage;
 }

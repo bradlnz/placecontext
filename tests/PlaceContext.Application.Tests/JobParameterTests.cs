@@ -1,11 +1,9 @@
 using System.Text.Json;
 using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Features;
-using PlaceContext.Application.Workload;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
-using Xunit;
 
 namespace PlaceContext.Application.Tests;
 

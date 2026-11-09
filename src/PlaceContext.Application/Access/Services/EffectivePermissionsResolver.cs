@@ -1,3 +1,6 @@
+using PlaceContext.Application.Access.Enums;
+using PlaceContext.Application.Access.Models;
+
 namespace PlaceContext.Application.Access;
 
 /// <summary>
@@ -10,6 +13,8 @@ namespace PlaceContext.Application.Access;
 /// but the tenant's default admin, regardless of what the role grants or an override allows — the
 /// /settings/* area is restricted to the default admin (see <c>Policies.DefaultAdmin</c> in the Host).
 /// </summary>
+/// 
+//TODO: Why is this a static class? 
 public static class EffectivePermissionsResolver
 {
     public static IReadOnlySet<string> Resolve(

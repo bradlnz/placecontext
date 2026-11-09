@@ -1,5 +1,5 @@
 using Microsoft.JSInterop;
-using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Dtos;
 
 namespace PlaceContext.Host.Components.ViewModels;

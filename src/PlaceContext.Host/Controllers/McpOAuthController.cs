@@ -1,13 +1,10 @@
 using System.Security.Cryptography;
-using System.Text.Json.Serialization;
 using System.Text.Json;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Mcp;
-using PlaceContext.Application;
-using PlaceContext.Domain.Mcp;
 
 namespace PlaceContext.Host.Controllers;
 

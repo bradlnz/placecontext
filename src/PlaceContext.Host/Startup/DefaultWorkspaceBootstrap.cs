@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;

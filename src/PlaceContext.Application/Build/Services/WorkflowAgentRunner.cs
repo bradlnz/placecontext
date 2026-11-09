@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Build;
@@ -17,12 +18,21 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
         LoopChainAction action, string? payload, CancellationToken ct, Action<AgentActivity>? report = null)
     {
         if (action.AgentProvider != LoopChainAction.AutomaticAgent)
+        {
             throw new ArgumentException("This step is not configured for automatic execution.");
+        }
+
         if (!await permissions.HasAsync(Permission.ProjectsView, ct) || !await permissions.HasAsync(Permission.JobsRun, ct))
+        {
             throw new UnauthorizedAccessException("Project access and permission to run jobs are required.");
+        }
+
         var connection = (await connections.ListAsync(ct)).SingleOrDefault(x => x.Id == action.ConnectionId);
         if (connection is not { Enabled: true } || !connection.Models.Contains(action.Model!))
+        {
             throw new InvalidOperationException("Choose an enabled connection and configured model in the agent step.");
+        }
+
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(BuildExecutionLimits.Turn);
         var token = deadline.Token;
@@ -61,7 +71,10 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                 token.ThrowIfCancellationRequested();
                 currentTurn = turn + 1;
                 if (messages.ToJsonString().Length > 12_000_000)
+                {
                     throw new InvalidOperationException("Agent context exceeded its limit; split the task into smaller steps.");
+                }
+
                 report?.Invoke(new(DateTimeOffset.UtcNow, "model", $"Waiting for {action.Model}", Turn: turn + 1));
                 var modelStarted = Stopwatch.GetTimestamp();
                 var reported = false;
@@ -77,7 +90,11 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                 if (reply["tool_calls"] is not JsonArray { Count: > 0 } calls)
                 {
                     var content = reply["content"]?.GetValue<string>();
-                    if (string.IsNullOrWhiteSpace(content)) throw new InvalidOperationException("The agent returned no result.");
+                    if (string.IsNullOrWhiteSpace(content))
+                    {
+                        throw new InvalidOperationException("The agent returned no result.");
+                    }
+
                     try
                     {
                         var output = JsonNode.Parse(content) as JsonObject ?? throw new JsonException();
@@ -91,10 +108,16 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                 }
                 if (!reported && reply["content"] is JsonValue update && update.TryGetValue<string>(out var updateText)
                     && !string.IsNullOrWhiteSpace(updateText))
+                {
                     report?.Invoke(new(DateTimeOffset.UtcNow, "update", updateText.Length > 2000 ? updateText[..2000] + "…" : updateText, Turn: turn + 1));
+                }
+
                 if (calls.Count > 8 || calls.Any(call => string.IsNullOrWhiteSpace(call?["id"]?.GetValue<string>()))
                     || calls.Select(call => call!["id"]!.GetValue<string>()).Distinct().Count() != calls.Count)
+                {
                     throw new InvalidOperationException("The agent returned invalid tool calls.");
+                }
+
                 foreach (var call in calls)
                 {
                     token.ThrowIfCancellationRequested();
@@ -106,7 +129,11 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                     var toolName = AllowedTools.Contains(name) ? name : "unavailable tool";
                     try
                     {
-                        if (!functions.TryGetValue(name, out var function)) throw new ArgumentException("Tool not available to this workflow agent.");
+                        if (!functions.TryGetValue(name, out var function))
+                        {
+                            throw new ArgumentException("Tool not available to this workflow agent.");
+                        }
+
                         var args = JsonSerializer.Deserialize<Dictionary<string, object?>>(call!["function"]!["arguments"]!.GetValue<string>())
                             ?? throw new ArgumentException("Tool arguments are required.");
                         var arguments = JsonNode.Parse(call!["function"]!["arguments"]!.GetValue<string>());
@@ -119,7 +146,11 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                             jobRunId = ReadId(output, "id");
                             jobId = ReadId(output, "jobId") ?? jobId;
                         }
-                        else if (name is "save_job" or "get_job") jobId = ReadId(output, "id") ?? jobId;
+                        else if (name is "save_job" or "get_job")
+                        {
+                            jobId = ReadId(output, "id") ?? jobId;
+                        }
+
                         var status = ReadValue(output, "status");
                         var failed = status is "Failed" or "Cancelled" or "Partial" || ReadValue(output, "error") is not null;
                         report?.Invoke(new(DateTimeOffset.UtcNow, failed ? "tool_failed" : "tool_completed",

@@ -1,4 +1,5 @@
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Enums;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Shared;
@@ -17,7 +18,8 @@ public sealed class CreateRoleHandler : ICommandHandler<CreateRoleCommand, RoleV
     public async Task<RoleView> HandleAsync(CreateRoleCommand c, CancellationToken ct = default)
     {
         var name = RoleDefinitionValidation.ValidateName(c.Name);
-        if (Enum.GetNames<UserRole>().Contains(name, StringComparer.OrdinalIgnoreCase))
+        var userRoleNames = Enum.GetNames<UserRole>() ?? throw new NullReferenceException();
+        if (userRoleNames.Contains(name, StringComparer.OrdinalIgnoreCase))
         {
             throw new ArgumentException($"'{name}' is a built-in system role.");
         }

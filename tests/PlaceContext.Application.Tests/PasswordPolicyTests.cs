@@ -1,5 +1,4 @@
 using PlaceContext.Application.Auth;
-using Xunit;
 
 namespace PlaceContext.Application.Tests;
 
