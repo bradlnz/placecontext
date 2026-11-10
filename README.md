@@ -24,26 +24,49 @@ in when a decision needs their judgement—all within a workflow you can run, in
 Use it to qualify a lead, review a document, prepare a report, or check a software release.
 You decide what runs automatically, what needs review, and what happens next.
 
-[Get started](#get-started) · [What you can build](#what-you-can-build) ·
+[Get started](#get-started) · [See the workflow](#from-data-to-a-decision) · [Use cases](#what-you-can-build) ·
 [Agents, people, and decisions](#agents-people-and-decisions) · [Documentation](#documentation)
 
-## From information to completed work
+## From data to a decision
 
-**Give every workflow the context it needs.** Bring together databases, files, and API feeds.
-Prepare and query project data, then use those records directly in your workflows. Save the
-results back to tables and reports so the next task can build on what you already know.
+A customer-onboarding workflow brings the process together: query the accounts that need attention,
+ask an agent to review the evidence, and let a person decide whether to prepare the handoff.
+These screenshots show the running app with sample customer data.
 
-**Put agents to work.** Ask an agent to research, analyse, write code, or prepare a recommendation.
-Combine AI with repeatable jobs, data checks, and browser tasks. Add a separate agent review
-to assess the evidence before the workflow moves on.
+### Query the data that drives the next step
 
-**Keep people involved where it matters.** Pause for an answer or approval, give the reviewer
-the workflow's results, and continue from their response. Make human judgement part of the
-process, from an exception review to a final sign-off.
+Use **Query data** inside the workflow to browse project tables, choose fields, filter records,
+and preview the result before running. The selected rows become context for the next agent or job.
+Here, the query finds two active enterprise accounts and one account that needs review.
 
-**See what happened and act on it.** Follow progress, inspect outputs and logs, and see which
-steps are waiting for input. When work fails, investigate the failed step and replay from there.
-Run on demand, on a schedule, or when new work arrives.
+![Query data step showing project columns, SQL, three preview rows, and the data passed to the next step](docs/images/workflow-query-data.png)
+
+### Make the decision flow explicit
+
+Connect agent recommendations, human answers, and conditions on the same canvas. In this example,
+a **Yes** selects the onboarding handoff; a **No** selects the follow-up list. Each condition shows
+its true and false paths, so you can see what runs, what is skipped, and where the workflow continues.
+
+![Workflow canvas showing agent review, human approval, and conditions selecting onboarding or follow-up](docs/images/workflow-decision-flow.png)
+
+### Bring people in at the right moment
+
+The workflow pauses with a visible request for input. Review the results, answer **Yes** or **No**,
+and continue from that point. The run keeps the response and shows the steps that already completed.
+
+![Running workflow paused for a human decision after the query and agent task have succeeded](docs/images/workflow-human-approval.png)
+
+<details>
+<summary>See the completed run</summary>
+
+The approved run completes the handoff query and skips the follow-up query. Run history shows the
+chosen path alongside its output, so you can inspect the result and investigate any failed step.
+
+![Completed workflow showing the approved query succeeded and the follow-up query was skipped](docs/images/workflow-run-completed.png)
+
+</details>
+
+[Try this workflow](examples/customer-onboarding/README.md) · [Capture details](docs/images/workflow-screenshots.md)
 
 ## What you can build
 
@@ -66,24 +89,11 @@ Your workflow decides how those responses affect the next action.
 
 | Concept | What it does | Example |
 | --- | --- | --- |
+| **Query data** | Selects project records and passes them to the next step. | Find the accounts that need onboarding or review. |
 | **Agent task** | Gives an agent work to complete. | Review an application and prepare a recommendation. |
 | **Agent in the loop** | Adds an AI review or assessment at a checkpoint. | Check whether the recommendation is supported by the evidence. |
 | **Human in the loop** | Pauses for a person's answer or approval. | Resolve missing information or approve an exception. |
 | **Decisions** | Routes work using recorded results and rules you choose. | Continue when checks pass; request review when they do not. |
-
-For example, an onboarding workflow can send routine cases forward and ask a person to review exceptions:
-
-```mermaid
-flowchart TD
-    Data["Collect and check application data"] --> Agent["Agent prepares recommendation"]
-    Agent --> Review["Agent reviews evidence"]
-    Review --> Checks{"Meets your acceptance rules?"}
-    Checks -->|Yes| Action["Continue onboarding"]
-    Checks -->|No| Human["Human reviews exception"]
-    Human --> Approval{"Approved?"}
-    Approval -->|Yes| Action
-    Approval -->|No| Hold["Hold for follow-up"]
-```
 
 You configure the checks, approval steps, and both decision paths. An AI recommendation is an
 input to that process; actions that need human approval must depend on the person's response.
@@ -95,7 +105,7 @@ for configuration examples.
 - **Data and execution together.** Connect sources, query records, run jobs, and keep their outputs
   in the same project. Use the data you already have to drive the next action.
 - **Room for real workloads.** Combine your own code and containers with agents, parallel work,
-  quality checks, and browser automation.
+  quality checks, and browser automation. Run on demand, on a schedule, or when new work arrives.
 - **Your infrastructure and model choices.** Self-host PlaceContext and connect your chosen
   model providers. Project permissions, encrypted secrets, and isolated jobs help control access.
 - **Fits your existing tools.** Work in the web portal or connect AI clients such as Codex and
