@@ -77,7 +77,7 @@ jobs:
             --filter "FullyQualifiedName~JobChainTests|FullyQualifiedName~CancelChainRunTests|FullyQualifiedName~RunStatusWatchServiceTests"
           dotnet test tests/PlaceContext.Infrastructure.Tests/PlaceContext.Infrastructure.Tests.csproj \
             --configuration Release --no-restore \
-            --filter "FullyQualifiedName~ChainInputResumeTests|FullyQualifiedName~ChainRunCancellationTests|FullyQualifiedName~RunStatusReconciliationTests|FullyQualifiedName~TypeSafeRateLimitTests|FullyQualifiedName~RpcChainSubmissionBackgroundServiceTests|FullyQualifiedName~ClusterWorkloadAdmissionTests|FullyQualifiedName~VirtualMachineEnvironmentRunnerTests"
+            --filter "FullyQualifiedName~ChainInputResumeTests|FullyQualifiedName~ChainRunCancellationTests|FullyQualifiedName~RunStatusReconciliationTests|FullyQualifiedName~TypeSafeRateLimitTests|FullyQualifiedName~RpcChainSubmissionBackgroundServiceTests|FullyQualifiedName~ClusterWorkloadAdmissionTests|FullyQualifiedName~VirtualMachineEnvironmentRunnerTests|FullyQualifiedName~VirtualMachineReplayStoreTests"
 
       - name: Validate SaaS allowance, signed billing and OAuth
         run: |

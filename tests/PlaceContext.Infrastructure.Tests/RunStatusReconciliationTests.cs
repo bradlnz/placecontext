@@ -31,7 +31,7 @@ public sealed class RunStatusReconciliationTests
               "ChainName" text NOT NULL, "Status" text NOT NULL, "StepsJson" text NOT NULL, "FinalOutput" text,
               "StartedAt" timestamptz NOT NULL, "FinishedAt" timestamptz, "ResumeAt" timestamptz,
               "ResumeStageIndex" integer, "ContinuationClaimedBy" text, "ContinuationClaimedAt" timestamptz,
-              "ContinuationOverrides" text, "InputRequest" text);
+              "ContinuationOverrides" text, "InputRequest" text, "InitiatedBy" uuid);
             CREATE TABLE job_runs ("Id" uuid PRIMARY KEY,"TenantId" uuid,"JobId" uuid,"ProjectId" uuid,"Status" text,
               "OriginalRunId" uuid,"AttemptNumber" int,"StartedAt" timestamptz,"FinishedAt" timestamptz);
             CREATE TABLE jobs ("Id" uuid PRIMARY KEY,"TenantId" uuid,"Name" text,"RetryDelaySeconds" int);
