@@ -5,11 +5,11 @@
 <h1 align="center">PlaceContext</h1>
 
 <p align="center">
-  <strong>Turn your data into action.</strong>
+  <strong>Put agents to work. Keep people in control.</strong>
 </p>
 
 <p align="center">
-  Workflows where data, AI agents, and people work together.
+  An agentic workflow platform for work that needs reasoning, action, and human judgement.
 </p>
 
 <p align="center">
@@ -17,9 +17,9 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-43d675?style=flat-square"></a>
 </p>
 
-PlaceContext is an open-source data and workflow platform for teams that need to turn
-information into completed work. Connect your data, give agents a task, and bring people
-in when a decision needs their judgement—all within a workflow you can run, inspect, and improve.
+PlaceContext is an open-source agentic workflow platform. Give agents tasks, connect tools and
+data, and bring people in when a decision needs their judgement—all within a workflow you can
+run, inspect, and improve.
 
 Use it to qualify a lead, review a document, prepare a report, or check a software release.
 You decide what runs automatically, what needs review, and what happens next.
@@ -31,16 +31,18 @@ You decide what runs automatically, what needs review, and what happens next.
 
 A customer-onboarding workflow brings the process together: query the accounts that need attention,
 ask an agent to review the evidence, and let a person decide whether to prepare the handoff.
-These dark-mode screenshots show the running app with sample customer data. The workflow starts
-with **Query data**, so the agent's recommendation and the person's decision share the same evidence.
+These dark-mode screenshots show one example in the running app with sample customer data.
+This example queries accounts before agent review, then queries again after the human decision
+to prepare the selected outcome.
 
-### Start with a data query
+### Query data wherever the workflow needs it
 
-Use **Query data** as the first step to browse project tables, choose fields, filter records,
-and preview the result before running. The selected rows become context for the agent that follows.
-Here, the query finds two active enterprise accounts and one account that needs review.
+Add **Query data** at any stage: gather evidence before an agent task, read records after agent
+work, or select the next action's data after a human decision. Browse project tables, choose fields,
+filter records, and preview the result. The selected rows become context for subsequent steps.
+Here, the opening query finds two active enterprise accounts and one account that needs review.
 
-![First Query data step in dark mode, with highlighted SQL, three preview rows, and the data passed to the agent](docs/images/workflow-query-data.png)
+![Example query step in dark mode, with highlighted SQL, three preview rows, and the data passed to the agent](docs/images/workflow-query-data.png)
 
 ### Make the decision flow explicit
 
@@ -48,7 +50,7 @@ Follow the complete flow from the initial data query through agent review and hu
 a **Yes** selects the onboarding handoff; a **No** selects the follow-up list. Each condition shows
 its true and false paths, so you can see what runs, what is skipped, and where the workflow continues.
 
-![Complete dark-mode workflow: Query data first, agent review, human approval, then onboarding or follow-up conditions](docs/images/workflow-decision-flow.png)
+![Example workflow with queries before agent review and after human approval, selecting onboarding or follow-up](docs/images/workflow-decision-flow.png)
 
 ### Bring people in at the right moment
 
@@ -90,7 +92,7 @@ Your workflow decides how those responses affect the next action.
 
 | Concept | What it does | Example |
 | --- | --- | --- |
-| **Query data** | Selects project records and passes them to the next step. | Find the accounts that need onboarding or review. |
+| **Query data** | Selects project records at any workflow stage and passes them to subsequent steps. | Gather evidence for an agent or prepare a handoff after approval. |
 | **Agent task** | Gives an agent work to complete. | Review an application and prepare a recommendation. |
 | **Agent in the loop** | Adds an AI review or assessment at a checkpoint. | Check whether the recommendation is supported by the evidence. |
 | **Human in the loop** | Pauses for a person's answer or approval. | Resolve missing information or approve an exception. |
