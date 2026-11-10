@@ -30,7 +30,8 @@ You decide what runs automatically, what needs review, and what happens next.
 ## From data to a decision
 
 A customer-onboarding workflow brings the process together: query the accounts that need attention,
-ask an agent to review the evidence, and let a person decide whether to prepare the handoff.
+ask an agent to review the evidence, use an AI decision to assess it, and let a person decide whether
+to prepare the handoff.
 These dark-mode screenshots show one example in the running app with sample customer data.
 This example queries accounts before agent review, then queries again after the human decision
 to prepare the selected outcome.
@@ -46,9 +47,11 @@ Here, the opening query finds two active enterprise accounts and one account tha
 
 ### Make the decision flow explicit
 
-Follow the complete flow from the initial data query through agent review and human approval. In this example,
-a **Yes** selects the onboarding handoff; a **No** selects the follow-up list. Each condition shows
-its true and false paths, so you can see what runs, what is skipped, and where the workflow continues.
+Follow the complete flow from the initial data query through agent review, AI decision, and human approval.
+The AI decision can use a Jev System One model or recorded output from an LLM; either result becomes
+workflow data that a condition can route. In this example, a **Yes** selects the onboarding handoff;
+a **No** selects the follow-up list. Each condition shows its true and false paths, so you can see what
+runs, what is skipped, and where the workflow continues.
 
 ![Example workflow with queries before agent review and after human approval, selecting onboarding or follow-up](docs/images/workflow-decision-flow.png)
 
@@ -87,7 +90,7 @@ combines agent tasks, independent review, browser checks, and a readiness assess
 
 ## Agents, people, and decisions
 
-An agent can prepare the work. Another agent can review it. A person can approve it.
+An agent can prepare the work. Jev or another LLM can assess it. A person can approve it.
 Your workflow decides how those responses affect the next action.
 
 | Concept | What it does | Example |
@@ -95,11 +98,14 @@ Your workflow decides how those responses affect the next action.
 | **Query data** | Selects project records at any workflow stage and passes them to subsequent steps. | Gather evidence for an agent or prepare a handoff after approval. |
 | **Agent task** | Gives an agent work to complete. | Review an application and prepare a recommendation. |
 | **Agent in the loop** | Adds an AI review or assessment at a checkpoint. | Check whether the recommendation is supported by the evidence. |
+| **AI decision** | Assesses recorded workflow data using a Jev System One model or LLM output. | Turn an AI assessment into a condition input while keeping human approval separate. |
 | **Human in the loop** | Pauses for a person's answer or approval. | Resolve missing information or approve an exception. |
 | **Decisions** | Routes work using recorded results and rules you choose. | Continue when checks pass; request review when they do not. |
 
-You configure the checks, approval steps, and both decision paths. An AI recommendation is an
-input to that process; actions that need human approval must depend on the person's response.
+You configure the AI source, checks, approval steps, and both decision paths. Jev System One can provide
+a structured verification result, while an LLM can provide an output that your workflow records and
+evaluates. An AI recommendation is an input to that process; actions that need human approval must
+depend on the person's response.
 See the [workflow and decision reference](docs/platform-reference.md#decisions-and-human-approval)
 for configuration examples.
 
