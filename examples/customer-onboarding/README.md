@@ -4,6 +4,9 @@ The working example shown in the main README. It uses sample project data, an ex
 handoff, a human Yes/No response, and conditional queries. It prepares a result for the next action;
 it does not contact customers or write to an external CRM.
 
+**Query data** can be used at any workflow stage. This example uses it before agent review to
+gather evidence and after human approval to prepare the selected outcome.
+
 ## Try it
 
 1. Import [workflow.json](workflow.json) through **Settings → Backup**. This creates the
