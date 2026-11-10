@@ -5,9 +5,8 @@ Blazor application at source revision
 [`bd3d870`](https://github.com/bradlnz/placecontext/commit/bd3d870699ec11d2e94590bb4b034e45b8f1bfb5).
 The Host Release build completed with zero warnings and zero errors.
 
-The captures use a local PostgreSQL 16 database and the
-[customer-onboarding example](../../examples/customer-onboarding/README.md). All company records
-are sample data. Screens are browser captures of the actual application; no mock pages, generated
+The captures use a local PostgreSQL 16 database and sample company records. Screens are browser
+captures of the actual application; no mock pages, generated
 UI imagery, or substituted run statuses were used.
 
 | Image | What it shows |

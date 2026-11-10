@@ -13,7 +13,7 @@
 <div class="page graph-page">
     <DataTabs ProjectId="ProjectId" Active="@DataSection.Graph" />
     <header class="data-graph-heading">
-        <div><h1>Data graph</h1><p>Project tables and their data mappings. Disabled mappings use dashed links.</p></div>
+        <div><h1>Data graph</h1><p>Map tables, data mappings, entities and their relationships. Disabled mappings use dashed links.</p></div>
         <a class="dcbtn" href="@($"/project/{ProjectId}/datamap")">Manage mappings</a>
     </header>
 
@@ -37,7 +37,7 @@
             <aside class="graph-sidebar">
                 <div class="graph-sidebar-head">
                     <input class="dcinput graph-search"
-                           placeholder="Search tables and mappings…"
+                           placeholder="Search tables, mappings and entities…"
                            @bind="Vm.SearchTerm"
                            @bind:event="oninput" />
                     @if (Vm.SelectedNodeId is not null)

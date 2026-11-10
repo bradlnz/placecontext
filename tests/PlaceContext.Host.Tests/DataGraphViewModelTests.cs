@@ -74,6 +74,7 @@ public sealed class DataGraphViewModelTests
         await vm.LoadAsync(projectId);
         Assert.Equal($"/project/{projectId}/data?table=table%20%26%20view", vm.NodeUrl(new("table:table & view", "Table", 0, false)));
         Assert.Equal($"/project/{projectId}/datamap", vm.NodeUrl(new($"mapping:{Guid.NewGuid():N}", "Mapping", 0, false)));
+        Assert.Equal($"/project/{projectId}/entity/Orders", vm.NodeUrl(new("entity:orders", "Orders", 0, false)));
         Assert.Null(vm.NodeUrl(new($"output:job:{jobId:N}", "Source", 0, false)));
         Assert.Equal($"/project/{projectId}/datamap?job={jobId}", vm.MappingUrl(jobId));
         Assert.Null(vm.NodeUrl(new("unknown", "Unknown", 0, false)));

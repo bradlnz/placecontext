@@ -6,7 +6,7 @@ using PlaceContext.Domain.Repositories;
 namespace PlaceContext.Application.Features;
 
 public sealed class GetGraphVizHandler(IProjectRepository projects, IProjectDataStore data,
-    IDataMappingRepository mappings)
+    IDataMappingRepository mappings, IDataEntityRepository entities)
     : IQueryHandler<GetGraphVizQuery, GraphVizView>
 {
     public async Task<GraphVizView> HandleAsync(GetGraphVizQuery query, CancellationToken ct = default)
@@ -14,6 +14,7 @@ public sealed class GetGraphVizHandler(IProjectRepository projects, IProjectData
         await ProjectDataGuard.EnsureExistsAsync(projects, query.ProjectId, ct);
         var tables = await data.ListTablesAsync(query.ProjectId, ct);
         var rules = await mappings.ListForProjectAsync(query.ProjectId, ct);
+        var entityList = await entities.ListForProjectAsync(query.ProjectId, ct);
         var nodes = new Dictionary<string, GraphNodeView>(StringComparer.Ordinal);
         var links = new List<GraphLinkView>();
 
@@ -39,6 +40,34 @@ public sealed class GetGraphVizHandler(IProjectRepository projects, IProjectData
                 Kind: "Mapping", Labeled: true);
             var confidence = rule.Enabled ? "Direct" : "Ambiguous";
             links.Add(new(mappingId, tableId, confidence));
+        }
+        foreach (var entity in entityList)
+        {
+            var entityId = $"entity:{entity.Id:N}";
+            nodes[entityId] = new(entityId, entity.Name, 0, false,
+                $"Entity · {entity.TableName}\n" +
+                (entity.LabelColumn is null ? "Label: first column" : $"Label: {entity.LabelColumn}") +
+                (entity.Relations.Count == 0 ? "" : "\n" + string.Join("\n", entity.Relations.Select(relation =>
+                    $"{relation.Column} → {relation.TargetEntity}.{relation.TargetColumn}"))),
+                Kind: "Entity", Labeled: true);
+            var tableId = "table:" + entity.TableName;
+            if (!nodes.ContainsKey(tableId))
+            {
+                nodes[tableId] = new(tableId, entity.TableName, 0, false,
+                    "Entity backing table · table has not been created.", Kind: "Table", Labeled: true);
+            }
+            links.Add(new(entityId, tableId, "Direct"));
+            foreach (var relation in entity.Relations)
+            {
+                var target = entityList.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, relation.TargetEntity, StringComparison.OrdinalIgnoreCase));
+                if (target is null)
+                {
+                    continue;
+                }
+                links.Add(new(entityId, $"entity:{target.Id:N}",
+                    $"{relation.Column} → {relation.TargetColumn}"));
+            }
         }
         var degrees = links.SelectMany(link => new[] { link.Source, link.Target })
             .GroupBy(id => id).ToDictionary(group => group.Key, group => group.Count());

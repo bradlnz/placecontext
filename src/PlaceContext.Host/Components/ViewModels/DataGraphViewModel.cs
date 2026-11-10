@@ -161,7 +161,10 @@ public sealed class DataGraphViewModel : PageViewModel
             return $"/project/{ProjectId}/data?table={Uri.EscapeDataString(node.Id[6..])}";
         }
         return node.Id.StartsWith("mapping:", StringComparison.Ordinal)
-            ? $"/project/{ProjectId}/datamap" : null;
+            ? $"/project/{ProjectId}/datamap"
+            : node.Id.StartsWith("entity:", StringComparison.Ordinal)
+                ? $"/project/{ProjectId}/entity/{Uri.EscapeDataString(node.Label)}"
+                : null;
     }
 
     public void Search(string? term)

@@ -16,7 +16,7 @@ public sealed class CodeStyleTests
         }
         Assert.NotNull(directory);
         var violations = new List<string>();
-        foreach (var folder in new[] { "src", "tests", "examples" })
+        foreach (var folder in new[] { "src", "tests" })
         {
             foreach (var file in Directory.EnumerateFiles(Path.Combine(directory.FullName, folder), "*.cs", SearchOption.AllDirectories))
             {

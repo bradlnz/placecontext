@@ -303,6 +303,3 @@ its completion condition passes. It allows 1–10 total attempts (default 3), pe
 across restarts and input handoffs, and fails when the last attempt does not meet the condition.
 Use conditions and evidence-producing jobs to distinguish failed quality assertions from execution errors,
 which stop the workflow. Repeated stages run again, including any external side effects.
-
-The `examples/real-estate-sdlc` template combines these steps with independent agent review, QEMU UI
-checks, source archive artifacts and a weighted production-readiness gate.

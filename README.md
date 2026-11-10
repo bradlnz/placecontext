@@ -72,7 +72,7 @@ chosen path alongside its output, so you can inspect the result and investigate 
 
 </details>
 
-[Try this workflow](examples/customer-onboarding/README.md) · [Capture details](docs/images/workflow-screenshots.md)
+[Capture details](docs/images/workflow-screenshots.md)
 
 ## What you can build
 
@@ -85,8 +85,21 @@ These are examples of workflows you can compose with PlaceContext:
 | **Research and reporting** | Collect sources in parallel, analyse the findings, review the evidence, and generate a report. | A repeatable reporting process with inspectable results. |
 | **Software delivery** | Assign implementation work, run tests, request an independent agent review, check the browser experience, and ask for sign-off. | A reviewable handoff with test and review evidence. |
 
-Explore the [build-and-verify example](examples/real-estate-sdlc/README.md) for a workflow that
-combines agent tasks, independent review, browser checks, and a readiness assessment.
+### Practical QEMU browser automation
+
+For example, a workflow can receive an order request, open the supplier site in a disposable QEMU
+Chromium desktop, and have a vision model navigate to the order while Jev System One checks each live
+screen before an action runs. The workflow records the order ID, total, and shipping result; a person
+can take control for login or MFA, then a condition can send verified orders onward and route uncertain
+results to review. The browser agent works from desktop frames, so the run keeps replayable evidence
+without exposing host credentials to the VM.
+
+![Illustrative QEMU browser automation run showing an order form, live desktop evidence, Jev verification, and a verified result](docs/images/qemu-browser-order-verification.png)
+
+*Illustrative screenshot of the order-verification use case.*
+
+See the [workflow screenshot details](docs/images/workflow-screenshots.md) for a captured workflow
+with agent tasks, human approval, conditional paths, and inspectable run results.
 
 ## Agents, people, and decisions
 

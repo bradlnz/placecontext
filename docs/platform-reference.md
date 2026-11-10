@@ -111,9 +111,6 @@ Project-level decisions also have a separate durable record: MCP `add_decision` 
 choice, and rationale. Recorded decisions and linked changes contribute to the project's decision tree.
 These context records document why a choice was made; they do not execute workflow branches.
 
-See the [real-estate SDLC example](../examples/real-estate-sdlc/README.md) for agent work, independent review,
-QEMU checks, artifacts, and a production-readiness score.
-
 ## QEMU enabled by default
 
 `PlaceContext:Qemu:Enabled` defaults to `true`. The Jev browser executor is the default; native hosts

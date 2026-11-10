@@ -99,14 +99,9 @@ mode. Replay remains a sequence of recorded actions. For manual login, password 
 other desktop interaction, use the live human-control console described below. Automated file
 uploads, new-window workflows and arbitrary desktop commands remain outside the browser agent.
 
-Realistic Order Desk task inputs and expected results are in
-[`examples/order-desk/tasks.json`](../../examples/order-desk/tasks.json). Replace the URL placeholder
-with the deployed service URL before copying a task into a workflow. The guest cannot use a host's
-`localhost` URL; supply an address reachable from the VM.
-
-For a live research workflow, see the [Australian grocery comparison demo](../../examples/grocery-compare/README.md).
-It takes a product name, defaults to postcode 4101, inspects Coles and Woolworths in QEMU,
-uses Jev to assess captured price evidence, and produces a report comparing verified offers.
+For a practical order-verification task, start with a reachable supplier URL in the prompt, ask the
+browser to place or inspect the order, and require it to report the order ID, final status, total, and
+shipping. The guest cannot use a host's `localhost` URL; supply an address reachable from the VM.
 
 Run the deterministic tests without a real model:
 
