@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Workload;
@@ -6,6 +7,29 @@ namespace PlaceContext.Infrastructure.Tests;
 
 public sealed class VirtualMachineEnvironmentRunnerTests
 {
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public void Configuration_enables_qemu_by_default_and_respects_explicit_overrides(string? enabled, bool expected)
+    {
+        var values = new Dictionary<string, string?>();
+        if (enabled is not null)
+        {
+            values["PlaceContext:Qemu:Enabled"] = enabled;
+        }
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+        var options = new VirtualMachineEnvironmentOptions();
+        configuration.GetSection("PlaceContext:Qemu").Bind(options);
+        var catalog = new VirtualMachineEnvironmentRunner(Options.Create(options)).Get();
+
+        Assert.Equal(expected, catalog.Enabled);
+        Assert.Empty(catalog.Images);
+        Assert.False(catalog.AgentReady);
+        Assert.False(options.UseKvm);
+        Assert.Equal("jev", options.Executor);
+    }
+
     [Fact]
     public void Image_catalog_reports_missing_profiles_without_exposing_host_paths()
     {
@@ -14,7 +38,6 @@ public sealed class VirtualMachineEnvironmentRunnerTests
         {
             var runner = new VirtualMachineEnvironmentRunner(Options.Create(new VirtualMachineEnvironmentOptions
             {
-                Enabled = true,
                 Images = new() { ["browser"] = path, ["missing"] = path + ".absent", ["relative"] = "relative.qcow2" }
             }));
             var catalog = runner.Get();
@@ -81,9 +104,30 @@ public sealed class VirtualMachineEnvironmentRunnerTests
     [Fact]
     public async Task Disabled_and_unconfigured_images_fail_before_starting_a_process()
     {
-        var runner = new VirtualMachineEnvironmentRunner(Options.Create(new VirtualMachineEnvironmentOptions()));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(new("linux", "cat"), null, default));
-        runner = new VirtualMachineEnvironmentRunner(Options.Create(new VirtualMachineEnvironmentOptions { Enabled = true }));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(new("linux", "cat"), null, default));
+        var runner = new VirtualMachineEnvironmentRunner(Options.Create(new VirtualMachineEnvironmentOptions { Enabled = false }));
+        Assert.False(runner.Get().Enabled);
+        var disabled = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(new("linux", "cat"), null, default));
+        Assert.Contains("not enabled", disabled.Message);
+
+        runner = new VirtualMachineEnvironmentRunner(Options.Create(new VirtualMachineEnvironmentOptions()));
+        var missing = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(new("linux", "cat"), null, default));
+        Assert.Contains("image profile 'linux' is not available", missing.Message);
+    }
+
+    [Fact]
+    public async Task Default_enabled_runner_still_requires_an_agent_before_starting_a_process()
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            var options = new VirtualMachineEnvironmentOptions { Images = new() { ["linux"] = path } };
+            var runner = new VirtualMachineEnvironmentRunner(Options.Create(options));
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(new("linux", "cat"), null, default));
+            Assert.Contains("Configure a QEMU task agent", error.Message);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 }
