@@ -31,23 +31,24 @@ You decide what runs automatically, what needs review, and what happens next.
 
 A customer-onboarding workflow brings the process together: query the accounts that need attention,
 ask an agent to review the evidence, and let a person decide whether to prepare the handoff.
-These screenshots show the running app with sample customer data.
+These dark-mode screenshots show the running app with sample customer data. The workflow starts
+with **Query data**, so the agent's recommendation and the person's decision share the same evidence.
 
-### Query the data that drives the next step
+### Start with a data query
 
-Use **Query data** inside the workflow to browse project tables, choose fields, filter records,
-and preview the result before running. The selected rows become context for the next agent or job.
+Use **Query data** as the first step to browse project tables, choose fields, filter records,
+and preview the result before running. The selected rows become context for the agent that follows.
 Here, the query finds two active enterprise accounts and one account that needs review.
 
-![Query data step showing project columns, SQL, three preview rows, and the data passed to the next step](docs/images/workflow-query-data.png)
+![First Query data step in dark mode, with highlighted SQL, three preview rows, and the data passed to the agent](docs/images/workflow-query-data.png)
 
 ### Make the decision flow explicit
 
-Connect agent recommendations, human answers, and conditions on the same canvas. In this example,
+Follow the complete flow from the initial data query through agent review and human approval. In this example,
 a **Yes** selects the onboarding handoff; a **No** selects the follow-up list. Each condition shows
 its true and false paths, so you can see what runs, what is skipped, and where the workflow continues.
 
-![Workflow canvas showing agent review, human approval, and conditions selecting onboarding or follow-up](docs/images/workflow-decision-flow.png)
+![Complete dark-mode workflow: Query data first, agent review, human approval, then onboarding or follow-up conditions](docs/images/workflow-decision-flow.png)
 
 ### Bring people in at the right moment
 
