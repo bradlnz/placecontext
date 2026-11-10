@@ -1,0 +1,82 @@
+{
+  "SchemaVersion": 3,
+  "ExportedAt": "2026-11-10T12:12:39.718Z",
+  "TenantSettings": {
+    "TimeZoneId": "",
+    "BrandingJson": null,
+    "GitHubLogin": null
+  },
+  "Projects": [
+    {
+      "ProjectId": "6c632302-1d19-4306-854c-7ea53e2e769a",
+      "Name": "Customer operations",
+      "Path": "/examples/customer-operations"
+    }
+  ],
+  "Jobs": [],
+  "JobChains": [
+    {
+      "ChainId": "a6e1f0ca-f607-4227-a668-137c7cf97bde",
+      "ProjectId": "6c632302-1d19-4306-854c-7ea53e2e769a",
+      "Name": "Customer onboarding \u00b7 query to decision",
+      "Description": "Query eligible accounts, review the evidence, request approval, then select the approved next action.",
+      "StepJobIds": [],
+      "Stages": [
+        {
+          "JobIds": [],
+          "Action": {
+            "Type": "queryData",
+            "Sql": "SELECT customer_name, plan, monthly_value, status\nFROM customer_accounts\nWHERE monthly_value >= 10000\n   OR status = 'Needs review'\nORDER BY monthly_value DESC\nLIMIT 20",
+            "OutputField": "accounts"
+          }
+        },
+        {
+          "JobIds": [],
+          "Action": {
+            "Type": "agentTask",
+            "Instructions": "Review accounts.rows. Explain which accounts are ready for onboarding and which need follow-up. Refer to the customer name, plan, monthly value, and status. Return a written recommendation for the human reviewer.",
+            "ResponseField": "recommendation",
+            "ResponseType": "text",
+            "AgentProvider": "external"
+          }
+        },
+        {
+          "JobIds": [],
+          "Action": {
+            "Type": "humanInput",
+            "Instructions": "Review the selected customer accounts and the agent recommendation. Approve preparing the onboarding handoff for the active accounts? The Needs review account remains on hold.",
+            "ResponseField": "approved",
+            "ResponseType": "yesNo"
+          }
+        },
+        {
+          "JobIds": [],
+          "Gate": {
+            "Type": "condition",
+            "Expression": "eq:approved:true"
+          },
+          "Action": {
+            "Type": "queryData",
+            "Sql": "SELECT customer_name, plan, monthly_value,\n       'Ready for onboarding' AS next_action\nFROM customer_accounts\nWHERE status = 'Active' AND monthly_value >= 10000\nORDER BY monthly_value DESC\nLIMIT 20",
+            "OutputField": "handoff"
+          }
+        },
+        {
+          "JobIds": [],
+          "Gate": {
+            "Type": "condition",
+            "Expression": "eq:approved:false"
+          },
+          "Action": {
+            "Type": "queryData",
+            "Sql": "SELECT customer_name, status,\n       'Hold for follow-up' AS next_action\nFROM customer_accounts\nWHERE monthly_value >= 10000 OR status = 'Needs review'\nORDER BY monthly_value DESC\nLIMIT 20",
+            "OutputField": "held_accounts"
+          }
+        }
+      ]
+    }
+  ],
+  "Triggers": [],
+  "EventDefinitions": [],
+  "DataMappings": []
+}

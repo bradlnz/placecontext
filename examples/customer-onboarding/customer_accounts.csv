@@ -1,0 +1,6 @@
+customer_name,plan,monthly_value,status
+Summit Retail Group,Enterprise,18900.00,Active
+Northwind Labs,Enterprise,12400.00,Active
+Acme Field Services,Growth,4800.00,Active
+Bluebird Studio,Starter,950.00,Needs review
+Harbour Design,Growth,3600.00,Active
