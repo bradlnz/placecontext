@@ -264,7 +264,7 @@
                                                     <td>
                                                         @if (cellValue is not null && Vm.IsJsonCellPresentation(columnName, cellValue))
                                                         {
-                                                            <button class="json-view-button" @onclick:stopPropagation="true" @onclick="@(() => OpenJsonViewer(columnName, cellValue))">View data</button>
+                                                            <button class="json-view-button" @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenJsonViewer(columnName, cellValue))">View data</button>
                                                         }
                                                         else
                                                         {
@@ -310,14 +310,14 @@
                     }
                 }
 
-                @if (_jsonViewerValue is not null)
+                @if (Vm.JsonViewerValue is not null)
                 {
                     <aside class="json-side-pane">
                         <header>
-                            <div><strong>@_jsonViewerTitle</strong><span>JSON data</span></div>
-                            <button class="json-pane-close" @onclick="CloseJsonViewer" aria-label="Close JSON viewer"><AppIcon Kind="close" /></button>
+                            <div><strong>@Vm.JsonViewerTitle</strong><span>JSON data</span></div>
+                            <button class="json-pane-close" @onclick="Vm.CloseJsonViewer" aria-label="Close JSON viewer"><AppIcon Kind="close" /></button>
                         </header>
-                        <pre>@_jsonViewerValue</pre>
+                        <div id="@ProjectDataViewModel.JsonViewerEditorId" class="json-monaco"></div>
                     </aside>
                 }
 
@@ -577,8 +577,6 @@
 
     private readonly List<TableTab> _openTabs = new();
     private string? _activeTableName;
-    private string? _jsonViewerTitle;
-    private string? _jsonViewerValue;
     private string _tableFilter = "";
     private string _resultFilter
     {
@@ -758,7 +756,10 @@
         sb.Append(_resultFilter).Append('|');
         sb.Append((int)_resultsPane).Append('|');
         sb.Append(_selectedRowIndex ?? -1).Append('|');
-        sb.Append(_jsonViewerTitle ?? "\0").Append('|').Append(_jsonViewerValue?.Length ?? 0).Append('|');
+        sb.Append(Vm.JsonViewerTitle ?? "\0").Append('|').Append(Vm.JsonViewerValue?.Length ?? 0).Append('|');
+        if (Vm.JsonViewerValue is { } jsonViewer)
+            sb.Append(jsonViewer.GetHashCode()).Append('|').Append(jsonViewer.AsSpan(0, Math.Min(48, jsonViewer.Length)));
+        sb.Append('|');
         sb.Append(Vm.GraphSidePaneTitle ?? "\0").Append('|').Append(Vm.GraphSidePaneGraph?.Nodes.Count ?? 0).Append('|');
         sb.Append((int)Vm.SidebarPane).Append('|');
         sb.Append(Vm.TablesReady).Append('|').Append(Vm.SavedQueriesReady).Append('|');
@@ -1016,22 +1017,6 @@
     private static string EscapeIdent(string value) => value.Replace("\"", "\"\"");
 
     private static string EscapeBacktickIdent(string value) => value.Replace("`", "``");
-
-    private void OpenJsonViewer(string column, string value)
-    {
-        using var document = JsonDocument.Parse(value);
-        _jsonViewerTitle = column;
-        _jsonViewerValue = JsonSerializer.Serialize(
-            document.RootElement,
-            new JsonSerializerOptions { WriteIndented = true }
-        );
-    }
-
-    private void CloseJsonViewer()
-    {
-        _jsonViewerTitle = null;
-        _jsonViewerValue = null;
-    }
 
     private void PruneOpenTabs()
     {

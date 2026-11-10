@@ -85,6 +85,12 @@ public sealed class DataTablesListContractTests
             StringComparison.Ordinal
         );
         Assert.Contains("OpenJsonViewer(columnName, cellValue)", page, StringComparison.Ordinal);
+        Assert.Contains("class=\"json-monaco\"", page, StringComparison.Ordinal);
+        Assert.Contains("JsonViewerEditorId", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("<pre>@_jsonViewerValue</pre>", page, StringComparison.Ordinal);
+        Assert.Contains("pcdata-json-viewer", viewModel, StringComparison.Ordinal);
+        Assert.Contains("\"json\"", viewModel, StringComparison.Ordinal);
+        Assert.Contains("pcmonaco.init", viewModel, StringComparison.Ordinal);
         Assert.Contains("padding: 0;", css, StringComparison.Ordinal);
         Assert.Contains("border-radius: 0;", css, StringComparison.Ordinal);
     }

@@ -47,6 +47,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
             TablesReady = false;
             Error = null;
             ViewMonacoReady = false;
+            CloseJsonViewer();
             ResetStudioResources();
         }
         ResetSqlEditor();
@@ -156,6 +157,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
                 SqlEditorMonaco = false;
             }
         }
+        await SyncJsonViewerAsync();
     }
 
     public Task RunModalFromEditorAsync() =>
@@ -231,6 +233,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     // ── Full-screen table query modal ─────────────────────────────────────────────────────────
 
     public const string TableModalEditorId = "pcdata-table-modal-editor";
+    public const string JsonViewerEditorId = "pcdata-json-viewer";
 
     public bool ShowTableModal
     {
@@ -265,6 +268,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     {
         get; private set;
     }
+    private string? _jsonViewerMounted;
 
     public void OpenJsonViewer(string column, string value)
     {
@@ -280,6 +284,71 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     {
         JsonViewerTitle = null;
         JsonViewerValue = null;
+    }
+
+    private async Task SyncJsonViewerAsync()
+    {
+        if (JsonViewerValue is null)
+        {
+            if (_jsonViewerMounted is null)
+            {
+                return;
+            }
+            _jsonViewerMounted = null;
+            try
+            {
+                await _js.InvokeVoidAsync("pcmonaco.destroy", JsonViewerEditorId);
+            }
+            catch (JSDisconnectedException) { }
+            catch
+            {
+                // The host element is already gone; the next open creates a fresh editor.
+            }
+            return;
+        }
+
+        var snapshot = string.Concat(JsonViewerTitle, "\0", JsonViewerValue);
+        if (snapshot == _jsonViewerMounted && await IsJsonViewerMountedAsync())
+        {
+            return;
+        }
+        try
+        {
+            await _js.InvokeAsync<bool>(
+                "pcmonaco.init",
+                JsonViewerEditorId,
+                JsonViewerValue,
+                "json",
+                null,
+                "record.json",
+                true,
+                string.IsNullOrWhiteSpace(JsonViewerTitle) ? "JSON data" : JsonViewerTitle
+            );
+            if (await IsJsonViewerMountedAsync())
+            {
+                _jsonViewerMounted = snapshot;
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            _jsonViewerMounted = null;
+        }
+        catch
+        {
+            _jsonViewerMounted = null;
+        }
+    }
+
+    private async Task<bool> IsJsonViewerMountedAsync()
+    {
+        try
+        {
+            return await _js.InvokeAsync<bool>("pcmonaco.isMounted", JsonViewerEditorId);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public async Task<string?> TablePreviewSqlAsync(string table)
