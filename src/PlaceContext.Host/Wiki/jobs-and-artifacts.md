@@ -66,6 +66,9 @@ In the workflow canvas you can:
 - add wait or condition gates;
 - ask a human a question with a written answer or Yes/No buttons;
 - pause for a response from an external agent;
+- run a selected model automatically with project job tools;
+- query project tables directly into a workflow context field;
+- evaluate evidence with AI verification or a weighted scoring gate;
 - run instructions in a prepared QEMU Linux desktop;
 - add an email or SMS action from a **+** connector;
 - switch to the list editor when preferred.
@@ -91,10 +94,13 @@ current workflow layout with recorded run results; when the steps no longer matc
 layout, it shows the recorded steps in execution order instead. The same view appears in
 Observability and queue message details.
 
-Human and external-agent steps use the configured model to turn validation instructions and the preceding
-output into a question. Human steps and **External agent** steps pause until a response arrives.
-A No answer is a valid boolean response, not a missing answer. Configure the question model
-through `PlaceContext:Qemu:Agent` (Codex or a chat-completions endpoint).
+Human and external review steps use the configured question model to turn validation instructions and
+preceding output into a question. Without a question model, human steps show the supplied instructions.
+Human steps and **External agent** steps pause until a fresh response arrives. A No answer is a valid
+boolean response, not a missing answer or automatic cancellation. Configure a condition such as
+`eq:approved:true` on every action that depends on the human response field `approved`; false paths
+rejoin the workflow after the conditional stage. Configure the question model
+through `PlaceContext:Qemu:Agent` (Codex or a chat-completions endpoint); no VM is launched for questions.
 Local Development configuration uses the signed-in Codex CLI with `gpt-6-astra`; override these settings to use another provider or model.
 
 For an automatic verification call, select **AI verification** in an agent step. The AI verifier evaluates the
@@ -106,14 +112,21 @@ mean approval. An administrator must configure the AI verification service. Ques
 
 ### QEMU browser tasks
 
+QEMU execution is enabled by default. Administrators can disable it with
+`PlaceContext__Qemu__Enabled=false`. Native hosts need QEMU installed; the packaged runtime image
+includes it. Each execution host still needs a prepared image profile and configured models before
+a browser task can run. For containers, mount the image and configure its absolute container path.
+Software emulation is the default; KVM is optional and requires access to `/dev/kvm`.
+
 Choose an image profile and give the browser assistant a task in **Task prompt**, including the starting HTTP(S)
 URL and the outcome to verify. For example, ask it to place a test order, wait for processing,
 check shipping and the total, and refresh to verify the saved record. Enable guest networking
 when the target site is outside the VM.
 
-The browser assistant receives page text and available controls, chooses one action at a time, and checks completion.
-The configured workflow model supplies text for form fields. Passwords, uploads, iframes, and
-new-window workflows are not supported. Never put credentials in the prompt or workflow context.
+The vision model proposes coordinate actions from live desktop frames, and Jev checks the frame before
+execution and when assessing completion. The agent does not inspect HTML or enumerate DOM controls.
+Use the live human-control console for login and MFA. Automated uploads and new-window workflows
+remain unsupported. Never put credentials in the prompt or workflow context.
 
 The workflow waits for completion, failure, cancellation, or timeout, then discards disk changes.
 The output field contains page evidence and a decision trace as JSON in `stdout`, errors in
@@ -267,8 +280,23 @@ Each reconciliation sweep logs how many records it repaired and queues it retrie
 
 ### Agent tasks and repeat flow
 
-**Agent task** assigns requirements or work to a connected external agent and waits for its response.
-Its instructions are preserved exactly. The agent uses its own tools; this step does not launch a local model.
+**Agent task** assigns requirements or work. **Agent in the loop** adds reasoning or review.
+Both default to **Automatic** when created in the editor: choose an enabled model connection and model
+from **Settings → Models**. The runner can inspect, author, run, and check project jobs, subject to
+permissions. It uses sandboxed jobs for code execution, stores a complete JSON object in the configured
+response field, and continues. Its limits are 20 model turns and 30 minutes; recorded activity links to
+the jobs it runs. The allowed tools do not expose the host filesystem or workflow, schedule, permission,
+or credential management. A returned result is not proof of correctness; inspect actual job evidence.
+
+Choose **External agent** to wait for a connected agent's written response instead. External **Agent task**
+instructions are preserved exactly, while an external **Agent in the loop** step adds a generated review
+question. **AI verification** is available on Agent in the loop and records a probability rather than
+running a general-purpose agent. Human approval remains a separate step.
+
+**Scoring gate** evaluates an evidence field against weighted criteria and minimum confidence. It stores
+`passed`, the score and criterion breakdown, blockers, model, evaluation time, and an evidence SHA-256.
+It stops the workflow when the criteria fail by default. If you disable **Stop on failure**, branch
+explicitly on the saved result, for example `eq:release_review.passed:true`.
 
 Add **Repeat flow** as the final stage to repeat all preceding steps with their accumulated output until
 its completion condition passes. It allows 1–10 total attempts (default 3), persists its attempt count

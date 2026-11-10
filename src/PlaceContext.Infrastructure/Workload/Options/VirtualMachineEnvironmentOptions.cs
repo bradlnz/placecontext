@@ -5,7 +5,7 @@ public sealed class VirtualMachineEnvironmentOptions
     public bool Enabled
     {
         get; set;
-    }
+    } = true;
     public string Executable { get; set; } = "qemu-system-x86_64";
     public bool UseKvm
     {

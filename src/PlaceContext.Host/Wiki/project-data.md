@@ -25,6 +25,19 @@ Tables are the source of truth for ingested and processed data. The Data sidebar
 and saved queries; search and vector indexes are derived retrieval representations, not a separate
 data catalogue. Removing the index browser does not delete existing search data.
 
+## Query data inside a workflow
+
+Add **Query data** on the workflow canvas to read project tables before a job, agent, or decision.
+The query panel lists this project's tables and columns, lets you search sample values, select columns,
+add typed filters, generate SELECT/count queries, and preview SQL before saving it. The SQL editor
+uses schema completion with a plain-text fallback. Previewing does not run later workflow stages.
+
+Choose an output field, such as `query_data`. At execution, the read-only query requires `data.read`
+and saves `columns`, named-object `rows`, `row_count`, and `truncated: false` under that field.
+Following steps can use `query_data.rows` as evidence. Queries run as the project's isolated database
+role. Execution rejects truncated results, duplicate column names, and results over 1 MiB; aggregate
+or narrow the query instead of passing incomplete data into a decision. A query error fails the step.
+
 ## Live charts
 
 Open **Data → Analytics** and add a **SQL chart**. Return a label column and numeric values;

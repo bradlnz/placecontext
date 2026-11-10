@@ -5,7 +5,7 @@
 <h1 align="center">PlaceContext</h1>
 
 <p align="center">
-  <strong>A data workflow engine for ingesting, transforming, validating, and delivering data.</strong>
+  <strong>A data platform for workflows that combine jobs, agents, evidence, and human decisions.</strong>
 </p>
 
 <p align="center">
@@ -14,9 +14,17 @@
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512bd4?style=flat-square">
 </p>
 
-PlaceContext is an open-source data workflow engine with a web portal and an MCP endpoint. Run work on
-demand, on schedules, or from events; fan it out across your fleet; connect jobs into pipelines; and keep the
-resulting data, logs, traces, and artifacts under your control.
+PlaceContext connects data sources, project-owned SQL tables, isolated compute, and agentic workflows in
+one self-hosted platform. Ingest and prepare records, run jobs or agents against that context, evaluate the
+results, and ask a human before a consequential action. The web portal, API, and MCP endpoint share the
+same project permissions, workflow runs, and execution evidence.
+
+Run workflows on demand, on schedules, from events, or through durable queues. **Build** helps author
+executable workflows; **Workflows** manages their stages, decisions, and runs; **Data** holds tables,
+sources, entity views, and analytics; **Observability** exposes logs, traces, and failures.
+
+[Data platform](#data-platform) · [Agentic workflows](#agentic-workflows) ·
+[Decisions and human approval](#decisions-and-human-approval) · [QEMU setup](#qemu-enabled-by-default)
 
 ## Quick start
 
@@ -35,37 +43,147 @@ across the fleet. For the quick start, [k3d](https://k3d.io) runs k3s inside Doc
 cluster is required. The installer pulls the versioned multi-architecture
 [PlaceContext image from GHCR](https://github.com/bradlnz/placecontext/pkgs/container/placecontext).
 
-## Workflow-first platform
+QEMU execution is enabled by default and the runtime image includes `qemu-system-x86_64`. Browser tasks
+still need an operator-supplied desktop image and model credentials; see [QEMU setup](#qemu-enabled-by-default).
 
-PlaceContext is a data workflow engine that runs locally or in the cloud. **Build** creates and edits executable pipelines,
-**Workflows** is the canonical place to manage stages, conditions, human approvals,
-execution and monitoring. The built-in **Runs** tab shows live status, step progress, inputs
-requiring human review, failures and run history. **Observability** provides deeper logs,
-traces and execution evidence; the home **Workflow overview** retains quick actions.
+## Data platform
 
-Connect data and services as workflow inputs. Create jobs and compose them into flows; use
-AI verification when evidence is uncertain, and durable human-input steps for consequential
-approvals. An AI assessment is not itself approval or permission to run external actions.
+Connect PostgreSQL, MySQL, SQL Server, S3/MinIO, Azure Data Lake, Fabric/OneLake, Snowflake,
+Databricks, or API/event feeds. Source setup discovers datasets, selects a stable key and approved
+fields, prepares records, and delivers them to a queue linked to a processing workflow.
 
-The separate **Workflow store / Agent Store** and **My dashboards / Data profiles** pages
-are retired from the product navigation. Their old URLs redirect to Workflows or the Workflow
-overview. Existing tenant/project/user records and prior executions are preserved; the underlying
-services are retained for compatibility pending a separately planned data-retention migration.
-No saved data is deleted by the navigation change. The workflow editor and Build no longer expose
-library-agent purchase/simulation actions as a primary workflow.
+```mermaid
+flowchart TD
+    Sources["Databases, lakes, warehouses, feeds"] --> Prepare["Select fields, sanitise, deduplicate"]
+    Prepare -->|Prepared records| Queue["Durable queue"]
+    Prepare -->|Invalid records| Held["Held for correction"]
+    Queue --> Workflow["Processing workflow"]
+    Workflow -->|Mapped output| Tables["Project SQL tables"]
+    Workflow --> Artifacts["Reports and artifacts"]
+    Tables --> Query["Queries, entities, analytics"]
+    Tables --> Index["Derived search and vector indexes"]
+```
 
-## Job + data workflows
+| Capability | Current implementation |
+| --- | --- |
+| Prepare and queue | Keep approved fields, apply explicit field redaction, deduplicate records, and hold invalid rows. Preparation and encrypted queue submissions commit together. Processing, tagging, and retrieval belong in the linked workflow. |
+| Project data | Isolated SQL schemas and roles, table editing, CSV import/export, entity relationships, saved queries, and SQL charts. Project tables are the source of truth; indexes are derived retrieval data. |
+| Data mapping | Map job or workflow JSON output into typed table columns. Completed runs append mapped rows with run IDs and ingestion timestamps for traceability. |
+| Query data step | Browse this project's tables and sample values, select columns and filters, edit SQL, and preview it inside the workflow editor. Execution returns named row objects under a configured field such as `query_data.rows`. |
+| Data contracts | The **Validate data contract** job checks required fields, types, row counts, null rates, and unique keys before downstream work. Failed checks stop the workflow and return structured quality evidence. |
+| Retrieval and artifacts | Search connected data and project context; opt into embeddings when configured. Keep generated reports and files in artifact storage. Existing source retrieval remains compatible until migrated to queue processing. |
 
-PlaceContext combines isolated jobs and project-owned data into durable workflows. Add a
-**Validate data contract** job between ingestion and downstream actions to enforce required
-fields, field types, row count, null-rate and unique-key rules. Failed data checks stop later
-workflow stages and produce structured evidence instead of silently forwarding invalid rows.
+**Query data** uses a read-only project transaction and requires `data.read`. The workflow rejects
+truncated results, duplicate column names, and results larger than 1 MiB rather than letting an agent
+decide from an incomplete result. Aggregate or narrow large datasets in SQL. Source records and SQL
+tables are separate: configure processing and output mappings to move data between them.
 
-The workflow editor offers **Pre-run checks** for job source readiness and human
-approval gates. Workflow edits carry an expected revision, protecting against silent
-concurrent overwrites. These are foundational safety features, not a complete deployment
-promotion system. See [the SaaS job/data foundation](docs/job-data-saas-foundation.md) for
-current functionality and remaining SaaS work.
+See [project data and connector limits](src/PlaceContext.Host/Wiki/project-data.md) and
+[data contracts and readiness checks](docs/job-data-saas-foundation.md).
+
+## Agentic workflows
+
+Compose code jobs, parallel stages, queries, agents, waits, conditions, and human responses on the same
+canvas. Each step records its execution and passes results into the workflow context. An agent can do
+work, a separate reviewer can assess its evidence, and a human can decide whether the next action runs.
+
+| Concept | How it runs | Result or continuation |
+| --- | --- | --- |
+| **Agent task** | Assign work and acceptance criteria. **Automatic** runs a selected model connection with project job tools; **External agent** waits for another agent to respond. | Automatic execution stores a JSON object in `task_result` (or your chosen field). External execution requires a fresh written response. |
+| **Agent in the loop** | Add a review or reasoning step. Choose **Automatic**, **External agent**, or **AI verification**. | Automatic/external modes return their response; AI verification records the question, model, and probability of Yes in `<response_field>.noul`. |
+| **Human in the loop** | Pause for a written answer or Yes/No decision in the run panel or through `resume_job_chain`. | The response is persisted into the chosen field. Yes and No are JSON `true` and `false`; later conditions determine what happens next. |
+| **QEMU browser task** | Execute a task in a disposable desktop VM. A vision model proposes actions and Jev checks live frames. | Browser evidence, decision traces, activity, and replay frames; live human control for login/MFA or assistance. |
+| **Scoring gate** | Evaluate evidence against weighted criteria, per-criterion minimums, and confidence requirements. | A recorded score, `passed`, blockers, model, evaluation time, and evidence hash. Stops on failure by default. |
+| **Condition / Repeat flow** | Branch on recorded values; optionally repeat preceding stages until a completion condition passes. | True/false paths rejoin. Repeat flow is a final stage with 1–10 total attempts; execution failures still stop the run. |
+
+New agent steps default to **Automatic** in the editor. Select an enabled connection and model from
+**Settings → Models**. The automatic runner can inspect, author, run, and check project jobs; code executes
+through sandboxed jobs. Its tool set does not include host filesystem access or workflow, schedule,
+permission, or credential management. It accepts a complete JSON object as the final response and is
+bounded to 20 model turns and 30 minutes. Activity and linked job results are visible in the run panel.
+Returning JSON completes the agent step; it does not prove that the requested outcome is correct.
+
+For an external hand-off, **Agent task** preserves the assigned instructions. **Agent in the loop** uses
+`PlaceContext:Qemu:Agent` to generate a review question from instructions and preceding output, then waits.
+Human steps use that question model when configured and otherwise present the supplied instructions.
+These steps do not require a VM. AI verification and scoring use the configured TypeSafe/Jev service;
+model errors fail the step instead of approving it.
+
+## Decisions and human approval
+
+A decision has explicit evidence, a recorded result, and a rule for the next action. Keep these separate:
+an agent's proposal, a model's assessment, a person's approval, and a deterministic branch are different
+parts of a workflow.
+
+For example, an order-review workflow can query project data, ask an agent to prepare a recommendation,
+score its evidence, and request human approval before sending an order:
+
+```mermaid
+flowchart TD
+    Query["Query project data"] --> Agent["Agent task: prepare recommendation"]
+    Agent --> Score{"Scoring gate passes?"}
+    Score -->|No| Blocked["Stop; inspect blockers"]
+    Score -->|Yes| Human["Human reviews evidence"]
+    Human --> Decision{"approved equals true?"}
+    Decision -->|Yes| Action["Send order"]
+    Decision -->|No| Hold["Hold; no order sent"]
+```
+
+Configure the human step as **Yes/No** with response field `approved`, then gate the action with
+`eq:approved:true`. **No is a completed response, not an automatic cancellation.** Conditions skip a stage
+or take its false path, then rejoin the workflow; gate every later action that depends on approval.
+
+| Decision | Example configuration | Meaning |
+| --- | --- | --- |
+| Human authorization | `eq:approved:true` | Run the action only after the recorded Yes response. |
+| AI evidence threshold | `gte:agent_response.noul:0.9` | Continue only when the model's probability meets the chosen threshold; this is not human approval. |
+| Weighted quality result | `eq:release_review.passed:true` | Branch on a scoring gate stored in `release_review`. If **Stop on failure** is disabled, configure the failure path explicitly. |
+| Bounded improvement | Repeat flow until `eq:release_review.passed:true` | Repeat earlier work up to the configured attempt limit. Repeated side effects must be idempotent. |
+
+Use **Pre-run checks** to inspect job readiness and missing human gates before execution. Workflow edits
+check the revision opened by the editor to prevent silent concurrent overwrites. Run history, saved
+context, logs, and review outputs let operators inspect what happened; these checks do not constitute
+immutable releases or a complete approval-assignment system.
+
+Project-level decisions also have a separate durable record: MCP `add_decision` stores a question,
+choice, and rationale. Recorded decisions and linked changes contribute to the project's decision tree.
+These context records document why a choice was made; they do not execute workflow branches.
+
+See the [real-estate SDLC example](examples/real-estate-sdlc/README.md) for agent work, independent review,
+QEMU checks, artifacts, and a production-readiness score.
+
+## QEMU enabled by default
+
+`PlaceContext:Qemu:Enabled` defaults to `true`. The Jev browser executor is the default; native hosts
+need QEMU installed, while the packaged runtime image includes it. A workflow only starts a VM when it
+reaches a QEMU step with a configured, available image and a ready task agent. Set
+`PlaceContext__Qemu__Enabled=false` to disable VM execution explicitly.
+
+Prepare a Debian-compatible x86-64 desktop qcow2 image using the [QEMU guide](deploy/qemu/README.md),
+then configure each process that executes workflows. This example uses a vision-capable chat-completions
+provider; replace the endpoint, model, and credential placeholders:
+
+```bash
+env 'PlaceContext__Qemu__Images__browser-linux=/absolute/path/browser-linux.qcow2' \
+    PlaceContext__Qemu__Agent__Provider=chat-completions \
+    PlaceContext__Qemu__Agent__Endpoint=https://your-model-server/v1/chat/completions \
+    PlaceContext__Qemu__Agent__Model=your-vision-model \
+    PlaceContext__Qemu__Agent__ApiKey=your-model-key \
+    TYPESAFE_API_KEY=your-typesafe-key \
+    ./run.sh
+```
+
+For a container deployment, mount the prepared image and use its absolute **container** path in the
+same configuration keys. QEMU executes in the workflow-host process environment, not a Kubernetes job pod.
+The installer does not download desktop images or configure providers. Prefer project vault entry
+`TYPESAFE_API_KEY` for Jev; host configuration/environment is the fallback. With a local Codex login,
+`./deploy/qemu/run-local.sh` configures the standard `dist/qemu/browser-linux.qcow2` image and vision model.
+
+Disks are disposable and guest networking remains off unless enabled on the step. Software emulation
+is the default; `PlaceContext__Qemu__UseKvm=true` requires access to `/dev/kvm`. Model credentials stay on
+the host. Use **Take control** for login/MFA, **Save login** for an encrypted private browser session,
+and **Resume automation** to continue. Cancellation or timeout stops the VM; the timeout includes human
+interaction. Live consoles must reach the process executing the VM, with one active VM per host.
 
 ## Connect your AI harness
 
@@ -125,15 +243,10 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
   Apps can submit work to the existing authenticated queue API using a reachable portal URL and API token.
   Kubernetes hosting, public ingress/TLS, persistent volumes, and rolling image updates are not yet supported.
 - **Workflows and automation** — pass output through ordered stages, fan out parallel work, add wait or condition
-  gates, pause for human or external-agent responses, replay from a failed step, and trigger the whole chain
-  on demand, on a schedule, or from an event. In the workflow editor, add a Human in the loop or Agent in the
-  loop step with validation instructions and a response field. The configured model generates a question
-  from those instructions and the preceding output. Configure `PlaceContext:Qemu:Agent` with a model and
-  either the `codex` provider or a `chat-completions` endpoint; question generation does not launch a VM.
-  Generation errors fail the step without bypassing review. Human steps accept either a written answer
-  or Yes/No buttons; Yes/No answers are JSON booleans, including `false`. The run waits for a fresh response
-  through the run panel or `resume_job_chain`; subsequent steps receive that field in the accumulated context. Agent steps
-  do not launch an agent automatically. These hand-offs are top-level stages and can have condition gates.
+  gates, run automatic agents, pause for human or external-agent responses, and replay from a failed step.
+  Trigger the workflow on demand, on a schedule, from an event, or through a queue. See
+  [agentic workflows](#agentic-workflows) for execution modes and [decisions](#decisions-and-human-approval)
+  for evidence thresholds, scoring, approval, and branching.
 - **QEMU agent steps** — give Jev a browser task with a starting URL and a result to verify.
   Our Rust guest agent controls the image's existing Chromium, with no Python or Node/npm runtime dependency.
   The configured vision model proposes coordinate actions; Jev checks live desktop frames for action approval,
@@ -141,7 +254,8 @@ Onboard this repository into PlaceContext, then show me its recent activity and 
   is off by default, and cancellation/timeout stop the VM. Runs return page evidence, a decision
   trace, and replay frames. Configure `PlaceContext:TypeSafe` and a prepared image; use
   `PlaceContext:Qemu:Executor=model` for the older general desktop/terminal agent.
-  See the [QEMU guide](deploy/qemu/README.md) for setup, supported controls, and realistic task examples.
+  Execution is enabled by default; see [QEMU setup](#qemu-enabled-by-default) and the
+  [QEMU guide](deploy/qemu/README.md) for image preparation, controls, and task examples.
   Workflows use `/project/{projectId}/workflows` and Observability uses `tab=workflows&workflowRun={runId}`.
   API trigger/replay endpoints use `/api/v1/workflows/{workflowId}` and cancellation uses
   `/api/v1/workflow-runs/{runId}/cancel`. Existing chain URLs remain compatible aliases.
@@ -283,6 +397,10 @@ Point the provider at a workspace origin with a management API key
 ## Documentation
 
 - [Installation and fleet setup](deploy/release/README.md)
+- [Project data, SQL, sources, and retrieval](src/PlaceContext.Host/Wiki/project-data.md)
+- [Jobs, workflows, and artifacts](src/PlaceContext.Host/Wiki/jobs-and-artifacts.md)
+- [QEMU browser agents and human control](deploy/qemu/README.md)
+- [Job/data validation and implementation boundaries](docs/job-data-saas-foundation.md)
 - [Management API reference](docs/management-api.md)
 - [Terraform provider](terraform/README.md)
 - [OpenSearch integration](src/PlaceContext.Host/Wiki/opensearch-integration.md)
@@ -296,6 +414,8 @@ operator-facing documentation shipped with each build.
 
 - Re-run the installer to download and verify the newest compiled GitHub release, then roll the deployment.
 - Pass `--version v1.2.3` to install or retain a specific release.
+- QEMU is enabled when `PlaceContext:Qemu:Enabled` is omitted. Existing explicit `false` settings remain
+  disabled; desktop images and model credentials still need configuration on each execution host.
 
 ## License
 
@@ -321,6 +441,5 @@ and run history. The Workflow overview highlights runnable processes; **Observab
 shows execution evidence, failures and timing. Use **Analytics** only where a workflow or
 investigation needs a chart; it is not a separate profiling product.
 
-Provider-specific billing simulations and private dashboard layouts are legacy records, not
-features to build new process design around. These records remain stored until an explicit
-retention/export policy is approved.
+The old Agent Store and Data profiles navigation redirects to Workflows or the overview. Existing
+records are retained for compatibility; new process design uses workflows and project data.

@@ -33,19 +33,26 @@ image. The build image has no SSH login credentials and disables root/password S
 
 ## Jev browser tasks (default)
 
-Set these on each workflow host:
+QEMU execution is enabled by default (`PlaceContext:Qemu:Enabled=true`), with `jev` as the
+default executor. Set `PlaceContext__Qemu__Enabled=false` to opt out on a workflow host.
+Enabling execution does not provision a desktop image or model credentials: unavailable images
+and unconfigured agents still fail before a VM starts. Native hosts need `qemu-system-x86_64`;
+the packaged runtime image includes it. Mount prepared images into containers and configure
+their absolute paths inside the container. The installer does not download desktop images.
+
+Set these on each workflow host (configuration keys shown below, not shell assignments):
 
 ```text
-PlaceContext__Qemu__Enabled=true
 PlaceContext__Qemu__Images__browser-linux=/absolute/path/browser-linux.qcow2
-PlaceContext__Qemu__UseKvm=true
+PlaceContext__Qemu__UseKvm=false
 PlaceContext__Qemu__Executor=jev
 TYPESAFE_API_KEY=your-key
 PlaceContext__Qemu__Agent__MaxSteps=20
 ```
 
 `Executor` defaults to `jev`. The model and key reuse `PlaceContext:TypeSafe`; the default model
-is `jev-1.14.0`. Existing Debian images built by this guide already provide Chromium;
+is `jev-1.14.0`. Software emulation is the default; set `UseKvm=true` only when the execution
+process can access `/dev/kvm`. Existing Debian images built by this guide already provide Chromium;
 no image rebuild is needed. The statically linked `pc-jev` executable is bundled with the host
 application and copied into each disposable guest in bounded chunks. Chromium keeps its sandbox
 enabled. Rust communicates with Chromium over inherited pipes; no HTTP server or debugging
@@ -105,10 +112,10 @@ Run the deterministic tests without a real model:
 
 ```bash
 cargo test --locked --manifest-path src/PlaceContext.DesktopAgent/Cargo.toml --target-dir dist/qemu-agent-build
-dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~JevQemuTaskAgentTests
+dotnet test tests/PlaceContext.Infrastructure.Tests --filter 'FullyQualifiedName~VirtualMachineEnvironmentRunnerTests|FullyQualifiedName~ReviewedVirtualMachineTaskAgentTests'
 PLACECONTEXT_TEST_QEMU_IMAGE=/absolute/path/browser-linux.qcow2 \
 PLACECONTEXT_TEST_QEMU_KVM=true \
-dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~JevQemuIntegrationTests
+dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~ReviewedVirtualMachineIntegrationTests
 ```
 
 The VM test uses real Chromium,
@@ -123,9 +130,8 @@ This is also required for existing general desktop tasks that do not include a s
 Set these on each host that executes workflows:
 
 ```text
-PlaceContext__Qemu__Enabled=true
 PlaceContext__Qemu__Images__browser-linux=/absolute/path/browser-linux.qcow2
-PlaceContext__Qemu__UseKvm=true
+PlaceContext__Qemu__UseKvm=false
 PlaceContext__Qemu__Executor=model
 PlaceContext__Qemu__Agent__Provider=chat-completions
 PlaceContext__Qemu__Agent__Endpoint=http://your-model-server:8080/v1/chat/completions
@@ -182,7 +188,7 @@ Run the opt-in test using a real model (this consumes account usage):
 PLACECONTEXT_TEST_QEMU_IMAGE=/absolute/path/browser-linux.qcow2 \
 PLACECONTEXT_TEST_QEMU_KVM=true \
 PLACECONTEXT_TEST_CODEX_MODEL=gpt-6-astra \
-dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~CodexQemuIntegrationTests
+dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~CliAgentIntegrationTests
 ```
 
 The test asks Codex to create and open an offline HTML page, inspect its Live preview, and return
@@ -203,7 +209,7 @@ Run the real desktop regression check after creating an image:
 ```bash
 PLACECONTEXT_TEST_QEMU_IMAGE=/absolute/path/browser-linux.qcow2 \
 PLACECONTEXT_TEST_QEMU_KVM=true \
-dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~QemuDesktopIntegrationTests
+dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~VirtualMachineDesktopIntegrationTests
 ```
 
 The checks open a local HTML page in Chromium, verify the non-root credentials, then check
@@ -254,17 +260,19 @@ model calls):
 ```bash
 PLACECONTEXT_TEST_QEMU_IMAGE=/absolute/path/browser-linux.qcow2 \
 PLACECONTEXT_TEST_QEMU_KVM=true \
-dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~QemuInteractiveIntegrationTests
+dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~VirtualMachineInteractiveIntegrationTests
 ```
 
 ### Repeatable local startup
 
 From the repository, run `./deploy/qemu/run-local.sh` after starting the local database.
 It uses `dist/qemu/browser-linux.qcow2` (override with `PLACECONTEXT_QEMU_IMAGE`), detects
-KVM access, and enables the Jev executor with the signed-in Codex vision model. Jev reads `TYPESAFE_API_KEY` from the current project’s vault first, falling back to host
+KVM access, and selects the Jev executor with the signed-in Codex vision model. An explicit
+`PlaceContext__Qemu__Enabled=false` is preserved. Jev reads `TYPESAFE_API_KEY` from the current project’s vault first, falling back to host
 configuration or the launching environment when no project entry exists. Existing `PlaceContext__Qemu__Agent__*`
 values take precedence. Kubernetes defaults to `$HOME/.kube/config`. The portal binds to
-`http://localhost:7700`. These local settings do not enable QEMU on production hosts.
+`http://localhost:7700`. These image and model settings apply only to this local process;
+production workflow hosts need their own image mounts and provider configuration.
 
 Jev credentials resolve per project: the vault entry `TYPESAFE_API_KEY` takes precedence over
 `PlaceContext:TypeSafe:ApiKey` and the host environment. This applies to browser automation,
