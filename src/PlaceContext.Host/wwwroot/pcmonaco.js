@@ -174,6 +174,30 @@ window.pcmonaco = (function () {
     'DESC',
     'SELECT *',
   ];
+  // Query-building snippets offered alongside schema completions. Labels start with the keyword
+  // so Monaco's prefix filtering keeps them discoverable while typing.
+  const SQL_SNIPPETS = [
+    {
+      label: 'SELECT columns FROM table LIMIT',
+      detail: 'bounded column query',
+      insertText: 'SELECT\n    ${1:column}\nFROM\n    ${2:table}\nLIMIT ${3:100}',
+    },
+    {
+      label: 'SELECT * FROM table WHERE',
+      detail: 'bounded filtered query',
+      insertText: 'SELECT\n    ${1:*}\nFROM\n    ${2:table}\nWHERE\n    ${3:column} = ${4:value}\nLIMIT ${5:100}',
+    },
+    {
+      label: 'COUNT(*) FROM table',
+      detail: 'row count',
+      insertText: 'SELECT COUNT(*) AS "row_count"\nFROM\n    ${1:table}',
+    },
+    {
+      label: 'WHERE column AND column',
+      detail: 'two-column filter',
+      insertText: 'WHERE\n    ${1:column} = ${2:value}\n    AND ${3:column} = ${4:value}',
+    },
+  ];
   let sqlTables = []; // [{ name, columns: [{ name, type }], kind: 'table' }]
   let sqlIndexes = []; // [{ name, columns: [{ name, type }], kind: 'index' }]
   let sqlProviderRegistered = false;
@@ -225,6 +249,18 @@ window.pcmonaco = (function () {
             kind: monaco.languages.CompletionItemKind.Keyword,
             range: word,
             sortText: 'z' + kw,
+          });
+        }
+
+        for (const snippet of SQL_SNIPPETS) {
+          suggestions.push({
+            label: snippet.label,
+            insertText: snippet.insertText,
+            kind: monaco.languages.CompletionItemKind.Snippet,
+            detail: snippet.detail,
+            range: word,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            sortText: 'c' + snippet.label,
           });
         }
 
@@ -622,6 +658,38 @@ window.pcmonaco = (function () {
     return null;
   }
 
+  // Insert text at the caret, replacing the selection. Used by the workflow query studio's
+  // column/filter helpers. Returns the new editor text, or null while Monaco is still loading.
+  function insertText(id, text) {
+    try {
+      const ta = fallbacks.get(id);
+      if (ta) {
+        const start = ta.selectionStart ?? ta.value.length;
+        const end = ta.selectionEnd ?? start;
+        ta.value = ta.value.slice(0, start) + (text || '') + ta.value.slice(end);
+        const caret = start + (text || '').length;
+        ta.selectionStart = ta.selectionEnd = caret;
+        ta.focus();
+        return ta.value;
+      }
+      const editor = editors.get(id);
+      if (editor && editor.getModel()) {
+        const selection = editor.getSelection() || editor.getModel().getFullModelRange();
+        editor.executeEdits('pcmonaco.insertText', [
+          { range: selection, text: text || '', forceMoveMarkers: true },
+        ]);
+        editor.focus();
+        return editor.getValue();
+      }
+      if (initLocks.has(id)) {
+        return initLocks.get(id).then(() => insertText(id, text));
+      }
+    } catch (e) {
+      console.warn('pcmonaco.insertText error:', e);
+    }
+    return null;
+  }
+
   function destroy(id) {
     try {
       const ta = fallbacks.get(id);
@@ -658,7 +726,7 @@ window.pcmonaco = (function () {
     return !!(host && node && host.contains(node));
   }
 
-  return { isMounted, init, openFile, closeFile, setValue, getValue, destroy, setSqlSchema };
+  return { isMounted, init, openFile, closeFile, setValue, getValue, insertText, destroy, setSqlSchema };
 })();
 
 // pcdata — downloads for project data and on-demand run output.

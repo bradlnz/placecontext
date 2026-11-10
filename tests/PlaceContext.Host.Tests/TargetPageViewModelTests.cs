@@ -3,6 +3,7 @@ using PlaceContext.Application.Auth;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Host.Components.ViewModels;
 using PlaceContext.Host.Wiki;
+using PlaceContext.Application.Access.Enums;
 
 namespace PlaceContext.Host.Tests;
 

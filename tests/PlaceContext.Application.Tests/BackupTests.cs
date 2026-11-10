@@ -5,6 +5,7 @@ using PlaceContext.Application.Organization;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Application.Tests;
 

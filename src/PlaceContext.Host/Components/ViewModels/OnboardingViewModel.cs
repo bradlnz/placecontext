@@ -1,14 +1,11 @@
 using Microsoft.AspNetCore.Components;
-using Microsoft.Extensions.Options;
 using PlaceContext.Application;
-using PlaceContext.Application.Billing;
 using PlaceContext.Application.Cluster;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed class OnboardingViewModel(
     PlaceContextService service,
-    IOptions<RunBillingDeploymentOptions> deployment,
     NavigationManager navigation,
     PortalUiState ui) : PageViewModel
 {
@@ -17,8 +14,6 @@ public sealed class OnboardingViewModel(
     public SetupGuideStep Step { get; private set; }
     public ExecutionLocation? Location { get; private set; }
     public ClusterInfo? Cluster { get; private set; }
-    public string? StartPlan { get; private set; }
-    public bool ManagedHosting => deployment.Value.ManagedHosting;
     public bool CanContinue => Location is not null;
     public bool IsCloud => Location == ExecutionLocation.Cloud;
     public bool IsLocal => Location == ExecutionLocation.Local;
@@ -30,17 +25,9 @@ public sealed class OnboardingViewModel(
         { NodeCount: 0 } => "The cluster has no visible nodes. Check access and add a worker.",
         _ => $"{Cluster.Nodes.Count(node => node.Ready)} of {Cluster.NodeCount} nodes ready. Verify job placement with a test run.",
     };
-    public string BillingUrl => StartPlan is null
-        ? PageRoutes.BillingSettings
-        : $"{PageRoutes.BillingSettings}?welcome=1&start={StartPlan}";
     public string SetupUrl => IsLocal
         ? PageRoutes.WikiArticle("setup") + "#install-locally"
         : PageRoutes.WikiArticle("cluster-and-nodes") + "#cloud-workers";
-
-    public void SetParameters(string? startPlan)
-    {
-        StartPlan = startPlan is RunPlans.Basic or RunPlans.Standard ? startPlan : null;
-    }
 
     public async Task LoadAsync()
     {

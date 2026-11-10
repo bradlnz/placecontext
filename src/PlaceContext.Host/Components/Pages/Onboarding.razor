@@ -83,11 +83,6 @@
                 <a href="/wiki/cluster-and-nodes#job-placement">Configure job placement</a></p>
             <div class="guide-links">
                 <a class="dcbtn" href="@Vm.SetupUrl">Installation instructions</a>
-                @if (Vm.ManagedHosting)
-                {
-                    <a class="dcbtn" href="@Vm.BillingUrl">Manage workspace plan</a>
-                    <p>A managed workspace requires an active subscription, including when you connect your own workers.</p>
-                }
             </div>
             <div class="guide-actions">
                 <button class="dcbtn quiet" @onclick="Vm.Back">Back</button>
@@ -98,11 +93,7 @@
 </main>
 
 @code {
-    [SupplyParameterFromQuery(Name = "start")]
-    public string? StartPlan { get; set; }
-
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
-    protected override void OnParametersSet() => Vm.SetParameters(StartPlan);
     protected override Task OnInitializedAsync() => Vm.LoadAsync();
     public void Dispose() => Vm.Detach();
 }

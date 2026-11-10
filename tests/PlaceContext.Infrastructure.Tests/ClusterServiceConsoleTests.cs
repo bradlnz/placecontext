@@ -9,6 +9,7 @@ using PlaceContext.Infrastructure.Workload;
 using PlaceContext.TestSupport;
 using k8s.Models;
 using k8s;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Tests;
 

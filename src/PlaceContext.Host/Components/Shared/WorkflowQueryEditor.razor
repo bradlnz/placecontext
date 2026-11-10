@@ -1,0 +1,63 @@
+@using PlaceContext.Application.ProjectData
+@inject WorkflowQueryEditorViewModel Vm
+@implements IAsyncDisposable
+
+<div id="@Vm.EditorId" class="workflow-query-editor"></div>
+
+@code {
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "Read-only SQL query";
+    [Parameter] public IReadOnlyList<ProjectTableSchema> Tables { get; set; } = [];
+
+    // The text this component last sent to (or read from) the editor. Blazor re-renders still pass
+    // the original parameter value, so only a genuinely new Value from the parent replaces the
+    // editor text — otherwise a parent re-render would clobber in-progress typing.
+    private string? _editorText;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Vm.InitAsync(Value, Label);
+            _editorText = Value;
+        }
+        await Vm.PushSchemaAsync(Tables);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.Equals(Value, _editorText, StringComparison.Ordinal))
+        {
+            _editorText = Value;
+            await Vm.SetValueAsync(Value);
+        }
+    }
+
+    public async Task<string> ReadAsync()
+    {
+        var text = await Vm.ReadAsync(Value);
+        Value = text;
+        _editorText = text;
+        return text;
+    }
+
+    public async Task SetValueAsync(string value)
+    {
+        Value = value;
+        _editorText = value;
+        await Vm.SetValueAsync(value);
+    }
+
+    public async Task<string?> InsertAsync(string text)
+    {
+        var value = await Vm.InsertAsync(text, Value);
+        if (value is not null)
+        {
+            Value = value;
+            _editorText = value;
+        }
+        return value;
+    }
+
+    public ValueTask DisposeAsync() => Vm.DisposeAsync();
+}

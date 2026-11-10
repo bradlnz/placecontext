@@ -5,6 +5,7 @@ using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Comms;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
+using PlaceContext.Application.Access.Enums;
 
 namespace PlaceContext.Infrastructure.Tests;
 

@@ -8,6 +8,7 @@ using PlaceContext.Application.Workload.VirtualMachines;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Application.Tests;
 

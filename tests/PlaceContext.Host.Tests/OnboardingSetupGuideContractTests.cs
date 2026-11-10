@@ -3,7 +3,7 @@ namespace PlaceContext.Host.Tests;
 public sealed class OnboardingSetupGuideContractTests
 {
     [Fact]
-    public void First_login_setup_focuses_on_execution_and_keeps_billing_in_workspace_settings()
+    public void First_login_setup_focuses_on_execution_and_leaves_plans_out_of_the_portal()
     {
         var onboarding = Read("src/PlaceContext.Host/Components/Pages/Onboarding.razor");
         var cluster = Read("src/PlaceContext.Host/Components/Pages/Cluster.razor");
@@ -14,10 +14,11 @@ public sealed class OnboardingSetupGuideContractTests
         Assert.Contains("ExecutionLocation.Cloud", onboarding);
         Assert.Contains("ExecutionLocation.Local", onboarding);
         Assert.DoesNotContain("OpenSearch", onboarding);
+        Assert.DoesNotContain("billing", onboarding, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("This guide does not move workloads", onboarding);
         Assert.Contains("@page \"/settings/cluster\"", cluster);
         Assert.Contains("destination == \"/\" ? \"/onboarding\"", auth);
-        Assert.Contains("/onboarding?start=", signup);
+        Assert.Contains("/onboarding", signup);
     }
 
     private static string Read(string relativePath)

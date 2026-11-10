@@ -902,19 +902,246 @@ else
 
         @if (Vm.ShowQueryDataEditor)
         {
-            <div class="dcmodal-overlay" @onclick="Vm.CloseQueryDataEditor" @onkeydown='@(e => { if (e.Key == "Escape") Vm.CloseQueryDataEditor(); })'>
-                <div class="dcmodal loop-modal" role="dialog" aria-modal="true" aria-labelledby="query-data-title" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle /><h3 id="query-data-title">Query data</h3>
-                        <button class="dcslide-x" aria-label="Close query settings" @onclick="Vm.CloseQueryDataEditor"><AppIcon Kind="close" /></button>
+            <div class="dcmodal-overlay" @onclick="CloseQueryStudioAsync" @onkeydown='@(e => { if (e.Key == "Escape") _ = CloseQueryStudioAsync(); })'>
+                <div class="dcmodal query-studio-modal" role="dialog" aria-modal="true" aria-labelledby="query-data-title" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                        <div>
+                            <h3 id="query-data-title">Query data</h3>
+                            <p class="sub-note">Read this project’s tables. Rows become the next step’s <code>@(Vm.QueryDataOutputField).rows</code>.</p>
+                        </div>
+                        <button class="dcslide-x" aria-label="Close query settings" @onclick="CloseQueryStudioAsync"><AppIcon Kind="close" /></button>
                     </div>
-                    <div class="dcmodal-body">
-                        <p class="sub-note">Read tables from this workflow’s project. Results become input to the next job.</p>
-                        <div class="dcfield"><label for="query-data-sql">Read-only SQL</label><textarea id="query-data-sql" class="dcinput" rows="8" maxlength="32768" @bind="Vm.QueryDataSql" placeholder="SELECT id, name FROM listings ORDER BY id LIMIT 100"></textarea></div>
-                        <div class="dcfield"><label for="query-data-output">Output field</label><input id="query-data-output" class="dcinput" maxlength="80" @bind="Vm.QueryDataOutputField" /></div>
-                        <p class="sub-note">The next job receives <code>@(Vm.QueryDataOutputField).rows</code> as an array of objects and <code>@(Vm.QueryDataOutputField).columns</code> as column names. Cell values are strings or null. Choose a LIMIT to bound the query; truncated results stop the workflow.</p>
-                        @if (Vm.QueryDataError is not null) { <p class="danger" role="alert">@Vm.QueryDataError</p> }
+                    <div class="query-studio-body">
+                        <aside class="query-studio-schema" aria-label="Project tables">
+                            <div class="query-studio-schema-head">
+                                <div><strong>Project tables</strong><small>Only this project’s schema</small></div>
+                                <button class="dcbtn btn-xs" @onclick="ReloadQuerySchemaAsync" disabled="@Vm.QueryDataSchemaLoading">Refresh</button>
+                            </div>
+                            <input class="dcinput" type="search" placeholder="Filter tables and columns"
+                                   @bind="Vm.QueryDataTableFilter" @bind:event="oninput" />
+                            @if (Vm.QueryDataSchemaLoading)
+                            {
+                                <p class="query-studio-note">Loading tables…</p>
+                            }
+                            else if (Vm.QueryDataSchemaError is { } schemaError)
+                            {
+                                <p class="danger" role="alert">@schemaError</p>
+                            }
+                            else if (!Vm.QueryDataTables.Any())
+                            {
+                                <p class="query-studio-note">No tables yet.</p>
+                            }
+                            else
+                            {
+                                @foreach (var table in Vm.FilteredQueryDataTables)
+                                {
+                                    var isSelected = string.Equals(Vm.QueryDataTableName, table.Name, StringComparison.OrdinalIgnoreCase);
+                                    <div class="query-table @(isSelected ? "selected" : "")">
+                                        <button class="query-table-name" aria-pressed="@isSelected" @onclick="() => Vm.SelectQueryTableAsync(table.Name)">
+                                            <span>@table.Name</span>
+                                            <small>@table.Columns.Count column@(table.Columns.Count == 1 ? "" : "s")</small>
+                                        </button>
+                                        @if (isSelected)
+                                        {
+                                            <div class="query-columns">
+                                                <div class="query-columns-head">
+                                                    <span>Columns</span>
+                                                    <button class="linklike" @onclick="() => Vm.SetAllQueryColumns(true)">All</button>
+                                                    <button class="linklike" @onclick="() => Vm.SetAllQueryColumns(false)">None</button>
+                                                </div>
+                                                @foreach (var column in table.Columns)
+                                                {
+                                                    <div class="query-column">
+                                                        <label>
+                                                            <input type="checkbox" checked="@Vm.QueryDataSelectedColumns.Contains(column.Name)"
+                                                                   @onchange="e => Vm.SetQueryColumn(column.Name, e.Value is true)" />
+                                                            <span>@column.Name</span>
+                                                            <small>@column.Type</small>
+                                                        </label>
+                                                        <button class="query-column-insert" title="Insert @column.Name into the query"
+                                                                aria-label="Insert @column.Name" @onclick="() => Vm.InsertQueryColumnAsync(column.Name)">+</button>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </aside>
+                        <section class="query-studio-main">
+                            <div class="query-studio-toolbar">
+                                <button class="dcbtn btn-xs" @onclick="BuildSelectedQueryAsync" title="Generate a SELECT for the checked columns and filters">SELECT checked</button>
+                                <button class="dcbtn btn-xs" @onclick="BuildCountQueryAsync" title="Generate a COUNT(*) for the selected table and filters">Count</button>
+                                <button class="dcbtn btn-xs" @onclick="InsertLimitAsync" title="Add LIMIT 100 when the query has no LIMIT">Add LIMIT 100</button>
+                                <span class="query-toolbar-spacer"></span>
+                                <button class="dcbtn primary btn-xs" @onclick="PreviewQueryAsync" disabled="@Vm.QueryDataPreviewLoading">
+                                    @(Vm.QueryDataPreviewLoading ? "Previewing…" : "Preview")
+                                </button>
+                            </div>
+                            <div class="query-studio-editor">
+                                <WorkflowQueryEditor @ref="_queryEditor" Value="@Vm.QueryDataSql" Tables="@Vm.QueryDataTables"
+                                                     Label="Read-only SQL for the Query data step" />
+                            </div>
+                            <div class="query-studio-output">
+                                <label for="query-data-output">Output field</label>
+                                <input id="query-data-output" class="dcinput" maxlength="80" @bind="Vm.QueryDataOutputField" />
+                                <button class="dcbtn btn-xs" @onclick="Vm.UseSelectedTableAsOutputField" disabled="@(Vm.QueryDataTable is null)">Use table name</button>
+                                <span>Next step reads <code>@(Vm.QueryDataOutputField).rows</code></span>
+                            </div>
+                            @if (Vm.QueryDataHelperError is { } helperError)
+                            {
+                                <p class="danger query-studio-message" role="alert">@helperError</p>
+                            }
+                            <div class="query-studio-tabs" role="tablist" aria-label="Query data panes">
+                                <button role="tab" aria-selected="@(Vm.QueryDataPane == "values")" @onclick='() => Vm.ShowQueryPane("values")'>Table values</button>
+                                <button role="tab" aria-selected="@(Vm.QueryDataPane == "result")" @onclick='() => Vm.ShowQueryPane("result")'>Query result</button>
+                                @if (Vm.QueryDataPreview is not null)
+                                {
+                                    <span class="query-studio-summary">@WorkflowSql.PreviewSummary(Vm.QueryDataPreview, Vm.QueryDataOutputField)</span>
+                                }
+                            </div>
+                            @if (Vm.QueryDataPane == "values")
+                            {
+                                <div class="query-studio-pane">
+                                    @if (Vm.QueryDataTable is not { } valuesTable)
+                                    {
+                                        <p class="query-studio-note">Choose a table to see its values.</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="query-values-bar">
+                                            <div class="query-values-search">
+                                                <input class="dcinput" type="search" placeholder="Search @valuesTable.Name"
+                                                       @bind="Vm.QueryDataValuesSearch" @bind:event="oninput" @onkeydown="QueryValuesSearchKeyAsync" />
+                                                <button class="dcbtn btn-xs" @onclick="Vm.SearchQueryValuesAsync">Search</button>
+                                            </div>
+                                            <div class="query-values-nav">
+                                                <button class="dcbtn btn-xs" disabled="@(Vm.QueryDataValuesPage <= 1 || Vm.QueryDataValuesLoading)"
+                                                        @onclick="Vm.PreviousQueryValuesPageAsync">Previous</button>
+                                                <span>Page @Vm.QueryDataValuesPage</span>
+                                                <button class="dcbtn btn-xs" disabled="@(!Vm.QueryDataHasNextPage || Vm.QueryDataValuesLoading)"
+                                                        @onclick="Vm.NextQueryValuesPageAsync">Next</button>
+                                            </div>
+                                        </div>
+                                        @if (Vm.QueryDataValuesLoading)
+                                        {
+                                            <p class="query-studio-note">Loading values…</p>
+                                        }
+                                        else if (Vm.QueryDataValuesError is { } valuesError)
+                                        {
+                                            <p class="danger" role="alert">@valuesError</p>
+                                        }
+                                        else
+                                        {
+                                            var values = Vm.QueryDataValues;
+                                            if (values is null || values.Columns.Count == 0 || values.Rows.Count == 0)
+                                            {
+                                                <p class="query-studio-note">This table has no rows to sample yet.</p>
+                                            }
+                                            else
+                                            {
+                                                <div class="query-filters">
+                                                    @if (Vm.QueryDataFilters.Count == 0)
+                                                    {
+                                                        <span class="query-studio-note">Click a cell to filter by its value.</span>
+                                                    }
+                                                    @foreach (var filter in Vm.QueryDataFilters)
+                                                    {
+                                                        <span class="query-filter-chip">
+                                                            @WorkflowSql.FilterLabel(filter)
+                                                            <button aria-label="Remove filter @WorkflowSql.FilterLabel(filter)" @onclick="() => Vm.RemoveQueryFilter(filter)">×</button>
+                                                        </span>
+                                                    }
+                                                </div>
+                                                <div class="query-grid-scroll">
+                                                    <table class="query-grid">
+                                                        <thead>
+                                                            <tr>@foreach (var column in values.Columns) { <th scope="col">@column</th> }</tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @foreach (var row in values.Rows.Take(WorkflowSql.SampleRows))
+                                                            {
+                                                                <tr>
+                                                                    @for (var i = 0; i < values.Columns.Count; i++)
+                                                                    {
+                                                                        var cell = i < row.Count ? row[i] : null;
+                                                                        var column = values.Columns[i];
+                                                                        <td>
+                                                                            <button class="query-cell" title="Filter @column = @(cell ?? "null")"
+                                                                                    @onclick="() => Vm.AddQueryFilter(column, cell)">@(cell ?? "∅")</button>
+                                                                        </td>
+                                                                    }
+                                                                </tr>
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            }
+                                        }
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="query-studio-pane">
+                                    @if (Vm.QueryDataPreviewWarning is { } warning)
+                                    {
+                                        <p class="query-studio-warning" role="alert">@warning</p>
+                                    }
+                                    @if (Vm.QueryDataPreviewLoading)
+                                    {
+                                        <p class="query-studio-note">Running preview…</p>
+                                    }
+                                    else if (Vm.QueryDataPreviewError is { } previewError)
+                                    {
+                                        <p class="danger" role="alert">@previewError</p>
+                                    }
+                                    else
+                                    {
+                                        var preview = Vm.QueryDataPreview;
+                                        if (preview is null || preview.Columns.Count == 0)
+                                        {
+                                            <p class="query-studio-note">Run a preview to see the rows this step will pass on.</p>
+                                        }
+                                        else
+                                        {
+                                            if (WorkflowSql.SampleRow(preview) is { } sample)
+                                            {
+                                                <div class="query-sample">
+                                                    <div class="query-sample-head"><strong>Next step receives</strong><code>@WorkflowSql.RowsPath(Vm.QueryDataOutputField)</code></div>
+                                                    <pre>@sample</pre>
+                                                </div>
+                                            }
+                                            <div class="query-grid-scroll">
+                                                <table class="query-grid">
+                                                    <thead>
+                                                        <tr>@foreach (var column in preview.Columns) { <th scope="col">@column</th> }</tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach (var row in preview.Rows)
+                                                        {
+                                                            <tr>
+                                                                @for (var i = 0; i < preview.Columns.Count; i++)
+                                                                {
+                                                                    var cell = i < row.Count ? row[i] : null;
+                                                                    <td><span class="query-cell readonly">@(cell ?? "∅")</span></td>
+                                                                }
+                                                            </tr>
+                                                        }
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        }
+                                    }
+                                    <p class="query-studio-note">@WorkflowSql.IsolationNote</p>
+                                </div>
+                            }
+                        </section>
                     </div>
-                    <div class="dcmodal-foot"><button class="dcbtn" @onclick="Vm.CloseQueryDataEditor">Cancel</button><button class="dcbtn primary" @onclick="Vm.SaveQueryDataAction">Save step</button></div>
+                    <div class="dcmodal-foot">
+                        <button class="dcbtn" @onclick="CloseQueryStudioAsync">Cancel</button>
+                        <button class="dcbtn primary" @onclick="SaveQueryDataAsync" disabled="@Vm.QueryDataPreviewLoading">Save step</button>
+                    </div>
                 </div>
             </div>
         }
@@ -1522,12 +1749,80 @@ else
         Vm.SaveLoopAction();
     }
 
+    private WorkflowQueryEditor? _queryEditor;
+    private int _queryStudioVersion;
+
+    private async Task ReloadQuerySchemaAsync() => await Vm.LoadQueryStudioAsync();
+
+    private async Task InsertQueryTextFromEditorAsync(string text)
+    {
+        if (_queryEditor is null) return;
+        var value = await _queryEditor.InsertAsync(text);
+        if (value is not null) Vm.QueryDataSql = value;
+    }
+
+    private async Task SetQuerySqlAsync(string? sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql)) return;
+        Vm.QueryDataSql = sql;
+        if (_queryEditor is not null) await _queryEditor.SetValueAsync(sql);
+    }
+
+    private async Task BuildSelectedQueryAsync() => await SetQuerySqlAsync(Vm.BuildSelectedQuery());
+
+    private async Task BuildCountQueryAsync() => await SetQuerySqlAsync(Vm.BuildCountQuery());
+
+    private async Task InsertLimitAsync()
+    {
+        var sql = await ReadQueryEditorAsync();
+        if (!WorkflowSql.EnsureLimit(sql, WorkflowSql.DefaultRowLimit, out var bounded))
+        {
+            Vm.ReportQueryHelperError(string.IsNullOrWhiteSpace(sql)
+                ? "Write a query first, then add a LIMIT."
+                : "This query already has a LIMIT.");
+            return;
+        }
+        await SetQuerySqlAsync(bounded);
+    }
+
+    private async Task<string> ReadQueryEditorAsync()
+    {
+        var sql = _queryEditor is null ? Vm.QueryDataSql : await _queryEditor.ReadAsync();
+        Vm.QueryDataSql = sql;
+        return sql;
+    }
+
+    private async Task PreviewQueryAsync() => await Vm.PreviewQueryDataAsync(await ReadQueryEditorAsync());
+
+    private async Task QueryValuesSearchKeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter") await Vm.SearchQueryValuesAsync();
+    }
+
+    private async Task SaveQueryDataAsync()
+    {
+        await ReadQueryEditorAsync();
+        Vm.SaveQueryDataAction();
+    }
+
+    private async Task CloseQueryStudioAsync()
+    {
+        await ReadQueryEditorAsync();
+        Vm.CloseQueryDataEditor();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_focusExecution && Vm.ExecutionStep is not null)
         {
             _focusExecution = false;
             await _executionClose.FocusAsync();
+        }
+        if (Vm.ShowQueryDataEditor && _queryStudioVersion != Vm.QueryStudioVersion)
+        {
+            _queryStudioVersion = Vm.QueryStudioVersion;
+            Vm.InsertQueryText = InsertQueryTextFromEditorAsync;
+            await Vm.LoadQueryStudioAsync();
         }
     }
 

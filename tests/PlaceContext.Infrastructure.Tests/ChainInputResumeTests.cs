@@ -11,6 +11,7 @@ using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Scheduling;
 using PlaceContext.TestSupport;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Tests;
 

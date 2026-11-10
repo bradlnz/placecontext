@@ -497,3 +497,93 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .score-slider-row input[type="range"]:focus-visible { outline:2px solid var(--brand); outline-offset:3px }
 .score-criterion-actions { display:flex; gap:8px; flex-wrap:wrap }
 .score-editor-tabs { flex:none }
+
+/* ── Workflow query studio ──────────────────────────────────────────────────────────────── */
+.dcmodal-overlay:not(.workflow-canvas-overlay) > .query-studio-modal {
+    width:min(1440px, calc(100vw - 24px));
+    height:min(900px, calc(100dvh - 24px));
+    max-width:calc(100vw - 24px);
+    max-height:calc(100dvh - 24px);
+}
+.query-studio-modal .dcmodal-head { align-items:center }
+.query-studio-modal .dcmodal-head h3 { margin:0; font-size:16px }
+.query-studio-modal .dcmodal-head .sub-note { margin:3px 0 0; max-width:760px }
+.query-studio-modal .dcmodal-head > .dcslide-x { margin-left:auto; align-self:flex-start; flex:none }
+.query-studio-body { display:grid; grid-template-columns:254px minmax(0, 1fr); flex:1; min-height:0; overflow:hidden }
+
+.query-studio-schema { display:flex; flex-direction:column; gap:10px; min-height:0; padding:14px; overflow:auto; border-right:1px solid var(--border); background:var(--card) }
+.query-studio-schema-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px }
+.query-studio-schema-head > div { display:grid; gap:2px }
+.query-studio-schema-head strong { font-size:12px }
+.query-studio-schema-head small { color:var(--text-3); font-size:10.5px }
+.query-studio-schema .dcinput { min-height:30px; padding:4px 8px; font-size:12px }
+.query-studio-note { margin:0; color:var(--text-3); font-size:11.5px; line-height:1.55 }
+.query-table { flex:none; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:var(--bg) }
+.query-table.selected { border-color:var(--brand) }
+.query-table-name { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; padding:8px 10px; border:0; background:transparent; color:var(--text-2); font:inherit; font-size:12px; text-align:left; cursor:pointer }
+.query-table-name:hover { background:var(--hover); color:var(--text) }
+.query-table-name span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600 }
+.query-table-name small { flex:none; color:var(--text-3); font-size:10px }
+.query-columns { border-top:1px solid var(--border); padding:6px 4px 8px }
+.query-columns-head { display:flex; align-items:center; gap:8px; padding:2px 6px 6px; color:var(--text-3); font-size:10px; letter-spacing:.06em; text-transform:uppercase }
+.query-columns-head span { flex:1 }
+.linklike { padding:0; border:0; background:transparent; color:var(--brand-2); font:inherit; font-size:10px; cursor:pointer }
+.linklike:hover { text-decoration:underline }
+.query-column { display:flex; align-items:center; gap:4px; padding:2px 4px; border-radius:5px }
+.query-column:hover { background:var(--hover) }
+.query-column label { display:flex; align-items:center; gap:6px; flex:1; min-width:0; color:var(--text-2); font-size:11px; cursor:pointer }
+.query-column label span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.query-column label small { flex:none; margin-left:auto; color:var(--text-4); font-size:9.5px }
+.query-column input[type="checkbox"] { flex:none; accent-color:var(--brand) }
+.query-column-insert { flex:none; width:20px; height:20px; border:1px solid var(--border); border-radius:4px; background:var(--card); color:var(--brand-2); font:600 12px/1 var(--font-sans); cursor:pointer }
+.query-column-insert:hover { border-color:var(--brand); color:var(--text) }
+
+.query-studio-main { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden }
+.query-studio-toolbar { display:flex; align-items:center; gap:6px; padding:10px 14px; border-bottom:1px solid var(--border); background:var(--card) }
+.query-toolbar-spacer { flex:1 }
+.query-studio-editor { flex:0 0 clamp(180px, 34%, 300px); min-height:180px; border-bottom:1px solid var(--border); background:var(--bg) }
+.query-studio-output { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:9px 14px; border-bottom:1px solid var(--border); background:var(--card) }
+.query-studio-output label { flex:none; color:var(--text-3); font-size:10.5px; font-weight:600; letter-spacing:.05em; text-transform:uppercase }
+.query-studio-output .dcinput { width:180px; min-height:30px; padding:4px 8px; font-size:12px }
+.query-studio-output > span { margin-left:auto; color:var(--text-3); font-size:11px }
+.query-studio-output code { color:var(--text-2) }
+.query-studio-message { margin:0; padding:7px 14px; border-bottom:1px solid var(--border); background:var(--bad-bg); font-size:11.5px }
+.query-studio-tabs { display:flex; align-items:center; gap:4px; padding:0 14px; border-bottom:1px solid var(--border); background:var(--panel) }
+.query-studio-tabs button { min-height:36px; padding:7px 11px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--text-3); font:500 12px var(--font-sans); cursor:pointer }
+.query-studio-tabs button[aria-selected="true"] { color:var(--text); border-bottom-color:var(--brand) }
+.query-studio-tabs button:hover { color:var(--text) }
+.query-studio-summary { margin-left:auto; color:var(--text-3); font-size:10.5px }
+.query-studio-pane { display:flex; flex-direction:column; gap:10px; flex:1; min-height:0; padding:12px 14px; overflow:auto }
+.query-studio-warning { margin:0; padding:8px 10px; border-left:2px solid var(--warn); background:var(--warn-bg); color:var(--text-2); font-size:11.5px; line-height:1.55 }
+
+.query-values-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+.query-values-search { display:flex; align-items:center; gap:6px; flex:1; min-width:220px }
+.query-values-search .dcinput { min-height:30px; padding:4px 8px; font-size:12px }
+.query-values-nav { display:flex; align-items:center; gap:8px; color:var(--text-3); font-size:11px }
+.query-filters { display:flex; align-items:center; flex-wrap:wrap; gap:6px }
+.query-filter-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 4px 3px 8px; border:1px solid var(--brand); border-radius:999px; background:var(--brand-bg); color:var(--text-2); font-size:10.5px }
+.query-filter-chip button { display:grid; place-items:center; width:16px; height:16px; border:0; border-radius:50%; background:transparent; color:var(--text-2); font-size:12px; line-height:1; cursor:pointer }
+.query-filter-chip button:hover { background:var(--bad-bg); color:var(--bad) }
+
+.query-grid-scroll { flex:1; min-height:160px; overflow:auto; border:1px solid var(--border); border-radius:8px; background:var(--bg) }
+.query-grid { width:100%; border-collapse:collapse; font-family:var(--font-mono); font-size:11.5px }
+.query-grid th { position:sticky; top:0; z-index:1; padding:7px 9px; border-bottom:1px solid var(--border); background:var(--card); color:var(--text-3); text-align:left; font-weight:600; white-space:nowrap }
+.query-grid td { padding:0; border-bottom:1px solid var(--border); vertical-align:top }
+.query-cell { display:block; width:100%; max-width:340px; padding:5px 9px; border:0; background:transparent; color:var(--text-2); font:inherit; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer }
+.query-cell:hover { background:var(--brand-bg); color:var(--text) }
+.query-cell.readonly { cursor:default }
+.query-cell.readonly:hover { background:transparent; color:var(--text-2) }
+.query-sample { flex:none; border:1px solid var(--border); border-radius:8px; background:var(--card); overflow:hidden }
+.query-sample-head { display:flex; align-items:center; gap:8px; padding:7px 10px; border-bottom:1px solid var(--border); font-size:11px }
+.query-sample-head code { color:var(--brand-2) }
+.query-sample pre { margin:0; max-height:150px; overflow:auto; padding:9px 10px; color:var(--text-2); font-family:var(--font-mono); font-size:11px; line-height:1.5; white-space:pre-wrap; word-break:break-word }
+
+@media (max-width:900px) {
+    .query-studio-body { grid-template-columns:1fr; grid-template-rows:minmax(160px, 32%) minmax(0, 1fr) }
+    .query-studio-schema { border-right:0; border-bottom:1px solid var(--border) }
+    .query-studio-output > span { margin-left:0 }
+}
+@media (max-width:700px) {
+    .dcmodal-overlay:not(.workflow-canvas-overlay) > .query-studio-modal { width:100vw; height:100dvh; max-width:100vw; max-height:100dvh; border-radius:0 }
+    .query-studio-toolbar, .query-studio-output, .query-studio-tabs, .query-studio-pane { padding-left:10px; padding-right:10px }
+}

@@ -23,7 +23,7 @@
         }
         else if (!string.IsNullOrWhiteSpace(VerifyToken))
         {
-            <div class="signup-step"><span>01</span><span class="signup-step-active">Confirm your email</span><span>02</span><span>Billing</span></div>
+            <div class="signup-step"><span class="signup-step-active">01</span><span class="signup-step-active">Confirm your email</span></div>
             <div class="signup-eyebrow">EMAIL CONFIRMATION</div>
             <h1>Confirm your workspace</h1>
             <p class="signup-sub">Confirm this request to create the workspace and its owner account.
@@ -44,17 +44,17 @@
             <div class="signup-eyebrow">CHECK YOUR INBOX</div>
             <h1>One more step</h1>
             <p class="signup-sub">We've sent a verification link to the email you provided.
-                Follow that link to activate your workspace, then you'll choose your managed plan.</p>
+                Follow that link to activate your workspace and sign in.</p>
             <div class="signup-notice">Verification links expire after 30 minutes. Check your spam folder if it doesn't arrive.</div>
             <a class="dcbtn signup-button secondary" href="/login">Back to sign in</a>
         }
         else
         {
-            <div class="signup-step"><span class="signup-step-active">01</span><span class="signup-step-active">Workspace</span><span>02</span><span>Verify email</span><span>03</span><span>Billing</span></div>
+            <div class="signup-step"><span class="signup-step-active">01</span><span class="signup-step-active">Workspace</span><span>02</span><span>Verify email</span></div>
             <div class="signup-eyebrow">CREATE YOUR WORKSPACE</div>
             <h1>Start building with PlaceContext</h1>
             <p class="signup-sub">Choose your workspace address and owner credentials.
-                Your workflow runs are unlimited on either managed plan.</p>
+                Your workflow runs are unlimited.</p>
             @if (!string.IsNullOrWhiteSpace(Error))
             {
                 <div class="signup-error" role="alert">@Error</div>
@@ -119,7 +119,7 @@
                     </label>
                 </fieldset>
                 <p class="signup-note">No payment is taken during registration. After email verification you'll
-                    review billing in your new workspace. Developer Edition is free and self-hosted only.</p>
+                    sign in to your new workspace. Developer Edition is free and self-hosted.</p>
                 <button type="submit" class="dcbtn primary signup-button">Create workspace <span aria-hidden="true">→</span></button>
             </form>
         }

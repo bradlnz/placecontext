@@ -51,9 +51,8 @@ See [Cluster and nodes](/wiki/cluster-and-nodes) for local and Tailscale topolog
 1. Open `http://localhost:7700`.
 2. If there is no owner account, complete the first-run setup form. There is no default password.
 3. Follow the cluster setup guide: choose cloud or local execution, connect workers, and check **Settings → Cluster**.
-4. For a managed workspace, choose a plan under **Settings → Billing & usage**. Local workers do not remove the managed workspace subscription requirement.
-5. Create or onboard a project, then run a small job and confirm its worker, logs and artifact are retained.
-6. Export a configuration backup from **Settings → Backup** and store it outside the cluster.
+4. Create or onboard a project, then run a small job and confirm its worker, logs and artifact are retained.
+5. Export a configuration backup from **Settings → Backup** and store it outside the cluster.
 
 ## Production URL and reverse proxy
 
@@ -144,11 +143,13 @@ verified recovery plan.
 - Follow [SSO and OAuth](/wiki/sso-and-oauth) to use PlaceContext sign-in in another platform or to
   sign users into PlaceContext through a compatible identity authority.
 - Follow [Cluster and nodes](/wiki/cluster-and-nodes) before adding worker machines.
+- Manage projects, jobs and schedules as code with the Terraform provider under
+  [`terraform/`](https://github.com/bradlnz/placecontext/tree/main/terraform); it uses the
+  workspace management API key (`PlaceContext:Api:Key`).
 
 ## Workspace settings
 
 - **Cluster** shows node health and worker join instructions. Use **Cloud or local setup** to reopen the setup guide.
-- **Billing & usage** manages the workspace subscription and reports top-level starts. Open the secure billing portal for payment methods, billing details, invoices and subscription changes. Self-hosted infrastructure is billed by your own hosting providers.
 - **Branding** changes the workspace name, logo, accent, and dark-mode colours.
 - **Menu** controls navigation labels, order, and visibility.
 - **Artifacts** controls the file categories shown on the Artifacts page.

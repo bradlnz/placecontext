@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Components;
-using Microsoft.Extensions.Options;
 using PlaceContext.Application;
-using PlaceContext.Application.Billing;
 using PlaceContext.Application.Cluster;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Host.Components.ViewModels;
@@ -61,17 +59,6 @@ public sealed class OnboardingViewModelTests
         Assert.NotNull(vm.Cluster);
     }
 
-    [Fact]
-    public void Signup_plan_is_preserved_for_billing_and_unrecognized_values_are_ignored()
-    {
-        var vm = Create(new ClusterQueries(), new Navigation());
-        vm.SetParameters(RunPlans.Standard);
-        Assert.True(vm.ManagedHosting);
-        Assert.Equal("/settings/billing?welcome=1&start=standard", vm.BillingUrl);
-        vm.SetParameters("https://example.com");
-        Assert.Equal(PageRoutes.BillingSettings, vm.BillingUrl);
-    }
-
     [Theory]
     [InlineData("/cluster")]
     [InlineData("/settings/cluster")]
@@ -79,7 +66,7 @@ public sealed class OnboardingViewModelTests
     {
         var vm = new SettingsLayoutViewModel(new Navigation(path), null!, null!);
         Assert.True(vm.IsActive("cluster"));
-        Assert.False(vm.IsActive("billing"));
+        Assert.False(vm.IsActive("backup"));
     }
 
     [Fact]
@@ -93,9 +80,7 @@ public sealed class OnboardingViewModelTests
     }
 
     private static OnboardingViewModel Create(ClusterQueries queries, Navigation navigation) =>
-        new(new PlaceContextService(queries, null!, null!, null!),
-            Options.Create(new RunBillingDeploymentOptions { ManagedHosting = true }),
-            navigation, new PortalUiState());
+        new(new PlaceContextService(queries, null!, null!, null!), navigation, new PortalUiState());
 
     private sealed class ClusterQueries : IDispatcher
     {

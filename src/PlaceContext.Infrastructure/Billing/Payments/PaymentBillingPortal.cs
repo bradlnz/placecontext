@@ -69,13 +69,15 @@ public sealed class PaymentBillingPortal(
                 ["client_reference_id"] = tenant.TenantId.ToString("N"),
                 ["metadata[tenant_id]"] = tenant.TenantId.ToString("D"),
                 ["subscription_data[metadata][tenant_id]"] = tenant.TenantId.ToString("D"),
-                ["success_url"] = origin + "/settings/billing?checkout=success",
-                ["cancel_url"] = origin + "/settings/billing?checkout=cancel"
+                // The portal no longer ships a billing page (open-source, self-hosted product);
+                // checkout returns to the workspace root.
+                ["success_url"] = origin + "/?checkout=success",
+                ["cancel_url"] = origin + "/?checkout=cancel"
             }
             : new Dictionary<string, string>
             {
                 ["customer"] = current!.StripeCustomerId!,
-                ["return_url"] = origin + "/settings/billing"
+                ["return_url"] = origin + "/"
             };
         if (type == "checkout" && !string.IsNullOrEmpty(current?.StripeCustomerId))
         {

@@ -6,6 +6,7 @@ using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
 using PlaceContext.Infrastructure.Workload;
 using PlaceContext.TestSupport;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Tests;
 

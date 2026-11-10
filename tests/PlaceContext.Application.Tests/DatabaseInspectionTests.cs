@@ -2,6 +2,7 @@ using PlaceContext.Application.DatabaseInspection;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application.Cqrs;
 using Microsoft.Extensions.DependencyInjection;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Application.Tests;
 

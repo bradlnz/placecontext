@@ -27,6 +27,7 @@ using PlaceContext.Infrastructure.Mcp;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
 using PlaceContext.Infrastructure.Tenancy;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Host.Tests;
 

@@ -9,6 +9,7 @@ using PlaceContext.Application.Tenancy;
 using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Tests.AgentWorkflows;
+using PlaceContext.Application.Access.Enums;
 
 namespace PlaceContext.Infrastructure.Tests.Auth;
 

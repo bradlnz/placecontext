@@ -14,7 +14,6 @@ public sealed class SettingsLayoutViewModel : PageViewModel
         new("Workspace", "Branding", "branding"),
         new("Workspace", "Navigation", "menu"),
         new("Workspace", "Timezone", "locality"),
-        new("Workspace", "Billing & usage", "billing"),
         new("Execution", "Cluster", "cluster"),
         new("Providers", "Data connections", "connections"),
         new("Providers", "Models", "models"),

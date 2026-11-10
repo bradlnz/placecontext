@@ -6,7 +6,6 @@ public static class PageRoutes
     public const string Wiki = "/wiki";
     public const string DatabaseSettings = "/settings/database";
     public const string ClusterSettings = "/settings/cluster";
-    public const string BillingSettings = "/settings/billing";
     public const string Login = "/login";
     public const string LocalitySettings = "/settings/locality";
     public const string ConnectionsSettings = "/settings/connections";

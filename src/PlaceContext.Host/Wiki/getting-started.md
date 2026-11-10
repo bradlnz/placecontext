@@ -13,8 +13,7 @@ You do not need to understand the technical parts to use the portal. A **job** i
 ## First steps
 
 Workspace administrators start with **Cloud or local setup** to connect the execution cluster.
-**Settings → Cluster** manages workers; **Settings → Billing & usage** manages the workspace subscription.
-Data connections and optional integrations can be added afterwards.
+**Settings → Cluster** manages workers. Data connections and optional integrations can be added afterwards.
 
 1. If the workspace has no projects, connect an approved MCP client and ask it to onboard a project.
 2. Select the project from the switcher in the lower-left corner.

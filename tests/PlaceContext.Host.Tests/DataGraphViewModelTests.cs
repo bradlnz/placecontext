@@ -5,6 +5,7 @@ using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Host.Components.ViewModels;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Host.Tests;
 

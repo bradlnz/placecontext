@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Host.Auth;
 using PlaceContext.Infrastructure.Persistence;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Host.Tests;
 

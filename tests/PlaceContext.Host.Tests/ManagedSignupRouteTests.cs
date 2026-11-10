@@ -48,7 +48,7 @@ public sealed class ManagedSignupRouteTests
         Assert.True(ManagedSignupUrls.IsPublicApexPath("/login"));
         Assert.True(ManagedSignupUrls.IsPublicApexPath("/healthz"));
         Assert.True(ManagedSignupUrls.IsPublicApexPath("/_blazor/negotiate"));
-        Assert.False(ManagedSignupUrls.IsPublicApexPath("/settings/billing"));
+        Assert.False(ManagedSignupUrls.IsPublicApexPath("/settings/access"));
         Assert.False(ManagedSignupUrls.IsPublicApexPath("/api/v1/projects"));
         Assert.False(ManagedSignupUrls.IsPublicApexPath("/auth/signup/complete"));
         var middleware = Source("src/PlaceContext.Host/Middleware/TenantResolutionMiddleware.cs");

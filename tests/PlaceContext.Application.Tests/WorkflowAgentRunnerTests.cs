@@ -4,6 +4,7 @@ using PlaceContext.Application.Features;
 using System.Text.Json.Nodes;
 using PlaceContext.Application.Build;
 using PlaceContext.Domain.ValueObjects;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Application.Tests;
 

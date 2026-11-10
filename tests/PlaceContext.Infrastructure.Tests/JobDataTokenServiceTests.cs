@@ -5,6 +5,7 @@ using PlaceContext.Application.Jobs;
 using PlaceContext.Infrastructure.Auth;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.TestSupport;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Tests;
 

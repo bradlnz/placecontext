@@ -1,8 +1,11 @@
 # PlaceContext SaaS: unlimited workflow runs, managed throughput and OAuth
 
 PlaceContext sells managed hosting, execution throughput, reliability and support
-rather than a monthly number of workflow runs. Billing and usage live under
-Settings → Billing; managed Microsoft authorisation lives under Settings → Connections.
+rather than a monthly number of workflow runs. The open-source, self-hosted
+product ships with **no billing UI**; managed Microsoft authorisation lives under
+Settings → Connections. For managed deployments, plan entitlements are provisioned
+out of band (Stripe subscription events via the webhook below) and enforced by
+the runtime — there is no in-portal billing, checkout or plan-management page.
 
 ## Plan catalogue
 

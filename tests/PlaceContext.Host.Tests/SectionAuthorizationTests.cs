@@ -39,7 +39,6 @@ public sealed class SectionAuthorizationTests
     public static TheoryData<Type> DefaultAdminPages =>
         new()
         {
-            typeof(Pages.BillingSettings),
             typeof(Pages.AccessSettings),
             typeof(Pages.ArtifactSettings),
             typeof(Pages.BackupSettings),

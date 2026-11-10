@@ -5,6 +5,7 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.Membership;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.TestSupport;
+using PlaceContext.Application.Access.Enums;
 
 namespace PlaceContext.Application.Tests;
 

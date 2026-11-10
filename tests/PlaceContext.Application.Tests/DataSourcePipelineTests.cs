@@ -2,6 +2,7 @@ using PlaceContext.Application.Features;
 using PlaceContext.Application.DataSources;
 using PlaceContext.Application.Search;
 using PlaceContext.TestSupport;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Application.Tests;
 

@@ -9,6 +9,7 @@ using PlaceContext.Application.Features;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.Pages;
 using PlaceContext.Host.Components.ViewModels;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Host.Tests;
 

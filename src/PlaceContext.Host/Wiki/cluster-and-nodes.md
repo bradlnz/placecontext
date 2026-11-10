@@ -64,8 +64,8 @@ without any workers.
 
 ## Cloud workers
 
-For managed hosting, use the execution cluster supplied with your workspace and select a plan in
-**Settings → Billing & usage**. For your own cloud infrastructure, deploy the control plane using
+For managed hosting, use the execution cluster supplied with your workspace.
+For your own cloud infrastructure, deploy the control plane using
 your production deployment configuration, open **Cluster → Add node**, and run the join command on
 each cloud worker. Check the nodes are ready before submitting a test job.
 

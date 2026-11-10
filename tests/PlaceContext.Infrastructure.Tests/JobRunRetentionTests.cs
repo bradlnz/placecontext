@@ -9,6 +9,7 @@ using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Caching;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Tests;
 

@@ -263,9 +263,28 @@ spread across independent Proxmox hosts, separate worker VMs, external PostgreSQ
 In every layout, the portal, schedules, events, and connected AI harnesses submit work to the same durable job
 queue. See [`deploy/release/README.md`](deploy/release/README.md) for production requirements and shard options.
 
+## Manage as code with Terraform
+
+The workspace management API exposes projects, jobs and schedules for automation. A Terraform provider
+lives under [`terraform/`](terraform/README.md), so workspace definitions can be reviewed, versioned and
+applied like any other infrastructure:
+
+```hcl
+resource "placecontext_project" "revenue" {
+  path = "data/revenue"
+  name = "Revenue"
+}
+```
+
+Point the provider at a workspace origin with a management API key
+(`PLACECONTEXT_URL` / `PLACECONTEXT_API_KEY`). See the
+[management API reference](docs/management-api.md) for endpoints, permissions and JSON schemas.
+
 ## Documentation
 
 - [Installation and fleet setup](deploy/release/README.md)
+- [Management API reference](docs/management-api.md)
+- [Terraform provider](terraform/README.md)
 - [OpenSearch integration](src/PlaceContext.Host/Wiki/opensearch-integration.md)
 - [SSO and OAuth integration](src/PlaceContext.Host/Wiki/sso-and-oauth.md)
 - [Security and sharing](src/PlaceContext.Host/Wiki/security-and-sharing.md)

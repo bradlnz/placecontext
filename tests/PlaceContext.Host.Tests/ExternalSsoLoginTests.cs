@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using PlaceContext.Host.Controllers;
+using PlaceContext.Application.Access.Enums;
 
 namespace PlaceContext.Host.Tests;
 

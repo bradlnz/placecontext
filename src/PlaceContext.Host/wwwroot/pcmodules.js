@@ -47,6 +47,7 @@
     'closeFile',
     'setValue',
     'getValue',
+    'insertText',
     'destroy',
     'setSqlSchema',
   ]);

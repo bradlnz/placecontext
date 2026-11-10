@@ -1,0 +1,11 @@
+# Terraform state and provider cache for the PlaceContext provider module.
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+terraform.tfvars
+crash.log
+terraform-provider-placecontext
+bin/

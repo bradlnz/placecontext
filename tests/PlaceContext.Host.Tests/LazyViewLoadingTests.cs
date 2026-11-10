@@ -12,6 +12,7 @@ using PlaceContext.Application;
 using PlaceContext.Host.Components.ViewModels;
 using PlaceContext.Infrastructure.Observability;
 using PlaceContext.TestSupport;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Host.Tests;
 

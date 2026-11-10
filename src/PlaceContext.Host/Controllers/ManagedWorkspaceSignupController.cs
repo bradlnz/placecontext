@@ -125,8 +125,7 @@ public sealed class ManagedWorkspaceSignupController(
             await AuthController.SignInAsync(HttpContext,
                 new AuthUser(identity.UserId, identity.TenantId,
                     identity.Email, identity.DisplayName, "Owner"));
-            return Redirect("/onboarding?start=" +
-                Uri.EscapeDataString(identity.Plan));
+            return Redirect("/onboarding");
         }
         catch (UnauthorizedAccessException)
         {

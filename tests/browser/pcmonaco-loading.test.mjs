@@ -10,7 +10,7 @@ function setup() {
     activeElement: null,
     getElementById: id => id === 'editor' ? host : null,
     createElement: () => ({ dataset: {}, style: {}, setAttribute(name, value) { this[name] = value; },
-      remove() { host.children = host.children.filter(child => child !== this); } }),
+      focus() {}, remove() { host.children = host.children.filter(child => child !== this); } }),
     head: { appendChild(script) { scripts.push(script); } },
   };
   const monaco = {
@@ -18,11 +18,23 @@ function setup() {
     languages: { registerCompletionItemProvider() {} },
     editor: {
       createModel(value, language, uri) {
-        const model = { getValue: () => value, getLanguageId: () => language, getPositionAt: n => ({lineNumber:1,column:n+1}), dispose() {} };
+        const model = { getValue: () => value, getLanguageId: () => language, getPositionAt: n => ({lineNumber:1,column:n+1}),
+          getFullModelRange: () => ({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: value.length + 1 }), dispose() {} };
         created.push({value,language,uri});
         return model;
       },
-      create(el, {model}) { return { getModel: () => model, getValue: model.getValue, setSelection() {}, focus() {}, dispose() {} }; },
+      create(el, {model}) {
+        let value = model.getValue();
+        return {
+          getModel: () => model,
+          getValue: () => value,
+          getSelection: () => ({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }),
+          executeEdits(_source, edits) { value = (value || '') + edits[0].text; },
+          setSelection() {},
+          focus() {},
+          dispose() {},
+        };
+      },
     },
   };
   const window = { require(dependencies, loaded) { window.monaco = monaco; loaded(); } };
@@ -66,4 +78,24 @@ test('destroying an editor during loading prevents a late rich-editor mount', as
   await loading;
   assert.equal(created.length, 0);
   assert.equal(window.pcmonaco.getValue('editor'), null);
+});
+
+test('insertText edits the plain fallback at the caret while Monaco loads', async () => {
+  const {window, host, scripts} = setup();
+  const loading = window.pcmonaco.init('editor', 'SELECT  FROM listings', 'sql');
+  host.children[0].selectionStart = host.children[0].selectionEnd = 7;
+  assert.equal(window.pcmonaco.insertText('editor', '*'), 'SELECT * FROM listings');
+  assert.equal(window.pcmonaco.getValue('editor'), 'SELECT * FROM listings');
+  scripts[0].onload();
+  await loading;
+  assert.equal(window.pcmonaco.getValue('editor'), 'SELECT * FROM listings');
+});
+
+test('insertText edits a mounted Monaco editor and returns the new text', async () => {
+  const {window, scripts} = setup();
+  const loading = window.pcmonaco.init('editor', 'SELECT ', 'sql');
+  scripts[0].onload();
+  await loading;
+  assert.equal(window.pcmonaco.insertText('editor', '*'), 'SELECT *');
+  assert.equal(window.pcmonaco.getValue('editor'), 'SELECT *');
 });

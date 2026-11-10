@@ -14,10 +14,10 @@
   transaction, including the standard tenant access roles. A second, short-lived,
 one-use code signs in on the **tenant's own
   host**. No wildcard-domain auth cookies are required.
-- **Billing**: new owners land at \`/settings/billing?welcome=1&start=basic|standard\`.
-  This screen explains that the workspace is created but **not active for managed
-  workflow executions**. Stripe Checkout must be completed and its signed webhook
-  must activate the tenant before hosted runs are allowed.
+- **First run**: new owners land at \`/onboarding\` (cluster setup). There is no
+  in-portal billing page — a managed deployment activates paid execution
+  entitlements out of band via Stripe checkout and its signed webhook before
+  hosted runs are allowed.
 - **Existing tenant**: email/password sign-in continues to support the existing
   provider-mandated 2FA flow, invited members and configured company SSO. Invalid
   credentials remain generic.

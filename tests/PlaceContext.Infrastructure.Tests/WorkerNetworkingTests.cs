@@ -12,6 +12,7 @@ using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Workload;
 using PlaceContext.TestSupport;
 using k8s;
+using PlaceContext.Application.Access;
 
 namespace PlaceContext.Infrastructure.Tests;
 

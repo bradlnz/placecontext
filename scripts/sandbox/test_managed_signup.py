@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real Chromium walkthrough of managed PlaceContext signup, login and billing.
+"""Real Chromium walkthrough of managed PlaceContext signup, login and first-run setup.
 Uses only a disposable PostgreSQL + k3d environment; no external mail or Stripe."""
 import json
 import os
@@ -42,13 +42,12 @@ with sync_playwright() as browser_tool:
     page.locator('input[name="confirmPassword"]').fill(password)
     page.locator('input[name="plan"][value="standard"]').check()
     page.get_by_role("button", name="Create workspace").click(timeout=20000)
-    page.wait_for_url(re.compile(r"/settings/billing\?welcome=1&start=standard"), timeout=45000)
-    expect(page.get_by_text("Your workspace is ready")).to_be_visible(timeout=35000)
-    expect(page.get_by_text("Subscription required")).to_be_visible(timeout=35000)
-    expect(page.get_by_text("Standard Managed").first).to_be_visible(timeout=35000)
+    page.wait_for_url(re.compile(r"/onboarding(?:\?.*)?$"), timeout=45000)
+    expect(page.get_by_role("heading", name="Choose where your jobs run")).to_be_visible(timeout=35000)
+    expect(page.get_by_text("Execution location")).to_be_visible(timeout=35000)
     assert page.url.startswith("http://" + slug + ".localhost:7700/"), page.url
-    capture(page, "02-workspace-created-billing.png")
-    print("Verified: signup created owner workspace, no paid entitlement, billing handoff.")
+    capture(page, "02-workspace-created-onboarding.png")
+    print("Verified: signup created owner workspace and landed on cluster setup.")
 
     # Creating a workspace must not silently sign the browser into any other host.
     apex_context = chromium.new_context(viewport={"width": 1400, "height": 930})
