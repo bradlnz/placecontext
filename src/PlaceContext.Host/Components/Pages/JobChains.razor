@@ -834,7 +834,7 @@ else
             var imageAvailable = Vm.QemuEnvironment.Images.Any(image => image.Name == Vm.VirtualMachineImageProfile && image.Available);
             var environmentReady = Vm.QemuEnvironment.Enabled && Vm.QemuEnvironment.AgentReady && imageAvailable;
             <div class="dcmodal-overlay" @onclick="Vm.CloseQemuEditor">
-                <div class="dcmodal qemu-modal" role="dialog" aria-modal="true" aria-labelledby="qemu-editor-title" @onclick:stopPropagation="true">
+                <div class="dcmodal qemu-modal @(Vm.QemuReplayRun is not null ? "qemu-modal-replay" : "")" role="dialog" aria-modal="true" aria-labelledby="qemu-editor-title" @onclick:stopPropagation="true">
                     <div class="dcmodal-head"><WorkflowDialogHandle />
                         <span class="qemu-heading-icon"><AppIcon Kind="vm" /></span>
                         <div><span class="workflow-eyebrow">Workflow step</span><h3 id="qemu-editor-title">QEMU environment</h3><p class="sub-note">Give an agent a task in a fresh Linux desktop.</p></div>
@@ -890,6 +890,12 @@ else
                         </section>
                         <p class="sub-note">Apply step keeps this edit in the draft. Save workflow saves all current workflow changes.</p>
                         @if (Vm.QemuError is not null) { <p role="alert" class="qemu-error">@Vm.QemuError</p> }
+                        @if (Vm.QemuReplayRun is { } replayRun)
+                        {
+                            <section class="qemu-replay-modal" aria-label="QEMU visual replay">
+                                <VirtualMachineReplay @key="(replayRun.Id, Vm.QemuReplayStep)" Run="replayRun" Step="Vm.QemuReplayStep" />
+                            </section>
+                        }
                     </div>
                     <div class="dcmodal-foot">
                         <button class="dcbtn" disabled="@Vm.Saving" @onclick="Vm.CloseQemuEditor">Cancel</button>

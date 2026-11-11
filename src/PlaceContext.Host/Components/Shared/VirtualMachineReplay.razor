@@ -78,7 +78,19 @@
 
 @code {
     [Parameter, EditorRequired] public ChainRunView Run { get; set; } = default!;
+    [Parameter] public int? Step { get; set; }
+    private Guid _boundRun;
+    private int? _boundStep;
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
-    protected override Task OnParametersSetAsync() => Vm.SetRunAsync(Run);
+    protected override async Task OnParametersSetAsync()
+    {
+        await Vm.SetRunAsync(Run);
+        if (Step is { } step && (_boundRun != Run.Id || _boundStep != step))
+        {
+            await Vm.SelectStepAsync(step.ToString());
+        }
+        _boundRun = Run.Id;
+        _boundStep = Step;
+    }
     public void Dispose() => Vm.Dispose();
 }

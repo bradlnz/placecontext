@@ -1,4 +1,5 @@
 using PlaceContext.Application.Workload.VirtualMachines;
+using PlaceContext.Application.Dtos;
 using PlaceContext.Domain.ValueObjects;
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -73,6 +74,8 @@ public sealed partial class JobChainsViewModel
     {
         get; private set;
     }
+    public ChainRunView? QemuReplayRun { get; private set; }
+    public int? QemuReplayStep { get; private set; }
     private int _qemuStageIndex;
     private bool _editingQemu;
 
@@ -80,6 +83,15 @@ public sealed partial class JobChainsViewModel
     {
         QemuEnvironment = _qemuCatalog?.Get() ?? new(false, []);
         _qemuStageIndex = Math.Clamp(index, 0, EdStages.Count);
+        var replayRun = OpenRun ?? ChainRuns?.FirstOrDefault();
+        QemuReplayRun = replayRun;
+        QemuReplayStep = replayRun is null ? null : Enumerable.Range(0, _qemuStageIndex)
+            .Sum(stage => EdStages[stage].Count == 0 ? 1 : EdStages[stage].Count);
+        if (QemuReplayRun is not null && !QemuReplayRun.Steps.Any(step => step.Index == QemuReplayStep && step.ActionType == VirtualMachineChainAction.ActionType))
+        {
+            QemuReplayRun = null;
+            QemuReplayStep = null;
+        }
         _editingQemu = false;
         VirtualMachineImageProfile = QemuEnvironment.Images.FirstOrDefault(image => image.Available)?.Name ?? "";
         QemuCommand = "Start at https://example.com. Read the page and verify that its heading is Example Domain. Return the heading and final URL.";
@@ -190,6 +202,8 @@ public sealed partial class JobChainsViewModel
     public void CloseQemuEditor()
     {
         ShowQemuEditor = false;
+        QemuReplayRun = null;
+        QemuReplayStep = null;
         NotifyStateChanged();
     }
 }

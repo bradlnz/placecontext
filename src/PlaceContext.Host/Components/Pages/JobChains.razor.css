@@ -276,6 +276,9 @@
 .human-decision-actions .dcbtn { min-width:90px; min-height:40px; justify-content:center; }
 
 .qemu-modal { width:min(620px, 100vw) }
+.qemu-modal-replay { width:min(1120px, 100vw) }
+.qemu-replay-modal { min-width:0; margin-top:4px }
+.qemu-replay-modal .qemu-replay { margin:0; max-width:none }
 .qemu-modal .dcmodal-head { gap:12px; padding:22px }
 .qemu-modal h3 { margin:5px 0 7px; font-size:20px }
 .qemu-heading-icon { display:grid; place-items:center; flex:none; width:40px; height:40px; border-radius:12px; background:var(--brand-bg); color:var(--brand-2); font-size:20px }
