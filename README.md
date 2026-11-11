@@ -41,7 +41,7 @@ human approval, and presenting the final result.
 > **Demo disclosure:** This recording uses a browser sandbox with simulated agent execution
 > and fictional data. It is not evidence of a live model/provider run. For verified
 > automatic-agent execution, follow the
-> [live recording guide](scripts/demo/onboarding-dashboard-video.md).
+> [live recording guide in PR #36](https://github.com/bradlnz/placecontext/pull/36).
 
 ## What you can build
 
