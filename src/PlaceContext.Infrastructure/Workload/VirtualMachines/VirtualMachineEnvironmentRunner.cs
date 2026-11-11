@@ -90,37 +90,34 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
                 desktop = desktops!.Register(tenantId, user!.UserId, context!, vncPath, action.PauseForLogin,
                                 (name, data, token) => logins!.SaveAsync(context!.ProjectId, name, action.ImageProfile, data, token));
             }
-            process = Process.Start(start) ?? throw new InvalidOperationException("Could not start QEMU.");
-            errors = CaptureErrorsAsync(process.StandardError);
-            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            while (true)
-            {
-                deadline.Token.ThrowIfCancellationRequested();
-                if (process.HasExited)
-                {
-                    throw new InvalidOperationException("QEMU exited during startup: " + await errors);
-                }
-                try
-                {
-                    await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), deadline.Token);
-                    break;
-                }
-                catch (SocketException)
-                {
-                    await Task.Delay(250, deadline.Token);
-                }
-            }
+            var started = await StartQemuAsync(start, socketPath, deadline.Token);
+            process = started.Process;
+            errors = started.Errors;
+            using var socket = started.Socket;
             using var stream = new NetworkStream(socket);
             using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
             using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
+            async Task<JsonElement> CallWithProgressCheck(string command, object arguments, CancellationToken token)
+            {
+                using var progress = CancellationTokenSource.CreateLinkedTokenSource(token);
+                progress.CancelAfter(TimeSpan.FromSeconds(15));
+                try
+                {
+                    return await CallAsync(reader, writer, command, arguments, progress.Token);
+                }
+                catch (OperationCanceledException) when (!token.IsCancellationRequested)
+                {
+                    throw new TimeoutException("QEMU guest agent stopped reporting progress.");
+                }
+            }
             // The socket accepts connections before the guest agent has booted; its reply is our readiness signal.
-            await CallAsync(reader, writer, "guest-ping", new
+            await CallWithProgressCheck("guest-ping", new
             {
             }, deadline.Token);
             await using var feed = await VirtualMachineDesktopFeed.ConnectAsync(vncPath, deadline.Token);
             async Task<VirtualMachineEnvironmentResult> ExecuteGuest(string command, int limit, CancellationToken token)
             {
-                var execution = await CallAsync(reader, writer, "guest-exec", BuildGuestExecution(command, input), token);
+                var execution = await CallWithProgressCheck("guest-exec", BuildGuestExecution(command, input), token);
                 var pid = execution.GetProperty("pid").GetInt64();
                 while (true)
                 {
@@ -129,7 +126,7 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
                     {
                         throw new InvalidOperationException("QEMU stopped before the agent action completed: " + await errors);
                     }
-                    var result = await CallAsync(reader, writer, "guest-exec-status", new
+                    var result = await CallWithProgressCheck("guest-exec-status", new
                     {
                         pid
                     }, token);
@@ -236,6 +233,61 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
             start.ArgumentList.Add("unix:" + vncPath.Replace(",", ",,") + ",share=force-shared");
         }
         return start;
+    }
+
+    private static async Task<(Process Process, Task<string> Errors, Socket Socket)> StartQemuAsync(
+        ProcessStartInfo start, string socketPath, CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            Process? process = null;
+            Task<string>? errors = null;
+            Socket? socket = null;
+            var connected = false;
+            try
+            {
+                process = Process.Start(start) ?? throw new InvalidOperationException("Could not start QEMU.");
+                errors = CaptureErrorsAsync(process.StandardError);
+                socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                while (true)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    if (process.HasExited)
+                    {
+                        throw new InvalidOperationException("QEMU exited during startup: " + await errors);
+                    }
+                    try
+                    {
+                        await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), ct);
+                        connected = true;
+                        return (process, errors, socket);
+                    }
+                    catch (SocketException)
+                    {
+                        await Task.Delay(250, ct);
+                    }
+                }
+            }
+            catch when (attempt == 0 && !ct.IsCancellationRequested)
+            {
+                await Task.Delay(500, ct);
+            }
+            finally
+            {
+                if (!connected)
+                {
+                    socket?.Dispose();
+                    if (process is not null)
+                    {
+                        if (!process.HasExited) process.Kill(entireProcessTree: true);
+                        await process.WaitForExitAsync(CancellationToken.None);
+                        if (errors is not null) await errors;
+                        process.Dispose();
+                    }
+                }
+            }
+        }
+        throw new InvalidOperationException("QEMU failed to become ready after two startup attempts.");
     }
 
     internal static Dictionary<string, object> BuildGuestExecution(string command, string? input) => new()
