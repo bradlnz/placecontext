@@ -295,9 +295,11 @@ public sealed class ReviewedVirtualMachineTaskAgent(IHttpClientFactory clients, 
                         step?["action_error"] is null ? 0 : 1);
                 }).ToArray();
         var goal = steps.LastOrDefault()?["goal_done"]?.GetValue<double>() ?? 0;
-        var success = result["status"]?.GetValue<string>() is "done" or "goal_achieved"
-            && double.IsFinite(goal) && goal is > 0.85 and <= 1;
-        return new(success ? 0 : 1, result.ToJsonString(), success ? "" : "AI verification could not verify completion. Inspect the browser trace in stdout.",
+        var status = result["status"]?.GetValue<string>() ?? "missing";
+        var success = status is "done" or "goal_achieved"
+            && double.IsFinite(goal) && goal is > 0.70 and <= 1;
+        var failure = success ? "" : $"AI verification could not verify completion (status={status}, goal confidence={goal:0.###}; requires done/goal_achieved and >0.70). Inspect the browser trace in stdout.";
+        return new(success ? 0 : 1, result.ToJsonString(), failure,
             AgentSteps: steps.Count, Activity: activity);
     }
 

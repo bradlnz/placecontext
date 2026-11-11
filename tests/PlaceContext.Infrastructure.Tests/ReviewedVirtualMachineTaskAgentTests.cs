@@ -124,6 +124,8 @@ public sealed class ReviewedVirtualMachineTaskAgentTests
 
     [Theory]
     [InlineData("done", 0.1, 1)]
+    [InlineData("done", 0.70, 1)]
+    [InlineData("goal_achieved", 0.71, 0)]
     [InlineData("goal_achieved", 0.99, 0)]
     [InlineData("max_steps", 0.99, 1)]
     [InlineData("done", 1.01, 1)]

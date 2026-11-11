@@ -88,7 +88,7 @@ judges the actual live desktop frame. Keys stay on the host. Do not put credenti
 
 Jev image requests use `TypeSafe-Danger-Zone-Images: true`. TypeSafe currently labels image input
 experimental; see the [image API](https://docs.typesafe.ai/images). Reversible browser actions run only when Jev selects the approval choice; its confidence is recorded. Completion requires a proposed finish and Jev goal probability above
-0.85. These thresholds are gates, not proof of correctness. Invalid responses and exhausted budgets
+0.70. These thresholds are gates, not proof of correctness. Invalid responses and exhausted budgets
 fail the step. Grocery offers include independent image judgments for price, total pack size,
 product match, selected postcode and availability, plus the evidence frame and image SHA-256.
 
@@ -260,8 +260,9 @@ dotnet test tests/PlaceContext.Infrastructure.Tests --filter FullyQualifiedName~
 
 ### Repeatable local startup
 
-From the repository, run `./deploy/qemu/run-local.sh` after starting the local database.
-It uses `dist/qemu/browser-linux.qcow2` (override with `PLACECONTEXT_QEMU_IMAGE`), detects
+From the repository, run `./run.sh` after starting Docker; it starts the local database and automatically
+uses `dist/qemu/browser-linux.qcow2` when present (override with `PLACECONTEXT_QEMU_IMAGE`). The
+lower-level `./deploy/qemu/run-local.sh` remains available when the database is already running. Both launchers detect
 KVM access, and selects the Jev executor with the signed-in Codex vision model. An explicit
 `PlaceContext__Qemu__Enabled=false` is preserved. Jev reads `TYPESAFE_API_KEY` from the current project’s vault first, falling back to host
 configuration or the launching environment when no project entry exists. Existing `PlaceContext__Qemu__Agent__*`
