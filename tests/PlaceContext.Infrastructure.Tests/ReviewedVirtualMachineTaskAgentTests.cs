@@ -66,6 +66,13 @@ public sealed class ReviewedVirtualMachineTaskAgentTests
     public void Starting_URL_is_read_from_task(string prompt, string expected) => Assert.Equal(expected, ReviewedVirtualMachineTaskAgent.StartUrl(prompt));
 
     [Theory]
+    [InlineData("http://localhost:7700/orders", "http://10.0.2.2:7700/orders")]
+    [InlineData("http://127.0.0.1:8080/orders", "http://127.0.0.1:8080/orders")]
+    [InlineData("https://orders.example.test/orders", "https://orders.example.test/orders")]
+    public void Host_local_urls_are_mapped_to_the_QEMU_gateway(string url, string expected)
+        => Assert.Equal(expected, ReviewedVirtualMachineTaskAgent.GuestStartUrl(url));
+
+    [Theory]
     [InlineData("Run echo hello")]
     [InlineData("Open file:///etc/passwd")]
     [InlineData("Visit https://user:password@example.test")]

@@ -281,13 +281,44 @@ public static class DefaultWorkspaceBootstrap
         var score = jobs["Score account health"].Id;
         var digest = jobs["Prepare success digest"].Id;
         var report = jobs["Generate weekly report"].Id;
-        return await app.CreateJobChainAsync(
+        var pdf = jobs["Generate PDF report"].Id;
+        var health = existing ?? await app.CreateJobChainAsync(
             projectId,
             "Customer health pipeline",
             "Ingests activity, fans out scoring and digest preparation, then generates a report.",
             [ingest, score, digest, report],
             stages: [[ingest], [score, digest], [report]],
             ct: ct);
+
+        var chains = await app.ListJobChainsAsync(projectId, ct);
+        var needsPdf = !health.Steps.Any(step => step.JobId == pdf)
+            || !health.Stages.Any(stage => stage.Action is QueryDataChainActionView);
+        if (needsPdf)
+        {
+            health = await app.UpdateJobChainAsync(
+                health.Id,
+                "Customer health pipeline",
+                "Ingests activity, reads customer accounts, and produces a downloadable PDF report.",
+                [ingest, score, digest, report, pdf],
+                stages: [[ingest], [score, digest], [report], [], [pdf]],
+                stageActions: [
+                    null, null, null,
+                    new QueryDataChainAction(
+                        "SELECT customer_name, plan, status, monthly_value, last_activity FROM customer_accounts ORDER BY monthly_value DESC LIMIT 100",
+                        "customer_accounts"),
+                    null],
+                ct: ct);
+        }
+
+        var separate = chains.FirstOrDefault(item =>
+            item.Name == "Customer PDF report"
+            && item.Description == "Reads customer account data and produces a downloadable PDF report.");
+        if (separate is not null)
+        {
+            await app.DeleteJobChainAsync(separate.Id, ct);
+        }
+
+        return health;
     }
 
     private static async Task SeedProjectDataAsync(

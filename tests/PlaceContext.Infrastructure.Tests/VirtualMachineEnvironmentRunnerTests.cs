@@ -61,6 +61,7 @@ public sealed class VirtualMachineEnvironmentRunnerTests
         Assert.Contains("virtio-vga", start.ArgumentList);
         Assert.Contains("virtio-rng-pci,max-bytes=1024,period=1000", start.ArgumentList);
         Assert.Contains("max", start.ArgumentList);
+        Assert.Contains("tcg,thread=multi", start.ArgumentList);
         Assert.Contains("file=/images/a,,b.qcow2,format=qcow2,if=virtio", start.ArgumentList);
         Assert.Contains("none", start.ArgumentList);
         Assert.DoesNotContain(action.Command, start.ArgumentList);

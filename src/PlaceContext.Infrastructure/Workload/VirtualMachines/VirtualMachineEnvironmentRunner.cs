@@ -32,6 +32,9 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
     // Bound memory consumption on each host independently of the chain worker count.
     private readonly SemaphoreSlim _capacity = new(1, 1);
     private const int MaxOutput = 65_536;
+    // TCG boot can be slow under host contention; the action deadline remains the hard limit.
+    private static readonly TimeSpan GuestProgressTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan GuestBootTimeout = TimeSpan.FromSeconds(150);
 
     public async Task<VirtualMachineEnvironmentResult> RunAsync(VirtualMachineChainAction action, string? input, CancellationToken ct,
         Func<VirtualMachineReplayCapture, CancellationToken, Task>? recordFrame = null, VirtualMachineRunContext? context = null)
@@ -97,10 +100,10 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
             using var stream = new NetworkStream(socket);
             using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
             using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
-            async Task<JsonElement> CallWithProgressCheck(string command, object arguments, CancellationToken token)
+            async Task<JsonElement> CallWithProgressCheck(string command, object arguments, CancellationToken token, TimeSpan timeout)
             {
                 using var progress = CancellationTokenSource.CreateLinkedTokenSource(token);
-                progress.CancelAfter(TimeSpan.FromSeconds(15));
+                progress.CancelAfter(timeout);
                 try
                 {
                     return await CallAsync(reader, writer, command, arguments, progress.Token);
@@ -113,11 +116,11 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
             // The socket accepts connections before the guest agent has booted; its reply is our readiness signal.
             await CallWithProgressCheck("guest-ping", new
             {
-            }, deadline.Token);
+            }, deadline.Token, GuestBootTimeout);
             await using var feed = await VirtualMachineDesktopFeed.ConnectAsync(vncPath, deadline.Token);
             async Task<VirtualMachineEnvironmentResult> ExecuteGuest(string command, int limit, CancellationToken token)
             {
-                var execution = await CallWithProgressCheck("guest-exec", BuildGuestExecution(command, input), token);
+                var execution = await CallWithProgressCheck("guest-exec", BuildGuestExecution(command, input), token, GuestProgressTimeout);
                 var pid = execution.GetProperty("pid").GetInt64();
                 while (true)
                 {
@@ -129,7 +132,7 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
                     var result = await CallWithProgressCheck("guest-exec-status", new
                     {
                         pid
-                    }, token);
+                    }, token, GuestProgressTimeout);
                     if (!result.GetProperty("exited").GetBoolean())
                     {
                         continue;
@@ -216,7 +219,7 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
         var start = new ProcessStartInfo(options.Executable) { UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true };
         foreach (var argument in new[] {
             "-no-user-config", "-nodefaults", "-display", "none", "-monitor", "none", "-serial", "none", "-no-reboot",
-            "-machine", "q35", "-accel", options.UseKvm ? "kvm" : "tcg", "-m", action.MemoryMb.ToString(), "-smp", action.Cpus.ToString(),
+            "-machine", "q35", "-accel", options.UseKvm ? "kvm" : "tcg,thread=multi", "-m", action.MemoryMb.ToString(), "-smp", action.Cpus.ToString(),
             "-cpu", options.UseKvm ? "host" : "max",
             "-snapshot", "-drive", "file=" + image.Replace(",", ",,") + ",format=qcow2,if=virtio",
             "-device", "virtio-vga", "-device", "qemu-xhci", "-device", "usb-tablet",

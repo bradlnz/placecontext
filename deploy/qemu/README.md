@@ -101,7 +101,10 @@ uploads, new-window workflows and arbitrary desktop commands remain outside the 
 
 For a practical order-verification task, start with a reachable supplier URL in the prompt, ask the
 browser to place or inspect the order, and require it to report the order ID, final status, total, and
-shipping. The guest cannot use a host's `localhost` URL; supply an address reachable from the VM.
+shipping. For local development, host URLs using `localhost` are mapped to QEMU's user-network
+gateway (`10.0.2.2`) before Chromium starts. Enable the QEMU step's network toggle; keep
+`127.0.0.1` for services running inside the guest, and for production tasks supply an address
+reachable from the VM.
 
 Run the deterministic tests without a real model:
 

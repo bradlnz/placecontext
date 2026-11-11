@@ -49,6 +49,14 @@ public sealed class ReviewedVirtualMachineTaskAgent(IHttpClientFactory clients, 
         return uri.AbsoluteUri;
     }
 
+    internal static string GuestStartUrl(string url)
+    {
+        var uri = new Uri(url, UriKind.Absolute);
+        return uri.Host == "localhost"
+            ? new UriBuilder(uri) { Host = "10.0.2.2" }.Uri.AbsoluteUri
+            : uri.AbsoluteUri;
+    }
+
     public async Task<VirtualMachineEnvironmentResult> RunAsync(string prompt, string? input,
         Func<string, int, CancellationToken, Task<VirtualMachineEnvironmentResult>> executeGuest, CancellationToken ct,
         Func<VirtualMachineReplayCapture, CancellationToken, Task>? recordFrame = null, VirtualMachineAgentInteraction? interaction = null, Func<CancellationToken, Task<byte[]>>? readLiveFrame = null)
@@ -62,6 +70,8 @@ public sealed class ReviewedVirtualMachineTaskAgent(IHttpClientFactory clients, 
             throw new InvalidOperationException("Browser tasks accept up to 8,192 prompt and 65,536 context characters.");
         }
         var startUrl = StartUrl(prompt);
+        var guestStartUrl = GuestStartUrl(startUrl);
+        var guestPrompt = prompt.Replace(startUrl, guestStartUrl, StringComparison.Ordinal);
         var directory = "/tmp/pc-jev-" + Guid.NewGuid().ToString("N");
         var activity = new List<VirtualMachineAgentActivity>();
         var elapsed = Stopwatch.StartNew();
@@ -114,9 +124,9 @@ public sealed class ReviewedVirtualMachineTaskAgent(IHttpClientFactory clients, 
         {
             var config = JsonSerializer.Serialize(new
             {
-                task = prompt,
+                task = guestPrompt,
                 context = input ?? "{}",
-                startUrl,
+                startUrl = guestStartUrl,
                 maxSteps = options.Value.Agent.MaxSteps,
                 interactive = interaction is not null
             });
