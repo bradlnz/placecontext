@@ -1,0 +1,108 @@
+{
+  "evidence": {
+    "columns": [
+      "account_id",
+      "company",
+      "segment",
+      "active",
+      "seats",
+      "region"
+    ],
+    "rows": [
+      {
+        "account_id": "NS-001",
+        "company": "Harbour Studio",
+        "segment": "enterprise",
+        "active": "True",
+        "seats": "80",
+        "region": "Australia"
+      },
+      {
+        "account_id": "NS-002",
+        "company": "Banksia Works",
+        "segment": "enterprise",
+        "active": "True",
+        "seats": "45",
+        "region": "Australia"
+      },
+      {
+        "account_id": "NS-003",
+        "company": "Riverbend Labs",
+        "segment": "enterprise",
+        "active": "False",
+        "seats": "30",
+        "region": "New Zealand"
+      },
+      {
+        "account_id": "NS-004",
+        "company": "Summit Design",
+        "segment": "enterprise",
+        "active": "True",
+        "seats": "65",
+        "region": "New Zealand"
+      },
+      {
+        "account_id": "NS-005",
+        "company": "Coastal Field",
+        "segment": "review",
+        "active": "True",
+        "seats": "20",
+        "region": "Australia"
+      }
+    ],
+    "row_count": 5,
+    "truncated": false
+  },
+  "research": {
+    "eligible_account_ids": [
+      "NS-001",
+      "NS-002",
+      "NS-004"
+    ],
+    "held_account_ids": [
+      "NS-003",
+      "NS-005"
+    ],
+    "rationale": [
+      {
+        "account_id": "NS-001",
+        "reason": "Active enterprise account."
+      },
+      {
+        "account_id": "NS-002",
+        "reason": "Active enterprise account."
+      },
+      {
+        "account_id": "NS-003",
+        "reason": "Held because active is false."
+      },
+      {
+        "account_id": "NS-004",
+        "reason": "Active enterprise account."
+      },
+      {
+        "account_id": "NS-005",
+        "reason": "Held because segment is review, not enterprise."
+      }
+    ]
+  },
+  "review": {
+    "passed": true,
+    "issues": [],
+    "summary": "Research is complete and accurate: eligible accounts are exactly the active enterprise accounts NS-001, NS-002, and NS-004."
+  },
+  "approved": true,
+  "handoff": {
+    "account_ids": [
+      "NS-001",
+      "NS-002",
+      "NS-004"
+    ],
+    "brief": "Internal draft: Proceed with active enterprise accounts NS-001, NS-002, and NS-004. Hold NS-003 because it is inactive, and NS-005 because its segment is review rather than enterprise.",
+    "next_steps": [
+      "Prepare outreach for eligible accounts.",
+      "Confirm NS-003 active status.",
+      "Reassess NS-005 after segment review."
+    ]
+  }
+}

@@ -32,16 +32,16 @@ You decide what runs automatically, what needs review, and what happens next.
 
 ## Watch PlaceContext in action
 
-The onboarding walkthrough follows a sample multi-agent workflow from the dashboard:
-querying project data, assigning specialist agents, reviewing recorded activity, requesting
-human approval, and presenting the final result.
+The live walkthrough follows a new sample project from data and the workflow canvas
+to chat launching a workflow, automatic agents, an approval checkpoint, and the successful result.
 
-[**Watch the onboarding walkthrough (MP4)**](docs/videos/placecontext-onboarding.mp4)
+[**Watch the live walkthrough (1080p MP4, 1:51)**](docs/videos/platform-live/placecontext-demo-branded.mp4)
+· [Clean footage](docs/videos/platform-live/placecontext-demo-clean.mp4)
 
-> **Demo disclosure:** This recording uses a browser sandbox with simulated agent execution
-> and fictional data. It is not evidence of a live model/provider run. For verified
-> automatic-agent execution, follow the
-> [live recording guide in PR #36](https://github.com/bradlnz/placecontext/pull/36).
+> **Demo disclosure:** Actual local application footage with fictional accounts and real
+> automatic model execution. The approval checkpoint was answered through browser automation.
+> Idle time is cut and one model-wait scene plays at a labelled 2.5× speed. The video is silent,
+> with chapter captions. See the [capture evidence](docs/videos/platform-live/capture-evidence.json).
 
 ## What you can build
 

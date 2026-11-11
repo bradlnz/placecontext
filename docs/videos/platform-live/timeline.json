@@ -1,0 +1,155 @@
+{
+  "started": 1794438883864,
+  "marks": [
+    {
+      "name": "dashboard-intro",
+      "at": 1794438886891,
+      "seconds": 3.027
+    },
+    {
+      "name": "dashboard-intro-end",
+      "at": 1794438913077,
+      "seconds": 29.213
+    },
+    {
+      "name": "data-open",
+      "at": 1794438918534,
+      "seconds": 34.67
+    },
+    {
+      "name": "data-ready",
+      "at": 1794438923281,
+      "seconds": 39.417
+    },
+    {
+      "name": "data-end",
+      "at": 1794438930180,
+      "seconds": 46.316
+    },
+    {
+      "name": "workflow-ready",
+      "at": 1794438933129,
+      "seconds": 49.265
+    },
+    {
+      "name": "canvas-ready",
+      "at": 1794439036802,
+      "seconds": 152.938
+    },
+    {
+      "name": "canvas-tour-start",
+      "at": 1794439047927,
+      "seconds": 164.063
+    },
+    {
+      "name": "canvas-tour-end",
+      "at": 1794439055495,
+      "seconds": 171.631
+    },
+    {
+      "name": "chat-prompt-start",
+      "at": 1794439057733,
+      "seconds": 173.869
+    },
+    {
+      "name": "chat-sent",
+      "at": 1794439068319,
+      "seconds": 184.455
+    },
+    {
+      "name": "chat-check",
+      "at": 1794439068323,
+      "seconds": 184.459
+    },
+    {
+      "name": "chat-running",
+      "at": 1794439081128,
+      "seconds": 197.264
+    },
+    {
+      "name": "research-live",
+      "at": 1794439108377,
+      "seconds": 224.513
+    },
+    {
+      "name": "review-evidence-start",
+      "at": 1794439119214,
+      "seconds": 235.35
+    },
+    {
+      "name": "research-output-end",
+      "at": 1794439125209,
+      "seconds": 241.345
+    },
+    {
+      "name": "review-output-end",
+      "at": 1794439131536,
+      "seconds": 247.672
+    },
+    {
+      "name": "approval-open",
+      "at": 1794439219516,
+      "seconds": 335.652
+    },
+    {
+      "name": "approval-ready",
+      "at": 1794439225052,
+      "seconds": 341.188
+    },
+    {
+      "name": "approve-start",
+      "at": 1794439235359,
+      "seconds": 351.495
+    },
+    {
+      "name": "approved",
+      "at": 1794439240181,
+      "seconds": 356.317
+    },
+    {
+      "name": "return-to-chat",
+      "at": 1794439249004,
+      "seconds": 365.14
+    },
+    {
+      "name": "handoff-show",
+      "at": 1794439256195,
+      "seconds": 372.331
+    },
+    {
+      "name": "handoff-evidence-end",
+      "at": 1794439266853,
+      "seconds": 382.989
+    },
+    {
+      "name": "summary-prompt-start",
+      "at": 1794439285882,
+      "seconds": 402.018
+    },
+    {
+      "name": "summary-sent",
+      "at": 1794439293951,
+      "seconds": 410.087
+    },
+    {
+      "name": "summary-check",
+      "at": 1794439299197,
+      "seconds": 415.333
+    },
+    {
+      "name": "summary-inspect",
+      "at": 1794439315966,
+      "seconds": 432.102
+    },
+    {
+      "name": "summary-ready",
+      "at": 1794439321758,
+      "seconds": 437.894
+    },
+    {
+      "name": "recording-end",
+      "at": 1794439333839,
+      "seconds": 449.975
+    }
+  ]
+}
