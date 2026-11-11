@@ -15,10 +15,14 @@
         <aside id="@(Vm.ViewId + "-build-history")" class="chat-history" aria-label="Conversations">
             <header><h2>Conversations</h2><button class="chat-icon-button" aria-label="Close conversations" @onclick="() => Vm.ShowHistory = false"><AppIcon Kind="close" /></button></header>
             <button class="dcbtn history-new" disabled="@Vm.NavigationLocked" @onclick="Vm.NewAsync"><AppIcon Kind="plus" /> New conversation</button>
+            <label class="visually-hidden" for="@(Vm.ViewId + "-history-search")">Search recent conversations by title</label>
+            <input id="@(Vm.ViewId + "-history-search")" class="history-search" type="search" placeholder="Search recent conversations" maxlength="200" @bind="Vm.HistoryQuery" @bind:event="oninput" />
             <p class="history-label">RECENT</p>
             @if (Vm.Conversations.Count == 0)
             { <div class="history-empty"><AppIcon Kind="message" /><p>A fresh start.</p><span>Your conversations will appear here.</span></div> }
-            @foreach (var chat in Vm.Conversations)
+            @if (Vm.Conversations.Count > 0 && !Vm.FilteredConversations.Any())
+            { <p class="history-empty" role="status">No matching conversations. Try a different title.</p> }
+            @foreach (var chat in Vm.FilteredConversations)
             {
                 <button class="history-item @(chat.Id == Vm.Conversation.Id ? "active" : "")" title="@chat.Title" disabled="@Vm.NavigationLocked" @onclick="() => Vm.OpenAsync(chat.Id)"><AppIcon Kind="message" /><span>@chat.Title</span>@if (chat.Status is PlaceContext.Application.Build.BuildRunStatus.Queued or PlaceContext.Application.Build.BuildRunStatus.Running) { <small>@chat.Status</small> }</button>
             }
@@ -35,6 +39,8 @@
                             </div>
             </div>
             <div class="chat-header-actions">
+                @if (Vm.Conversation.ParentConversationId is { } parentId)
+                { <button type="button" class="chat-toolbar-button" aria-label="Open original conversation" title="Open original conversation" disabled="@Vm.NavigationLocked" @onclick="() => Vm.OpenAsync(parentId)"><AppIcon Kind="history" /><span>Original conversation</span></button> }
                 <button type="button" class="chat-toolbar-button" aria-expanded="@(Vm.AgentOpen ? "true" : "false")" disabled="@Vm.Loading" @onclick="Vm.OpenAgentAsync"><span class="toolbar-avatar"><AssistantAvatar /></span><span>Agent</span></button>
                 @if (Vm.Conversation.Messages.Count > 0 && !Vm.WorkspaceVisible)
                 { <button type="button" class="chat-toolbar-button" aria-label="Open workspace" @onclick="Vm.OpenWorkspace"><AppIcon Kind="chain" /><span>Workspace</span></button> }
@@ -114,6 +120,19 @@
                             { <button type="button" class="dcbtn" disabled="@Vm.NavigationLocked" @onclick="Vm.StartWorkflowChatAsync">Choose a workflow</button> }
                             @foreach (var url in BuildChatViewModel.ImageUrls(message)) { <img class="message-image" src="@url" alt="Image attached to your message" /> }
                             @foreach (var call in BuildChatViewModel.Calls(message)) { <details class="tool-call"><summary><AppIcon Kind="agent" /> @(call["function"]?["name"])</summary><RunOutput Value="@(Vm.Presentation.Json(call["function"]?["arguments"]?.ToString() ?? ""))" Label="Tool arguments JSON" /></details> }
+                            @if (BuildChatViewModel.Text(message).Length > 0)
+                            {
+                                <div class="message-actions" role="group" aria-label="@(role == "user" ? "Your message actions" : "Assistant message actions")">
+                                    <button type="button" @onclick="() => Vm.CopyMessageAsync(message)">Copy</button>
+                                    @if (role == "user" && !BuildChatViewModel.ImageUrls(message).Any())
+                                    { <button type="button" disabled="@(!Vm.CanEditMessage(message))" title="Edit the message in a new conversation" @onclick="() => PrepareBranch(() => Vm.EditMessage(message))">Edit</button> }
+                                    @if (role == "assistant" && !BuildChatViewModel.Calls(message).Any())
+                                    {
+                                        <button type="button" disabled="@(!Vm.CanRetryMessage(message))" title="Review the prompt before retrying in a new conversation" @onclick="() => PrepareBranch(() => Vm.RetryMessage(message))">Retry</button>
+                                        <button type="button" disabled="@(!Vm.CanBranchMessage(message))" title="Continue from this reply in a new conversation" @onclick="() => PrepareBranch(() => Vm.BranchFromMessage(message))">Branch from here</button>
+                                    }
+                                </div>
+                            }
                         </article>
                     }
                 }
@@ -123,6 +142,13 @@
                 @if (Vm.Error is not null && Vm.Error != Vm.Conversation.Messages.LastOrDefault()?["content"]?.ToString())
                 { <p class="chat-notice error-notice" role="alert"><AppIcon Kind="warning" /> @Vm.Error</p> }
                 @if (Vm.Notice is not null) { <p class="chat-notice" role="status">@Vm.Notice</p> }
+                @if (Vm.BranchPending)
+                {
+                    <div class="branch-draft" role="status">
+                        <div><strong>@Vm.BranchLabel</strong><p>The original is preserved. Sending may run tools again; completed actions remain applied.</p></div>
+                        <button type="button" class="dcbtn" disabled="@Vm.Submitting" @onclick="Vm.CancelBranch">Cancel</button>
+                    </div>
+                }
                 <span id="@(Vm.ViewId + "-composer-keys")" class="visually-hidden">Enter to send. Shift and Enter for a new line.</span>
                 <form class="chat-composer" @onsubmit="Vm.SendAsync" @onsubmit:preventDefault>
                     <textarea @ref="_composer" class="chat-input" rows="3" aria-label="Message assistant" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Ask a question…" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
@@ -130,7 +156,7 @@
                         <div class="send-actions">
                             <button type="button" class="chat-icon-button mic-button @(Vm.Listening ? "listening" : "")" disabled="@(Vm.Locked || !Vm.SpeechSupported)" aria-label="@(Vm.Listening ? "Stop dictation" : "Dictate")" aria-pressed="@Vm.Listening" title="@(Vm.SpeechSupported ? "Dictate a message" : "Dictation requires a supported browser and HTTPS")" @onclick="Vm.ToggleSpeechAsync"><AppIcon Kind="mic" /></button>
                             @if (Vm.Busy) { <button type="button" class="send-button stop-button" aria-label="Stop response" title="Stop response" @onclick="Vm.StopAsync"><span></span></button> }
-                            else { <button type="submit" class="send-button" aria-label="Send message" title="Send message" disabled="@(!Vm.CanSend)"><AppIcon Kind="arrow-up" /></button> }
+                            else { <button type="submit" class="send-button" aria-label="@(Vm.BranchPending ? "Send in new conversation" : "Send message")" title="@(Vm.BranchPending ? "Send in new conversation" : "Send message")" disabled="@(!Vm.CanSend)"><AppIcon Kind="arrow-up" /></button> }
                         </div>
                     </div>
                 </form>
@@ -313,6 +339,11 @@
     private (Guid, string?, Guid?)? _appliedSourceHint;
     private ElementReference _composer;
     private bool _focusComposer;
+    private void PrepareBranch(Action action)
+    {
+        action();
+        _focusComposer = Vm.BranchPending;
+    }
     private void CloseWorkspace()
     {
         Vm.CloseWorkspace();

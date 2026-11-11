@@ -10,6 +10,8 @@ public sealed class BuildConversation
         get; set;
     }
     public string Title { get; set; } = "New chat";
+    public Guid? ParentConversationId { get; set; }
+    public int? ParentMessageCount { get; set; }
     public Guid? AgentId { get; set; }
     public Guid ConnectionId
     {

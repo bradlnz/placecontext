@@ -40,6 +40,12 @@ Use models with function/tool calling. Model discovery verifies the provider's m
 
 Conversations, legacy image attachments, titles, and memory are encrypted in PostgreSQL using the existing Data Protection key ring. They are scoped to the signed-in user, tenant, and project. Switching models preserves the conversation. Disabled or deleted connections require selecting another model.
 
+Use **History** to search the titles of your 100 most recent conversations in this project. **Copy** copies a message's text, including Markdown, to the clipboard.
+
+**Edit** prepares an earlier text message in the composer. **Retry** prepares the prompt that led to an assistant reply. Review the draft and select **Send in new conversation** to continue; neither control sends automatically. **Branch from here** keeps the conversation through the selected assistant reply, including completed tool results, and lets you write a new follow-up. Each option preserves the original conversation and later replies. The new conversation includes an **Original conversation** link. Cancel leaves the original intact.
+
+Editing, retrying, and branching are unavailable while a response is running, dictation is active, or an unsent draft exists. Legacy messages with images cannot be edited or retried. Sending a revised prompt may call tools again; completed project changes are not undone. Check previous action results before retrying a request that changes data or runs a workflow.
+
 The assistant uses its existing memory tool to retain durable project facts and preferences from conversations automatically. Saved memory carries across your chats in the same project; ask the assistant to review, correct, or forget it. Do not put credentials in memory; use the vault. Deleting a chat deletes its attachments but keeps project memory and any jobs, workflows, or schedules created through it.
 
 When the assistant asks a question with concrete choices, it can present clickable answers. Selecting one sends that answer and resumes the conversation; you can also type a custom reply. Buttons are disabled for earlier questions, while work is running, or while you have a draft or active dictation. Questions and choices remain available after reopening the conversation.
