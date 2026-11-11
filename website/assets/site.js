@@ -1,0 +1,54 @@
+const $ = (s, p = document) => p.querySelector(s);
+const $$ = (s, p = document) => [...p.querySelectorAll(s)];
+const menu = $('.mobile-menu');
+menu?.addEventListener('click', () => {const open = menu.getAttribute('aria-expanded') !== 'true';menu.setAttribute('aria-expanded',String(open));menu.setAttribute('aria-label',open?'Close navigation':'Open navigation');$('#mobile-nav').hidden=!open;});
+$$('#mobile-nav a').forEach(a=>a.addEventListener('click',()=>{menu.setAttribute('aria-expanded','false');$('#mobile-nav').hidden=true;}));
+
+const shots={
+ flow:{image:'workflow-decision-flow.png',alt:'Real PlaceContext workflow canvas with a query, agent review, human approval, and conditional follow-up queries',caption:'Queries, agent work, human judgement, and both decision paths. One inspectable workflow.'},
+ data:{image:'workflow-query-data.png',alt:'Real PlaceContext Query data step with SQL, selected columns, and three sample customer records',caption:'Preview project data, choose the evidence, and pass named query results to subsequent steps.'},
+ approval:{image:'workflow-human-approval.png',alt:'Real workflow run paused for a human Yes or No response after an external-agent review',caption:'The workflow pauses for a person. Their answer becomes a recorded input to the next decision.'},
+ result:{image:'workflow-run-completed.png',alt:'Completed workflow with an approved handoff query and a skipped follow-up query',caption:'See what ran, which path was skipped, and the output that supports the final result.'}
+};
+$$('[data-shot]').forEach(b=>b.addEventListener('click',()=>{const s=shots[b.dataset.shot];$$('[data-shot]').forEach(x=>{x.setAttribute('aria-selected',String(x===b));x.tabIndex=x===b?0:-1;});$('#product-image').src='/assets/'+s.image;$('#product-image').alt=s.alt;$('#product-caption').textContent=s.caption;$('#product-panel').setAttribute('aria-labelledby',b.id);}));
+const uses={
+ operations:['Turn account data into a reviewed next step.','Select accounts that need attention, ask an agent to review the evidence, and let a person approve the handoff.',['Query account records','Prepare an agent recommendation','Review exceptions with a person','Prepare the approved outcome']],
+ reporting:['Make the next report a repeatable process.','Collect the inputs, analyse the findings, review the evidence, and generate an output you can inspect and share.',['Gather data from connected sources','Analyse with jobs and agents','Review findings and exceptions','Generate and store the report']],
+ quality:['Catch data issues before they become decisions.','Check the records against explicit expectations before they reach the next stage of your process.',['Prepare incoming records','Validate types, fields, and unique keys','Stop and inspect failed checks','Map accepted output into project tables']],
+ delivery:['Give every release a reviewable handoff.','Combine implementation work, test jobs, independent review, and human sign-off in a workflow you can inspect.',['Assign an implementation task','Run tests in isolated jobs','Review results and browser evidence','Request human sign-off']]
+};
+$$('[data-use]').forEach(b=>b.addEventListener('click',()=>{const [title,description,steps]=uses[b.dataset.use];$$('[data-use]').forEach(x=>{x.setAttribute('aria-selected',String(x===b));x.tabIndex=x===b?0:-1;});$('#use-title').textContent=title;$('#use-description').textContent=description;$('#use-steps').replaceChildren(...steps.map(t=>{const li=document.createElement('li');li.textContent=t;return li;}));$('#use-panel').setAttribute('aria-labelledby',b.id);}));
+$$('[role=tablist]').forEach(list=>list.addEventListener('keydown',e=>{const tabs=$$('[role=tab]',list);const i=tabs.indexOf(document.activeElement);if(i<0)return;const vertical=list.getAttribute('aria-orientation')==='vertical';const next=vertical?'ArrowDown':'ArrowRight',prev=vertical?'ArrowUp':'ArrowLeft';let target;if(e.key===next)target=(i+1)%tabs.length;else if(e.key===prev)target=(i-1+tabs.length)%tabs.length;else if(e.key==='Home')target=0;else if(e.key==='End')target=tabs.length-1;else return;e.preventDefault();tabs[target].focus();tabs[target].click();}));
+
+async function copy(text,button){const prior=button.textContent;try{await navigator.clipboard.writeText(text);button.textContent='Copied ✓';button.setAttribute('aria-label','Copied to clipboard');setTimeout(()=>{button.textContent=prior;button.setAttribute('aria-label','Copy command');},1800);}catch{button.textContent='Select to copy';const code=button.parentElement.querySelector('code');if(code){const range=document.createRange();range.selectNodeContents(code);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);}}}
+$$('[data-copy]').forEach(b=>b.addEventListener('click',()=>copy(b.dataset.copy,b)));
+$$('.doc-article pre').forEach(pre=>{const b=document.createElement('button');b.className='copy-button';b.textContent='Copy';b.setAttribute('aria-label','Copy code block');b.addEventListener('click',()=>copy($('code',pre).textContent,b));pre.append(b);});
+$$('.doc-article table').forEach(table=>{const wrap=document.createElement('div');wrap.className='table-scroll';wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','Scrollable reference table');table.before(wrap);wrap.append(table);});
+
+const imageDialog=$('#image-dialog');
+function showImage(img){const target=$('img',imageDialog);target.src=img.src;target.alt=img.alt;$('p',imageDialog).textContent=img.alt;imageDialog.showModal();}
+$$('[data-zoom]').forEach(b=>b.addEventListener('click',()=>showImage($('img',b))));
+$$('.doc-article img').forEach(img=>{const b=document.createElement('button');b.type='button';b.className='inline-shot';b.setAttribute('aria-label','Enlarge image: '+img.alt);img.before(b);b.append(img);b.addEventListener('click',()=>showImage(img));});
+$('.image-close',imageDialog)?.addEventListener('click',()=>imageDialog.close());
+imageDialog?.addEventListener('click',e=>{if(e.target===imageDialog){const r=imageDialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)imageDialog.close();}});
+
+const sidebar=$('#docs-sidebar'), toggle=$('.docs-toggle');
+$('.docs-close')?.addEventListener('click',()=>{sidebar.classList.remove('open');toggle.setAttribute('aria-expanded','false');toggle.focus();});
+toggle?.addEventListener('click',()=>{const open=!sidebar.classList.contains('open');sidebar.classList.toggle('open',open);toggle.setAttribute('aria-expanded',String(open));});
+document.addEventListener('click',e=>{if(sidebar?.classList.contains('open')&&!sidebar.contains(e.target)&&!toggle.contains(e.target)){sidebar.classList.remove('open');toggle.setAttribute('aria-expanded','false');}});
+
+let index,searchReturnFocus;const dialog=$('#search-dialog'),input=$('#doc-search'),results=$('#search-results');
+async function getIndex(){if(index)return index;const r=await fetch('/search-index.json');if(!r.ok)throw new Error('Search unavailable');index=await r.json();return index;}
+function resultNode(item,q){const a=document.createElement('a');a.className='search-result';a.href=item.url;const group=document.createElement('small');group.textContent=item.group;const title=document.createElement('strong');title.textContent=item.label;const detail=document.createElement('p');let text=item.description;if(q&&!((item.title+' '+item.description).toLowerCase().includes(q))){const at=item.text.toLowerCase().indexOf(q);if(at>=0)text=(at>50?'…':'')+item.text.slice(Math.max(0,at-50),at+125)+'…';}detail.textContent=text;a.append(group,title,detail);return a;}
+let searchGeneration=0;
+async function renderSearch(){const generation=++searchGeneration;const query=input.value.trim().toLowerCase();try{const items=await getIndex();if(generation!==searchGeneration)return;let selected;if(!query)selected=items.filter(x=>['quickstart','first-workflow','data','agents','models'].includes(x.id));else{const terms=query.split(/\s+/);selected=items.map(x=>({item:x,score:terms.reduce((n,t)=>n+(x.label.toLowerCase().includes(t)?8:0)+(x.title.toLowerCase().includes(t)?5:0)+(x.description.toLowerCase().includes(t)?3:0)+(x.text.toLowerCase().includes(t)?1:0),0)})).filter(x=>terms.every(t=>(x.item.label+' '+x.item.title+' '+x.item.description+' '+x.item.text).toLowerCase().includes(t))).sort((a,b)=>b.score-a.score).slice(0,8).map(x=>x.item);}results.replaceChildren(...selected.map(x=>resultNode(x,query)));if(!selected.length){const p=document.createElement('p');p.className='search-empty';p.textContent='No matching guides. Try “models”, “query”, “approval”, or “MCP”.';results.append(p);}}catch{results.innerHTML='<p class="search-empty">Search could not load. <a href="/docs/">Browse all documentation →</a></p>';}}
+function openSearch(){searchReturnFocus=document.activeElement;dialog.showModal();input.value='';input.focus();renderSearch();}
+$$('[data-search]').forEach(b=>b.addEventListener('click',openSearch));
+$('[data-close-search]')?.addEventListener('click',()=>dialog.close());
+dialog?.addEventListener('close',()=>searchReturnFocus?.focus());
+input?.addEventListener('input',renderSearch);
+input?.addEventListener('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();$('.search-result',results)?.focus();}if(e.key==='Enter'){const first=$('.search-result',results);if(first){e.preventDefault();location.href=first.href;}}});
+results?.addEventListener('keydown',e=>{const links=$$('.search-result',results),i=links.indexOf(document.activeElement);if(e.key==='ArrowDown'){e.preventDefault();links[(i+1)%links.length]?.focus();}else if(e.key==='ArrowUp'){e.preventDefault();if(i<=0)input.focus();else links[i-1].focus();}});
+dialog?.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
+document.addEventListener('keydown',e=>{const typing=/input|textarea|select/i.test(document.activeElement?.tagName)||document.activeElement?.isContentEditable;if(((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k')||(e.key==='/'&&!typing&&!dialog.open&&!imageDialog.open)){e.preventDefault();if(dialog.open)dialog.close();else openSearch();}if(e.key==='Escape'){if(sidebar?.classList.contains('open')){sidebar.classList.remove('open');toggle.setAttribute('aria-expanded','false');toggle.focus();}if(menu?.getAttribute('aria-expanded')==='true'){menu.click();menu.focus();}}});
+if(!/Mac|iPhone|iPad/.test(navigator.platform))$$('.search-trigger kbd,.docs-search-large kbd').forEach(k=>k.textContent='Ctrl K');
