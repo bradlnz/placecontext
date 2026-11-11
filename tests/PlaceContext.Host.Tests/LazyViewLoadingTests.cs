@@ -221,7 +221,8 @@ public sealed class LazyViewLoadingTests
         Assert.All(dispatcher.Queries.OfType<QueryProjectTablePageQuery>(), query => Assert.Equal(50, query.PageSize));
 
         await vm.SelectGraph();
-        Assert.IsType<ExecuteProjectDataCommand>(Assert.Single(dispatcher.Commands));
+        Assert.Single(dispatcher.Queries.OfType<QueryProjectDataQuery>());
+        Assert.Empty(dispatcher.Commands);
     }
 
     [Fact]
@@ -517,6 +518,7 @@ public sealed class LazyViewLoadingTests
                 SearchQuery q => new SearchResultsView(q.Term, []),
                 ListDataEntitiesQuery q => new DataEntityView[] { new(Guid.NewGuid(), q.ProjectId, "Records", "records", "name", [], [], DateTimeOffset.UtcNow) },
                 QueryProjectTablePageQuery q => Page(q.Page),
+                QueryProjectDataQuery => new ProjectQueryResult(["name"], [], 0, false),
                 ListProjectDataTablesQuery => Array.Empty<ProjectTableInfo>(),
                 ListProjectChartsQuery => new ProjectChartView[] { new("sql:Summary", "{\"type\":\"bar\"}", DateTimeOffset.UtcNow) },
                 ListSearchIndicesQuery => Array.Empty<SearchIndexView>(),

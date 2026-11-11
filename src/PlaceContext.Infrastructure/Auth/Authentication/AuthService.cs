@@ -328,7 +328,7 @@ public sealed class AuthService : IAuthService
     }
 
     public async Task SetTwoFactorPhoneNumberAsync(
-        Guid userId, string? phoneNumber, CancellationToken ct = default)
+        Guid userId, string? phoneNumber, CancellationToken ct = default, bool onlyIfMissing = false)
     {
         var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
         if (row is null)
@@ -336,6 +336,20 @@ public sealed class AuthService : IAuthService
             throw new InvalidOperationException("User not found.");
         }
         var normalized = (phoneNumber ?? string.Empty).Trim();
+        if (onlyIfMissing)
+        {
+            if (!PhoneNumberPattern.IsMatch(normalized)) throw new ArgumentException("Enter a valid mobile number.");
+            if (!string.IsNullOrEmpty(row.PhoneNumber)) throw new InvalidOperationException("A verification phone is already enrolled.");
+            if (_db.Database.IsRelational())
+            {
+                var changed = await _db.Users.Where(u => u.Id == userId && (u.PhoneNumber == null || u.PhoneNumber == ""))
+                    .ExecuteUpdateAsync(update => update.SetProperty(u => u.PhoneNumber, normalized)
+                        .SetProperty(u => u.TwoFactorChannel, "sms"), ct);
+                if (changed != 1) throw new InvalidOperationException("A verification phone is already enrolled.");
+                await _db.Entry(row).ReloadAsync(ct);
+                return;
+            }
+        }
         void ApplyPhoneNumber()
         {
             if (normalized.Length == 0)
@@ -387,6 +401,9 @@ public sealed class AuthService : IAuthService
     private static string ResolveChannel(
         UserRow row, IReadOnlyCollection<string> flagged, string? requested)
     {
+        // An existing email factor must be verified before enrolling an alternative phone.
+        if (string.IsNullOrWhiteSpace(row.PhoneNumber) && flagged.Contains("email"))
+            return "email";
         if (requested is not null && flagged.Contains(requested))
         {
             return requested;

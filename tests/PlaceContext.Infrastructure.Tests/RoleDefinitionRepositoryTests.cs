@@ -79,7 +79,7 @@ public class RoleDefinitionRepositoryTests
     {
         var (provider, _) = NewServices();
         var svc = new PermissionService(new FakeCurrentUser(), provider.GetRequiredService<IServiceScopeFactory>());
-        var effective = await svc.GetEffectivePermissionsForUserAsync(Guid.NewGuid(), "Owner");
+        var effective = await svc.GetEffectivePermissionsForUserAsync(PlaceContext.Application.Auth.TrustedServicePrincipals.ManagementApiUserId, "Owner");
         Assert.Contains(Permission.JobsView, effective);
         Assert.Contains(Permission.JobsEdit, effective);
         Assert.DoesNotContain(Permission.SettingsManage, effective);

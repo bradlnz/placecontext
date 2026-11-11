@@ -71,7 +71,8 @@ public sealed class MembershipService : IMembershipService
     }
 
     public Task<string?> GetRoleAsync(Guid userId, CancellationToken ct = default)
-        => _db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => (string?)u.Role).FirstOrDefaultAsync(ct);
+        => _db.Users.AsNoTracking().Where(u => u.Id == userId)
+            .Select(u => (string?)(u.IsExternalAdmin ? nameof(UserRole.Admin) : u.Role)).FirstOrDefaultAsync(ct);
 
     public async Task SetRoleAsync(Guid userId, string roleName, CancellationToken ct = default)
     {

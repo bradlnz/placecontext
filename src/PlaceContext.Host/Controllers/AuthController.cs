@@ -8,7 +8,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Membership;
-using PlaceContext.Application.Secrets;
+using Microsoft.AspNetCore.DataProtection;
+using System.Security.Cryptography;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application;
 using PlaceContext.Host.Auth;
@@ -44,12 +45,15 @@ public sealed class AuthController : ControllerBase
     private readonly IAntiforgery _antiforgery;
     private readonly IConfiguration _config;
     private readonly IWebHostEnvironment _env;
-    private readonly IDataEncryptor _encryptor;
+    private readonly ITimeLimitedDataProtector _mfaState;
+    private readonly ICurrentTenant _tenant;
+    internal const string MfaCookie = "placecontext_mfa";
+    internal const string MfaPurpose = "placecontext.login-mfa.v2";
     private readonly PlaceContextService _placeContext;
 
     public AuthController(IAuthService auth, PortalToken portal, IMembershipService members,
-        IAntiforgery antiforgery, IConfiguration config, IWebHostEnvironment env, IDataEncryptor encryptor,
-        PlaceContextService placeContext)
+        IAntiforgery antiforgery, IConfiguration config, IWebHostEnvironment env, IDataProtectionProvider protection,
+        PlaceContextService placeContext, ICurrentTenant tenant)
     {
         _auth = auth;
         _portal = portal;
@@ -57,7 +61,8 @@ public sealed class AuthController : ControllerBase
         _antiforgery = antiforgery;
         _config = config;
         _env = env;
-        _encryptor = encryptor;
+        _mfaState = protection.CreateProtector(MfaPurpose).ToTimeLimitedDataProtector();
+        _tenant = tenant;
         _placeContext = placeContext;
     }
 
@@ -312,13 +317,17 @@ public sealed class AuthController : ControllerBase
                 }
             }
 
+            var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            Response.Cookies.Append(MfaCookie, nonce, new CookieOptions
+            {
+                HttpOnly = true, Secure = Request.IsHttps, SameSite = SameSiteMode.Strict,
+                Path = "/auth", MaxAge = TimeSpan.FromMinutes(10)
+            });
             var stateToken = ProtectEmailState(new EmailTwoFactorState
             {
                 UserId = user.Id,
                 TenantId = user.TenantId,
-                Email = user.Email,
-                DisplayName = user.DisplayName,
-                Role = user.Role.ToString(),
+                Nonce = nonce,
                 ReturnUrl = await ResolvePostLoginUrlAsync(user, returnUrl, HttpContext.RequestAborted),
                 Channel = channel,
                 Destination = destination,
@@ -690,7 +699,9 @@ public sealed class AuthController : ControllerBase
         }
         // Phone enrollment: the code goes by SMS but no number is on file yet — collect it first,
         // then send the code to the freshly stored number.
-        if (pending.NeedsPhone || !string.IsNullOrWhiteSpace(phone))
+        if (!string.IsNullOrWhiteSpace(phone) && !pending.NeedsPhone)
+            return BadRequest("Verify your existing factor before changing your phone number.");
+        if (pending.NeedsPhone)
         {
             if (string.IsNullOrWhiteSpace(phone))
             {
@@ -699,9 +710,9 @@ public sealed class AuthController : ControllerBase
             try
             {
                 await _auth.SetTwoFactorPhoneNumberAsync(
-                    pending.UserId, phone, HttpContext.RequestAborted);
+                    pending.UserId, phone, HttpContext.RequestAborted, onlyIfMissing: true);
             }
-            catch (ArgumentException ex)
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
             {
                 return RenderVerify(pending, state, ex.Message);
             }
@@ -732,8 +743,11 @@ public sealed class AuthController : ControllerBase
             return Redirect($"/auth/email-verify?{qs}");
         }
 
-        var user = new AuthUser(pending.UserId, pending.TenantId, pending.Email,
-            pending.DisplayName, pending.Role);
+        var member = await _members.GetMemberAsync(pending.UserId, HttpContext.RequestAborted);
+        var role = await _members.GetRoleAsync(pending.UserId, HttpContext.RequestAborted);
+        if (member is null || string.IsNullOrWhiteSpace(role)) return Redirect("/login");
+        Response.Cookies.Delete(MfaCookie, new CookieOptions { Path = "/auth" });
+        var user = new AuthUser(member.Id, _tenant.TenantId, member.Email, member.DisplayName, role);
         await SignInAsync(HttpContext, user);
         return Redirect(await ResolvePostLoginUrlAsync(user, pending.ReturnUrl, HttpContext.RequestAborted));
     }
@@ -868,19 +882,19 @@ public sealed class AuthController : ControllerBase
     }
 
     private string ProtectEmailState(EmailTwoFactorState state)
-        => _encryptor.Protect(
-            JsonSerializer.Serialize(state), IDataEncryptor.Purpose.EmailTwoFactorState);
+        => _mfaState.Protect(JsonSerializer.Serialize(state), state.ExpiresAt);
 
     private EmailTwoFactorState? DecryptEmailState(string state)
     {
         try
         {
-            var json = _encryptor.Unprotect(state, IDataEncryptor.Purpose.EmailTwoFactorState);
-            return string.IsNullOrEmpty(json)
-                ? null
-                : JsonSerializer.Deserialize<EmailTwoFactorState>(json);
+            var pending = JsonSerializer.Deserialize<EmailTwoFactorState>(_mfaState.Unprotect(state));
+            return pending is not null && _tenant.IsResolved && pending.TenantId == _tenant.TenantId
+                && pending.UserId != Guid.Empty && pending.ExpiresAt > DateTimeOffset.UtcNow
+                && !string.IsNullOrEmpty(pending.Nonce)
+                && SecureCompare.Equals(pending.Nonce, Request.Cookies[MfaCookie]) ? pending : null;
         }
-        catch
+        catch (Exception ex) when (ex is CryptographicException or JsonException or FormatException)
         {
             return null;
         }
@@ -896,9 +910,8 @@ public sealed class AuthController : ControllerBase
         {
             get; set;
         }
-        public string Email { get; set; } = "";
-        public string DisplayName { get; set; } = "";
-        public string Role { get; set; } = "";
+        public string Nonce { get; set; } = "";
+        public DateTimeOffset ExpiresAt { get; set; } = DateTimeOffset.UtcNow.AddMinutes(10);
         public string? ReturnUrl
         {
             get; set;

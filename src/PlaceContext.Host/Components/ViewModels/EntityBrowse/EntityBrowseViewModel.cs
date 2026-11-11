@@ -36,7 +36,7 @@ public sealed partial class EntityBrowseViewModel : PageViewModel
         NotifyStateChanged();
         try
         {
-            var rows = await _svc.ExecuteProjectDataAsync(
+            var rows = await _svc.QueryProjectDataAsync(
                 ProjectId, $"SELECT * FROM \"{Entity.TableName.Replace("\"", "\"\"")}\" LIMIT 500");
             if (version != _loadVersion)
             {

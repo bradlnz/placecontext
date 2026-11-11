@@ -698,7 +698,7 @@ public sealed class PlaceContextTools
             async () =>
             {
                 EnsureSelectOnly(sql);
-                var result = await svc.ExecuteProjectDataAsync(projectId, sql);
+                var result = await svc.QueryProjectDataAsync(projectId, sql);
                 return new
                 {
                     result.Columns,

@@ -84,7 +84,7 @@ public interface IAuthService
     /// enrollment step when SMS is the required channel and no number is on file. An empty value
     /// clears the number (and resets the channel to email).
     /// </summary>
-    Task SetTwoFactorPhoneNumberAsync(Guid userId, string? phoneNumber, CancellationToken ct = default);
+    Task SetTwoFactorPhoneNumberAsync(Guid userId, string? phoneNumber, CancellationToken ct = default, bool onlyIfMissing = false);
 
     /// <summary>Sets the user's preferred 2FA channel; the channel must have a flagged provider.</summary>
     Task SetTwoFactorChannelAsync(Guid userId, string channel, CancellationToken ct = default);

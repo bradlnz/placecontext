@@ -1,3 +1,4 @@
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 namespace PlaceContext.Application.Features;
 
@@ -8,4 +9,7 @@ namespace PlaceContext.Application.Features;
 /// this project's tables, and data edits remain possible only on tables the project defines
 /// (system tables stay read-only at the Postgres level).
 /// </summary>
-public sealed record SaveProjectViewCommand(Guid ProjectId, string Name, string SelectSql) : ICommand<bool>;
+public sealed record SaveProjectViewCommand(Guid ProjectId, string Name, string SelectSql) : ICommand<bool>, IRequiresPermission
+{
+    public string RequiredPermission => Permission.DataWrite;
+}

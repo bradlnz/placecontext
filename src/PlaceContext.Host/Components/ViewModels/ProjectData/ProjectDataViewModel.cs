@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.JSInterop;
 using PlaceContext.Application.ProjectData;
 using PlaceContext.Application;
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -13,15 +15,18 @@ public sealed partial class ProjectDataViewModel : PageViewModel
     private readonly PortalUiState _ui;
     private readonly IJSRuntime _js;
     private readonly IDispatcher? _dispatcher;
+    private readonly IPermissionService? _permissions;
     public bool ApplicationDatabase { get; private set; }
     public IReadOnlyList<DatabaseTable> ApplicationTables { get; private set; } = [];
 
-    public ProjectDataViewModel(PlaceContextService svc, PortalUiState ui, IJSRuntime js, IDispatcher? dispatcher = null)
+    public ProjectDataViewModel(PlaceContextService svc, PortalUiState ui, IJSRuntime js, IDispatcher? dispatcher = null,
+        IPermissionService? permissions = null)
     {
         _svc = svc;
         _ui = ui;
         _js = js;
         _dispatcher = dispatcher;
+        _permissions = permissions;
     }
 
     // ── Parameters ────────────────────────────────────────────────────────────────────────────
@@ -414,7 +419,7 @@ public sealed partial class ProjectDataViewModel : PageViewModel
         try
         {
             var sql = await getSql();
-            ModalResult = await _svc.ExecuteProjectDataAsync(ProjectId, sql);
+            ModalResult = await RunSqlAsync(sql);
         }
         catch (Exception ex)
         {
@@ -427,5 +432,10 @@ public sealed partial class ProjectDataViewModel : PageViewModel
             NotifyStateChanged();
         }
     }
+
+    public async Task<ProjectQueryResult> RunSqlAsync(string sql)
+        => _permissions is not null && await _permissions.HasAsync(Permission.DataWrite)
+            ? await _svc.ExecuteProjectDataAsync(ProjectId, sql)
+            : await _svc.QueryProjectDataAsync(ProjectId, sql);
 
 }

@@ -57,11 +57,14 @@ public sealed class ProjectDataTraceTests
             {
                 throw new InvalidOperationException("Database error contains private-marker");
             }
-            object result = command is ExecuteProjectDataCommand
-                ? new ProjectQueryResult(["customer"], [["private-marker"]], 0, false)
-                : new ProjectChartView("sql:private-marker", "private-marker", DateTimeOffset.UtcNow);
+            object result = new ProjectChartView("sql:private-marker", "private-marker", DateTimeOffset.UtcNow);
             return Task.FromResult((T)result);
         }
-        public Task<T> Query<T>(IQuery<T> query, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<T> Query<T>(IQuery<T> query, CancellationToken ct = default)
+        {
+            Assert.IsType<QueryProjectDataQuery>(query);
+            if (fail) throw new InvalidOperationException("Database error contains private-marker");
+            return Task.FromResult((T)(object)new ProjectQueryResult(["customer"], [["private-marker"]], 0, false));
+        }
     }
 }

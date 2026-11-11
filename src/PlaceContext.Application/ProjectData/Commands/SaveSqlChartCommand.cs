@@ -1,3 +1,4 @@
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 
 namespace PlaceContext.Application.Features;
@@ -9,4 +10,7 @@ namespace PlaceContext.Application.Features;
 /// numeric columns = series) and stored under the reserved <c>sql:{name}</c> chart slot with the
 /// query embedded, so it can be re-run and edited later.
 /// </summary>
-public sealed record SaveSqlChartCommand(Guid ProjectId, string Name, string Sql, string ChartType = "bar") : ICommand<ProjectChartView>;
+public sealed record SaveSqlChartCommand(Guid ProjectId, string Name, string Sql, string ChartType = "bar") : ICommand<ProjectChartView>, IRequiresPermission
+{
+    public string RequiredPermission => Permission.DataWrite;
+}

@@ -137,7 +137,7 @@ public sealed partial class EntityBrowseViewModel
 
             foreach (var col in columns.Where(c => IsNumeric(c.Type)).Take(3))
             {
-                var r = await _svc.ExecuteProjectDataAsync(
+                var r = await _svc.QueryProjectDataAsync(
                     ProjectId,
                     $"SELECT round(avg(\"{col.Name}\")::numeric, 1), min(\"{col.Name}\"), max(\"{col.Name}\") FROM \"{table}\""
                 );
@@ -172,7 +172,7 @@ public sealed partial class EntityBrowseViewModel
                 .Take(2);
             foreach (var col in keyCols)
             {
-                var r = await _svc.ExecuteProjectDataAsync(
+                var r = await _svc.QueryProjectDataAsync(
                     ProjectId,
                     $"SELECT \"{col}\"::text, count(*) FROM \"{table}\" GROUP BY 1 ORDER BY 2 DESC LIMIT 5"
                 );
@@ -269,7 +269,7 @@ public sealed partial class EntityBrowseViewModel
                 var tLabel = target.LabelColumn ?? rel.TargetColumn;
                 try
                 {
-                    var join = await _svc.ExecuteProjectDataAsync(
+                    var join = await _svc.QueryProjectDataAsync(
                         ProjectId,
                         $"SELECT a.\"{rel.Column}\"::text, b.\"{tLabel.Replace("\"", "")}\"::text FROM \"{Entity.TableName.Replace("\"", "")}\" a JOIN \"{target.TableName.Replace("\"", "")}\" b ON a.\"{rel.Column}\"::text = b.\"{rel.TargetColumn.Replace("\"", "")}\"::text LIMIT 40"
                     );

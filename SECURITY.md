@@ -20,6 +20,26 @@ Please avoid accessing data that is not yours, disrupting running services, or p
 before a fix is available. Acknowledgement and remediation timing depend on severity and the quality
 of the report.
 
+## Security update deployment
+
+The portal now uses the `placecontext_auth_v2` cookie. Deploying this update signs existing users
+out; they must sign in again. Requests and interactive events recheck workspace membership and
+refresh the user's role. Pending MFA logins expire after ten minutes and are bound to the browser
+and workspace.
+
+Internal project SQL now connects as a restricted `proj_<project-id>` PostgreSQL login, including
+read queries. Existing project schemas and role ownership are preserved. Provisioning enables login
+on each project role on first use. The platform connection string must include its password and use
+a superuser to reset project-role privilege flags. `pg_hba.conf` must permit password
+authentication for project logins from the application. Do not allow `trust` authentication from
+untrusted clients. Project credentials are derived from the platform database password; coordinate
+password rotation with restarting all application replicas. External project databases continue to
+use their configured credentials, which must have only the intended database privileges.
+
+Connector OAuth administration requires `secrets.manage`. The unused `/mcp-oauth/token` endpoint
+has been removed; refresh returns connection status and expiry without credentials and requires
+an antiforgery token.
+
 ## SOC 2 Type II readiness
 
 SOC 2 Type II is the confirmed assurance target. This repository does not establish that an

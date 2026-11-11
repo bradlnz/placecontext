@@ -5,6 +5,7 @@ using PlaceContext.Application.Tenancy;
 using PlaceContext.Domain.Repositories;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Auth;
 
 namespace PlaceContext.Infrastructure.Auth;
 
@@ -47,6 +48,8 @@ public sealed class PermissionService : IPermissionService
 
         var overrides = await grants.ListForUserAsync(userId, ct);
         var account = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (account is null && userId != TrustedServicePrincipals.ManagementApiUserId)
+            return new HashSet<string>();
         var isDefaultAdmin = account is not null && (account.IsDefaultAdmin || account.IsExternalAdmin);
         // Service API principals have no user row; their authenticated role still controls job access.
         if (account is not null)

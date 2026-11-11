@@ -1,3 +1,4 @@
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.ProjectData;
 namespace PlaceContext.Application.Features;
@@ -12,4 +13,7 @@ public sealed record ImportCsvToProjectTableCommand(
     string TableName,
     IReadOnlyList<ProjectColumnSpec> Columns,
     IReadOnlyList<IReadOnlyList<string?>> Rows,
-    bool CreateTable) : ICommand<ImportCsvResult>;
+    bool CreateTable) : ICommand<ImportCsvResult>, IRequiresPermission
+{
+    public string RequiredPermission => Permission.DataWrite;
+}

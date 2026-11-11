@@ -230,7 +230,7 @@ public sealed partial class EntityBrowseViewModel
             }
             try
             {
-                var related = await _svc.ExecuteProjectDataAsync(
+                var related = await _svc.QueryProjectDataAsync(
                     ProjectId,
                     $"SELECT * FROM \"{target.TableName}\" WHERE \"{rel.TargetColumn}\"::text = '{value.Replace("'", "''")}' LIMIT 20"
                 );

@@ -11,12 +11,18 @@ namespace PlaceContext.Host.Tenancy;
 public sealed class TenantCircuitHandler : CircuitHandler
 {
     private readonly TenantHolder _holder;
-    public TenantCircuitHandler(TenantHolder holder) => _holder = holder;
+    public TenantCircuitHandler(TenantHolder holder)
+    {
+        _holder = holder;
+        // A circuit has a new DI scope; capture the tenant resolved by its opening HTTP request.
+        _holder.Tenant ??= CurrentTenant.Current;
+    }
 
     public override Func<CircuitInboundActivityContext, Task> CreateInboundActivityHandler(
         Func<CircuitInboundActivityContext, Task> next)
         => async context =>
         {
+            CurrentTenant.Clear();
             if (_holder.Tenant is { } tenant)
             {
                 CurrentTenant.Set(tenant);

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Mcp;
+using PlaceContext.Application.Access.Models;
 
 namespace PlaceContext.Host.Controllers;
 
@@ -12,7 +13,7 @@ namespace PlaceContext.Host.Controllers;
 /// OAuth 2.1 proxy for external MCP server connections. Handles DCR, authorization-code + PKCE,
 /// and token exchange on behalf of the chat UI. The popup flow posts messages back to the opener.
 /// </summary>
-[Authorize]
+[Authorize(Policy = Permission.SecretsManage)]
 public sealed class McpOAuthController : ControllerBase
 {
     private readonly McpOAuthService _oauth;
@@ -188,6 +189,7 @@ public sealed class McpOAuthController : ControllerBase
     /// Step 3: Refresh an expired OAuth token. Called from the chat UI or test handler.
     /// </summary>
     [HttpPost("/mcp-oauth/refresh")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Refresh([FromQuery] Guid connectionId)
     {
         if (await _oauth.GetConnectionAsync(connectionId, HttpContext.RequestAborted) is null)
@@ -196,30 +198,13 @@ public sealed class McpOAuthController : ControllerBase
         }
         try
         {
-            return Ok(await _oauth.RefreshAsync(connectionId, HttpContext.RequestAborted));
+            var token = await _oauth.RefreshAsync(connectionId, HttpContext.RequestAborted);
+            return Ok(new { Connected = true, token.ExpiresAt });
         }
         catch (Exception ex)
         {
             _log.LogError(ex, "Token refresh failed for connection {ConnectionId}", connectionId);
             return BadRequest($"Token refresh failed: {ex.Message}");
-        }
-    }
-
-    [HttpGet("/mcp-oauth/token")]
-    public async Task<IActionResult> GetToken([FromQuery] Guid connectionId)
-    {
-        try
-        {
-            var token = await _oauth.GetTokenAsync(connectionId, HttpContext.RequestAborted);
-            return token is null ? NotFound() : Ok(token);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "OAuth token unavailable for connection {ConnectionId}", connectionId);
-            return Unauthorized(new
-            {
-                error = "Token expired and refresh failed."
-            });
         }
     }
 

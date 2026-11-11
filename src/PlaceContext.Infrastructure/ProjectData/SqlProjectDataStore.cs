@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Text;
@@ -13,8 +14,8 @@ using PlaceContext.Application.Shared;
 namespace PlaceContext.Infrastructure.ProjectData;
 
 /// <summary>
-/// Each project's own database, realised as a private Postgres schema plus a matching NOLOGIN
-/// role. Every execution runs as that role with <c>search_path</c> pinned to the project's schema,
+/// Each project's own database, realised as a private Postgres schema plus a matching restricted LOGIN
+/// role. Every execution authenticates as that role with <c>search_path</c> pinned to the project's schema,
 /// so Postgres itself enforces the isolation: the role holds privileges on its own schema only —
 /// it cannot see another project's tables or the platform's (which live in <c>public</c>, where
 /// this role has no table grants). Provisioning is idempotent and happens lazily on first use.
@@ -42,7 +43,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
     private static readonly ConcurrentDictionary<string, byte> ProvisionedSchemas = new();
 
     /// <summary>Test hook: true once <paramref name="schema"/> has been provisioned in this process.</summary>
-    internal static bool IsProvisionedInProcess(string schema) => ProvisionedSchemas.ContainsKey(schema);
+    internal static bool IsProvisionedInProcess(string schema) => ProvisionedSchemas.Keys.Any(key => key.EndsWith(":" + schema, StringComparison.Ordinal));
 
     /// <summary>Test hook: clears the in-process provisioning cache so tests don't leak state.</summary>
     internal static void ResetProvisioningCacheForTests() => ProvisionedSchemas.Clear();
@@ -70,39 +71,61 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             ? new ProjectDatabaseConnection(_connectionString, IsExternal: false)
             : await _dbResolver.ResolveAsync(projectId, ct);
 
-    /// <summary>Open a connection to the resolved database for <paramref name="projectId"/>.</summary>
-    private static async Task<NpgsqlConnection> OpenConnectionAsync(ProjectDatabaseConnection resolved, CancellationToken ct)
+    private async Task<NpgsqlConnection> OpenConnectionAsync(ProjectDatabaseConnection resolved, Guid projectId, CancellationToken ct)
     {
-        var conn = new NpgsqlConnection(resolved.ConnectionString);
-        await conn.OpenAsync(ct);
-        return conn;
-    }
-
-    /// <summary>
-    /// Provision the per-project schema/role when the project lives on the cluster DB. External
-    /// databases are the project's own — there is nothing to provision and no isolation to build.
-    /// </summary>
-    private async Task EnsureIsolationAsync(NpgsqlConnection conn, Guid projectId, ProjectDatabaseConnection resolved, CancellationToken ct)
-    {
+        var connectionString = resolved.ConnectionString;
         if (!resolved.IsExternal)
         {
-            await EnsureProvisionedAsync(conn, SchemaFor(projectId), ct);
+            var schema = SchemaFor(projectId);
+            var settings = new NpgsqlConnectionStringBuilder(connectionString);
+            var password = ProjectPassword(settings, schema);
+            var cacheKey = ProvisioningKey(connectionString, schema);
+            if (!ProvisionedSchemas.ContainsKey(cacheKey))
+            {
+                await using var owner = new NpgsqlConnection(connectionString);
+                await owner.OpenAsync(ct);
+                await EnsureProvisionedAsync(owner, schema, connectionString, ct);
+            }
+            settings.Database ??= settings.Username;
+            settings.Username = schema;
+            settings.Password = password;
+            settings.SearchPath = schema;
+            settings.Options = null;
+            settings.PersistSecurityInfo = false;
+            connectionString = settings.ConnectionString;
+        }
+        var conn = new NpgsqlConnection(connectionString);
+        try
+        {
+            await conn.OpenAsync(ct);
+            return conn;
+        }
+        catch
+        {
+            await conn.DisposeAsync();
+            throw;
         }
     }
 
-    /// <summary>
-    /// Pin the session for one execution. On the cluster DB this runs as the project's NOLOGIN role
-    /// with search_path pinned to its private schema; on an external DB the connecting credentials
-    /// are already the owner, so only the statement timeout is pinned. SET LOCAL scopes everything
-    /// to the enclosing transaction.
-    /// </summary>
-    private async Task SetupSessionAsync(NpgsqlConnection conn, NpgsqlTransaction tx, Guid projectId, ProjectDatabaseConnection resolved, CancellationToken ct)
+    // Shared across replicas without storing another credential; rotate with the platform DB password.
+    private static string ProjectPassword(NpgsqlConnectionStringBuilder settings, string schema)
+    {
+        if (string.IsNullOrEmpty(settings.Password))
+            throw new InvalidOperationException("Project SQL isolation requires a password in the platform database connection string.");
+        return Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(settings.Password),
+            Encoding.UTF8.GetBytes($"placecontext.project-sql.v1:{settings.Database ?? settings.Username}:{schema}")));
+    }
+
+    private static string ProvisioningKey(string connectionString, string schema)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(connectionString))) + ":" + schema;
+
+    private static async Task SetupSessionAsync(NpgsqlConnection conn, NpgsqlTransaction tx, Guid projectId, ProjectDatabaseConnection resolved, CancellationToken ct)
     {
         await using var setup = conn.CreateCommand();
         setup.Transaction = tx;
         setup.CommandText = resolved.IsExternal
             ? $"SET LOCAL statement_timeout = '{StatementTimeout}'"
-            : $"SET LOCAL ROLE \"{SchemaFor(projectId)}\"; SET LOCAL search_path TO \"{SchemaFor(projectId)}\"; SET LOCAL statement_timeout = '{StatementTimeout}'";
+            : $"SET LOCAL search_path TO \"{SchemaFor(projectId)}\"; SET LOCAL statement_timeout = '{StatementTimeout}'";
         await setup.ExecuteNonQueryAsync(ct);
     }
 
@@ -178,8 +201,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             throw new ArgumentException("A SQL query is required.");
         }
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
         await SetupSessionAsync(conn, tx, projectId, resolved, ct);
         await using (var mode = new NpgsqlCommand("SET TRANSACTION READ ONLY", conn, tx))
@@ -215,12 +237,9 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
     public async Task<ProjectQueryResult> ExecuteAsync(Guid projectId, string sql, CancellationToken ct = default)
     {
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
 
-        // The user's SQL runs inside a transaction with search_path and a statement timeout pinned
-        // (and, on the cluster DB, as the project's NOLOGIN role). SET LOCAL scopes everything to
-        // this transaction only.
+        // The connection authenticates as the project role, so RESET ROLE cannot recover platform privileges.
         await using var tx = await conn.BeginTransactionAsync(ct);
         await SetupSessionAsync(conn, tx, projectId, resolved, ct);
 
@@ -318,8 +337,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
         pageSize = ClampPageSize(pageSize);
 
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
 
         await using var tx = await conn.BeginTransactionAsync(ct);
         await SetupSessionAsync(conn, tx, projectId, resolved, ct);
@@ -435,8 +453,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             throw new ArgumentException($"Read at most {MaxReadRows:N0} rows.");
         }
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
         var schema = await EffectiveListSchemaAsync(conn, resolved, projectId, ct);
         var qualified = $"{QuoteIdent(schema)}.{QuoteIdent(tableName)}";
 
@@ -512,8 +529,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
     public async Task<IReadOnlyList<ProjectTableInfo>> ListTablesAsync(Guid projectId, CancellationToken ct = default)
     {
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
 
         // A table the project role does not own is system-written and read-only for the project
         // (the role holds SELECT at most — see AppendReadOnlyRowsAsync). On an external database the
@@ -592,8 +608,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
     public async Task<IReadOnlyList<ProjectTableSchema>> ListTableSchemasAsync(Guid projectId, CancellationToken ct = default)
     {
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
         var schema = await EffectiveListSchemaAsync(conn, resolved, projectId, ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -625,8 +640,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
     {
         Ident(tableName, "table name");
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
         var schema = await EffectiveListSchemaAsync(conn, resolved, projectId, ct);
 
         await using var cmd = conn.CreateCommand();
@@ -730,7 +744,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
         var schema = SchemaFor(projectId);
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
-        await EnsureProvisionedAsync(conn, schema, ct);
+        await EnsureProvisionedAsync(conn, schema, _connectionString, ct);
 
         // Everything runs as the PLATFORM user, not the project role: the platform owns the table,
         // so the role cannot ALTER, DROP, or (after the revoke) write it — Postgres enforces the
@@ -744,7 +758,11 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             await setup.ExecuteNonQueryAsync(ct);
         }
 
+        // Serialize platform writers before deciding whether the system table needs to be created.
+        await AcquireSchemaAdvisoryLockAsync(conn, tx, schema, ct);
+
         // A same-named table the project role owns is a user table — refuse rather than hijack it.
+        string? existingOwner;
         await using (var owner = conn.CreateCommand())
         {
             owner.Transaction = tx;
@@ -755,7 +773,8 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
                 """;
             owner.Parameters.AddWithValue("schema", schema);
             owner.Parameters.AddWithValue("table", tableName);
-            if (await owner.ExecuteScalarAsync(ct) is string existingOwner && existingOwner == schema)
+            existingOwner = await owner.ExecuteScalarAsync(ct) as string;
+            if (existingOwner == schema)
             {
                 throw new InvalidOperationException(
                                 $"Table '{tableName}' already exists as a project-owned table — cannot repurpose it as a read-only system table.");
@@ -763,12 +782,6 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
         }
 
         var qualified = $"\"{schema}\".{QuoteIdent(tableName)}";
-
-        // Same advisory lock, same key as EnsureProvisionedAsync: this CREATE/REVOKE/GRANT batch
-        // mutates the same shared-catalog rows (pg_class.relacl etc.) as schema provisioning, so
-        // the background job writer must serialize against a concurrent browser-triggered
-        // provisioning pass on the same schema rather than race it.
-        await AcquireSchemaAdvisoryLockAsync(conn, tx, schema, ct);
 
         await using (var create = conn.CreateCommand())
         {
@@ -779,8 +792,9 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             var adds = columns.Select((c, i) => $"ADD COLUMN IF NOT EXISTS {QuoteIdent(c.Name)} {pgTypes[i]}");
             create.Transaction = tx;
             // The revoke also undoes the schema's ALTER DEFAULT PRIVILEGES auto-grant on this table.
+            // Fail on a concurrent project-owned table creation before executing privileged writes.
             create.CommandText =
-                $"CREATE TABLE IF NOT EXISTS {qualified} ({string.Join(", ", defs)}); " +
+                (existingOwner is null ? $"CREATE TABLE {qualified} ({string.Join(", ", defs)}); " : "") +
                 $"ALTER TABLE {qualified} {string.Join(", ", adds)}; " +
                 $"REVOKE ALL ON TABLE {qualified} FROM \"{schema}\"; " +
                 $"GRANT SELECT ON TABLE {qualified} TO \"{schema}\"";
@@ -826,8 +840,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             throw new ArgumentException("Every row must have exactly one value per column.");
         }
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
 
         // Runs as the PROJECT ROLE inside its schema on the cluster DB, so the created table is
         // project-owned and stays fully writable/alterable/droppable — the CSV import produces a
@@ -898,8 +911,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             Ident(c, "column name");
         }
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
 
         await using var tx = await conn.BeginTransactionAsync(ct);
         await SetupSessionAsync(conn, tx, projectId, resolved, ct);
@@ -947,8 +959,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             Ident(c, "column name");
         }
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
         await SetupSessionAsync(conn, tx, projectId, resolved, ct);
 
@@ -1003,8 +1014,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             Ident(c, "column name");
         }
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
         await SetupSessionAsync(conn, tx, projectId, resolved, ct);
 
@@ -1072,8 +1082,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
     private async Task RunAsRoleAsync(Guid projectId, string statement, CancellationToken ct)
     {
         var resolved = await ResolveDatabaseAsync(projectId, ct);
-        await using var conn = await OpenConnectionAsync(resolved, ct);
-        await EnsureIsolationAsync(conn, projectId, resolved, ct);
+        await using var conn = await OpenConnectionAsync(resolved, projectId, ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
         await SetupSessionAsync(conn, tx, projectId, resolved, ct);
         await using (var cmd = conn.CreateCommand())
@@ -1085,7 +1094,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
         await tx.CommitAsync(ct);
     }
 
-    // Idempotent: schema + NOLOGIN role, role owns full rights on its schema and nothing else.
+    // Idempotent: schema + restricted login; existing project-owned tables keep their owner.
     // System tables (platform-owned, e.g. job_run_data) are clawed back to SELECT-only afterwards,
     // because the blanket grant would otherwise re-open writes on every provisioning pass.
     //
@@ -1094,12 +1103,13 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
     // two sessions provision the same schema at once (the catalog rows they touch — pg_namespace,
     // pg_class.relacl, pg_default_acl — aren't protected by normal row-level serialization):
     //   1. an in-process "already provisioned" cache, so a hot schema only pays for this once;
-    //   2. a Postgres advisory lock (same transaction as the DDL) so two sessions that both miss
-    //      the cache for the same schema serialize instead of racing each other's DDL;
+    //   2. Postgres advisory locks for the shared database ACL and project schema DDL;
     //   3. a short retry backstop for the residual XX000 / 40001 / 40P01 races.
-    private async Task EnsureProvisionedAsync(NpgsqlConnection conn, string schema, CancellationToken ct)
+    private async Task EnsureProvisionedAsync(NpgsqlConnection conn, string schema, string connectionString, CancellationToken ct)
     {
-        if (ProvisionedSchemas.ContainsKey(schema))
+        var cacheKey = ProvisioningKey(connectionString, schema);
+        var password = ProjectPassword(new NpgsqlConnectionStringBuilder(connectionString), schema);
+        if (ProvisionedSchemas.ContainsKey(cacheKey))
         {
             return;
         }
@@ -1109,8 +1119,8 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
             {
                 await using var tx = await conn.BeginTransactionAsync(ct);
 
-                // Serializes concurrent first-time provisioning of the SAME schema. Sessions
-                // provisioning DIFFERENT schemas don't contend (different lock keys).
+                // CONNECT grants update one shared database ACL, even for different project roles.
+                await AcquireSchemaAdvisoryLockAsync(conn, tx, "project-provision:" + conn.Database, ct);
                 await AcquireSchemaAdvisoryLockAsync(conn, tx, schema, ct);
 
                 await using (var cmd = conn.CreateCommand())
@@ -1119,6 +1129,8 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
                     cmd.CommandText = $"""
                         CREATE SCHEMA IF NOT EXISTS "{schema}";
                         DO $$ BEGIN CREATE ROLE "{schema}" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+                        ALTER ROLE "{schema}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '{password}';
+                        GRANT CONNECT ON DATABASE "{conn.Database.Replace("\"", "\"\"")}" TO "{schema}";
                         GRANT USAGE, CREATE ON SCHEMA "{schema}" TO "{schema}";
                         GRANT ALL ON ALL TABLES IN SCHEMA "{schema}" TO "{schema}";
                         GRANT ALL ON ALL SEQUENCES IN SCHEMA "{schema}" TO "{schema}";
@@ -1141,7 +1153,7 @@ public sealed class SqlProjectDataStore : IProjectDataStore, IProjectDataReader
                 await tx.CommitAsync(ct);
 
                 // Only cache on success — a failed/rolled-back attempt must re-run next time.
-                ProvisionedSchemas.TryAdd(schema, 0);
+                ProvisionedSchemas.TryAdd(cacheKey, 0);
                 return;
             }
             catch (PostgresException ex) when (attempt < ProvisioningMaxAttempts && IsTransientConcurrencyError(ex))

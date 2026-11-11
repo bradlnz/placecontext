@@ -179,7 +179,8 @@ public sealed class TargetPageViewModelTests
         public Task SetTwoFactorPhoneNumberAsync(
             Guid userId,
             string? phoneNumber,
-            CancellationToken ct = default
+            CancellationToken ct = default,
+            bool onlyIfMissing = false
         ) => throw new NotImplementedException();
 
         public Task SetTwoFactorChannelAsync(

@@ -1,3 +1,4 @@
+using PlaceContext.Application.Access.Models;
 using System.Text;
 using PlaceContext.Application.Cqrs;
 
@@ -11,8 +12,9 @@ namespace PlaceContext.Application.Features;
 public sealed record MaterializeTableIndexCommand(
     Guid ProjectId,
     string TableName,
-    string? IndexName = null) : ICommand<MaterializeTableIndexResult>
+    string? IndexName = null) : ICommand<MaterializeTableIndexResult>, IRequiresPermission
 {
+    public string RequiredPermission => Permission.DataWrite;
     /// <summary>Default index name for a table: the <c>pi-</c> prefix plus the table name.</summary>
     public static string DefaultIndexName(string tableName)
     {

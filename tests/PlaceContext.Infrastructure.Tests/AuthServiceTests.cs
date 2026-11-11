@@ -395,6 +395,26 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task An_existing_email_factor_cannot_be_bypassed_by_requesting_an_unenrolled_phone()
+    {
+        var sender = new FakeCommunicationSender();
+        var (auth, db) = NewService(communications: sender);
+        AddProvider(db, "email", useForTwoFactor: true);
+        AddProvider(db, "sms", useForTwoFactor: true);
+        var user = await auth.CreateFirstAdminAsync("owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+        await auth.SetTwoFactorChannelAsync(user!.Id, "sms");
+
+        var preferred = await auth.GetTwoFactorDeliveryInfoAsync(user.Id);
+        var requested = await auth.GetTwoFactorDeliveryInfoAsync(user.Id, "sms");
+        Assert.Equal("email", preferred.Channel);
+        Assert.Equal("email", requested.Channel);
+        Assert.False(requested.RequiresPhoneEnrollment);
+        Assert.Equal("email", (await auth.IssueTwoFactorCodeAsync(user.Id, "sms")).Channel);
+        Assert.Single(sender.AuthenticationEmails);
+        Assert.Empty(sender.AuthenticationSmses);
+    }
+
+    [Fact]
     public async Task Phone_enrollment_validates_and_stores_the_number_and_switches_the_channel()
     {
         var (auth, db) = NewService();

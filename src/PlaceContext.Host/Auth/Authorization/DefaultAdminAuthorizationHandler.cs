@@ -29,6 +29,8 @@ public sealed class DefaultAdminAuthorizationHandler : AuthorizationHandler<Defa
             return; // no parseable identity — deny
         }
         await using var scope = _scopeFactory.CreateAsyncScope();
+        var tenant = scope.ServiceProvider.GetRequiredService<PlaceContext.Application.Tenancy.ICurrentTenant>();
+        if (!tenant.IsResolved || tenant.TenantId != tenantId) return;
         var administrators = scope.ServiceProvider.GetRequiredService<IWorkspaceAdministratorReader>();
         var isDefaultAdmin = requirement.IncludeOwners
             ? await administrators.IsOwnerOrAdministratorAsync(tenantId, userId)

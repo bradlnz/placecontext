@@ -216,7 +216,7 @@ builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(o =>
     {
-        o.Cookie.Name = "placecontext_auth";
+        o.Cookie.Name = "placecontext_auth_v2"; // Invalidate sessions issued before membership/MFA validation.
         o.Cookie.HttpOnly = true;
         o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         o.Cookie.SameSite = SameSiteMode.Lax;
@@ -226,6 +226,7 @@ builder.Services
         o.LogoutPath = "/auth/logout";
         o.ExpireTimeSpan = TimeSpan.FromDays(14);
         o.SlidingExpiration = true;
+        o.Events.OnValidatePrincipal = PortalSession.ValidateCookieAsync;
         // The Blazor SignalR hubs (/_blazor, /_blazor/negotiate, /_blazor/initializers) expect JSON
         // responses. Return 401 + empty JSON instead of a 302 redirect to /locked (HTML), which the
         // Blazor JS client would try to parse as JSON → "unexpected token" errors.

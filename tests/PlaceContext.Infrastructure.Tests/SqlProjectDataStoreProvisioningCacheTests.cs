@@ -71,6 +71,6 @@ public class SqlProjectDataStoreProvisioningCacheTests
         var field = typeof(SqlProjectDataStore).GetField("ProvisionedSchemas",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         var dict = (System.Collections.Concurrent.ConcurrentDictionary<string, byte>)field.GetValue(null)!;
-        dict.TryAdd(schema, 0);
+        dict.TryAdd("test:" + schema, 0);
     }
 }
