@@ -30,6 +30,19 @@ You decide what runs automatically, what needs review, and what happens next.
 [Data](#data-that-drives-the-next-step) · [Decisions](#agents-people-and-decisions) ·
 [Documentation](#documentation)
 
+## Watch PlaceContext in action
+
+The onboarding walkthrough follows a sample multi-agent workflow from the dashboard:
+querying project data, assigning specialist agents, reviewing recorded activity, requesting
+human approval, and presenting the final result.
+
+[**Watch the onboarding walkthrough (MP4)**](docs/videos/placecontext-onboarding.mp4)
+
+> **Demo disclosure:** This recording uses a browser sandbox with simulated agent execution
+> and fictional data. It is not evidence of a live model/provider run. For verified
+> automatic-agent execution, follow the
+> [live recording guide in PR #36](https://github.com/bradlnz/placecontext/pull/36).
+
 ## What you can build
 
 These are examples of workflows you can compose with PlaceContext:
