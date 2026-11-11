@@ -24,17 +24,10 @@ public sealed class JobTemplateCatalogTests
     }
 
     [Fact]
-    public void Microsoft_Graph_job_uses_managed_connection_without_storing_a_token()
+    public void New_job_catalogue_excludes_managed_mail_integration()
     {
-        var template = Assert.IsType<JobTemplate>(JobTemplateCatalog.GetById("managed-microsoft-mail"));
-        Assert.Equal("Managed connections", template.Category);
-        Assert.Equal("python", template.MapRuntimeId);
-        Assert.True(template.AllowNetworkEgress);
-        Assert.Contains("PC_USE_MANAGED_MICROSOFT_GRAPH=true", template.MapEnvRaw);
-        Assert.DoesNotContain("ACCESS_TOKEN=", template.MapEnvRaw);
-        Assert.Contains("PC_MICROSOFT_GRAPH_ACCESS_TOKEN", template.MapSource);
-        Assert.Contains("https://graph.microsoft.com/v1.0/me/messages", template.MapSource);
-        Assert.Empty(template.RequiredCredentials);
+        Assert.Null(JobTemplateCatalog.GetById("managed-microsoft-mail"));
+        Assert.DoesNotContain(JobTemplateCatalog.All, template => template.Category == "Managed connections");
     }
 
     [Fact]
