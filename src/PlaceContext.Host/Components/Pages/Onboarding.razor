@@ -9,8 +9,8 @@
 <main class="setup-guide">
     <header class="guide-head">
         <div class="guide-kicker">WORKSPACE SETUP</div>
-        <h1>Choose where your jobs run</h1>
-        <p>Set up cloud or local workers, check your cluster, then run your first job.</p>
+        <h1>Set up your execution cluster</h1>
+        <p>Choose where jobs run, connect workers if needed, and check the cluster. This guide does not move workloads.</p>
     </header>
 
     <ol class="guide-steps" aria-label="Setup progress">
@@ -24,19 +24,19 @@
             <div class="guide-section-head">
                 <div>
                     <h2>Cloud or local?</h2>
-                    <p>Choose a setup path for the machines that execute your jobs. The portal can be hosted separately.</p>
+                    <p>Choose where the machines that run your jobs are hosted.</p>
                 </div>
             </div>
             <div class="choice-list">
                 <button type="button" class="choice-row @(Vm.IsCloud ? "selected" : null)"
                         aria-pressed="@Vm.IsCloud" @onclick="() => Vm.SelectLocation(ExecutionLocation.Cloud)">
                     <span class="choice-radio" aria-hidden="true"></span>
-                    <span><strong>Cloud</strong><small>Use managed execution or workers deployed on your cloud infrastructure.</small></span>
+                        <span><strong>Cloud</strong><small>Use managed execution or cloud workers.</small></span>
                 </button>
                 <button type="button" class="choice-row @(Vm.IsLocal ? "selected" : null)"
                         aria-pressed="@Vm.IsLocal" @onclick="() => Vm.SelectLocation(ExecutionLocation.Local)">
                     <span class="choice-radio" aria-hidden="true"></span>
-                    <span><strong>Local</strong><small>Run jobs on your own computers, servers or on-premises virtual machines.</small></span>
+                        <span><strong>Local</strong><small>Use your own computers, servers, or virtual machines.</small></span>
                 </button>
             </div>
             <div class="guide-actions">
@@ -49,7 +49,7 @@
     {
         <section class="dccard guide-card">
             <div class="guide-section-head"><div><h2>@Vm.LocationLabel execution</h2>
-                <p>Connect the workers that will run your jobs and verify they are ready.</p></div></div>
+                <p>Check the current cluster or add a worker.</p></div></div>
             @if (Vm.Loading)
             {
                 <Skeleton Kind="list" Rows="2" />
@@ -62,25 +62,31 @@
             {
                 <div class="detected-box"><strong>Current cluster</strong><span>@Vm.ClusterSummary</span></div>
                 <button class="dcbtn" @onclick="Vm.LoadAsync">Refresh cluster</button>
+                @if (!Vm.HasModelSetup)
+                {
+                    <div class="guide-notice" role="status">
+                        <strong>Choose a model before running jobs</strong>
+                        <span>Add a provider connection and enable at least one model in Model settings.</span>
+                        <a class="dcbtn" href="/settings/models">Open model settings</a>
+                    </div>
+                }
             }
             @if (Vm.IsLocal)
             {
                 <ol class="setup-checklist">
-                    <li>Install a local cluster, or open Cluster and use <strong>Add node</strong> to join your own machines.</li>
-                    <li>Configure job placement on those workers. A cloud-hosted portal can still use local workers.</li>
-                    <li>Run a small job and confirm its worker, logs and output before adding production workloads.</li>
+                    <li>Open Cluster and use <strong>Add node</strong> to join a worker.</li>
+                    <li>Check that the worker is ready.</li>
+                    <li>Run a small job to verify execution.</li>
                 </ol>
             }
             @if (Vm.IsCloud)
             {
                 <ol class="setup-checklist">
-                    <li>Use your managed execution cluster, or deploy cloud workers and join them from <strong>Add node</strong>.</li>
-                    <li>Check worker readiness and configure job placement on the intended cloud machines.</li>
-                    <li>Run a small job and confirm its worker, logs and output.</li>
+                    <li>Use managed execution or join your cloud workers with <strong>Add node</strong>.</li>
+                    <li>Check that the workers are ready.</li>
+                    <li>Run a small job to verify execution.</li>
                 </ol>
             }
-            <p class="guide-notice">This guide does not move workloads. Job placement is controlled by the cluster deployment.
-                <a href="/wiki/cluster-and-nodes#job-placement">Configure job placement</a></p>
             <div class="guide-links">
                 <a class="dcbtn" href="@Vm.SetupUrl">Installation instructions</a>
             </div>

@@ -297,7 +297,7 @@
                     else if (Vm.Content is null)
                     {
                         <div class="raw-note">Not valid JSON — showing the raw content:</div>
-                        <pre class="raw-pre">@Vm.RawText</pre>
+                        <RunOutput Value="@Vm.RawText" Label="Raw artifact JSON" />
                     }
                     else
                     {

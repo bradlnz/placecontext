@@ -152,6 +152,7 @@
     box-sizing: border-box;
     border-radius: 0;
     box-shadow: none;
+    z-index: 20;
 }
 
 .panel-window-head {
@@ -169,6 +170,9 @@
 
 .panel-window-head .card-x {
     margin-left: auto;
+    position: relative;
+    z-index: 3;
+    pointer-events: auto;
 }
 
 .panel-window-handle {
@@ -243,8 +247,9 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
     border-radius: 6px;
     flex: none;
 }
@@ -544,6 +549,9 @@
     color: var(--warn);
     margin-top: 6px;
 }
+
+.detail-section-group { margin-top: 14px; padding-top: 2px; border-top: 1px solid var(--border); }
+.relationship-label { margin: 8px 0 4px; color: var(--text-3); font-size: 10px; font-weight: 600; }
 
 @media (max-width: 700px) {
     .docked-detail-shell.docked-panel-open {

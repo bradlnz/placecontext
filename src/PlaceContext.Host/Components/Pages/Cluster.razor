@@ -82,62 +82,24 @@ else
             }
             else
             {
-                <div class="node-grid">
+                <div class="node-list" role="list" aria-label="Cluster nodes">
                     @foreach (var n in Vm.Nodes)
                     {
-                        <article class="node-card @(!n.Ready ? "node-warning" : "")">
-                            <div class="node-top">
-                                <div class="node-avatar @(n.IsControlPlane ? "master-avatar" : "")">
-                                    <AppIcon Kind="@(n.IsControlPlane ? "data.graph" : "box")" />
-                                    <span class="status-pin @(n.Ready ? "online" : "offline")"></span>
-                                </div>
-                                <div class="node-title">
-                                    <div>
-                                        <h3>@n.Name</h3>
-                                        @if (n.IsSelf)
-                                        {
-                                            <span class="you-badge">this host</span>
-                                        }
-                                    </div>
-                                    <span class="node-status @(n.Ready ? "ready" : "not-ready")">
-                                        <i></i>@(n.Ready ? "Ready" : "Not ready")
-                                    </span>
-                                </div>
+                        <article class="node-list-row @(!n.Ready ? "node-warning" : "")" role="listitem">
+                            <div class="node-list-name">
+                                <div class="node-avatar @(n.IsControlPlane ? "master-avatar" : "")"><AppIcon Kind="@(n.IsControlPlane ? "data.graph" : "box")" /></div>
+                                <div><strong>@n.Name</strong>@if (n.IsSelf) { <span class="you-badge">this host</span> }<small>@(n.IsControlPlane ? "Control plane" : "Worker")</small></div>
                             </div>
-
-                            <div class="role-row">
-                                @if (n.IsDesignatedMaster)
-                                {
-                                    <span class="role-chip master-chip">★ Fleet master</span>
-                                }
-                                @if (!n.IsControlPlane)
-                                {
-                                    <span class="role-chip">Standard worker</span>
-                                }
-                                @foreach (var role in n.Roles.Take(3))
-                                {
-                                    <span class="role-chip">@role</span>
-                                }
+                            <span class="node-status @(n.Ready ? "ready" : "not-ready")"><i></i>@(n.Ready ? "Ready" : "Not ready")</span>
+                            <div class="node-list-role">
+                                @if (n.IsDesignatedMaster) { <span class="role-chip master-chip">★ Fleet master</span> }
+                                @foreach (var role in n.Roles.Take(3)) { <span class="role-chip">@role</span> }
                             </div>
-
-                            <div class="resource-row">
-                                <div class="resource">
-                                    <span>CPU</span>
-                                    <strong>@(n.CpuCapacity ?? "—")</strong>
-                                </div>
-                                <div class="resource-divider"></div>
-                                <div class="resource">
-                                    <span>Memory</span>
-                                    <strong>@(n.MemoryCapacity ?? "—")</strong>
-                                </div>
-                            </div>
-
-                            <dl class="node-details">
-                                <div><dt>Address</dt><dd class="mono">@(n.PreferredIp ?? "—")</dd></div>
-                                <div><dt>Platform</dt><dd>@ClusterViewModel.PlatformLabel(n)</dd></div>
-                                <div><dt>Kubelet</dt><dd class="mono">@n.KubeletVersion</dd></div>
-                                <div><dt>Joined</dt><dd>@ClusterViewModel.RelativeAge(n.CreatedAt)</dd></div>
-                            </dl>
+                            <div class="node-list-value"><small>CPU</small><span>@(n.CpuCapacity ?? "—")</span></div>
+                            <div class="node-list-value"><small>Memory</small><span>@(n.MemoryCapacity ?? "—")</span></div>
+                            <div class="node-list-value"><small>Address</small><span class="mono">@(n.PreferredIp ?? "—")</span></div>
+                            <div class="node-list-value"><small>Platform · Kubelet</small><span>@ClusterViewModel.PlatformLabel(n) · @n.KubeletVersion</span></div>
+                            <div class="node-list-value"><small>Joined</small><span>@ClusterViewModel.RelativeAge(n.CreatedAt)</span></div>
                         </article>
                     }
                 </div>

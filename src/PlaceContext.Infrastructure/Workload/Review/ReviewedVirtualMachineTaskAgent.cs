@@ -277,7 +277,7 @@ public sealed class ReviewedVirtualMachineTaskAgent(IHttpClientFactory clients, 
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or FormatException or NullReferenceException or IOException)
         {
-            return Fail($"Browser verification {stage} failed. Check the prepared image and host model configuration.");
+            return Fail($"Browser verification {stage} failed: {ex.Message[..Math.Min(ex.Message.Length, 500)]}");
         }
     }
 

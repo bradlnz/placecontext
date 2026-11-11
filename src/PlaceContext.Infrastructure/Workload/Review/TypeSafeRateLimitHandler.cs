@@ -12,18 +12,36 @@ public sealed class TypeSafeRateLimitHandler(ITypeSafeRateBudget budget, ILogger
     {
         var body = request.Content is null ? [] : await request.Content.ReadAsByteArrayAsync(ct);
         var inputBytes = body.Length;
+        var imageRequest = false;
         if (body.Length > 0)
         {
             using var json = JsonDocument.Parse(body);
-            if (json.RootElement.ValueKind == JsonValueKind.Object
-                && json.RootElement.TryGetProperty("state", out var state) && state.ValueKind == JsonValueKind.String)
+            if (json.RootElement.ValueKind == JsonValueKind.Object)
             {
-                // Transport escaping of JSON text is not additional model input.
-                inputBytes += Encoding.UTF8.GetByteCount(state.GetString()!) + 2 - Encoding.UTF8.GetByteCount(state.GetRawText());
+                if (json.RootElement.TryGetProperty("state", out var state) && state.ValueKind == JsonValueKind.String)
+                {
+                    // Transport escaping of JSON text is not additional model input.
+                    inputBytes += Encoding.UTF8.GetByteCount(state.GetString()!) + 2 - Encoding.UTF8.GetByteCount(state.GetRawText());
+                }
+                if (json.RootElement.TryGetProperty("assets", out var assets)
+                    && assets.TryGetProperty("screen-image", out var image)
+                    && image.TryGetProperty("data_base64", out var encoded) && encoded.ValueKind == JsonValueKind.String)
+                {
+                    imageRequest = true;
+                    // Base64 transport bytes are not image tokens; reserve a bounded allowance for the image instead.
+                    inputBytes -= Encoding.UTF8.GetByteCount(encoded.GetString()!);
+                    inputBytes += 4096;
+                }
             }
         }
         // shortcut: UTF-8 input bytes plus overhead reserve tokens; use a provider tokenizer for better utilization.
-        var reservedTokens = checked(inputBytes + 1024);
+        if (!imageRequest && body.AsSpan().IndexOf("\"data_base64\""u8) >= 0)
+        {
+            imageRequest = true;
+        }
+        var reservedTokens = imageRequest
+            ? Math.Min(16_384, checked(inputBytes + 1024))
+            : checked(inputBytes + 1024);
         for (var attempt = 0; ; attempt++)
         {
             await budget.AcquireAsync(reservedTokens, ct);

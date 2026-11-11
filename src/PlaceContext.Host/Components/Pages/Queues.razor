@@ -55,7 +55,7 @@
     else if (Vm.Selected is { } selected)
     {
         <header class="queues-head">
-            <div><h2>@selected.Name</h2><p><span class="queue-status @(selected.Enabled ? "accepting" : "paused")"><span class="status-dot"></span>@(selected.Enabled ? "Accepting messages" : "Intake paused")</span><span class="queue-heading-meta">Workflow queue · JSON messages</span></p></div>
+            <div><h2>@selected.Name</h2><p><span class="queue-heading-label">Status:</span> <span class="queue-status @(selected.Enabled ? "accepting" : "paused")"><span class="status-dot"></span>@(selected.Enabled ? "Accepting messages" : "Intake paused")</span><span class="queue-heading-meta">Workflow queue · JSON messages</span></p></div>
             <div class="queue-actions">
                 <button class="dcbtn icon-button" disabled="@Vm.Busy" aria-label="Refresh queue" @onclick="Vm.RefreshAsync"><AppIcon Kind="refresh" /></button>
                 <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ToggleIntakeAsync"><AppIcon Kind="@(selected.Enabled ? "pause" : "play")" /> @(selected.Enabled ? "Pause intake" : "Enable intake")</button>
@@ -193,7 +193,7 @@
                 @if (Vm.InspectError is not null) { <p role="alert" class="danger">@Vm.InspectError</p> }
                 @if (Vm.InspectRun is { } run)
                 {
-                    <h3>@run.ChainName <span class="queue-status">@run.Status</span></h3>
+                    <h3>@run.ChainName <span class="queue-heading-label">Status:</span> <span class="queue-status">@run.Status</span></h3>
                     <p class="queue-note">Run @run.Id · @Vm.Presentation.DateTime(run.StartedAt)</p>
                     @if (run.Steps.Any(step => step.ActionType == PlaceContext.Domain.ValueObjects.VirtualMachineChainAction.ActionType))
                     {

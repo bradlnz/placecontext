@@ -71,7 +71,7 @@
                  aria-valuemax="520"
                  tabindex="0"
                  title="Drag to resize the node list"></div>
-            <main class="graph-main">
+            <main class="graph-main @(Vm.SelectedNodeId is not null ? "has-detail-pane" : null)">
                 <GraphCanvas @ref="_canvas"
                              Graph="Vm.Graph"
                              NodeUrl="Vm.NodeUrl"
@@ -84,38 +84,6 @@
             </main>
         </div>
     }
-    @if (Vm.CanViewArtifacts)
-    {
-        <section class="dccard artifact-catalog" aria-labelledby="artifact-catalog-title">
-            <header><div><h2 id="artifact-catalog-title">Artifacts</h2><p>Stored files from this project. Map the source's primary JSON output into tables; files stay in artifact storage.</p></div></header>
-            @if (Vm.ArtifactsError is not null) { <p role="alert">@Vm.ArtifactsError</p> }
-            @if (Vm.Artifacts.Count > 0)
-            {
-                <div class="artifact-table-scroll">
-                    <table>
-                        <thead><tr><th>Artifact</th><th>Type</th><th>Size</th><th>Created</th><th>Data mapping</th></tr></thead>
-                        <tbody>
-                            @foreach (var artifact in Vm.Artifacts)
-                            {
-                                <tr @key="artifact.Id">
-                                    <td><a href="@($"/artifacts?artifact={artifact.Id}")">@artifact.Title</a></td>
-                                    <td>@artifact.ContentType</td>
-                                    <td>@Vm.Presentation.Bytes(artifact.SizeBytes)</td><td>@Vm.Presentation.Format(artifact.CreatedAt, "g")</td>
-                                    <td><a href="@Vm.MappingUrl(artifact.JobId)">Map source output</a></td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-            else if (!Vm.HasMoreArtifacts) { <p>No stored artifacts in this project.</p> }
-            @if (Vm.HasMoreArtifacts)
-            {
-                <button class="dcbtn" disabled="@Vm.ArtifactsLoading" @onclick="Vm.LoadArtifactsAsync">@(Vm.ArtifactsLoading ? "Loading…" : Vm.Artifacts.Count == 0 ? "Load artifacts" : "Load more artifacts")</button>
-            }
-        </section>
-    }
-
 </div>
 
 @code {

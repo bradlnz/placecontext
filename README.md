@@ -48,7 +48,7 @@ Here, the opening query finds two active enterprise accounts and one account tha
 ### Make the decision flow explicit
 
 Follow the complete flow from the initial data query through agent review, AI decision, and human approval.
-The AI decision can use a Jev System One model or recorded output from an LLM; either result becomes
+[The AI decision can use a Jev System One model](https://docs.typesafe.ai/api/system-one) or recorded output from an LLM; either result becomes
 workflow data that a condition can route. In this example, a **Yes** selects the onboarding handoff;
 a **No** selects the follow-up list. Each condition shows its true and false paths, so you can see what
 runs, what is skipped, and where the workflow continues.
@@ -88,15 +88,11 @@ These are examples of workflows you can compose with PlaceContext:
 ### Practical QEMU browser automation
 
 For example, a workflow can receive an order request, open the supplier site in a disposable QEMU
-Chromium desktop, and have a vision model navigate to the order while Jev System One checks each live
+Chromium desktop, and have a vision model navigate to the order while [Jev System One](https://docs.typesafe.ai/api/system-one) checks each live
 screen before an action runs. The workflow records the order ID, total, and shipping result; a person
 can take control for login or MFA, then a condition can send verified orders onward and route uncertain
 results to review. The browser agent works from desktop frames, so the run keeps replayable evidence
 without exposing host credentials to the VM.
-
-![Illustrative QEMU browser automation run showing an order form, live desktop evidence, Jev verification, and a verified result](docs/images/qemu-browser-order-verification.png)
-
-*Illustrative screenshot of the order-verification use case.*
 
 See the [workflow screenshot details](docs/images/workflow-screenshots.md) for a captured workflow
 with agent tasks, human approval, conditional paths, and inspectable run results.

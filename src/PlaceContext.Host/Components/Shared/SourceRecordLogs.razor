@@ -27,7 +27,7 @@
                         <td class="record-message">
                             @if (record.ValidationError is not null) { <p class="review-reason">@record.ValidationError</p> }
                             @if (status == "Held" && record.ValidationError is null) { <p class="review-reason">This record has not passed the current review policy.</p> }
-                            <details><summary><span class="record-excerpt">@record.Json</span><span class="detail-label">View record</span></summary><pre>@FormatJson(record.Json)</pre></details>
+                            <details><summary><span class="record-excerpt">@record.Json</span><span class="detail-label">View record</span></summary><RunOutput Value="@FormatJson(record.Json)" Label="Source record JSON" /></details>
                         </td>
                     </tr>
                 }

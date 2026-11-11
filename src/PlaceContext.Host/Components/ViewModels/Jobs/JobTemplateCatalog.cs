@@ -20,7 +20,6 @@ public static class JobTemplateCatalog
         CsvToDatabase(),
         EmailReport(),
         DataQualityJobTemplate.Create(),
-        ManagedMicrosoftMail(),
     };
 
     public static JobTemplate? GetById(string id) =>

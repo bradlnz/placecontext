@@ -40,6 +40,29 @@ public sealed class TypeSafeRateLimitTests
         Assert.True(expected < 65_536);
     }
 
+    [Fact]
+    public async Task Image_budget_does_not_charge_base64_transport_bytes_as_tokens()
+    {
+        var image = Convert.ToBase64String(new byte[100_000]);
+        var body = JsonSerializer.Serialize(new
+        {
+            state = "{}",
+            assets = new Dictionary<string, object> { ["screen-image"] = new { data_base64 = image } }
+        });
+        var budget = new RecordingBudget();
+        using var api = new ModelReviewTestApi((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)));
+        using var client = Client(budget, api);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.typesafe.ai/v1/systemone")
+        {
+            Content = new StringContent(body, Encoding.UTF8, "application/json")
+        };
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.InRange(Assert.Single(budget.Costs), 4_096, 65_536);
+    }
+
     [Theory]
     [InlineData(429, false)]
     [InlineData(529, true)]

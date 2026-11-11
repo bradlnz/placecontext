@@ -9,6 +9,8 @@ public sealed class GetGraphVizHandler(IProjectRepository projects, IProjectData
     IDataMappingRepository mappings, IDataEntityRepository entities)
     : IQueryHandler<GetGraphVizQuery, GraphVizView>
 {
+    private const int MaxItemsPerEntity = 25;
+
     public async Task<GraphVizView> HandleAsync(GetGraphVizQuery query, CancellationToken ct = default)
     {
         await ProjectDataGuard.EnsureExistsAsync(projects, query.ProjectId, ct);
@@ -57,6 +59,27 @@ public sealed class GetGraphVizHandler(IProjectRepository projects, IProjectData
                     "Entity backing table · table has not been created.", Kind: "Table", Labeled: true);
             }
             links.Add(new(entityId, tableId, "Direct"));
+            if (tables.FirstOrDefault(table => string.Equals(table.Name, entity.TableName, StringComparison.OrdinalIgnoreCase)) is not null)
+            {
+                var rows = await data.ReadTableAsync(query.ProjectId, entity.TableName, MaxItemsPerEntity, ct);
+                var labelIndex = entity.LabelColumn is null
+                    ? 0
+                    : rows.Columns
+                        .Select((column, index) => (column, index))
+                        .FirstOrDefault(item => string.Equals(item.column, entity.LabelColumn, StringComparison.OrdinalIgnoreCase)).index;
+                foreach (var (row, index) in rows.Rows.Select((row, index) => (row, index)))
+                {
+                    var label = labelIndex < row.Count && !string.IsNullOrWhiteSpace(row[labelIndex])
+                        ? row[labelIndex]!
+                        : $"Item {index + 1}";
+                    var itemId = $"item:{entity.Id:N}:{index}";
+                    nodes[itemId] = new(itemId, $"{entity.Name}: {label}", 0, false,
+                        string.Join("\n", rows.Columns.Select((column, columnIndex) =>
+                            $"{column}: {(columnIndex < row.Count ? row[columnIndex] : null) ?? "—"}")),
+                        Kind: "Item", Labeled: true);
+                    links.Add(new(itemId, entityId, "Direct"));
+                }
+            }
             foreach (var relation in entity.Relations)
             {
                 var target = entityList.FirstOrDefault(candidate =>

@@ -236,53 +236,43 @@
                             loading="lazy" referrerpolicy="no-referrer"></iframe>
                 }
             }
-            @if (reachableArtifacts.Count > 0)
+            @if (reachableArtifacts.Count > 0 || neighbors.Any(x => !Vm.IsArtifact(x.Node)))
             {
-                @* Related artifacts — including ones reached by stepping UP the tree from an
-                   outer node (record → run → artifact), with the hop distance shown. *@
-                <div class="section-cap">Related artifacts</div>
-                <div class="col-4">
-                    @foreach (var (node, hops) in reachableArtifacts)
+                <section class="detail-section-group" aria-label="Relationships">
+                    <div class="section-cap">Relationships</div>
+                    @if (reachableArtifacts.Count > 0)
                     {
-                        <div class="artifact-row">
-                            <button type="button" class="artifact-link" @onclick="@(() => Vm.SelectAsync(node.Id))"
-                                    title="@node.Id">
-                                <span class="ellipsis-flex">@Vm.ShortLabel(node.Label)</span>
-                                @if (hops > 1)
-                                {
-                                    <span class="hops">@hops hops</span>
-                                }
-                            </button>
-                            @if (NodeUrl?.Invoke(node) is { Length: > 0 } nurl)
+                        <div class="relationship-label">Related artifacts</div>
+                        <div class="col-4">
+                            @foreach (var (node, hops) in reachableArtifacts)
                             {
-                                <a href="@nurl" class="artifact-open" target="_blank" title="Open"><AppIcon Kind="external-link" /></a>
+                                <div class="artifact-row">
+                                    <button type="button" class="artifact-link" @onclick="@(() => Vm.SelectAsync(node.Id))" title="@node.Id">
+                                        <span class="ellipsis-flex">@Vm.ShortLabel(node.Label)</span>
+                                        @if (hops > 1) { <span class="hops">@hops hops</span> }
+                                    </button>
+                                    @if (NodeUrl?.Invoke(node) is { Length: > 0 } nurl) { <a href="@nurl" class="artifact-open" target="_blank" title="Open"><AppIcon Kind="external-link" /></a> }
+                                </div>
                             }
                         </div>
                     }
-                </div>
-            }
-            @if (neighbors.Any(x => !Vm.IsArtifact(x.Node)))
-            {
-                <div class="section-cap">Connected to</div>
-                <div class="col-3">
-                    @foreach (var (node, confidence) in neighbors.Where(x => !Vm.IsArtifact(x.Node)))
+                    @if (neighbors.Any(x => !Vm.IsArtifact(x.Node)))
                     {
-                        <div class="neighbor-row">
-                            <button class="neighbor-btn"
-                                    title="@node.Id" @onclick="@(() => Vm.SelectAsync(node.Id))">
-                                @Vm.ShortLabel(node.Label) @if (Vm.IsAmbiguous(confidence)) { <AppIcon Kind="chain" /> }
-                            </button>
-                            @if (NodeUrl?.Invoke(node) is { Length: > 0 } nurl)
+                        <div class="relationship-label">Connected nodes</div>
+                        <div class="col-3">
+                            @foreach (var (node, confidence) in neighbors.Where(x => !Vm.IsArtifact(x.Node)))
                             {
-                                <a href="@nurl" class="neighbor-link" title="Open"><AppIcon Kind="external-link" /></a>
+                                <div class="neighbor-row">
+                                    <button class="neighbor-btn" title="@node.Id" @onclick="@(() => Vm.SelectAsync(node.Id))">
+                                        @Vm.ShortLabel(node.Label) @if (Vm.IsAmbiguous(confidence)) { <AppIcon Kind="chain" /> }
+                                    </button>
+                                    @if (NodeUrl?.Invoke(node) is { Length: > 0 } nurl) { <a href="@nurl" class="neighbor-link" title="Open"><AppIcon Kind="external-link" /></a> }
+                                </div>
                             }
                         </div>
+                        @if (neighbors.Any(n => Vm.IsAmbiguous(n.Confidence))) { <div class="ambiguous-note"><AppIcon Kind="chain" /> ambiguous link (low confidence)</div> }
                     }
-                </div>
-                @if (neighbors.Any(n => Vm.IsAmbiguous(n.Confidence)))
-                {
-                    <div class="ambiguous-note"><AppIcon Kind="chain" /> ambiguous link (low confidence)</div>
-                }
+                </section>
             }
         </div>
     }

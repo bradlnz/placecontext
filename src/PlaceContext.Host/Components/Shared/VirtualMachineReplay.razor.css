@@ -1,13 +1,13 @@
-.qemu-replay { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); color: var(--text); margin: 16px 0; min-width: 0; max-width: 880px; }
+.qemu-replay { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); color: var(--text); margin: 16px 0; min-width: 0; max-width: 1200px; }
 .replay-header { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px; border-bottom: 1px solid var(--border); }
 .replay-header h3 { margin: 4px 0 0; font-size: 17px; }
 .replay-eyebrow { text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); font-size: 10px; }
 .replay-state { color: var(--good); font-size: 12px; margin-right: auto; }
 .replay-header label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .replay-header select { max-width: 280px; }
-.replay-layout { display: grid; grid-template-columns: minmax(0, 1fr) 240px; }
+.replay-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; }
 .replay-main { min-width: 0; }
-.replay-screen { aspect-ratio: 4 / 3; background: var(--card-2); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.replay-screen { position: relative; aspect-ratio: 8 / 5; width: 100%; background: var(--card-2); display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .replay-screen img { width: 100%; height: 100%; object-fit: contain; }
 .replay-screen p { padding: 24px; text-align: center; color: var(--text-2); }
 .replay-caption { display: flex; align-items: baseline; gap: 12px; padding: 14px 16px 8px; font-size: 12px; }
@@ -29,12 +29,6 @@ time { color: var(--text-3); font-variant-numeric: tabular-nums; white-space: no
 @media (max-width: 850px) { .replay-layout { grid-template-columns: minmax(0, 1fr); } .replay-actions { border-left: 0; border-top: 1px solid var(--border); max-height: 220px; } }
 @media (max-width: 500px) { .replay-header label { width: 100%; } .replay-header select { max-width: none; flex: 1; min-width: 0; } .replay-controls input { flex-basis: 100%; order: 1; } }
 
-/* Give the browser the full replay width; keep the action history below it. */
-.replay-layout { grid-template-columns: minmax(0, 1fr); }
-.replay-screen { position: relative; aspect-ratio: 8 / 5; width: min(100%, 640px, 64dvh); margin-inline: auto; }
-.replay-actions { border-left: 0; border-top: 1px solid var(--border); max-height: 180px; }
-.replay-actions ol { display: flex; gap: 6px; }
-.replay-actions li { flex: 0 0 220px; }
 .replay-pointer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .replay-pointer g { transition: transform .65s ease; }
 .replay-pointer path { fill: #fff; stroke: #13251b; stroke-width: 2; }

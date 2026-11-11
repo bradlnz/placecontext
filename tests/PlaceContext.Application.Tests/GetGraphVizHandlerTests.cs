@@ -39,9 +39,9 @@ public sealed class GetGraphVizHandlerTests
 
         var graph = await handler.HandleAsync(new(projectId));
 
-        Assert.Equal(7, graph.NodeCount);
-        Assert.Equal(5, graph.LinkCount);
-        Assert.All(graph.Nodes, node => Assert.Contains(node.Kind, new[] { "Mapping", "Table", "Entity" }));
+        Assert.Equal(9, graph.NodeCount);
+        Assert.Equal(7, graph.LinkCount);
+        Assert.All(graph.Nodes, node => Assert.Contains(node.Kind, new[] { "Mapping", "Table", "Entity", "Item" }));
         Assert.Contains(graph.Nodes, node => node.Id == "table:unmapped" && node.Degree == 0);
         Assert.Contains(graph.Nodes, node => node.Id == "table:pending_table" && node.Content!.Contains("not been created"));
         var mapped = Assert.Single(graph.Nodes, node => node.Id == $"mapping:{mapping.Id:N}");
@@ -53,6 +53,9 @@ public sealed class GetGraphVizHandlerTests
         Assert.Contains("customer_id → Customers.id", orderEntity.Content);
         Assert.Contains(graph.Links, link => link.Source == orderEntity.Id && link.Target == "table:orders");
         Assert.Contains(graph.Links, link => link.Source == orderEntity.Id && link.Target == $"entity:{entities.Items[1].Id:N}");
+        var orderItem = Assert.Single(graph.Nodes, node => node.Id == $"item:{entities.Items[0].Id:N}:0");
+        Assert.Contains("order_id: order-1", orderItem.Content);
+        Assert.Contains(graph.Links, link => link.Source == orderItem.Id && link.Target == orderEntity.Id);
         Assert.DoesNotContain(graph.Nodes, node => node.Id.Contains("other_project"));
     }
 
@@ -70,7 +73,12 @@ public sealed class GetGraphVizHandlerTests
         public Guid ProjectId { get; set; }
         protected override object? Invoke(MethodInfo? method, object?[]? args)
         {
-            Assert.Equal(nameof(IProjectDataStore.ListTablesAsync), method!.Name);
+            if (method!.Name == nameof(IProjectDataStore.ReadTableAsync))
+            {
+                return Task.FromResult(new ProjectTableReadResult(
+                    ["order_id", "customer_id"], ["text", "text"], [["order-1", "customer-1"]], 1, false));
+            }
+            Assert.Equal(nameof(IProjectDataStore.ListTablesAsync), method.Name);
             Assert.Equal(ProjectId, args![0]);
             return Task.FromResult<IReadOnlyList<ProjectTableInfo>>([new("orders", 500), new("unmapped", 0)]);
         }

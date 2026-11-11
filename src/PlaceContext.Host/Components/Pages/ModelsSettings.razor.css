@@ -1,4 +1,4 @@
-.models-settings { max-width: 960px; display: grid; gap: 18px; }
+.models-settings { max-width: 960px; display: grid; gap: 18px; font-family:var(--font-sans); color:var(--text); }
 header,.connection,footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 h2,h3,p { margin: 0 0 8px; }
 p,small { opacity: .75; }

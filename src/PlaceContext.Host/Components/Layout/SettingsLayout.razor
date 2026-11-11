@@ -5,34 +5,36 @@
 @implements IDisposable
 
 <div class="shell">
-    <button type="button" class="settings-toggle"
-            aria-controls="settings-sections" aria-expanded="@(Vm.NavigationOpen ? "true" : "false")"
-            @onclick="Vm.ToggleNavigation">
-        <span>Settings</span>
-        <span class="settings-current">@Vm.ActiveLabel</span>
-        <span aria-hidden="true">@(Vm.NavigationOpen ? "−" : "+")</span>
-    </button>
-
-    <nav id="settings-sections" class="settings-nav @(Vm.NavigationOpen ? "open" : null)"
-         aria-label="Settings sections">
-        <div class="settings-nav-head">Settings</div>
+    <header class="settings-page-head">
+        <div>
+            <h2>Settings</h2>
+            <p>Configure workspace access, providers, execution and maintenance.</p>
+        </div>
+    </header>
+    <nav class="settings-tabs" role="tablist" aria-label="Settings sections">
         @foreach (var group in Vm.VisibleGroups)
         {
-            <section class="settings-group" aria-label="@group.Key">
-                <h2>@group.Key</h2>
-                @foreach (var item in group)
-                {
-                    <a href="@(Vm.Href(item.Path))" class="settings-link"
-                       aria-current="@(Vm.IsActive(item.Path) ? "page" : null)" @onclick="Vm.CloseNavigation">
-                        @item.Label
-                    </a>
-                }
-            </section>
+            var active = group.Any(item => Vm.IsActive(item.Path));
+            <a href="@(Vm.Href(group.First().Path))" class="dctab @(active ? "active" : null)"
+               role="tab" aria-selected="@active">
+                @group.Key
+            </a>
         }
     </nav>
-
-    <div class="body">
-        @Body
+    <div class="settings-content-shell">
+        @foreach (var group in Vm.VisibleGroups.Where(group => group.Any(item => Vm.IsActive(item.Path))))
+        {
+            <nav class="settings-subtabs" aria-label="@group.Key settings">
+                @foreach (var item in group)
+                {
+                    <a href="@(Vm.Href(item.Path))" class="settings-subtab @(Vm.IsActive(item.Path) ? "active" : null)"
+                       aria-current="@(Vm.IsActive(item.Path) ? "page" : null)">@item.Label</a>
+                }
+            </nav>
+        }
+        <div class="body">
+            @Body
+        </div>
     </div>
 </div>
 

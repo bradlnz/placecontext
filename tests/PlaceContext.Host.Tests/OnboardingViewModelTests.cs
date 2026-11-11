@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using PlaceContext.Application;
+using PlaceContext.Application.Build;
 using PlaceContext.Application.Cluster;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Host.Components.ViewModels;
@@ -80,7 +81,15 @@ public sealed class OnboardingViewModelTests
     }
 
     private static OnboardingViewModel Create(ClusterQueries queries, Navigation navigation) =>
-        new(new PlaceContextService(queries, null!, null!, null!), navigation, new PortalUiState());
+        new(new PlaceContextService(queries, null!, null!, null!), navigation, new PortalUiState(), new ModelConnections());
+
+    private sealed class ModelConnections : IModelConnections
+    {
+        public Task<IReadOnlyList<ModelConnection>> ListAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ModelConnection>>([]);
+        public Task SaveAsync(SaveModelConnection connection, CancellationToken ct = default) => Task.CompletedTask;
+        public Task DeleteAsync(Guid id, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<string>> DiscoverAsync(Guid id, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<string>>([]);
+    }
 
     private sealed class ClusterQueries : IDispatcher
     {

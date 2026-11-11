@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using PlaceContext.Application;
+using PlaceContext.Application.Build;
 using PlaceContext.Application.Cluster;
 
 namespace PlaceContext.Host.Components.ViewModels;
@@ -7,13 +8,15 @@ namespace PlaceContext.Host.Components.ViewModels;
 public sealed class OnboardingViewModel(
     PlaceContextService service,
     NavigationManager navigation,
-    PortalUiState ui) : PageViewModel
+    PortalUiState ui,
+    IModelConnections modelConnections) : PageViewModel
 {
     public bool Loading { get; private set; }
     public string? Error { get; private set; }
     public SetupGuideStep Step { get; private set; }
     public ExecutionLocation? Location { get; private set; }
     public ClusterInfo? Cluster { get; private set; }
+    public bool HasModelSetup { get; private set; }
     public bool CanContinue => Location is not null;
     public bool IsCloud => Location == ExecutionLocation.Cloud;
     public bool IsLocal => Location == ExecutionLocation.Local;
@@ -39,10 +42,20 @@ public sealed class OnboardingViewModel(
         Loading = true;
         Error = null;
         Cluster = null;
+        HasModelSetup = false;
         NotifyStateChanged();
         try
         {
             Cluster = await service.GetClusterInfoAsync();
+            try
+            {
+                var models = await modelConnections.ListAsync();
+                HasModelSetup = models.Any(connection => connection.Enabled && connection.Models.Count > 0);
+            }
+            catch
+            {
+                HasModelSetup = false;
+            }
         }
         catch
         {
