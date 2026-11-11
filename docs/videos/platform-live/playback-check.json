@@ -1,10 +1,27 @@
 {
-  "browser": "Chromium",
-  "result": "passed",
-  "time": 2.166159,
-  "paused": false,
-  "error": null,
+  "duration": 160,
   "width": 1920,
   "height": 1080,
-  "duration": 110.933333
+  "playing": true,
+  "current_time": 2.10463,
+  "error": null,
+  "pdf_scene_seek": 149,
+  "clean": {
+    "duration": 151,
+    "width": 1600,
+    "height": 900,
+    "playing": true,
+    "current_time": 1.478816,
+    "error": null
+  },
+  "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+  "packaged_preview_links": "verified",
+  "checked_scenes_seconds": [
+    36,
+    44,
+    76,
+    99,
+    117,
+    149
+  ]
 }

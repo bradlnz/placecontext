@@ -63,33 +63,18 @@
       "NS-003",
       "NS-005"
     ],
-    "rationale": [
-      {
-        "account_id": "NS-001",
-        "reason": "Active enterprise account."
-      },
-      {
-        "account_id": "NS-002",
-        "reason": "Active enterprise account."
-      },
-      {
-        "account_id": "NS-003",
-        "reason": "Held because active is false."
-      },
-      {
-        "account_id": "NS-004",
-        "reason": "Active enterprise account."
-      },
-      {
-        "account_id": "NS-005",
-        "reason": "Held because segment is review, not enterprise."
-      }
-    ]
+    "rationale": {
+      "NS-001": "Eligible: active enterprise account.",
+      "NS-002": "Eligible: active enterprise account.",
+      "NS-003": "Held: account is inactive.",
+      "NS-004": "Eligible: active enterprise account.",
+      "NS-005": "Held: account is not in the enterprise segment."
+    }
   },
   "review": {
     "passed": true,
     "issues": [],
-    "summary": "Research is complete and accurate: eligible accounts are exactly the active enterprise accounts NS-001, NS-002, and NS-004."
+    "summary": "Research is correct and complete: all five accounts are classified exactly once, eligibility matches active=true and segment=enterprise, account IDs are preserved, and each account has one rationale."
   },
   "approved": true,
   "handoff": {
@@ -98,11 +83,112 @@
       "NS-002",
       "NS-004"
     ],
-    "brief": "Internal draft: Proceed with active enterprise accounts NS-001, NS-002, and NS-004. Hold NS-003 because it is inactive, and NS-005 because its segment is review rather than enterprise.",
+    "brief": "Held accounts: NS-003 is inactive; NS-005 is not in the enterprise segment.",
     "next_steps": [
-      "Prepare outreach for eligible accounts.",
-      "Confirm NS-003 active status.",
-      "Reassess NS-005 after segment review."
+      "Proceed with NS-001, NS-002, and NS-004.",
+      "Keep NS-003 on hold until active.",
+      "Keep NS-005 on hold unless it enters the enterprise segment."
     ]
-  }
+  },
+  "status": "approved",
+  "summary": "Northstar onboarding brief generated for approved fictional accounts.",
+  "context": {
+    "evidence": {
+      "columns": [
+        "account_id",
+        "company",
+        "segment",
+        "active",
+        "seats",
+        "region"
+      ],
+      "rows": [
+        {
+          "account_id": "NS-001",
+          "company": "Harbour Studio",
+          "segment": "enterprise",
+          "active": "True",
+          "seats": "80",
+          "region": "Australia"
+        },
+        {
+          "account_id": "NS-002",
+          "company": "Banksia Works",
+          "segment": "enterprise",
+          "active": "True",
+          "seats": "45",
+          "region": "Australia"
+        },
+        {
+          "account_id": "NS-003",
+          "company": "Riverbend Labs",
+          "segment": "enterprise",
+          "active": "False",
+          "seats": "30",
+          "region": "New Zealand"
+        },
+        {
+          "account_id": "NS-004",
+          "company": "Summit Design",
+          "segment": "enterprise",
+          "active": "True",
+          "seats": "65",
+          "region": "New Zealand"
+        },
+        {
+          "account_id": "NS-005",
+          "company": "Coastal Field",
+          "segment": "review",
+          "active": "True",
+          "seats": "20",
+          "region": "Australia"
+        }
+      ],
+      "row_count": 5,
+      "truncated": false
+    },
+    "research": {
+      "eligible_account_ids": [
+        "NS-001",
+        "NS-002",
+        "NS-004"
+      ],
+      "held_account_ids": [
+        "NS-003",
+        "NS-005"
+      ],
+      "rationale": {
+        "NS-001": "Eligible: active enterprise account.",
+        "NS-002": "Eligible: active enterprise account.",
+        "NS-003": "Held: account is inactive.",
+        "NS-004": "Eligible: active enterprise account.",
+        "NS-005": "Held: account is not in the enterprise segment."
+      }
+    },
+    "review": {
+      "passed": true,
+      "issues": [],
+      "summary": "Research is correct and complete: all five accounts are classified exactly once, eligibility matches active=true and segment=enterprise, account IDs are preserved, and each account has one rationale."
+    },
+    "approved": true,
+    "handoff": {
+      "account_ids": [
+        "NS-001",
+        "NS-002",
+        "NS-004"
+      ],
+      "brief": "Held accounts: NS-003 is inactive; NS-005 is not in the enterprise segment.",
+      "next_steps": [
+        "Proceed with NS-001, NS-002, and NS-004.",
+        "Keep NS-003 on hold until active.",
+        "Keep NS-005 on hold unless it enters the enterprise segment."
+      ]
+    }
+  },
+  "artifacts": [
+    {
+      "filename": "northstar-onboarding-brief.pdf",
+      "base64": "JVBERi0xLjQKJeLjz9MKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA1OTUuMjggODQxLjg5XSAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA0IDAgUiAvRjIgNSAwIFIgPj4gPj4gL0NvbnRlbnRzIDYgMCBSID4+CmVuZG9iago0IDAgb2JqCjw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PgplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EtQm9sZCA+PgplbmRvYmoKNiAwIG9iago8PCAvTGVuZ3RoIDI2MTggPj4Kc3RyZWFtCjAuMDgwIDAuMzUwIDAuMjAwIHJnCjAuMDAgNzQ5Ljg5IDU5NS4yOCA5Mi4wMCByZSBmCjEuMDAwIDEuMDAwIDEuMDAwIHJnCkJUIC9GMiAxNi4wMCBUZiA0Mi4wMCA3OTkuODkgVGQgKE5PUlRIU1RBUikgVGogRVQKMC44NDAgMC45NjAgMC44ODAgcmcKQlQgL0YyIDExLjAwIFRmIDQyLjAwIDc3NC44OSBUZCAoQVBQUk9WRUQgT05CT0FSRElORyBCUklFRikgVGogRVQKMC44NDAgMC45NjAgMC44ODAgcmcKQlQgL0YyIDguMDAgVGYgNDU0LjAwIDc5OS44OSBUZCAoSU5URVJOQUwgRFJBRlQpIFRqIEVUCjAuMDgwIDAuMjUwIDAuMTQwIHJnCkJUIC9GMiAxNi4wMCBUZiA0Mi4wMCA3MTkuODkgVGQgKEFjY291bnQgb25ib2FyZGluZykgVGogRVQKMC4zMjAgMC40MDAgMC4zNjAgcmcKQlQgL0YxIDkuMDAgVGYgNDIuMDAgNzAxLjg5IFRkIChBcHByb3ZlZCBmb3IgZWxpZ2libGUgZW50ZXJwcmlzZSBhY2NvdW50cykgVGogRVQKMC4wODAgMC4zNTAgMC4yMDAgcmcKQlQgL0YyIDExLjAwIFRmIDQyLjAwIDY3My44OSBUZCAoRWxpZ2libGUgYWNjb3VudHMpIFRqIEVUCjAuNzQwIDAuODQwIDAuNzgwIFJHIDEgdwo0Mi4wMCA2NjUuODkgbSA1NTMuMDAgNjY1Ljg5IGwgUwowLjEyMCAwLjE2MCAwLjE1MCByZwpCVCAvRjEgOS4wMCBUZiA1Mi4wMCA2NDcuODkgVGQgKC0gSGFyYm91ciBTdHVkaW8gXChhY2NvdW50IE5TLTAwMVwpKSBUaiBFVAowLjEyMCAwLjE2MCAwLjE1MCByZwpCVCAvRjEgOS4wMCBUZiA1Mi4wMCA2MzQuODkgVGQgKC0gQmFua3NpYSBXb3JrcyBcKGFjY291bnQgTlMtMDAyXCkpIFRqIEVUCjAuMTIwIDAuMTYwIDAuMTUwIHJnCkJUIC9GMSA5LjAwIFRmIDUyLjAwIDYyMS44OSBUZCAoLSBTdW1taXQgRGVzaWduIFwoYWNjb3VudCBOUy0wMDRcKSkgVGogRVQKMC4wODAgMC4zNTAgMC4yMDAgcmcKQlQgL0YyIDExLjAwIFRmIDQyLjAwIDYwMC44OSBUZCAoSGVsZCBhY2NvdW50cyBhbmQgcmVhc29ucykgVGogRVQKMC43NDAgMC44NDAgMC43ODAgUkcgMSB3CjQyLjAwIDU5Mi44OSBtIDU1My4wMCA1OTIuODkgbCBTCjAuMTIwIDAuMTYwIDAuMTUwIHJnCkJUIC9GMSA5LjAwIFRmIDUyLjAwIDU3NC44OSBUZCAoLSBSaXZlcmJlbmQgTGFicyBcKGFjY291bnQgTlMtMDAzXCk6IEhlbGQ6IGFjY291bnQgaXMgaW5hY3RpdmUuKSBUaiBFVAowLjEyMCAwLjE2MCAwLjE1MCByZwpCVCAvRjEgOS4wMCBUZiA1Mi4wMCA1NjEuODkgVGQgKC0gQ29hc3RhbCBGaWVsZCBcKGFjY291bnQgTlMtMDA1XCk6IEhlbGQ6IGFjY291bnQgaXMgbm90IGluIHRoZSBlbnRlcnByaXNlIHNlZ21lbnQuKSBUaiBFVAowLjA4MCAwLjM1MCAwLjIwMCByZwpCVCAvRjIgMTEuMDAgVGYgNDIuMDAgNTQwLjg5IFRkIChJbmRlcGVuZGVudCByZXZpZXcpIFRqIEVUCjAuNzQwIDAuODQwIDAuNzgwIFJHIDEgdwo0Mi4wMCA1MzIuODkgbSA1NTMuMDAgNTMyLjg5IGwgUwowLjEyMCAwLjE2MCAwLjE1MCByZwpCVCAvRjEgOS4wMCBUZiA1Mi4wMCA1MTQuODkgVGQgKFBhc3NlZC4gUmVzZWFyY2ggaXMgY29ycmVjdCBhbmQgY29tcGxldGU6IGFsbCBmaXZlIGFjY291bnRzIGFyZSBjbGFzc2lmaWVkIGV4YWN0bHkgb25jZSwpIFRqIEVUCjAuMTIwIDAuMTYwIDAuMTUwIHJnCkJUIC9GMSA5LjAwIFRmIDUyLjAwIDUwMS44OSBUZCAoZWxpZ2liaWxpdHkgbWF0Y2hlcyBhY3RpdmU9dHJ1ZSBhbmQgc2VnbWVudD1lbnRlcnByaXNlLCBhY2NvdW50IElEcyBhcmUgcHJlc2VydmVkLCBhbmQpIFRqIEVUCjAuMTIwIDAuMTYwIDAuMTUwIHJnCkJUIC9GMSA5LjAwIFRmIDUyLjAwIDQ4OC44OSBUZCAoZWFjaCBhY2NvdW50IGhhcyBvbmUgcmF0aW9uYWxlLikgVGogRVQKMC4wODAgMC4zNTAgMC4yMDAgcmcKQlQgL0YyIDExLjAwIFRmIDQyLjAwIDQ2Ny44OSBUZCAoSGFuZG9mZikgVGogRVQKMC43NDAgMC44NDAgMC43ODAgUkcgMSB3CjQyLjAwIDQ1OS44OSBtIDU1My4wMCA0NTkuODkgbCBTCjAuMTIwIDAuMTYwIDAuMTUwIHJnCkJUIC9GMSA5LjAwIFRmIDUyLjAwIDQ0MS44OSBUZCAoSGVsZCBhY2NvdW50czogTlMtMDAzIGlzIGluYWN0aXZlOyBOUy0wMDUgaXMgbm90IGluIHRoZSBlbnRlcnByaXNlIHNlZ21lbnQuKSBUaiBFVAowLjEyMCAwLjE2MCAwLjE1MCByZwpCVCAvRjIgOS4wMCBUZiA1Mi4wMCA0MjAuODkgVGQgKE5leHQgc3RlcHMpIFRqIEVUCjAuMTIwIDAuMTYwIDAuMTUwIHJnCkJUIC9GMSA5LjAwIFRmIDU4LjAwIDQwNi44OSBUZCAoMS4gUHJvY2VlZCB3aXRoIE5TLTAwMSwgTlMtMDAyLCBhbmQgTlMtMDA0LikgVGogRVQKMC4xMjAgMC4xNjAgMC4xNTAgcmcKQlQgL0YxIDkuMDAgVGYgNTguMDAgMzkzLjg5IFRkICgyLiBLZWVwIE5TLTAwMyBvbiBob2xkIHVudGlsIGFjdGl2ZS4pIFRqIEVUCjAuMTIwIDAuMTYwIDAuMTUwIHJnCkJUIC9GMSA5LjAwIFRmIDU4LjAwIDM4MC44OSBUZCAoMy4gS2VlcCBOUy0wMDUgb24gaG9sZCB1bmxlc3MgaXQgZW50ZXJzIHRoZSBlbnRlcnByaXNlIHNlZ21lbnQuKSBUaiBFVAowLjQwMCAwLjQ4MCAwLjQ0MCByZwpCVCAvRjEgNy4wMCBUZiA0Mi4wMCAzMC4wMCBUZCAoTm9ydGhzdGFyIC0gRmljdGlvbmFsIGFjY291bnQgZGF0YXNldCAtIEdlbmVyYXRlZCBhZnRlciBodW1hbiBhcHByb3ZhbCkgVGogRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNwowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDA2NCAwMDAwMCBuIAowMDAwMDAwMTIxIDAwMDAwIG4gCjAwMDAwMDAyNjMgMDAwMDAgbiAKMDAwMDAwMDMzMyAwMDAwMCBuIAowMDAwMDAwNDA4IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNyAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKMzA3NwolJUVPRgo="
+    }
+  ]
 }

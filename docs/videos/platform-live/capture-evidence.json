@@ -1,15 +1,21 @@
 {
-  "project_id": "5e7ca474-97e1-4d2a-b46f-cb1c72ad13e9",
-  "workflow_id": "f1f00a84-a642-4ea0-a5de-e45d7e816a51",
-  "run_id": "a4e0365b-52a3-44b7-ac11-496caf35bc66",
+  "project_id": "ed1f40eb-1481-4602-84ef-1606b3bad679",
+  "project_name": "Northstar Customer Success",
+  "workflow_id": "257635cf-3ca6-4ef1-aa4b-379a0a05d9f3",
+  "run_id": "ecd62d43-ffde-4e7c-9ee4-8210752d0e90",
+  "pdf_job_id": "9d2bcd72-8f1b-4fdc-a1b4-9618f3354a7e",
+  "pdf_job_run_id": "40ad61cf-27e5-4da4-86c9-1582724f77bc",
+  "artifact_id": "0bb94635-264e-4c5c-b355-8a1ccb0be45e",
   "application_revision": "e70904d5",
+  "repository_revision_at_capture": "79d2b609",
   "capture": "Actual local browser recording. No mocked UI, agent messages, run statuses or outputs.",
   "data": "Five fictional accounts in a newly created isolated project.",
-  "execution": "Chat invoked run_workflow once. Three automatic agent steps used Codex gpt-5.6-luna.",
+  "authoring": "A configured Northstar Assistant used real model tool calls to create and save the workflow and PDF job in chat. The model corrected draft saves. A second chat request refined PDF layout before execution; these refinements are omitted from the edit.",
+  "execution": "Chat invoked run_workflow once. Three automatic workflow agent steps used Codex gpt-5.6-luna. The PDF job ran locally.",
   "approval": "The live human checkpoint was approved through browser automation for this fictional demo.",
   "database_verified_status": "Succeeded",
-  "started_at": "2026-11-11T23:18:02.309157Z",
-  "finished_at": "2026-11-11T23:20:50.084664Z",
+  "started_at": "2026-11-11T23:45:46.594514Z",
+  "finished_at": "2026-11-11T23:48:42.833718Z",
   "result": {
     "eligible": [
       "NS-001",
@@ -21,10 +27,19 @@
       "NS-005"
     ],
     "review_passed": true,
-    "steps_succeeded": 5
+    "steps_succeeded": 6
   },
-  "validation": "UI evidence and parsed final workflow output assertions passed; the database contains exactly one successful run in this project.",
-  "editing": "Chronological cuts remove idle time. The live execution scene is shown at 2.5x with an on-screen disclosure. Other selected scenes play at normal speed.",
+  "pdf": {
+    "file": "northstar-onboarding-brief.pdf",
+    "content_type": "application/pdf",
+    "pages": 1,
+    "bytes": 3281,
+    "sha256": "5e862f745e4b3de3771ef5cf41a7816af60bae3a79d7ddc5e713d830eb8ba350",
+    "verification": "Downloaded from the actual Artifacts preview endpoint. PDF parser and extracted text checks passed; all five accounts, review and next steps are present. The embedded viewer was visually checked. Downloaded bytes exactly match the PDF emitted in the final workflow output.",
+    "versions": "The job emitted the same PDF through its output file and JSON artifact envelope; Artifacts groups these as two versions."
+  },
+  "validation": "The database contains exactly one successful workflow run in this project. UI output assertions and PDF approval/review rejection checks passed. No browser page errors.",
+  "editing": "Chronological cuts remove idle time and authoring refinements. Selected authoring and execution scenes run at labelled 2x or 2.5x speed. No fabricated UI, statuses, messages or outputs.",
   "audio": "Silent, with chapter captions in the branded version.",
   "external_actions": "No messages sent and no account data changed."
 }

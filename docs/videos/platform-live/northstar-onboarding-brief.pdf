@@ -1,0 +1,92 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Length 2618 >>
+stream
+0.080 0.350 0.200 rg
+0.00 749.89 595.28 92.00 re f
+1.000 1.000 1.000 rg
+BT /F2 16.00 Tf 42.00 799.89 Td (NORTHSTAR) Tj ET
+0.840 0.960 0.880 rg
+BT /F2 11.00 Tf 42.00 774.89 Td (APPROVED ONBOARDING BRIEF) Tj ET
+0.840 0.960 0.880 rg
+BT /F2 8.00 Tf 454.00 799.89 Td (INTERNAL DRAFT) Tj ET
+0.080 0.250 0.140 rg
+BT /F2 16.00 Tf 42.00 719.89 Td (Account onboarding) Tj ET
+0.320 0.400 0.360 rg
+BT /F1 9.00 Tf 42.00 701.89 Td (Approved for eligible enterprise accounts) Tj ET
+0.080 0.350 0.200 rg
+BT /F2 11.00 Tf 42.00 673.89 Td (Eligible accounts) Tj ET
+0.740 0.840 0.780 RG 1 w
+42.00 665.89 m 553.00 665.89 l S
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 52.00 647.89 Td (- Harbour Studio \(account NS-001\)) Tj ET
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 52.00 634.89 Td (- Banksia Works \(account NS-002\)) Tj ET
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 52.00 621.89 Td (- Summit Design \(account NS-004\)) Tj ET
+0.080 0.350 0.200 rg
+BT /F2 11.00 Tf 42.00 600.89 Td (Held accounts and reasons) Tj ET
+0.740 0.840 0.780 RG 1 w
+42.00 592.89 m 553.00 592.89 l S
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 52.00 574.89 Td (- Riverbend Labs \(account NS-003\): Held: account is inactive.) Tj ET
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 52.00 561.89 Td (- Coastal Field \(account NS-005\): Held: account is not in the enterprise segment.) Tj ET
+0.080 0.350 0.200 rg
+BT /F2 11.00 Tf 42.00 540.89 Td (Independent review) Tj ET
+0.740 0.840 0.780 RG 1 w
+42.00 532.89 m 553.00 532.89 l S
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 52.00 514.89 Td (Passed. Research is correct and complete: all five accounts are classified exactly once,) Tj ET
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 52.00 501.89 Td (eligibility matches active=true and segment=enterprise, account IDs are preserved, and) Tj ET
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 52.00 488.89 Td (each account has one rationale.) Tj ET
+0.080 0.350 0.200 rg
+BT /F2 11.00 Tf 42.00 467.89 Td (Handoff) Tj ET
+0.740 0.840 0.780 RG 1 w
+42.00 459.89 m 553.00 459.89 l S
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 52.00 441.89 Td (Held accounts: NS-003 is inactive; NS-005 is not in the enterprise segment.) Tj ET
+0.120 0.160 0.150 rg
+BT /F2 9.00 Tf 52.00 420.89 Td (Next steps) Tj ET
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 58.00 406.89 Td (1. Proceed with NS-001, NS-002, and NS-004.) Tj ET
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 58.00 393.89 Td (2. Keep NS-003 on hold until active.) Tj ET
+0.120 0.160 0.150 rg
+BT /F1 9.00 Tf 58.00 380.89 Td (3. Keep NS-005 on hold unless it enters the enterprise segment.) Tj ET
+0.400 0.480 0.440 rg
+BT /F1 7.00 Tf 42.00 30.00 Td (Northstar - Fictional account dataset - Generated after human approval) Tj ET
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000263 00000 n 
+0000000333 00000 n 
+0000000408 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+3077
+%%EOF

@@ -1,96 +1,166 @@
 {
   "source": "raw/platform-live.webm",
-  "editing": "Chronological cuts; one model wait sequence at 2.5x. No fabricated UI, statuses, messages or outputs.",
+  "editing": "Chronological cuts remove idle time and authoring refinements. Selected authoring and execution scenes run at labelled 2x or 2.5x speed. No fabricated UI, statuses, messages or outputs.",
   "scenes": [
     {
-      "id": "01-project",
-      "start": 3.7270000000000003,
-      "end": 9.727,
+      "id": "01-create",
+      "start": 2.8,
+      "end": 19.8,
       "speed": 1,
-      "title": "A fresh project. A clear goal.",
-      "subtitle": "Northstar Onboarding · Five fictional accounts · One approval-gated workflow.",
+      "title": "Start by asking the agent to build it.",
+      "subtitle": "A new project \u00b7 Create Account onboarding, with review, approval, and a PDF result.",
       "index": 1,
-      "total": 9
+      "total": 16
     },
     {
-      "id": "02-data",
-      "start": 38.717,
-      "end": 46.016000000000005,
-      "speed": 1,
-      "title": "Ground every decision in project data.",
-      "subtitle": "Read the source accounts before an agent makes a recommendation.",
+      "id": "02-build",
+      "start": 177,
+      "end": 199,
+      "speed": 2,
+      "title": "The agent saves a reusable workflow.",
+      "subtitle": "Actual tool calls create the PDF job and workflow \u00b7 Selected authoring at 2\u00d7 speed.",
       "index": 2,
-      "total": 9
+      "total": 16
     },
     {
-      "id": "03-workflow",
-      "start": 164.063,
-      "end": 171.531,
+      "id": "03-saved",
+      "start": 220,
+      "end": 227,
       "speed": 1,
-      "title": "Give each step a clear responsibility.",
-      "subtitle": "Query → Research → Independent review → Approval → Handoff.",
+      "title": "Saved and checked. Ready to run.",
+      "subtitle": "Six stages connect project data, agents, a person, and PDF publication.",
       "index": 3,
-      "total": 9
+      "total": 16
     },
     {
-      "id": "04-chat",
-      "start": 173.569,
-      "end": 190.455,
+      "id": "04-catalogue",
+      "start": 307.6,
+      "end": 315.5,
       "speed": 1,
-      "title": "Start the workflow in chat.",
-      "subtitle": "One request launches the saved workflow and opens its live run.",
+      "title": "Find the workflow in the catalogue.",
+      "subtitle": "Account onboarding is now saved in this project.",
       "index": 4,
-      "total": 9
+      "total": 16
     },
     {
-      "id": "05-live",
-      "start": 194.455,
-      "end": 226.513,
-      "speed": 2.5,
-      "title": "Watch the specialists work.",
-      "subtitle": "Actual model execution · Model waiting time shown at 2.5× speed.",
+      "id": "05-canvas",
+      "start": 337.6,
+      "end": 344.9,
+      "speed": 1,
+      "title": "Inspect the workflow before running it.",
+      "subtitle": "Query \u2192 Research \u2192 Agent in the loop \u2192 Human in the loop \u2192 Handoff \u2192 PDF.",
       "index": 5,
-      "total": 9
+      "total": 16
     },
     {
-      "id": "06-review",
-      "start": 235.35,
-      "end": 250.172,
+      "id": "06-reopen",
+      "start": 345.5,
+      "end": 350.35,
       "speed": 1,
-      "title": "Review the evidence behind the answer.",
-      "subtitle": "Three eligible accounts. Two held. Independent checks passed.",
+      "title": "Reopen the saved workflow in chat.",
+      "subtitle": "Choose Account onboarding from the workflow picker.",
       "index": 6,
-      "total": 9
+      "total": 16
     },
     {
-      "id": "07-approval",
-      "start": 341.188,
-      "end": 358.317,
+      "id": "07-run",
+      "start": 350.35,
+      "end": 362.5,
       "speed": 1,
-      "title": "Keep a person at the decision point.",
-      "subtitle": "The workflow pauses until an explicit approval resumes it.",
+      "title": "Ask the agent to run it.",
+      "subtitle": "One request starts the workflow and opens its live execution.",
       "index": 7,
-      "total": 9
+      "total": 16
     },
     {
-      "id": "08-handoff",
-      "start": 372.331,
-      "end": 380.331,
-      "speed": 1,
-      "title": "Produce an approved internal handoff.",
-      "subtitle": "Five steps succeeded · No account changes or customer messages.",
+      "id": "08-agents",
+      "start": 362.5,
+      "end": 379,
+      "speed": 2,
+      "title": "Let the agents work through the evidence.",
+      "subtitle": "Actual research and independent review \u00b7 Execution shown at 2\u00d7 speed.",
       "index": 8,
-      "total": 9
+      "total": 16
     },
     {
-      "id": "09-summary",
-      "start": 438.194,
-      "end": 449.675,
+      "id": "09-review",
+      "start": 392.5,
+      "end": 399.9,
       "speed": 1,
-      "title": "Bring the outcome back to the conversation.",
-      "subtitle": "Eligible accounts, exceptions, and next steps — together.",
+      "title": "Inspect the independent agent review.",
+      "subtitle": "All five accounts checked. Three eligible. Two held. Review passed.",
       "index": 9,
-      "total": 9
+      "total": 16
+    },
+    {
+      "id": "10-pause",
+      "start": 400.3,
+      "end": 407,
+      "speed": 1,
+      "title": "The workflow pauses for a person.",
+      "subtitle": "The approval question names the eligible accounts and explains both holds.",
+      "index": 10,
+      "total": 16
+    },
+    {
+      "id": "11-approve",
+      "start": 511.8,
+      "end": 521.2,
+      "speed": 1,
+      "title": "Approve the result to continue.",
+      "subtitle": "An explicit Yes resumes the workflow from this checkpoint.",
+      "index": 11,
+      "total": 16
+    },
+    {
+      "id": "12-publish",
+      "start": 521.2,
+      "end": 545.5,
+      "speed": 2.5,
+      "title": "Generate the PDF after approval.",
+      "subtitle": "The handoff feeds the PDF job \u00b7 Execution shown at 2.5\u00d7 speed.",
+      "index": 12,
+      "total": 16
+    },
+    {
+      "id": "13-success",
+      "start": 552,
+      "end": 559.45,
+      "speed": 1,
+      "title": "All six stages succeeded.",
+      "subtitle": "The PDF job completed with the approved account decisions.",
+      "index": 13,
+      "total": 16
+    },
+    {
+      "id": "14-data",
+      "start": 559.45,
+      "end": 570,
+      "speed": 1,
+      "title": "Return to the data behind the decision.",
+      "subtitle": "Inspect the five source accounts in the project database.",
+      "index": 14,
+      "total": 16
+    },
+    {
+      "id": "15-artifacts",
+      "start": 580.8,
+      "end": 594,
+      "speed": 1,
+      "title": "Find the finished PDF in Artifacts.",
+      "subtitle": "northstar-onboarding-brief.pdf \u00b7 Produced by this workflow run.",
+      "index": 15,
+      "total": 16
+    },
+    {
+      "id": "16-pdf",
+      "start": 616.9,
+      "end": 628,
+      "speed": 1,
+      "title": "An approved PDF, ready to use.",
+      "subtitle": "Eligible accounts, held accounts, independent review, and next steps in one document.",
+      "index": 16,
+      "total": 16
     }
   ]
 }
