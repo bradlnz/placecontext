@@ -54,6 +54,12 @@ jobs:
           dotnet restore PlaceContext.slnx
           dotnet build PlaceContext.slnx --configuration Release --no-restore
 
+      - name: Test private chat, branching and agent controls
+        run: |
+          dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj \
+            --configuration Release --no-build --no-restore \
+            --filter "FullyQualifiedName~BuildChatTests"
+
       - name: Test auth, navigation and form contracts
         run: |
           dotnet test tests/PlaceContext.Host.Tests/PlaceContext.Host.Tests.csproj \

@@ -36,6 +36,185 @@ namespace PlaceContext.Host.Tests;
 public sealed class BuildChatTests
 {
     [Fact]
+    public async Task Editing_a_message_preserves_the_original_and_queues_a_separate_conversation()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var agent = new BuildChatAgent(fixture.Store, new PlainTextModel(), fixture.Service, fixture.Permissions, fixture.Tenant);
+        var original = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await agent.QueueAsync(original, "Explore revenue");
+        await agent.RunAsync(original, default);
+        await agent.QueueAsync(original, "Show the last year");
+        await agent.RunAsync(original, default);
+        var saved = original.Messages.ToJsonString();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId, original.Id);
+        vm.EditMessage(vm.Conversation.Messages[2]!);
+        Assert.True(vm.BranchPending);
+        Assert.Equal("Show the last year", vm.Draft);
+        Assert.Single(await fixture.Store.ListAsync(fixture.ProjectId));
+        vm.Draft = "Show the last quarter";
+        await vm.SendAsync();
+        Assert.Null(vm.Error);
+        Assert.False(vm.BranchPending);
+        Assert.NotEqual(original.Id, vm.Conversation.Id);
+        Assert.Equal(original.Id, vm.Conversation.ParentConversationId);
+        Assert.Equal(2, vm.Conversation.ParentMessageCount);
+        Assert.Equal(BuildRunStatus.Queued, vm.Conversation.Status);
+        Assert.Equal(3, vm.Conversation.Messages.Count);
+        Assert.Equal("Show the last quarter", BuildChatViewModel.Text(vm.Conversation.Messages.Last()!));
+        Assert.Equal(saved, (await fixture.Store.LoadAsync(fixture.ProjectId, original.Id)).Messages.ToJsonString());
+        var branch = await fixture.Store.LoadAsync(fixture.ProjectId, vm.Conversation.Id);
+        Assert.Equal(original.Id, branch.ParentConversationId);
+        Assert.Equal(2, branch.ParentMessageCount);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Retry_requires_send_and_branch_retains_complete_tool_history()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var agent = new BuildChatAgent(fixture.Store, new ScriptedModel(), fixture.Service, fixture.Permissions, fixture.Tenant);
+        var original = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await agent.QueueAsync(original, "Explain job contracts");
+        await agent.RunAsync(original, default);
+        Assert.Equal(4, original.Messages.Count);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId, original.Id);
+        var reply = vm.Conversation.Messages.Last()!;
+        vm.RetryMessage(reply);
+        Assert.Equal("Explain job contracts", vm.Draft);
+        Assert.False(vm.Busy);
+        Assert.Single(await fixture.Store.ListAsync(fixture.ProjectId));
+        vm.CancelBranch();
+        Assert.False(vm.BranchPending);
+        Assert.Empty(vm.Draft);
+        Assert.False(vm.CanBranchMessage(vm.Conversation.Messages[1]!));
+        vm.BranchFromMessage(reply);
+        vm.Draft = "Explain this in more detail";
+        await vm.SendAsync();
+        Assert.Null(vm.Error);
+        Assert.Equal(5, vm.Conversation.Messages.Count);
+        Assert.Equal(original.Messages.ToJsonString(), new JsonArray(vm.Conversation.Messages.Take(4).Select(x => x!.DeepClone()).ToArray()).ToJsonString());
+        Assert.Equal(4, vm.Conversation.ParentMessageCount);
+        Assert.False(vm.CanRetryMessage(vm.Conversation.Messages[3]!));
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Retrying_the_first_turn_queues_only_the_original_prompt_and_preserves_completed_actions()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var agent = new BuildChatAgent(fixture.Store, new ScriptedModel(), fixture.Service, fixture.Permissions, fixture.Tenant);
+        var original = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await agent.QueueAsync(original, "Explain job contracts");
+        await agent.RunAsync(original, default);
+        var originalMessages = original.Messages.ToJsonString();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId, original.Id);
+        vm.RetryMessage(vm.Conversation.Messages.Last()!);
+        await vm.SendAsync();
+        Assert.Null(vm.Error);
+        Assert.Equal("Explain job contracts", BuildChatViewModel.Text(Assert.Single(vm.Conversation.Messages)!));
+        Assert.Equal(BuildRunStatus.Queued, vm.Conversation.Status);
+        Assert.Equal(0, vm.Conversation.ParentMessageCount);
+        Assert.Equal(originalMessages, (await fixture.Store.LoadAsync(fixture.ProjectId, original.Id)).Messages.ToJsonString());
+        await vm.DisposePageAsync();
+    }
+
+    [Theory]
+    [InlineData("deleted")]
+    [InlineData("other-user")]
+    [InlineData("running")]
+    public async Task Branch_send_rechecks_ownership_existence_and_active_runs(string change)
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var agent = new BuildChatAgent(fixture.Store, new PlainTextModel(), fixture.Service, fixture.Permissions, fixture.Tenant);
+        var original = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await agent.QueueAsync(original, "Inspect revenue");
+        await agent.RunAsync(original, default);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId, original.Id);
+        vm.RetryMessage(vm.Conversation.Messages.Last()!);
+        if (change == "deleted")
+        {
+            await fixture.Store.DeleteAsync(fixture.ProjectId, original.Id);
+        }
+        if (change == "other-user")
+        {
+            fixture.User.UserId = Guid.NewGuid();
+        }
+        if (change == "running")
+        {
+            await agent.QueueAsync(original, "A turn in another tab");
+        }
+        await vm.SendAsync();
+        Assert.NotNull(vm.Error);
+        Assert.True(vm.BranchPending);
+        Assert.Equal(original.Id, vm.Conversation.Id);
+        Assert.Equal("Inspect revenue", vm.Draft);
+        Assert.DoesNotContain(await fixture.Store.ListAsync(fixture.ProjectId), chat => chat.Id != original.Id);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Chat_actions_preserve_unsent_drafts_and_filter_recent_titles_without_case_sensitivity()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var agent = new BuildChatAgent(fixture.Store, new PlainTextModel(), fixture.Service, fixture.Permissions, fixture.Tenant);
+        var original = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await agent.QueueAsync(original, "Explore revenue");
+        await agent.RunAsync(original, default);
+        var js = new ClipboardJs();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), js, fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId, original.Id);
+        vm.HistoryQuery = "  REVENUE  ";
+        Assert.Equal(original.Id, Assert.Single(vm.FilteredConversations).Id);
+        vm.HistoryQuery = "unmatched";
+        Assert.Empty(vm.FilteredConversations);
+        vm.HistoryQuery = "";
+        Assert.Single(vm.FilteredConversations);
+        vm.Draft = "Keep this draft";
+        vm.EditMessage(vm.Conversation.Messages[0]!);
+        vm.RetryMessage(vm.Conversation.Messages.Last()!);
+        vm.BranchFromMessage(vm.Conversation.Messages.Last()!);
+        Assert.False(vm.BranchPending);
+        Assert.Equal("Keep this draft", vm.Draft);
+        await vm.CopyMessageAsync(vm.Conversation.Messages[0]!);
+        Assert.Equal("Explore revenue", js.Copied);
+        js.Fail = true;
+        await vm.CopyMessageAsync(vm.Conversation.Messages.Last()!);
+        Assert.Contains("Clipboard access is unavailable", vm.Notice);
+        vm.Draft = "";
+        vm.RetryMessage(vm.Conversation.Messages.Last()!);
+        await vm.NewAsync();
+        Assert.False(vm.BranchPending);
+        Assert.Empty(vm.Draft);
+        await vm.DisposePageAsync();
+    }
+
+    private sealed class ClipboardJs : IJSRuntime
+    {
+        public string? Copied;
+        public bool Fail;
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
+        {
+            Assert.Equal("navigator.clipboard.writeText", identifier);
+            if (Fail)
+            {
+                throw new JSException("Denied");
+            }
+            Copied = args![0]?.ToString();
+            return ValueTask.FromResult(default(TValue)!);
+        }
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args) => InvokeAsync<TValue>(identifier, args);
+    }
+
+    [Fact]
     public async Task Agent_profiles_persist_model_and_prompt_and_reject_unknown_profiles()
     {
         await using var fixture = new Fixture();

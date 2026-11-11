@@ -140,6 +140,8 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         Loading = true;
         Error = Notice = null;
         Draft = "";
+        _branch = null;
+        HistoryQuery = "";
         ResetWorkspace();
         Dashboard = new();
         AgentDraft = new();
@@ -228,6 +230,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             Model = Conversation.Model
         };
         Draft = "";
+        _branch = null;
         Error = Notice = null;
         ConfirmDelete = false;
         ShowHistory = false;
@@ -258,6 +261,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             NavigateToDashboard();
             await AutoPreviewAsync();
             Draft = "";
+            _branch = null;
             Error = Notice = null;
             ConfirmDelete = false;
             ShowHistory = false;
@@ -303,7 +307,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         _send = SendCoreAsync();
         return _send;
     }
-    public bool CanAnswer(JsonNode message) => !Locked && !Listening && Draft.Length == 0
+    public bool CanAnswer(JsonNode message) => !Locked && !Listening && !BranchPending && Draft.Length == 0
         && Conversation.ConnectionId != Guid.Empty && Models.Contains(Conversation.Model)
         && ReferenceEquals(Conversation.Messages.LastOrDefault(), message);
 
@@ -322,18 +326,28 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         Error = Notice = null;
         SubscribeToConversation();
         var text = Draft;
-        if (PreviewItem is { Kind: "workflow-run", WorkflowId: { } workflowId } selected && PreviewError is null)
+        if (!BranchPending && PreviewItem is { Kind: "workflow-run", WorkflowId: { } workflowId } selected && PreviewError is null)
         {
             text += $"\n\nSelected workflow run: {selected.Id} (workflow {workflowId}).";
         }
-        if (PreviewWorkflow is { } workflow && PreviewError is null && !PreviewLoading)
+        if (!BranchPending && PreviewWorkflow is { } workflow && PreviewError is null && !PreviewLoading)
         {
             text += $"\n\nSelected workflow: {workflow.Id}.";
         }
         try
         {
-            Conversation.AgentId ??= Guid.Empty;
-            await agent.QueueAsync(Conversation, text);
+            var pending = await PrepareSendConversationAsync();
+            pending.AgentId ??= Guid.Empty;
+            await agent.QueueAsync(pending, text);
+            if (BranchPending)
+            {
+                Conversation = pending;
+                _branch = null;
+                ResetWorkspace();
+                NavigateToDashboard();
+                SubscribeToConversation();
+                _refreshPending = true;
+            }
             Draft = "";
             Notice = "Working in the background. You can leave this page and return later.";
             Conversations = await store.ListAsync(Conversation.ProjectId);
