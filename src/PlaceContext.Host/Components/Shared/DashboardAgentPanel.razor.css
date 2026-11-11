@@ -4,8 +4,11 @@
 .agent-panel h3, .agent-panel p { margin:0; }
 .agent-panel p { line-height:1.6; }
 .hint { color:var(--text-3); font-size:12px; }
-.agent-panel textarea, .agent-panel input { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:inherit; font:inherit; }
+.agent-panel textarea, .agent-panel input, .agent-panel select { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:inherit; font:inherit; }
 .agent-panel textarea { resize:vertical; min-height:80px; }
+.agent-mcp { display:flex; flex-direction:column; gap:12px; min-width:0; border:1px solid var(--border); border-radius:8px; padding:14px; }
+.agent-mcp label { display:flex; align-items:center; gap:8px; overflow-wrap:anywhere; }
+.agent-mcp input[type="checkbox"] { width:auto; flex:none; }
 .agent-panel > .dcbtn { align-self:flex-start; }
 .agent-panel summary { cursor:pointer; padding:10px 0; font-weight:600; }
 .agent-card { display:flex; flex-direction:column; gap:10px; padding:16px; border:1px solid var(--border); border-radius:10px; }

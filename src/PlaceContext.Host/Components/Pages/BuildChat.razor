@@ -31,12 +31,11 @@
                 <button class="chat-icon-button" aria-label="History" title="Conversation history" aria-expanded="@Vm.ShowHistory" aria-controls="@(Vm.ViewId + "-build-history")" @onclick="Vm.ToggleHistoryAsync"><AppIcon Kind="history" /></button>
                 <button class="chat-icon-button" aria-label="New chat" title="New chat" disabled="@Vm.NavigationLocked" @onclick="Vm.NewAsync"><AppIcon Kind="edit" /></button>
                             <div class="model-picker">
-                                <label for="@(Vm.ViewId + "-chat-provider")" class="visually-hidden">Model connection</label><select id="@(Vm.ViewId + "-chat-provider")" value="@Vm.Conversation.ConnectionId" @onchange="e => Vm.SelectConnection(e.Value?.ToString())" disabled="@Vm.Locked"><option value="">Select provider</option>@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select>
-                                <label for="@(Vm.ViewId + "-chat-model")" class="visually-hidden">Model</label><select id="@(Vm.ViewId + "-chat-model")" @bind="Vm.Conversation.Model" disabled="@Vm.Locked"><option value="">Select model</option>@foreach (var model in Vm.Models) { <option>@model</option> }</select>
+                                <label for="@(Vm.ViewId + "-chat-agent")" class="visually-hidden">Agent</label><select id="@(Vm.ViewId + "-chat-agent")" value="@(Vm.Conversation.AgentId ?? Guid.Empty)" @onchange="e => Vm.SelectAgent(e.Value?.ToString())" disabled="@Vm.Locked">@foreach (var profile in Vm.Dashboard.Agents) { <option value="@profile.Id">@profile.Name</option> }</select>
                             </div>
             </div>
             <div class="chat-header-actions">
-                <button type="button" class="chat-toolbar-button" aria-expanded="@(Vm.AgentOpen ? "true" : "false")" disabled="@Vm.Loading" @onclick="Vm.OpenAgentAsync"><AppIcon Kind="agent" /><span>Agent</span></button>
+                <button type="button" class="chat-toolbar-button" aria-expanded="@(Vm.AgentOpen ? "true" : "false")" disabled="@Vm.Loading" @onclick="Vm.OpenAgentAsync"><span class="toolbar-avatar"><AssistantAvatar /></span><span>Agent</span></button>
                 @if (Vm.Conversation.Messages.Count > 0 && !Vm.WorkspaceVisible)
                 { <button type="button" class="chat-toolbar-button" aria-label="Open workspace" @onclick="Vm.OpenWorkspace"><AppIcon Kind="chain" /><span>Workspace</span></button> }
                 <a class="chat-toolbar-button" href="@($"/project/{ProjectId}/workflows")"><AppIcon Kind="chain" /><span>Workflows</span></a>
@@ -54,11 +53,11 @@
                 @if (!Vm.Loading && Vm.Conversation.Messages.Count == 0)
                 {
                     <div class="chat-welcome">
-                        <span class="welcome-icon"><AppIcon Kind="agent" /></span>
+                        <span class="welcome-icon"><AssistantAvatar /></span>
                         <h1>What do you need to do?</h1>
                         <p>Check your project, explore the numbers, or build your next workflow.<br />Ask for a chart, describe an outcome, or choose a quick action.</p>
                         <div class="dashboard-actions">
-                            <button type="button" class="dashboard-action" disabled="@(!Vm.CanStartChat || !string.IsNullOrWhiteSpace(Vm.Draft))" @onclick="Vm.StartWorkflowChatAsync">
+                            <button type="button" class="dashboard-action" disabled="@Vm.NavigationLocked" @onclick="Vm.StartWorkflowChatAsync">
                                 <span class="dashboard-action-icon"><AppIcon Kind="play" /></span>
                                 <span><strong>Run a workflow</strong><small>Choose a workflow, answer a few questions, and follow each step here.</small></span>
                                 <AppIcon Kind="arrow-right" />
@@ -91,7 +90,7 @@
                     else
                     {
                         <article class="chat-message @role">
-                            <div class="message-author"><span><AppIcon Kind="@(role == "user" ? "human" : "agent")" /></span><strong>@(role == "user" ? "You" : "Assistant")</strong></div>
+                            <div class="message-author"><span>@if (role == "user") { <AppIcon Kind="human" /> } else { <AssistantAvatar /> }</span><strong>@(role == "user" ? "You" : "Assistant")</strong></div>
                             @if (BuildChatViewModel.JsonReply(message) is { } json)
                             { <RunOutput Value="@json" Label="Assistant JSON response" /> }
                             else if (BuildChatViewModel.Text(message).Length > 0)
@@ -111,12 +110,14 @@
                                 </div>
                                 <p class="answer-hint">Choose an answer to send, or type your own below.</p>
                             }
+                            @if (message["dashboard_action"]?.ToString() == "choose_workflow")
+                            { <button type="button" class="dcbtn" disabled="@Vm.NavigationLocked" @onclick="Vm.StartWorkflowChatAsync">Choose a workflow</button> }
                             @foreach (var url in BuildChatViewModel.ImageUrls(message)) { <img class="message-image" src="@url" alt="Image attached to your message" /> }
                             @foreach (var call in BuildChatViewModel.Calls(message)) { <details class="tool-call"><summary><AppIcon Kind="agent" /> @(call["function"]?["name"])</summary><RunOutput Value="@(Vm.Presentation.Json(call["function"]?["arguments"]?.ToString() ?? ""))" Label="Tool arguments JSON" /></details> }
                         </article>
                     }
                 }
-                @if (Vm.Busy) { <div class="thinking" role="status"><span></span><span></span><span></span> @(Vm.Conversation.Status == PlaceContext.Application.Build.BuildRunStatus.Queued ? "Queued for background work" : "The assistant is working in the background")</div> }
+                @if (Vm.Busy) { <div class="thinking" role="status"><span class="toolbar-avatar"><AssistantAvatar /></span> @(Vm.Conversation.Status == PlaceContext.Application.Build.BuildRunStatus.Queued ? "Queued for background work" : "The assistant is working in the background")</div> }
             </div>
             <div class="chat-bottom">
                 @if (Vm.Error is not null && Vm.Error != Vm.Conversation.Messages.LastOrDefault()?["content"]?.ToString())
@@ -135,15 +136,15 @@
                 </form>
                 @if (Vm.ModelSetupHint is not null)
                 { <div class="composer-note" role="status">@Vm.ModelSetupHint</div> }
-                else if (!Vm.Loading && !Vm.Connections.Any(x => x.Models.Count > 0))
-                { <div class="model-setup" role="status"><span><AppIcon Kind="agent" /> No models available. Add a connection in Model settings and choose its models.</span><a href="/settings/models">Model settings <AppIcon Kind="arrow-right" /></a></div> }
+                else if (!Vm.Loading && !Vm.Models.Contains(Vm.Conversation.Model))
+                { <div class="model-setup" role="status"><span>This agent needs a model. Choose its connection and model in Agent settings.</span><button type="button" class="dcbtn" @onclick="Vm.OpenAgentAsync">Agent settings</button></div> }
                 else { <div class="composer-note">@(Vm.Listening ? "Listening… Stop dictation to review and send." : "The assistant can make changes to this project. Review action results.")</div> }
             </div>
         </div>
             <div class="build-divider" inert="@(Vm.Loading || !Vm.WorkspaceVisible)" role="separator" tabindex="0" aria-label="Resize chat and workspace" aria-orientation="vertical" aria-valuemin="30" aria-valuemax="70" aria-valuenow="42" aria-controls="@(Vm.ViewId + "-thread " + Vm.ViewId + "-workspace")" title="Drag to resize · arrow keys to adjust"></div>
             <section id="@(Vm.ViewId + "-workspace")" class="build-workspace" aria-label="Dashboard workspace" inert="@(Vm.Loading || !Vm.WorkspaceVisible)">
                 <header class="preview-heading">
-                    <h2>@(Vm.AgentOpen ? "Agent" : Vm.PreviewChart?.Spec.Title ?? Vm.PreviewItem?.Name ?? "Workspace")</h2>
+                    <h2>@(Vm.AgentOpen ? "Agent" : Vm.WorkflowPickerOpen ? "Run a workflow" : Vm.PreviewChart?.Spec.Title ?? Vm.PreviewItem?.Name ?? "Workspace")</h2>
                     @if (Vm.AgentOpen && Vm.PreviewItem is not null)
                     { <button type="button" class="dcbtn" @onclick="Vm.ShowWorkspace">Back to run / output</button> }
                     @if (!Vm.AgentOpen && Vm.PreviewEditorUrl is { } editorUrl)
@@ -153,6 +154,26 @@
                 @if (Vm.AgentOpen)
                 {
                     <DashboardAgentPanel Vm="Vm" />
+                }
+                else if (Vm.WorkflowPickerOpen)
+                {
+                    <div class="preview-content workflow-picker">
+                        <p class="preview-description">Choose a workflow to see it immediately. Then continue in chat for inputs and follow-up. Nothing runs just by selecting it.</p>
+                        @if (Vm.WorkflowPickerLoading) { <Skeleton Kind="list" Rows="3" /> }
+                        else if (Vm.WorkflowPickerError is { } pickerError)
+                        { <p role="alert">@pickerError</p><button class="dcbtn" @onclick="Vm.StartWorkflowChatAsync">Try again</button> }
+                        else if (Vm.AvailableWorkflows.Count == 0)
+                        { <p>No workflows yet in this project.</p><a class="dcbtn" href="@($"/project/{ProjectId}/workflows")">Open workflows</a> }
+                        else
+                        {
+                            <div class="result-items" aria-label="Available workflows">
+                                @foreach (var choice in Vm.AvailableWorkflows)
+                                {
+                                    <button type="button" class="result-item" @key="choice.Id" @onclick="() => Vm.SelectWorkflowAsync(choice.Id)"><AppIcon Kind="chain" /><span>@choice.Name<small>@choice.Description</small></span><AppIcon Kind="arrow-right" /></button>
+                                }
+                            </div>
+                        }
+                    </div>
                 }
                 else if (Vm.PreviewChart is { } previewChart)
                 {
@@ -225,6 +246,11 @@
                         }
                         else if (Vm.PreviewWorkflow is { } workflow)
                         {
+                            <div class="preview-run-summary">
+                                <button type="button" class="dcbtn" disabled="@Vm.NavigationLocked" @onclick="Vm.StartWorkflowChatAsync">Choose another workflow</button>
+                                <button type="button" class="dcbtn primary" disabled="@(!Vm.CanStartChat || !string.IsNullOrWhiteSpace(Vm.Draft))" @onclick="Vm.PrepareWorkflowRunAsync"><AppIcon Kind="play" /> Prepare run in chat</button>
+                            </div>
+                            <p class="preview-description">Chat will check required inputs before starting. You can also ask a follow-up question below.</p>
                             @if (!string.IsNullOrWhiteSpace(workflow.Description)) { <p class="preview-description">@workflow.Description</p> }
                             <ChainCanvas @key="workflow.Id" Stages="workflow.Stages" ReadOnly="true" OnOpenJob="Vm.OpenJobPreviewAsync" />
                         }

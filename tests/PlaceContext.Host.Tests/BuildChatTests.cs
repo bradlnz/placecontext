@@ -17,6 +17,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Membership;
+using PlaceContext.Application.Mcp;
 using PlaceContext.Application.Operations;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
@@ -34,6 +35,174 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class BuildChatTests
 {
+    [Fact]
+    public async Task Agent_profiles_persist_model_and_prompt_and_reject_unknown_profiles()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var settings = JsonSerializer.Deserialize<DashboardSettings>("""{"Instructions":"Legacy preference","Actions":[]}""")!;
+        Assert.Equal(Guid.Empty, Assert.Single(settings.Agents).Id);
+        var profile = new DashboardAgentProfile
+        {
+            Name = "Research", ConnectionId = fixture.ConnectionId, Model = "test", Instructions = "Cite evidence for reports"
+        };
+        settings.Agents.Add(profile);
+        await fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings);
+        var model = new ScriptedModel("""{"content":"Ready to research."}""");
+        var agent = new BuildChatAgent(fixture.Store, model, fixture.Service, fixture.Permissions, fixture.Tenant);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        vm.SelectAgent(profile.Id.ToString());
+        Assert.Equal(fixture.ConnectionId, vm.Conversation.ConnectionId);
+        Assert.Equal("test", vm.Conversation.Model);
+        await vm.NewAsync();
+        Assert.Equal(profile.Id, vm.Conversation.AgentId);
+        await vm.OpenAgentAsync();
+        Assert.Equal(profile.Id, vm.EditedAgent!.Id);
+        Assert.Contains("Cite evidence for reports", vm.AgentPrompt);
+        var conversation = new BuildConversation { ProjectId = fixture.ProjectId, AgentId = profile.Id, ConnectionId = Guid.NewGuid(), Model = "wrong" };
+        await agent.QueueAsync(conversation, "Help with research");
+        Assert.Equal(fixture.ConnectionId, conversation.ConnectionId);
+        Assert.Equal("test", conversation.Model);
+        await agent.RunAsync(conversation, default);
+        Assert.Equal(BuildRunStatus.Completed, conversation.Status);
+        Assert.Contains("Cite evidence for reports", conversation.SystemPrompt);
+        Assert.Contains("Legacy preference", conversation.SystemPrompt);
+        Assert.Equal(profile.Id, (await fixture.Store.LoadAsync(fixture.ProjectId, conversation.Id)).AgentId);
+        conversation.AgentId = Guid.NewGuid();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => agent.QueueAsync(conversation, "Unknown agent"));
+        settings.Agents.Add(new() { Name = " research " });
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings));
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Agent_settings_add_profiles_and_require_model_setup_before_chat()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var agent = fixture.Provider.GetRequiredService<BuildChatAgent>();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        await vm.OpenAgentAsync();
+        vm.AddAgent();
+        var id = vm.EditedAgent!.Id;
+        await vm.SaveAgentAsync();
+        Assert.Null(vm.AgentError);
+        vm.SelectAgent(id.ToString());
+        Assert.False(vm.CanStartChat);
+        await vm.StartWorkflowChatAsync();
+        Assert.True(vm.WorkflowPickerOpen);
+        await vm.OpenAgentAsync();
+        vm.SelectAgentConnection(fixture.ConnectionId.ToString());
+        Assert.Equal("test", vm.EditedAgent!.Model);
+        await vm.SaveAgentAsync();
+        Assert.True(vm.CanStartChat);
+        vm.Conversation.Status = BuildRunStatus.Running;
+        vm.SelectAgent(Guid.Empty.ToString());
+        Assert.Equal(id, vm.Conversation.AgentId);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Agent_MCP_assignments_are_saved_only_for_enabled_connections_in_this_project()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var allowed = await fixture.SeedMcpAsync();
+        var disabled = await fixture.SeedMcpAsync(enabled: false);
+        var other = await fixture.SeedMcpAsync(projectId: Guid.NewGuid());
+        var settings = new DashboardSettings();
+        settings.Agents[0].McpConnectionIds = [allowed.Id];
+        await fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings);
+        Assert.Equal(allowed.Id, Assert.Single((await fixture.Store.GetSettingsAsync(fixture.ProjectId)).Agents[0].McpConnectionIds));
+        foreach (var invalid in new[] { disabled.Id, other.Id, Guid.NewGuid() })
+        {
+            settings.Agents[0].McpConnectionIds = [invalid];
+            await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings));
+        }
+        settings.Agents[0].McpConnectionIds = [allowed.Id, allowed.Id];
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings));
+        var mcp = new AgentMcp { Connections = [allowed, disabled] };
+        var agent = new BuildChatAgent(fixture.Store, new ScriptedModel(), fixture.Service, fixture.Permissions, fixture.Tenant, mcp: mcp);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), fixture.Service, fixture.Permissions, mcp: mcp);
+        await vm.LoadAsync(fixture.ProjectId);
+        await vm.OpenAgentAsync();
+        Assert.Null(vm.AgentError);
+        vm.ToggleAgentMcp(disabled.Id, true);
+        Assert.Equal(allowed.Id, Assert.Single(vm.EditedAgent!.McpConnectionIds));
+        vm.ToggleAgentMcp(allowed.Id, false);
+        await vm.SaveAgentAsync();
+        Assert.Empty((await fixture.Store.GetSettingsAsync(fixture.ProjectId)).Agents[0].McpConnectionIds);
+        Assert.DoesNotContain("call_mcp_tool", vm.AgentTools);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Assigned_agent_MCP_tools_are_available_but_unassigned_disabled_and_unscoped_connections_are_blocked()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var allowed = await fixture.SeedMcpAsync();
+        var unassigned = await fixture.SeedMcpAsync();
+        var disabled = await fixture.SeedMcpAsync(enabled: false);
+        var otherProjectId = Guid.NewGuid();
+        var mcp = new AgentMcp { Connections = [allowed, unassigned, disabled] };
+        var settings = new DashboardSettings();
+        settings.Agents[0].McpConnectionIds = [allowed.Id];
+        await fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings);
+        var reply = new JsonObject
+        {
+            ["tool_calls"] = new JsonArray(new JsonObject
+            {
+                ["id"] = "mcp", ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = "call_mcp_tool", ["arguments"] = JsonSerializer.Serialize(new { connectionId = allowed.Id, toolName = "lookup", arguments = new { } }) }
+            })
+        };
+        var model = new ScriptedModel(reply.ToJsonString());
+        var agent = new BuildChatAgent(fixture.Store, model, fixture.Service, fixture.Permissions, fixture.Tenant, mcp: mcp);
+        var inspection = await agent.InspectAsync(fixture.ProjectId);
+        Assert.Contains("call_mcp_tool", inspection.Tools);
+        Assert.Contains(allowed.Id.ToString(), inspection.Prompt);
+        Assert.DoesNotContain(unassigned.Id.ToString(), inspection.Prompt);
+        Assert.DoesNotContain("private-token", inspection.Prompt);
+        var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await agent.QueueAsync(conversation, "Look up a report with the assigned connection");
+        await agent.RunAsync(conversation, default);
+        Assert.Equal(BuildRunStatus.Completed, conversation.Status);
+        Assert.Equal(1, mcp.Calls);
+        Assert.Equal(fixture.ProjectId, mcp.ProjectId);
+        var tools = new BuildTools(fixture.ProjectId, fixture.Service, fixture.Permissions, fixture.Store, mcp: mcp,
+            mcpConnectionIds: new HashSet<Guid> { allowed.Id, disabled.Id, otherProjectId });
+        var arguments = JsonSerializer.SerializeToElement(new { });
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.list_mcp_tools(unassigned.Id, default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.call_mcp_tool(unassigned.Id, "lookup", arguments, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tools.call_mcp_tool(disabled.Id, "lookup", arguments, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tools.call_mcp_tool(otherProjectId, "lookup", arguments, default));
+        fixture.Permissions.Allowed = false;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.call_mcp_tool(allowed.Id, "lookup", arguments, default));
+        Assert.Equal(1, mcp.Calls);
+    }
+
+    private sealed class AgentMcp : IMcpClientService
+    {
+        public IReadOnlyList<McpConnectionInfo> Connections = [];
+        public int Calls;
+        public Guid ProjectId;
+        public Task<IReadOnlyList<McpConnectionInfo>> ListConnectionsAsync(Guid projectId, CancellationToken ct = default)
+        {
+            ProjectId = projectId;
+            return Task.FromResult(Connections);
+        }
+        public Task<IReadOnlyList<McpToolDefinition>> ListToolsAsync(Guid connectionId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<McpToolDefinition>>([new("lookup", "Look up a report", JsonSerializer.SerializeToElement(new { type = "object" }))]);
+        public Task<McpToolResult> CallToolAsync(Guid connectionId, string toolName, JsonElement? arguments = null, CancellationToken ct = default)
+        {
+            Calls++;
+            return Task.FromResult(new McpToolResult(true, "Report found", null));
+        }
+    }
+
     [Fact]
     public async Task Dashboard_settings_are_encrypted_private_and_validated_without_overwriting_memory()
     {
@@ -74,6 +243,10 @@ public sealed class BuildChatTests
         Assert.Empty(vm.Dashboard.Actions);
         await vm.StartWorkflowChatAsync();
         Assert.False(vm.AgentOpen);
+        Assert.True(vm.WorkflowPickerOpen);
+        Assert.Empty(vm.Conversation.Messages);
+        vm.Draft = "Explain how to run an existing workflow";
+        await vm.SendAsync();
         Assert.Equal(BuildRunStatus.Queued, vm.Conversation.Status);
         Assert.Contains("run an existing workflow", BuildChatViewModel.Text(vm.Conversation.Messages[0]!));
         await agent.RunAsync(vm.Conversation, default);
@@ -82,6 +255,168 @@ public sealed class BuildChatTests
         var saved = await fixture.Store.LoadAsync(fixture.ProjectId, vm.Conversation.Id);
         Assert.Equal(vm.Conversation.SystemPrompt, saved.SystemPrompt);
         await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Workflow_tile_and_selection_are_immediate_without_models_and_preserve_drafts()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var workflow = new JobChainView(Guid.NewGuid(), fixture.ProjectId, "Report", "Build a report", [], DateTimeOffset.UtcNow);
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Workflow = workflow };
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        vm.Conversation.ConnectionId = Guid.Empty;
+        vm.Draft = "Keep my draft";
+        await vm.StartWorkflowChatAsync();
+        Assert.True(vm.WorkflowPickerOpen);
+        Assert.False(vm.WorkflowPickerLoading);
+        Assert.Equal(workflow, Assert.Single(vm.AvailableWorkflows));
+        Assert.Empty(vm.Conversation.Messages);
+        await vm.SelectWorkflowAsync(Guid.NewGuid());
+        Assert.Null(vm.PreviewWorkflow);
+        await vm.SelectWorkflowAsync(workflow.Id);
+        Assert.Equal(workflow, vm.PreviewWorkflow);
+        Assert.False(vm.WorkflowPickerOpen);
+        Assert.Equal("Keep my draft", vm.Draft);
+        await vm.PrepareWorkflowRunAsync();
+        Assert.Empty(vm.Conversation.Messages);
+        Assert.Equal(0, dispatcher.Commands);
+        await vm.DisposePageAsync();
+    }
+
+    [Theory]
+    [InlineData(Permission.ProjectsView)]
+    [InlineData(Permission.ChainsManage)]
+    [InlineData(Permission.JobsRun)]
+    public async Task Workflow_picker_checks_permissions_and_filters_project(string permission)
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var dispatcher = new ToolDispatcher(fixture.ProjectId)
+        {
+            Workflow = new(Guid.NewGuid(), Guid.NewGuid(), "Other project", null, [], DateTimeOffset.UtcNow)
+        };
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        await vm.StartWorkflowChatAsync();
+        Assert.Empty(vm.AvailableWorkflows);
+        Assert.Null(vm.WorkflowPickerError);
+        fixture.Permissions.Denied = permission;
+        await vm.StartWorkflowChatAsync();
+        Assert.NotNull(vm.WorkflowPickerError);
+        Assert.Empty(vm.AvailableWorkflows);
+        Assert.Equal(0, dispatcher.Commands);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Closed_workflow_picker_ignores_late_results()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { PendingWorkflows = new() };
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        var loading = vm.StartWorkflowChatAsync();
+        Assert.True(vm.WorkflowPickerOpen);
+        Assert.True(vm.WorkflowPickerLoading);
+        vm.CloseWorkspace();
+        dispatcher.PendingWorkflows.SetResult([new(Guid.NewGuid(), fixture.ProjectId, "Late", null, [], DateTimeOffset.UtcNow)]);
+        await loading;
+        Assert.False(vm.WorkflowPickerOpen);
+        Assert.Empty(vm.AvailableWorkflows);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Preparing_selected_workflow_queues_chat_with_its_real_id_without_starting_a_run()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var dispatcher = new ToolDispatcher(fixture.ProjectId)
+        {
+            Workflow = new(Guid.NewGuid(), fixture.ProjectId, "Report", null, [], DateTimeOffset.UtcNow)
+        };
+        var agent = fixture.Provider.GetRequiredService<BuildChatAgent>();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        await vm.StartWorkflowChatAsync();
+        await vm.SelectWorkflowAsync(dispatcher.Workflow.Id);
+        await vm.PrepareWorkflowRunAsync();
+        Assert.Equal(BuildRunStatus.Queued, vm.Conversation.Status);
+        var prompt = BuildChatViewModel.Text(Assert.Single(vm.Conversation.Messages)!);
+        Assert.Contains(dispatcher.Workflow.Id.ToString(), prompt);
+        Assert.Contains("required inputs", prompt);
+        Assert.Equal(0, dispatcher.Commands);
+        await vm.DisposePageAsync();
+    }
+
+    [Theory]
+    [InlineData(0.95, true)]
+    [InlineData(0.85, true)]
+    [InlineData(0.84, false)]
+    [InlineData(-0.1, false)]
+    [InlineData(1.1, false)]
+    public async Task Jev_routes_confident_navigation_without_calling_the_chat_model(double confidence, bool routed)
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var model = new ScriptedModel("""{"content":"How can I help?"}""");
+        var reviewer = new Reviewer { Confidence = confidence };
+        var agent = new BuildChatAgent(fixture.Store, model, fixture.Service, fixture.Permissions, fixture.Tenant, reviewer);
+        var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await agent.QueueAsync(conversation, "Click the run workflow tile");
+        await agent.RunAsync(conversation, default);
+        Assert.Equal(BuildRunStatus.Completed, conversation.Status);
+        Assert.Equal(routed ? 0 : 1, model.Requests);
+        Assert.Equal(1, reviewer.Calls);
+        Assert.Equal(fixture.ProjectId, reviewer.ProjectId);
+        Assert.Equal(BuildChatAgent.WorkflowPickerQuestion, reviewer.Question);
+        Assert.DoesNotContain("ProjectId", reviewer.State);
+        var saved = await fixture.Store.LoadAsync(fixture.ProjectId, conversation.Id);
+        Assert.Equal(routed ? "choose_workflow" : null, saved.Messages.Last()?["dashboard_action"]?.ToString());
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId, conversation.Id);
+        Assert.Equal(routed, vm.WorkflowPickerOpen);
+        await vm.DisposePageAsync();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Jev_failure_or_timeout_falls_back_to_chat(bool timeout)
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var model = new ScriptedModel("""{"content":"Choose a workflow."}""");
+        var reviewer = new Reviewer { Fail = !timeout, WaitForCancellation = timeout };
+        var agent = new BuildChatAgent(fixture.Store, model, fixture.Service, fixture.Permissions, fixture.Tenant, reviewer);
+        var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await agent.QueueAsync(conversation, "Run a workflow");
+        await agent.RunAsync(conversation, default).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(BuildRunStatus.Completed, conversation.Status);
+        Assert.Equal(1, model.Requests);
+        Assert.Null(conversation.Messages.Last()?["dashboard_action"]);
+    }
+
+    [Fact]
+    public async Task Jev_skips_followups_and_cannot_be_impersonated_by_the_chat_model()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var reviewer = new Reviewer { Confidence = .99 };
+        var model = new ScriptedModel("""{"content":"Here is more information.","dashboard_action":"choose_workflow"}""");
+        var agent = new BuildChatAgent(fixture.Store, model, fixture.Service, fixture.Permissions, fixture.Tenant, reviewer);
+        var conversation = new BuildConversation { ProjectId = fixture.ProjectId, ConnectionId = fixture.ConnectionId, Model = "test" };
+        await agent.QueueAsync(conversation, "Run a workflow");
+        await agent.RunAsync(conversation, default);
+        await agent.QueueAsync(conversation, "What does the report workflow do?");
+        await agent.RunAsync(conversation, default);
+        Assert.Equal(1, reviewer.Calls);
+        Assert.Equal(1, model.Requests);
+        Assert.Null(conversation.Messages.Last()?["dashboard_action"]);
+        Assert.Equal(BuildRunStatus.Completed, conversation.Status);
     }
 
     [Fact]
@@ -666,15 +1001,19 @@ public sealed class BuildChatTests
     }
 
     [Fact]
-    public async Task Chat_renders_inputs_model_selection_and_escapes_assistant_HTML()
+    public async Task Chat_renders_agent_selection_corgi_and_escapes_assistant_HTML()
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
         var connectionId = Guid.NewGuid();
         await fixture.Connections.SaveAsync(new(connectionId, "Test provider", "openai", "http://localhost:11434/v1", ["test-model"], true));
+        var profile = new DashboardAgentProfile { Name = "Report assistant", ConnectionId = connectionId, Model = "test-model" };
+        var settings = new DashboardSettings();
+        settings.Agents.Add(profile);
+        await fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings);
         var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new PortalUiState(), new NoJs(), fixture.Service, fixture.Permissions);
         await vm.LoadAsync(fixture.ProjectId);
-        vm.SelectConnection(connectionId.ToString());
+        vm.SelectAgent(profile.Id.ToString());
         vm.Conversation.Messages.Add(new JsonObject { ["role"] = "user", ["content"] = "**Keep my input literal**" });
         vm.Conversation.Messages.Add(JsonNode.Parse("""{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,AAAA"}}]}"""));
         vm.Conversation.Messages.Add(new JsonObject { ["role"] = "assistant", ["content"] = "Please send the **reporting date range**.\n\n- Onboarding status\n- Missing documents" });
@@ -700,8 +1039,11 @@ public sealed class BuildChatTests
                 ParameterView.FromDictionary(new Dictionary<string, object?> { ["ProjectId"] = fixture.ProjectId }));
             return rendered.ToHtmlString();
         });
-        Assert.Contains("Test provider", html);
-        Assert.Contains("test-model", html);
+        Assert.Contains("Report assistant", html);
+        Assert.Contains("class=\"assistant-avatar\"", html);
+        Assert.Contains("class=\"corgi-mark\"", html);
+        Assert.DoesNotContain("chat-provider", html);
+        Assert.DoesNotContain("chat-model", html);
         Assert.DoesNotContain("Attach images", html);
         Assert.DoesNotContain("type=\"file\"", html);
         Assert.Contains("src=\"data:image/png;base64,AAAA\"", html);
@@ -757,7 +1099,9 @@ public sealed class BuildChatTests
             Assert.Null(vm.Error);
             Assert.Equal(enabled && hasModels ? localId : remoteId, vm.Conversation.ConnectionId);
             Assert.Equal(enabled && hasModels ? "local-model" : "remote-model", vm.Conversation.Model);
-            vm.SelectConnection(remoteId.ToString());
+            var profile = new DashboardAgentProfile { Name = "Remote", ConnectionId = remoteId, Model = "remote-model" };
+            vm.Dashboard.Agents.Add(profile);
+            vm.SelectAgent(profile.Id.ToString());
             await vm.NewAsync();
             Assert.Equal(remoteId, vm.Conversation.ConnectionId);
             Assert.Equal("remote-model", vm.Conversation.Model);
@@ -1071,6 +1415,7 @@ public sealed class BuildChatTests
             Requests++;
             SystemPrompt = messages[0]!["content"]!.GetValue<string>();
             Assert.All(messages.OfType<JsonObject>(), message => Assert.False(message.ContainsKey("suggested_answers")));
+            Assert.All(messages.OfType<JsonObject>(), message => Assert.False(message.ContainsKey("dashboard_action")));
             if (Requests == 2)
             {
                 Assert.Contains(messages, x => x?["role"]?.GetValue<string>() == "tool");
@@ -1640,6 +1985,7 @@ public sealed class BuildChatTests
         public JobChainView? Workflow;
         public JobRunDetailView? JobRun;
         public TaskCompletionSource<ChainRunView?>? PendingRun;
+        public TaskCompletionSource<IReadOnlyList<JobChainView>>? PendingWorkflows;
         public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
         {
             Commands++;
@@ -1647,6 +1993,10 @@ public sealed class BuildChatTests
         }
         public async Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default)
         {
+            if (query is ListJobChainsQuery && PendingWorkflows is not null)
+            {
+                return (TResult)(object)await PendingWorkflows.Task;
+            }
             if (query is GetChainRunQuery && PendingRun is not null)
             {
                 return (TResult)(object)(await PendingRun.Task)!;
@@ -1704,14 +2054,26 @@ public sealed class BuildChatTests
     private sealed class Reviewer : IOutcomeReviewer
     {
         public int Calls;
+        public double Confidence = .4;
+        public bool Fail, WaitForCancellation;
+        public Guid? ProjectId;
         public string? State, Question;
         public Task<JsonObject> ScoreAsync(IReadOnlyList<PlaceContext.Domain.ValueObjects.ScoreCriterion> criteria, string state, CancellationToken ct, Guid? projectId = null) => throw new NotSupportedException();
-        public Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null)
+        public async Task<JsonObject> EvaluateAsync(string question, string? state, CancellationToken ct, Guid? projectId = null)
         {
             Calls++;
             State = state;
             Question = question;
-            return Task.FromResult(new JsonObject { ["noul"] = .4, ["model"] = "jev-test" });
+            ProjectId = projectId;
+            if (Fail)
+            {
+                throw new InvalidOperationException("Review service unavailable");
+            }
+            if (WaitForCancellation)
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+            return new JsonObject { ["type"] = "noul", ["noul"] = Confidence, ["model"] = "jev-test" };
         }
     }
     private sealed class User : ICurrentUser
@@ -1751,6 +2113,19 @@ public sealed class BuildChatTests
     }
     private sealed class Fixture : IAsyncDisposable
     {
+        public async Task<McpConnectionInfo> SeedMcpAsync(bool enabled = true, Guid? projectId = null)
+        {
+            var connection = new McpConnectionInfo(Guid.NewGuid(), "MCP test", "http", "https://mcp.test/?private-token=secret", enabled);
+            using var scope = Provider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.McpConnections.Add(new()
+            {
+                Id = connection.Id, ProjectId = projectId ?? ProjectId, Name = connection.Name, Transport = "http",
+                EndpointUrl = connection.EndpointUrl, AuthType = "none", Enabled = enabled
+            });
+            await db.SaveChangesAsync();
+            return connection;
+        }
         public readonly User User = new(); public readonly Tenant Tenant = new(); public readonly Permissions Permissions = new(); public readonly Http Http = new();
         public readonly OperationCenter Operations = new(null!, default);
         public readonly Guid ProjectId = Guid.NewGuid();

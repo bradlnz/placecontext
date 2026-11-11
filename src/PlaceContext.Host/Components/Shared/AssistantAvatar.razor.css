@@ -1,0 +1,32 @@
+.assistant-avatar {
+    display: inline-grid;
+    place-items: center;
+    position: relative;
+    isolation: isolate;
+    width: 100%;
+    height: 100%;
+    min-width: 24px;
+    min-height: 24px;
+    border-radius: 50%;
+    color: var(--brand);
+    background: var(--card);
+}
+.corgi-mark { width: 72%; height: 72%; }
+.assistant-avatar::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    z-index: -1;
+    border: 1px solid #22d3ee;
+    border-radius: inherit;
+    box-shadow: 0 0 5px #22d3ee, 0 0 10px #a78bfa80;
+    animation: corgi-pulse 2.6s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes corgi-pulse {
+    0%, 100% { opacity: .45; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .assistant-avatar::before { animation: none; opacity: .7; }
+}

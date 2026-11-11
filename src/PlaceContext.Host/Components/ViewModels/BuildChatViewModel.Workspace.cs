@@ -397,6 +397,7 @@ public sealed partial class BuildChatViewModel
 
     public void ClosePreview()
     {
+        CloseWorkflowPicker();
         ShowDemoShare = false;
         DemoUrl = DemoError = null;
         DemoExpiry = null;
@@ -420,6 +421,7 @@ public sealed partial class BuildChatViewModel
     }
     private void ResetWorkspace()
     {
+        _handledWorkflowPicker = 0;
         AgentOpen = false;
         ClosePreview();
         _workspaceVisible = null;
@@ -440,8 +442,15 @@ public sealed partial class BuildChatViewModel
     }
     private async Task AutoPreviewAsync()
     {
-        if (AgentOpen || PreviewLoading || _workspaceVisible == false)
+        if (AgentOpen || WorkflowPickerOpen || PreviewLoading || _workspaceVisible == false)
         {
+            return;
+        }
+        if (Conversation.Messages.LastOrDefault()?["dashboard_action"]?.ToString() == "choose_workflow"
+            && _handledWorkflowPicker != Conversation.Messages.Count)
+        {
+            _handledWorkflowPicker = Conversation.Messages.Count;
+            await OpenWorkflowPickerAsync();
             return;
         }
         foreach (var message in Conversation.Messages.OfType<JsonNode>().Reverse().Where(x => Role(x) == "tool"))

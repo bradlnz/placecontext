@@ -332,6 +332,12 @@ public sealed class DbBuildChatStore(IServiceScopeFactory scopes, ICurrentUser u
         await using var scope = scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await CheckAsync(db, projectId, ct);
+        var assignedMcp = settings.Agents.SelectMany(a => a.McpConnectionIds).Distinct().ToArray();
+        if (assignedMcp.Length > 0 && await db.McpConnections.CountAsync(c => c.ProjectId == projectId
+                && c.Enabled && assignedMcp.Contains(c.Id), ct) != assignedMcp.Length)
+        {
+            throw new ArgumentException("Assign only enabled MCP connections from this project. Remove unavailable connections before saving.");
+        }
         var row = await db.BuildMemories.SingleOrDefaultAsync(x => x.UserId == user.UserId && x.ProjectId == projectId, ct);
         if (row is null)
         {

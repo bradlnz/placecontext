@@ -10,6 +10,7 @@ public sealed class BuildConversation
         get; set;
     }
     public string Title { get; set; } = "New chat";
+    public Guid? AgentId { get; set; }
     public Guid ConnectionId
     {
         get; set;

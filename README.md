@@ -101,12 +101,20 @@ with agent tasks, human approval, conditional paths, and inspectable run results
 
 ### Run and manage work from the dashboard
 
-The pinned **Run a workflow** tile starts a guided chat: choose an existing workflow, supply its inputs,
-and follow the run and each step's output in the side pane. Runs have refreshable routes. Add or remove
+The pinned **Run a workflow** tile opens a workflow picker immediately, without an AI request or a configured
+chat model. Select a workflow to preview it, then **Prepare run in chat** to supply inputs and follow each
+step's output in the side pane. For short, standalone opening messages, Jev can recognize the same navigation
+intent; uncertain decisions or a two-second timeout fall back to normal chat. Routing never starts a run.
+Runs have refreshable routes. Add or remove
 personal quick-action tiles, such as job statistics or artifacts, through **Agent → Dashboard**.
 
+Choose an agent in the chat header. In **Agent → Instructions**, create named agents and configure each one's
+model, instructions and assigned MCP connections. Only assigned, enabled connections in the current project
+are exposed to that agent; credentials stay server-side. MCP tools can affect external systems, so assign
+trusted connections only. Existing chats keep their model until the default agent is configured.
+
 The **Agent** pane shows the current system prompt, the last recorded prompt and tool schemas used in
-the conversation, saved project memory, and workflow sub-agent instructions. Add personal instructions
+the conversation, Jev's routing instructions, saved project memory, and workflow sub-agent instructions. Add personal instructions
 without changing platform safeguards. Context and tools remain scoped to your project and permissions;
 connected data is retrieved when needed, and vault credentials are not exposed through the panel.
 Automatic agent steps remain configured in the workflow editor, with their own model, task and recorded output.

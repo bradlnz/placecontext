@@ -13,10 +13,36 @@
     }
     else if (Vm.AgentTab == "Instructions")
     {
-        <label for="agent-instructions">Your agent instructions</label>
+        <label for="agent-profile">Configure agent</label>
+        <select id="agent-profile" @bind="Vm.AgentEditId" disabled="@Vm.Locked">@foreach (var profile in Vm.AgentDraft.Agents) { <option value="@profile.Id">@profile.Name</option> }</select>
+        <button type="button" class="dcbtn" disabled="@(Vm.Locked || Vm.AgentDraft.Agents.Count >= 8)" @onclick="Vm.AddAgent">Add agent</button>
+        @if (Vm.EditedAgent is { } edited)
+        {
+            <label for="agent-name">Agent name</label><input id="agent-name" maxlength="60" @bind="edited.Name" disabled="@Vm.Locked" />
+            <label for="agent-connection">Model connection</label>
+            <select id="agent-connection" value="@edited.ConnectionId" @onchange="e => Vm.SelectAgentConnection(e.Value?.ToString())" disabled="@Vm.Locked"><option value="@Guid.Empty">Select connection</option>@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select>
+            <label for="agent-model">Model</label><select id="agent-model" @bind="edited.Model" disabled="@Vm.Locked"><option value="">Select model</option>@foreach (var model in Vm.AgentModels) { <option>@model</option> }</select>
+            <a href="/settings/models">Manage model connections</a>
+            <label for="agent-profile-instructions">Agent instructions</label><textarea id="agent-profile-instructions" rows="5" maxlength="8000" @bind="edited.Instructions" disabled="@Vm.Locked"></textarea>
+            <fieldset class="agent-mcp"><legend>MCP connections</legend>
+                <p class="hint">Only assigned, enabled connections are available to this agent. MCP tools can read or change external systems; assign trusted connections only. Credentials stay in the vault.</p>
+                @foreach (var connection in Vm.AgentMcpConnections)
+                {
+                    <label><input type="checkbox" checked="@edited.McpConnectionIds.Contains(connection.Id)" disabled="@(Vm.Locked || (!connection.Enabled && !edited.McpConnectionIds.Contains(connection.Id)))" @onchange="e => Vm.ToggleAgentMcp(connection.Id, e.Value is true)" /> @connection.Name @(!connection.Enabled ? "(disabled)" : "")</label>
+                }
+                @foreach (var missing in edited.McpConnectionIds.Where(id => !Vm.AgentMcpConnections.Any(c => c.Id == id)).ToArray())
+                {
+                    <label><input type="checkbox" checked disabled="@Vm.Locked" @onchange="e => Vm.ToggleAgentMcp(missing, false)" /> Unavailable connection · @missing</label>
+                }
+                @if (Vm.AgentMcpConnections.Count == 0) { <p class="hint">No MCP connections are configured in this project.</p> }
+                <a href="/settings/mcp">Manage MCP connections</a>
+            </fieldset>
+        }
+        <label for="agent-instructions">Shared project instructions</label>
         <textarea id="agent-instructions" rows="6" maxlength="8000" @bind="Vm.AgentDraft.Instructions" disabled="@Vm.Locked" placeholder="How should the agent work with you?"></textarea>
-        <button class="dcbtn primary" disabled="@Vm.Locked" @onclick="Vm.SaveAgentAsync">Save instructions</button>
-        <details open><summary>Current system prompt</summary><p class="hint">Rendered from the same template as execution, with current project context and saved preferences. Unsaved edits are not included.</p><RunOutput Value="@Vm.AgentPrompt" Language="plaintext" Label="Current agent system prompt" /></details>
+        <button class="dcbtn primary" disabled="@Vm.Locked" @onclick="Vm.SaveAgentAsync">Save agents</button>
+        <details open><summary>Current chat agent system prompt</summary><p class="hint">Rendered for the agent selected in the chat header, using the same template as execution, current project context and saved preferences. Unsaved edits are not included.</p><RunOutput Value="@Vm.AgentPrompt" Language="plaintext" Label="Current agent system prompt" /></details>
+        <details><summary>Jev dashboard routing</summary><p class="hint">The Run a workflow tile opens the picker directly, without AI. For a short first chat message, Jev can open the same picker at confidence ≥ 0.85. A two-second timeout, unavailable Jev, or an uncertain decision falls back to normal chat. Follow-ups use the chat model. Routing never starts a run.</p><RunOutput Value="@BuildChatAgent.WorkflowPickerQuestion" Language="plaintext" Label="Jev routing instructions" /></details>
         @if (Vm.Conversation.SystemPrompt is { } lastPrompt)
         {
             <details><summary>Last recorded prompt used in this conversation</summary><RunOutput Value="@lastPrompt" Language="plaintext" Label="Recorded system prompt" /></details>
@@ -62,7 +88,7 @@
     else if (Vm.AgentTab == "Dashboard")
     {
         <h3>Quick actions</h3>
-        <p>Tiles send a visible request to chat. The agent can ask follow-up questions before acting.</p>
+        <p>Run a workflow opens the picker immediately, without waiting for AI. Custom tiles send a visible request to chat. The agent can ask follow-up questions before acting.</p>
         <div class="agent-card"><strong>Run a workflow</strong><span class="hint">System tile · always available · cannot be removed</span></div>
         @foreach (var action in Vm.AgentDraft.Actions.ToArray())
         {

@@ -14,9 +14,9 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Build;
 
-public sealed partial class BuildTools(Guid projectId, PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IOutcomeReviewer? reviewer = null, Action<Guid, Guid>? jobStarted = null, IMcpClientService? mcp = null, IJobChainSubmissionQueue? submissions = null)
+public sealed partial class BuildTools(Guid projectId, PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IOutcomeReviewer? reviewer = null, Action<Guid, Guid>? jobStarted = null, IMcpClientService? mcp = null, IJobChainSubmissionQueue? submissions = null, IReadOnlySet<Guid>? mcpConnectionIds = null)
 {
-    private readonly IMcpClientService? _mcp = mcp;
+    private readonly IMcpClientService? _mcp = mcpConnectionIds is { Count: 0 } ? null : mcp;
     public IReadOnlyList<AIFunction> Functions() => GetType().GetMethods()
         .Where(m => m.GetCustomAttribute<DescriptionAttribute>() is not null)
         .Where(m => _mcp is not null || m.Name is not (nameof(list_mcp_tools) or nameof(call_mcp_tool)))
@@ -73,6 +73,10 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
 
     private async Task<McpConnectionInfo> McpConnectionAsync(Guid connectionId, CancellationToken ct)
     {
+        if (mcpConnectionIds is not null && !mcpConnectionIds.Contains(connectionId))
+        {
+            throw new UnauthorizedAccessException("This MCP connection is not assigned to the selected agent.");
+        }
         var connections = await (_mcp ?? throw new InvalidOperationException("MCP tools are not configured.")).ListConnectionsAsync(projectId, ct);
         return connections.SingleOrDefault(x => x.Id == connectionId && x.Enabled)
             ?? throw new InvalidOperationException("MCP connection not found or disabled in this project.");
@@ -130,6 +134,9 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         return new
         {
             ProjectId = projectId,
+            McpConnections = _mcp is null ? [] : (await _mcp.ListConnectionsAsync(projectId, ct))
+                .Where(c => c.Enabled && (mcpConnectionIds is null || mcpConnectionIds.Contains(c.Id)))
+                .Select(c => new { c.Id, c.Name }).ToArray(),
             CapturedAt = DateTimeOffset.UtcNow,
             Access = new
             {
