@@ -47,7 +47,7 @@ PlaceContext__Qemu__Images__browser-linux=/absolute/path/browser-linux.qcow2
 PlaceContext__Qemu__UseKvm=false
 PlaceContext__Qemu__Executor=jev
 TYPESAFE_API_KEY=your-key
-PlaceContext__Qemu__Agent__MaxSteps=20
+PlaceContext__Qemu__Agent__MaxSteps=40
 ```
 
 `Executor` defaults to `jev`. The model and key reuse `PlaceContext:TypeSafe`; the default model
@@ -135,7 +135,7 @@ PlaceContext__Qemu__Agent__Provider=chat-completions
 PlaceContext__Qemu__Agent__Endpoint=http://your-model-server:8080/v1/chat/completions
 PlaceContext__Qemu__Agent__Model=your-vision-tool-model
 PlaceContext__Qemu__Agent__ApiKey=optional-provider-key
-PlaceContext__Qemu__Agent__MaxSteps=20
+PlaceContext__Qemu__Agent__MaxSteps=40
 ```
 
 The endpoint is a full chat-completions URL using the function-tool and image-input protocol,

@@ -6,5 +6,5 @@ public sealed class VirtualMachineAgentOptions
     public string Endpoint { get; set; } = "";
     public string Model { get; set; } = "";
     public string ApiKey { get; set; } = "";
-    public int MaxSteps { get; set; } = 20;
+    public int MaxSteps { get; set; } = 40;
 }
