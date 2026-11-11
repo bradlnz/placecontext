@@ -336,6 +336,12 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Settings")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("");
+
                     b.HasKey("TenantId", "UserId", "ProjectId");
 
                     b.ToTable("build_memories", (string)null);
@@ -345,9 +351,6 @@ namespace PlaceContext.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("InitiatedBy")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("ChainId")
@@ -371,6 +374,9 @@ namespace PlaceContext.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset?>("FinishedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("InitiatedBy")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("InputRequest")
                         .HasColumnType("text");
@@ -2446,6 +2452,41 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("users", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.WorkflowDemoShareRow", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("TenantId", "UserId", "RunId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("workflow_demo_shares", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ArtifactShareTokenRow", b =>

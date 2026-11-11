@@ -81,6 +81,7 @@ public static class DependencyInjection
             configuration.GetSection("PlaceContext:OpenSearch"));
 
         services.AddScoped<PlaceContext.Application.Build.IBuildChatStore, Build.DbBuildChatStore>();
+        services.AddScoped<PlaceContext.Application.Build.IWorkflowDemoShares, Build.WorkflowDemoShares>();
         services.AddScoped<Build.LocalCliModels>();
         services.AddScoped<Build.ModelConnections>();
         services.AddScoped<PlaceContext.Application.Build.IModelConnections>(sp => sp.GetRequiredService<Build.ModelConnections>());

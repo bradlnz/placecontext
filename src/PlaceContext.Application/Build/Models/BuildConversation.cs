@@ -16,6 +16,8 @@ public sealed class BuildConversation
     }
     public string Model { get; set; } = "";
     public JsonArray Messages { get; set; } = [];
+    public string? SystemPrompt { get; set; }
+    public string? ToolSchema { get; set; }
     public BuildRunStatus Status
     {
         get; set;

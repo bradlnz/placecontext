@@ -494,7 +494,7 @@ public sealed class DataSourcesViewModel(IDispatcher dispatcher, PortalUiState u
         {
             return;
         }
-        WorkflowUrl = $"/project/{ProjectId}/workflows?chain={workflow}";
+        WorkflowUrl = $"/project/{ProjectId}/workflows/{workflow}";
         Notice = "Workflow created. Open the canvas to add processing steps or schedule runs.";
     });
 

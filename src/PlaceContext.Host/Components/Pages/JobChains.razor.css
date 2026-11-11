@@ -185,21 +185,17 @@
 .node-picker-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    gap: 8px;
 }
 
-.pipeline-step-modal { width:min(680px, 100vw);  }
-.pipeline-step-body { overflow-y:auto; }
+.pipeline-step-modal { width:min(800px, 100vw); display:flex; flex-direction:column; }
+.pipeline-step-body { min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:22px; padding:20px; }
+.step-picker-section h4 { display:flex; align-items:center; gap:8px; margin:0 0 10px; color:var(--text-2); font-size:12px; font-weight:600; }
+.step-picker-section h4 span { padding:2px 7px; border-radius:10px; background:var(--card-2); color:var(--text-3); font-size:10px; }
 .job-picker-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
-.job-picker-tile { min-width:0; display:flex; align-items:flex-start; gap:10px; padding:11px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:var(--text-2); cursor:pointer; text-align:left; }
-.job-picker-tile:hover { border-color:var(--brand); background:var(--brand-bg); }
-.job-picker-icon { flex:none; color:var(--brand-2); font-size:10px; padding-top:3px; }
-.job-picker-tile span:last-child { min-width:0; display:flex; flex-direction:column; gap:3px; }
-.job-picker-tile strong, .job-picker-tile small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.job-picker-tile strong { color:var(--text); font-size:12px; }
-.job-picker-tile small { color:var(--text-3); font-size:9.5px; }
+.job-picker-tile { display:flex; align-items:center; gap:12px; }
+.job-picker-tile > span:last-child { min-width:0; display:flex; flex-direction:column; gap:4px; }
 .job-picker-empty { padding:14px; border:1px dashed var(--border); border-radius:8px; color:var(--text-3); font-size:11px; text-align:center; }
-.node-picker-divider { margin:4px 0 0; padding-top:12px; border-top:1px solid var(--border); color:var(--text-3); font-size:9px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
 
 .dcmodal-head > .dcslide-x {
     margin-left: auto;
@@ -207,13 +203,10 @@
     align-self: flex-start;
 }
 
-.node-picker-tile {
-    display: flex;
-    min-height: 112px;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
-    padding: 14px;
+.node-picker-tile, .job-picker-tile {
+    min-width: 0;
+    min-height: 78px;
+    padding: 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--card);
@@ -222,27 +215,33 @@
     text-align: left;
 }
 
-.node-picker-tile:hover { border-color: var(--brand); background: var(--card-2); }
+.node-picker-tile { display:grid; grid-template-columns:36px minmax(0, 1fr); column-gap:12px; row-gap:4px; align-content:center; }
+.node-picker-tile .node-picker-icon { grid-row:1 / 3; align-self:center; }
+.node-picker-tile:hover:not(:disabled), .job-picker-tile:hover { border-color: var(--brand); background: var(--brand-bg); }
+.job-picker-tile:focus-visible { outline:2px solid var(--brand-2); outline-offset:3px; }
 .node-picker-tile:disabled { cursor: not-allowed; opacity: .45; }
 .node-picker-icon {
     display: inline-flex;
-    width: 28px;
-    height: 28px;
+    flex: none;
+    width: 36px;
+    height: 36px;
     align-items: center;
     justify-content: center;
     color: var(--brand-2);
+    background: var(--brand-bg);
+    border-radius: 9px;
 }
-.node-picker-icon svg {
-    width: 24px;
-    height: 24px;
+.node-picker-icon ::deep svg {
+    width: 20px;
+    height: 20px;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
-.node-picker-tile strong { color: var(--text); font-size: 12px; }
-.node-picker-tile small { color: var(--text-3); font-size: 9.5px; }
+.node-picker-tile strong, .job-picker-tile strong { color: var(--text); font-size: 12px; line-height:1.4; overflow-wrap:anywhere; }
+.node-picker-tile small, .job-picker-tile small { color: var(--text-3); font-size: 11px; line-height:1.5; overflow-wrap:anywhere; }
 
 .email-action-modal { width:min(720px, 100vw);  display:flex; flex-direction:column; }
 .email-action-modal .dcmodal-body { overflow-y:auto; }
@@ -277,8 +276,20 @@
 
 .qemu-modal { width:min(620px, 100vw) }
 .qemu-modal-replay { width:min(1120px, 100vw) }
+.qemu-run-modal { width:min(1400px, calc(100vw - 32px)); height:min(900px, calc(100dvh - 32px)) }
+.qemu-run-modal .dcmodal-body { overflow:hidden; gap:12px }
+.qemu-run-modal ::deep .qemu-replay, .qemu-run-modal ::deep .desktop-panel { flex:1; min-height:0; max-width:none; margin:0 }
+.qemu-run-modal ::deep .qemu-replay { display:flex; flex-direction:column }
+.qemu-run-modal ::deep .replay-layout { flex:1; min-height:0; overflow:hidden }
+.qemu-run-modal ::deep .replay-main { display:flex; flex-direction:column; min-height:0 }
+.qemu-run-modal ::deep .replay-screen { flex:1; min-height:0; aspect-ratio:auto }
+.qemu-run-modal ::deep .replay-actions { max-height:none; overflow:auto }
+.qemu-run-modal ::deep .desktop-screen { height:min(64vh, 680px); max-height:calc(100dvh - 250px) }
 .qemu-replay-modal { min-width:0; margin-top:4px }
 .qemu-replay-modal .qemu-replay { margin:0; max-width:none }
+.qemu-live-empty { padding:40px 18px; border:1px dashed var(--border); border-radius:10px; text-align:center; color:var(--text-3) }
+.qemu-live-empty strong { display:block; color:var(--text); font-size:14px; margin-bottom:6px }
+.qemu-live-empty p { margin:0; font-size:12px; line-height:1.6 }
 .qemu-modal .dcmodal-head { gap:12px; padding:22px }
 .qemu-modal h3 { margin:5px 0 7px; font-size:20px }
 .qemu-heading-icon { display:grid; place-items:center; flex:none; width:40px; height:40px; border-radius:12px; background:var(--brand-bg); color:var(--brand-2); font-size:20px }
@@ -290,6 +301,8 @@
 .qemu-section .dcfield { margin:0 }
 .qemu-section small { display:block; color:var(--text-3); font-size:11px; line-height:1.6 }
 .qemu-section textarea { min-height:150px; resize:vertical; line-height:1.65 }
+.qemu-command-editor { height:220px; border:1px solid var(--border); border-radius:7px; overflow:hidden; background:var(--bg) }
+.qemu-command-editor ::deep .workflow-instructions-editor { height:100% !important; }
 .qemu-section .sub-note { margin:0; line-height:1.6 }
 .qemu-readiness { padding:12px 14px; border:1px solid var(--border); border-radius:9px; background:var(--card) }
 .qemu-status { display:flex; align-items:center; gap:6px; font-size:11px; font-weight:650; color:var(--warn) }
@@ -353,7 +366,9 @@
 /* The editor canvas fills the screen; step choices remain in its Add step menu. */
 .workflow-canvas-overlay { z-index:45; padding:0 }
 .workflow-canvas-dialog { width:100%; max-width:none; height:100dvh; border-radius:0 }
-.workflow-canvas-dialog .dcmodal-head { justify-content:space-between }
+.workflow-canvas-dialog .dcmodal-head { justify-content:space-between; padding:18px 22px; background:color-mix(in srgb, var(--panel) 94%, var(--brand-bg)); border-bottom:1px solid var(--border-2) }
+.workflow-canvas-dialog .dcmodal-head .title-14 { font-size:15px }
+.workflow-canvas-dialog .dcmodal-head .sub-115 { max-width:680px; line-height:1.5 }
 .workflow-canvas-dialog .dcmodal-body { display:flex; min-height:0; overflow:hidden; padding:12px }
 .workflow-canvas-dialog .dcmodal-body:not(.workflow-list-body) ::deep .chain-canvas:not(.run-canvas) { display:flex; flex-direction:column; flex:1; min-height:0 }
 .workflow-canvas-dialog ::deep .canvas-toolbar, .workflow-canvas-dialog ::deep .canvas-legend { flex:none }
@@ -371,7 +386,7 @@
 .workflow-canvas-open:hover { background:color-mix(in srgb, var(--panel) 40%, transparent) }
 .workflow-canvas-open:focus-visible { outline:2px solid var(--brand); outline-offset:-3px }
 
-.workflow-canvas-actions { display:flex; align-items:center; gap:20px }
+.workflow-canvas-actions { display:flex; align-items:center; gap:8px }
 .workflow-menu { position:relative; font-size:12px }
 .workflow-menu summary { padding:8px 12px; border:1px solid var(--border-2); border-radius:7px; cursor:pointer; background:var(--card-2) }
 .workflow-menu-items { position:absolute; right:0; top:calc(100% + 6px); z-index:2; width:210px; display:grid; gap:3px; padding:6px; border:1px solid var(--border-2); border-radius:8px; background:var(--panel); box-shadow:var(--shadow) }
@@ -414,9 +429,17 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .workflow-canvas-thumbnail ::deep .canvas-hint { display:none }
 .workflow-canvas-dialog .workflow-list-body { display:block; overflow:auto; padding:18px }
 .workflow-canvas-dialog .workflow-list-body .runs-body { overflow:visible; overscroll-behavior:auto }
-.workflow-view-tabs { flex:none; margin:0; padding:0 18px }
+.workflow-view-tabs { flex:none; margin:0; padding:0 22px; background:var(--panel); border-bottom:1px solid var(--border) }
+.workflow-view-tabs .dctab { min-height:44px; padding-inline:14px; }
 .workflow-step-count { margin-left:8px; color:var(--text-3); font-size:11px; font-weight:400; white-space:nowrap }
 .empty-steps { padding:20px; color:var(--text-3); text-align:center }
+.workflow-run-queued { display:flex; align-items:center; gap:11px; padding:14px 16px; border:1px solid color-mix(in srgb, var(--brand-2) 38%, var(--border)); border-radius:10px; background:color-mix(in srgb, var(--brand-2) 7%, var(--card)); }
+.workflow-run-queued strong { display:block; font-size:13px; }
+.workflow-run-queued p { margin:3px 0 0; color:var(--text-3); font-size:11px; }
+.workflow-run-queued .spinner { flex:none; width:14px; height:14px; }
+.queued-detail { margin-left:auto; color:var(--brand-2); font-size:11px; font-weight:600; }
+.run-card { transition:border-color .15s ease, background .15s ease, transform .15s ease; }
+.run-card:hover { border-color:var(--border-2); background:color-mix(in srgb, var(--brand-2) 4%, var(--card)); transform:translateY(-1px); }
 @media (max-width:700px) {
     .workflow-canvas-dialog .dcmodal-head { flex-wrap:wrap; gap:10px }
     .workflow-canvas-actions { flex-wrap:wrap; gap:8px; width:100%; justify-content:flex-end }
@@ -429,21 +452,22 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .execution-overlay { z-index:70 }
 .dcmodal-overlay > .execution-modal {
     width:min(1080px, calc(100vw - 32px)); height:min(760px, calc(100dvh - 48px));
-    display:flex; flex-direction:column; background:var(--panel); color:var(--text);
+    display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--border-2); border-radius:14px; box-shadow:0 24px 80px #0007; background:var(--panel); color:var(--text);
     font-family:var(--font-sans);
 }
-.execution-modal .dcmodal-head { align-items:flex-start; gap:10px; padding:13px 16px; border-bottom:1px solid var(--border); background:var(--panel) }
+.execution-modal .dcmodal-head { align-items:flex-start; gap:12px; padding:18px 20px; border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--panel) 94%, var(--brand-bg)); cursor:default }
 .execution-heading { flex:1; min-width:0 }
 .execution-heading .workflow-eyebrow { font-size:9px; color:var(--text-3) }
-.execution-heading h3 { margin:4px 0 7px; font:600 14px var(--font-sans); overflow-wrap:anywhere }
+.execution-heading h3 { margin:5px 0 9px; font:650 18px var(--font-sans); overflow-wrap:anywhere }
 .execution-meta { display:flex; flex-wrap:wrap; align-items:center; gap:10px; color:var(--text-3); font-size:10px }
+.execution-meta > span:not(.status-chip) { padding-left:10px; border-left:1px solid var(--border-2); }
 .execution-tabs { display:flex; gap:4px; padding:0 16px; background:var(--panel); border-bottom:1px solid var(--border) }
-.execution-tabs button { display:flex; align-items:center; gap:8px; min-height:40px; padding:9px 13px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--text-3); font:500 13px var(--font-sans); cursor:pointer }
+.execution-tabs button { display:flex; align-items:center; gap:8px; min-height:46px; padding:10px 14px; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--text-3); font:550 12px var(--font-sans); cursor:pointer }
 .execution-tabs button[aria-pressed="true"] { color:var(--text); border-bottom-color:var(--brand) }
 .execution-tabs button:hover { background:var(--hover); color:var(--text) }
 .execution-tabs button:focus-visible { outline:2px solid var(--brand-2); outline-offset:-3px }
 .execution-tabs span { font-size:10px; color:var(--text-3) }
-.execution-modal .execution-body { display:flex; flex:1; flex-direction:column; gap:12px; min-height:0; overflow:auto; padding:14px 16px; background:var(--bg) }
+.execution-modal .execution-body { display:flex; flex:1; flex-direction:column; gap:14px; min-height:0; overflow:auto; padding:18px 20px; background:var(--bg) }
 .execution-body ::deep .agent-activity { min-height:0 }
 .execution-body ::deep .job-log-viewer { border:0; border-radius:0; background:transparent }
 .execution-body ::deep .log-toolbar { padding:0 0 12px; gap:8px }
@@ -458,7 +482,7 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .execution-body ::deep .log-footer { padding:12px 0 0; border-top:1px solid var(--border); font-size:9px }
 .execution-body .job-log-selector { margin-bottom:12px; gap:8px }
 .console-stream { font-size:10px; color:var(--text-3) }
-.execution-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 16px; border-top:1px solid var(--border); background:var(--panel) }
+.execution-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 20px; border-top:1px solid var(--border); background:var(--panel) }
 .execution-footer > span { color:var(--text-3); font-size:10px }
 .execution-empty { display:flex; flex-direction:column; align-items:flex-start; justify-content:center; min-height:140px; gap:10px; padding:16px 0; color:var(--text-3) }
 .execution-empty ::deep svg { width:20px; height:20px; color:var(--brand-2) }
@@ -466,7 +490,7 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .execution-empty p { max-width:520px; margin:0; font-size:11px; line-height:1.7 }
 .execution-error { margin:0; padding:10px; border-left:2px solid var(--bad); background:var(--bad-bg); color:var(--bad); font-size:12px; overflow-wrap:anywhere }
 @media (max-width:640px) {
-    .execution-modal .dcmodal-head, .execution-modal .execution-body { padding:12px }
+    .execution-modal .dcmodal-head, .execution-modal .execution-body { padding:14px }
     .execution-meta { gap:6px }
     .execution-footer { flex-wrap:wrap; padding:10px 12px }
 }
@@ -481,6 +505,11 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 }
 .dcmodal-overlay:not(.workflow-canvas-overlay) > .dcmodal > .dcmodal-head h3 { margin:3px 0; font-size:14px }
 .dcmodal-overlay:not(.workflow-canvas-overlay) > .dcmodal > .dcmodal-head > .dcslide-x { margin-left:auto; align-self:flex-start; flex:none; cursor:pointer }
+.execution-overlay > .execution-modal > .dcmodal-head { padding:18px 20px; background:color-mix(in srgb, var(--panel) 94%, var(--brand-bg)); cursor:default; }
+.dcmodal-overlay:not(.workflow-canvas-overlay) > .pipeline-step-modal > .dcmodal-head { padding:16px 20px; gap:12px; }
+.dcmodal-overlay:not(.workflow-canvas-overlay) > .pipeline-step-modal > .dcmodal-head h3 { font-size:16px; }
+.pipeline-step-modal .dcmodal-head p { margin:4px 0 0; line-height:1.5; }
+.pipeline-step-modal .dcslide-x { min-width:36px; min-height:36px; }
 
 
 .loop-settings { display:flex; flex-direction:column; gap:20px; min-width:0 }

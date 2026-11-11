@@ -144,6 +144,7 @@ public sealed partial class JobChainsViewModel
     // ── Editor ────────────────────────────────────────────────────────────────────────────────
     public void NewChain()
     {
+        NavigateToWorkflow(null);
         _openedWorkflowUpdatedAt = null;
         Readiness = null;
         EditChainId = null;
@@ -161,7 +162,7 @@ public sealed partial class JobChainsViewModel
         NotifyStateChanged();
     }
 
-    public async Task OpenChainEditorAsync(JobChainView chain)
+    public async Task OpenChainEditorAsync(JobChainView chain, Guid? runId = null, string? view = null)
     {
         _pageVersion++;
         StopPolling();
@@ -189,21 +190,52 @@ public sealed partial class JobChainsViewModel
         OpenRun = null;
         StepRunDetail = null;
         ShowEditor = true;
+        EditorView = NormalizeEditorView(view ?? (runId.HasValue ? "runs" : "canvas"));
+        if (EditorView == "runs")
+        {
+            EditorTab = "runs";
+        }
+        NavigateToWorkflow(chain.Id, runId, EditorView);
         NotifyStateChanged();
         await RefreshRunsAsync(chain.Id);
     }
 
     public void ShowWorkflowDetails()
     {
+        if (OpenRun is not null)
+        {
+            StopPolling();
+            OpenRun = null;
+            StepRunDetail = null;
+        }
         EditorTab = "details";
         EditorView = "details";
+        NavigateToWorkflow(EditChainId, view: "details");
         NotifyStateChanged();
     }
 
     public async Task ShowWorkflowRunsAsync()
     {
         EditorView = "runs";
+        NavigateToWorkflow(EditChainId, OpenRun?.Id, "runs");
         await SwitchToRunsTabAsync();
+    }
+
+    public void SetEditorView(string view)
+    {
+        EditorView = NormalizeEditorView(view);
+        if (EditorView == "runs")
+        {
+            EditorTab = "runs";
+        }
+        if (EditorView != "runs" && OpenRun is not null)
+        {
+            StopPolling();
+            OpenRun = null;
+            StepRunDetail = null;
+        }
+        NavigateToWorkflow(EditChainId, EditorView == "runs" ? OpenRun?.Id : null, EditorView);
+        NotifyStateChanged();
     }
 
     public void CloseEditor()
@@ -222,13 +254,39 @@ public sealed partial class JobChainsViewModel
         OpenRun = null;
         StepRunDetail = null;
         StopPolling();
-        var uri = _navigation.GetUriWithQueryParameters(new Dictionary<string, object?> { ["workflow"] = null, ["chain"] = null });
-        if (uri != _navigation.Uri)
-        {
-            _navigation.NavigateTo(uri, replace: true);
-        }
+        NavigateToWorkflow(null);
         NotifyStateChanged();
     }
+
+    private void NavigateToWorkflow(Guid? workflowId, Guid? runId = null, string? view = null)
+    {
+        var uri = WorkflowsRoute;
+        if (workflowId is { } workflow)
+        {
+            uri += "/" + workflow;
+            if (!string.IsNullOrWhiteSpace(view) && view != "canvas")
+            {
+                uri += "/" + view;
+            }
+            if (runId is { } run)
+            {
+                uri += "/" + run;
+            }
+        }
+        if (_navigation.ToAbsoluteUri(uri).AbsoluteUri == _navigation.Uri)
+        {
+            return;
+        }
+        _navigation.NavigateTo(uri, replace: true);
+    }
+
+    private static string NormalizeEditorView(string? view) => view?.ToLowerInvariant() switch
+    {
+        "details" => "details",
+        "list" => "list",
+        "runs" => "runs",
+        _ => "canvas"
+    };
 
     public void AddStage()
     {

@@ -167,7 +167,7 @@ public class OperationCenterTests
         var run = Guid.NewGuid();
         var chain = Guid.NewGuid();
         var key = $"chain-run:{run:N}";
-        var deepLink = $"/project/{project}/workflows?chain={chain}&run={run}";
+        var deepLink = $"/project/{project}/workflows/{chain}/runs/{run}";
         var op = center.Track(Tenant, project, "Run workflow", "/observability", key);
 
         center.Sync(Tenant.Id, key, PortalOperationStatus.NeedsInput, "Run chain",

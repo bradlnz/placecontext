@@ -1,0 +1,12 @@
+.agent-panel { padding:24px; display:flex; flex-direction:column; gap:14px; font-size:13px; min-width:0; }
+.agent-tabs, .agent-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.agent-tabs [aria-pressed="true"] { background:var(--brand-bg); color:var(--brand); border-color:var(--brand); }
+.agent-panel h3, .agent-panel p { margin:0; }
+.agent-panel p { line-height:1.6; }
+.hint { color:var(--text-3); font-size:12px; }
+.agent-panel textarea, .agent-panel input { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:inherit; font:inherit; }
+.agent-panel textarea { resize:vertical; min-height:80px; }
+.agent-panel > .dcbtn { align-self:flex-start; }
+.agent-panel summary { cursor:pointer; padding:10px 0; font-weight:600; }
+.agent-card { display:flex; flex-direction:column; gap:10px; padding:16px; border:1px solid var(--border); border-radius:10px; }
+.agent-card .dcbtn { align-self:flex-start; }

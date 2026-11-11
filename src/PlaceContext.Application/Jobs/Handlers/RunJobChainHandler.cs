@@ -346,7 +346,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     envelope[queryData.OutputField] = result;
                     payload = envelope.ToJsonString(); chainRun.SetCurrentPayload(payload);
                     chainRun.AppendAgentActivity(flatIndex, new(_clock.UtcNow, "completed", $"Read {rows.Count} row(s), {data.Columns.Count} column(s). Available at {queryData.OutputField}.rows."));
-                    chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow);
+                    chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow, output: result.ToJsonString());
                     await SaveProgressAsync(chainRun, ct); await SaveContextAsync(chainRun, payload, ct);
                     continue;
                 }
@@ -398,7 +398,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     chainRun.AppendAgentActivity(flatIndex, new(_clock.UtcNow, passed ? "completed" : "failed",
                         $"Gate {(passed ? "passed" : "blocked")}: {result["score"]!.GetValue<double>():F1}/100. {string.Join(" ", ((System.Text.Json.Nodes.JsonArray)result["blockers"]!).Select(x => x!.ToString()))}"));
                     chainRun.MarkStepFinished(flatIndex++, null, passed ? ChainStepStatus.Succeeded : scoring.StopOnFailure ? ChainStepStatus.Failed : ChainStepStatus.Partial,
-                        _clock.UtcNow, provider: result["model"]!.GetValue<string>(), error: !passed && scoring.StopOnFailure ? "Scoring gate did not pass. See pipeline output for criterion results." : null);
+                        _clock.UtcNow, provider: result["model"]!.GetValue<string>(), error: !passed && scoring.StopOnFailure ? "Scoring gate did not pass. See pipeline output for criterion results." : null,
+                        output: result.ToJsonString());
                     await SaveProgressAsync(chainRun, ct);
                     await SaveContextAsync(chainRun, payload, ct);
                     if (!passed && scoring.StopOnFailure) { status = ChainRunStatus.Failed; break; }
@@ -442,7 +443,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                         payload = envelope.ToJsonString();
                         chainRun.SetCurrentPayload(payload);
                         chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow,
-                            provider: loop.Model);
+                            provider: loop.Model, output: result.ToJsonString());
                         await SaveProgressAsync(chainRun, ct);
                         await SaveContextAsync(chainRun, payload, ct);
                         continue;
@@ -467,7 +468,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     var responses = ChainInputPayload.Apply(request, request.SubmittedValues, null, null);
                     payload = MergePayload(payload, responses[flatIndex]);
                     chainRun.MarkStepRunning(flatIndex, null, _clock.UtcNow);
-                    chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow);
+                    chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Succeeded, _clock.UtcNow, output: responses[flatIndex]);
+                    flatIndex++;
                     chainRun.SetCurrentPayload(payload);
                     await SaveProgressAsync(chainRun, ct);
                     await SaveContextAsync(chainRun, payload, ct);
@@ -515,7 +517,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 if (verification is not null)
                 {
                     payload = MergePayload(payload, new System.Text.Json.Nodes.JsonObject { [loop.ResponseField] = verification }.ToJsonString());
-                    chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow);
+                    chainRun.MarkStepFinished(flatIndex++, null, ChainStepStatus.Succeeded, _clock.UtcNow, output: verification.ToJsonString());
                     chainRun.SetCurrentPayload(payload);
                     await SaveProgressAsync(chainRun, ct);
                     await SaveContextAsync(chainRun, payload, ct);
@@ -1117,22 +1119,21 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 run.MarkStepFinished(index, null, ChainStepStatus.Cancelled, _clock.UtcNow, "QEMU");
                 return (payload, ChainRunStatus.Cancelled);
             }
-            payload = MergeContext(payload, JsonSerializer.Serialize(new Dictionary<string, object>
+            var output = new
             {
-                [action.OutputField] = new
-                {
-                    exitCode = result.ExitCode,
-                    stdout = result.Stdout,
-                    stderr = result.Stderr,
-                    outputTruncated = result.OutputTruncated,
-                    agentSteps = result.AgentSteps,
-                    activity = result.Activity
-                },
-            }));
+                exitCode = result.ExitCode,
+                stdout = result.Stdout,
+                stderr = result.Stderr,
+                outputTruncated = result.OutputTruncated,
+                agentSteps = result.AgentSteps,
+                activity = result.Activity
+            };
+            payload = MergeContext(payload, JsonSerializer.Serialize(new Dictionary<string, object> { [action.OutputField] = output }));
             run.SetCurrentPayload(payload);
             var success = result.ExitCode == 0;
             run.MarkStepFinished(index, null, success ? ChainStepStatus.Succeeded : ChainStepStatus.Failed,
-                _clock.UtcNow, "QEMU", error: success ? null : ShortError(string.IsNullOrWhiteSpace(result.Stderr) ? "The QEMU agent did not complete the task." : result.Stderr));
+                _clock.UtcNow, "QEMU", error: success ? null : ShortError(string.IsNullOrWhiteSpace(result.Stderr) ? "The QEMU agent did not complete the task." : result.Stderr),
+                output: JsonSerializer.Serialize(output));
             await SaveProgressAsync(run, ct);
             await SaveContextAsync(run, payload, ct);
             return (payload, success ? ChainRunStatus.Succeeded : ChainRunStatus.Failed);

@@ -5,12 +5,33 @@ using PlaceContext.Application.Operations;
 using PlaceContext.Application.Shared;
 using PlaceContext.Application.Tenancy;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Jobs;
 
 namespace PlaceContext.Application.Build;
 
 public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway model, PlaceContextService service,
-    IPermissionService permissions, ICurrentTenant tenant, IOutcomeReviewer? reviewer = null, OperationCenter? operations = null, ICurrentUser? user = null)
+    IPermissionService permissions, ICurrentTenant tenant, IOutcomeReviewer? reviewer = null, OperationCenter? operations = null, ICurrentUser? user = null, IJobChainSubmissionQueue? submissions = null)
 {
+    public async Task<(string Prompt, string Tools)> InspectAsync(Guid projectId, CancellationToken ct = default)
+    {
+        var tools = new BuildTools(projectId, service, permissions, store, reviewer, submissions: submissions);
+        var context = await tools.project_context(ct);
+        var memory = await store.GetMemoryAsync(projectId, ct);
+        var settings = await store.GetSettingsAsync(projectId, ct);
+        return (RenderPrompt(projectId, context, memory, settings), JsonSerializer.Serialize(tools.Functions().Select(f => new
+        {
+            f.Name, f.Description, Parameters = f.JsonSchema
+        })));
+    }
+
+    private string RenderPrompt(Guid projectId, object context, string memory, DashboardSettings settings) =>
+        PromptText.Render("Build.Prompts.ProjectAssistant",
+            ("projectId", projectId.ToString()), ("projectContext", JsonSerializer.Serialize(context)),
+            ("utcNow", DateTimeOffset.UtcNow.ToString("O")), ("timeZone", tenant.TimeZoneId),
+            ("memory", JsonSerializer.Serialize(memory)))
+        + "\nUser preferences for this project (do not override permissions, safety rules or the current request):\n"
+        + JsonSerializer.Serialize(settings.Instructions);
+
     public async Task QueueAsync(BuildConversation conversation, string text, CancellationToken ct = default)
     {
         if (text.Length > 16000 || string.IsNullOrWhiteSpace(text))
@@ -55,9 +76,10 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                 throw new OperationCanceledException();
             }
             RepairInterruptedCalls(conversation.Messages);
-            var tools = new BuildTools(conversation.ProjectId, service, permissions, store, reviewer);
+            var tools = new BuildTools(conversation.ProjectId, service, permissions, store, reviewer, submissions: submissions);
             var functions = tools.Functions().ToDictionary(x => x.Name);
             var context = await tools.project_context(deadline.Token);
+            var settings = await store.GetSettingsAsync(conversation.ProjectId, deadline.Token);
             var toolSchema = new JsonArray(functions.Values.Select(f => (JsonNode)new JsonObject
             {
                 ["type"] = "function",
@@ -72,15 +94,12 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
             {
                 deadline.Token.ThrowIfCancellationRequested();
                 var memory = await store.GetMemoryAsync(conversation.ProjectId, deadline.Token);
+                conversation.SystemPrompt = RenderPrompt(conversation.ProjectId, context, memory, settings);
+                conversation.ToolSchema = toolSchema.ToJsonString();
                 var messages = new JsonArray(new JsonObject
                 {
                     ["role"] = "system",
-                    ["content"] = PromptText.Render("Build.Prompts.ProjectAssistant",
-                        ("projectId", conversation.ProjectId.ToString()),
-                        ("projectContext", JsonSerializer.Serialize(context)),
-                        ("utcNow", DateTimeOffset.UtcNow.ToString("O")),
-                        ("timeZone", tenant.TimeZoneId),
-                        ("memory", JsonSerializer.Serialize(memory)))
+                    ["content"] = conversation.SystemPrompt
                 });
                 foreach (var message in conversation.Messages)
                 {

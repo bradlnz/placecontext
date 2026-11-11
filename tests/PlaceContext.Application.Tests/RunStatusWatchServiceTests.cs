@@ -234,7 +234,7 @@ public class RunStatusWatchServiceTests
         var update = Assert.Single(ctx.Notifier.Synced);
         Assert.Equal(RunOutcome.NeedsInput, update.Outcome);
         Assert.Equal(RunStatusWatchService.ChainRunKey(runId), update.Key);
-        Assert.Equal($" /project/{Project}/workflows?chain={chain.ChainId}&run={runId}".Trim(), update.Link);
+        Assert.Equal($"/project/{Project}/workflows/{chain.ChainId}/runs/{runId}", update.Link);
         Assert.Contains("input required", update.Detail);
         Assert.Null(update.FinishedAt);
     }

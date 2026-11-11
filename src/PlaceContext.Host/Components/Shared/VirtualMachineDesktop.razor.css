@@ -10,4 +10,7 @@
 .desktop-save > div { flex:1; min-width:180px; max-width:420px }
 .desktop-save label { display:block; font-size:12px; margin-bottom:6px }
 .desktop-panel [role=alert] { color:var(--bad) }
+.desktop-empty { padding:32px 16px; text-align:center; border:1px dashed var(--border); border-radius:10px; color:var(--text-3) }
+.desktop-empty strong { display:block; color:var(--text); font-size:14px; margin-bottom:6px }
+.desktop-empty p { margin:0; font-size:12px; line-height:1.6 }
 .desktop-screen:focus-visible { outline:2px solid var(--brand-2); outline-offset:2px }

@@ -2,19 +2,12 @@
 @implements IDisposable
 @inject VirtualMachineReplayViewModel Vm
 
-@if (Vm.ActiveDesktop is { } active)
-{
-    <VirtualMachineDesktop @key="(Run.Id, active.Index)" Run="@(new PlaceContext.Application.Workload.VirtualMachines.VirtualMachineRunContext(Run.ProjectId, Run.Id, active.Index))" />
-}
-
-<details class="qemu-replay-history" open="@(Vm.ActiveDesktop is null)">
-<summary>Recorded actions and replay</summary>
-<section class="qemu-replay" aria-label="QEMU visual replay">
+<section class="qemu-replay" aria-label="Browser workspace visual replay">
     <div class="replay-header">
-        <div><span class="replay-eyebrow">QEMU environment</span><h3>Visual replay</h3></div>
+        <div><span class="replay-eyebrow">Browser workspace</span><h3>Visual replay</h3></div>
         <span class="replay-state">@(Vm.Recording ? "Recording actions" : "Saved replay")</span>
         <label>Step
-            <select class="dcinput" aria-label="QEMU replay step" value="@Vm.Step" @onchange="e => Vm.SelectStepAsync(e.Value?.ToString())">
+            <select class="dcinput" aria-label="Browser workspace replay step" value="@Vm.Step" @onchange="e => Vm.SelectStepAsync(e.Value?.ToString())">
                 @foreach (var step in Vm.Steps) { <option value="@step.Index">@(step.Index + 1). @step.JobName · @step.Status</option> }
             </select>
         </label>
@@ -55,7 +48,7 @@
                 </div>
                 <p class="replay-note">Recorded decision frames and pointer targets · clicks are highlighted · one frame per second</p>
             </div>
-            <div class="replay-actions" role="region" aria-label="Recorded QEMU actions" tabindex="0">
+            <div class="replay-actions" role="region" aria-label="Recorded browser workspace actions" tabindex="0">
                 <ol>
                     @foreach (var (item, index) in Vm.Frames.Select((item, index) => (item, index)))
                     {
@@ -74,7 +67,6 @@
         <p class="replay-message" role="status">@(Vm.Loading ? "Loading replay…" : Vm.Recording ? "Waiting for the desktop. Captured actions will appear here." : "No visual replay was recorded for this step. Earlier runs cannot be replayed.")</p>
     }
 </section>
-</details>
 
 @code {
     [Parameter, EditorRequired] public ChainRunView Run { get; set; } = default!;

@@ -15,6 +15,7 @@ using PlaceContext.Application.Build;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Membership;
 using PlaceContext.Application.Operations;
 using PlaceContext.Application.Secrets;
@@ -33,6 +34,96 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class BuildChatTests
 {
+    [Fact]
+    public async Task Dashboard_settings_are_encrypted_private_and_validated_without_overwriting_memory()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        await fixture.Store.SaveMemoryAsync(fixture.ProjectId, "Remember this");
+        await fixture.Store.SaveSettingsAsync(fixture.ProjectId, new() { Instructions = "Use brief answers", Actions = [new("Inspect", "Show statistics")] });
+        Assert.Equal("Remember this", await fixture.Store.GetMemoryAsync(fixture.ProjectId));
+        Assert.Equal("Use brief answers", (await fixture.Store.GetSettingsAsync(fixture.ProjectId)).Instructions);
+        using var scope = fixture.Provider.CreateScope();
+        Assert.DoesNotContain("Use brief answers", (await scope.ServiceProvider.GetRequiredService<AppDbContext>().BuildMemories.SingleAsync()).Settings);
+        fixture.User.UserId = Guid.NewGuid();
+        Assert.Empty((await fixture.Store.GetSettingsAsync(fixture.ProjectId)).Instructions);
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.SaveSettingsAsync(fixture.ProjectId, new() { Instructions = new string('x', 8001) }));
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Store.SaveSettingsAsync(fixture.ProjectId, new() { Actions = [new("", "x")] }));
+        fixture.Permissions.Allowed = false;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Store.GetSettingsAsync(fixture.ProjectId));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Store.SaveSettingsAsync(fixture.ProjectId, new()));
+    }
+
+    [Fact]
+    public async Task Agent_panel_uses_execution_prompt_and_saves_tiles_without_removing_system_action()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var agent = fixture.Provider.GetRequiredService<BuildChatAgent>();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        await vm.OpenAgentAsync();
+        Assert.Null(vm.AgentError);
+        Assert.True(vm.AgentOpen);
+        Assert.Contains(fixture.ProjectId.ToString(), vm.AgentPrompt);
+        Assert.Contains("run_workflow", vm.AgentTools);
+        vm.AgentDraft.Instructions = "Prefer concise summaries";
+        vm.AgentDraft.Actions.Clear();
+        await vm.SaveAgentAsync();
+        Assert.Contains("Prefer concise summaries", vm.AgentPrompt);
+        Assert.Empty(vm.Dashboard.Actions);
+        await vm.StartWorkflowChatAsync();
+        Assert.False(vm.AgentOpen);
+        Assert.Equal(BuildRunStatus.Queued, vm.Conversation.Status);
+        Assert.Contains("run an existing workflow", BuildChatViewModel.Text(vm.Conversation.Messages[0]!));
+        await agent.RunAsync(vm.Conversation, default);
+        Assert.Contains("Prefer concise summaries", vm.Conversation.SystemPrompt);
+        Assert.Contains("run_workflow", vm.Conversation.ToolSchema);
+        var saved = await fixture.Store.LoadAsync(fixture.ProjectId, vm.Conversation.Id);
+        Assert.Equal(vm.Conversation.SystemPrompt, saved.SystemPrompt);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Dashboard_run_routes_survive_reload_and_close_without_query_strings()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var run = new ChainRunView(Guid.NewGuid(), Guid.NewGuid(), "Example", "Succeeded", [], "{}", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow) { ProjectId = fixture.ProjectId };
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Run = run };
+        var nav = new DashboardNavigation(PageRoutes.DashboardRun(fixture.ProjectId, run.Id));
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions, navigation: nav);
+        await vm.LoadAsync(fixture.ProjectId, runId: run.Id);
+        Assert.Equal(run, vm.PreviewRun);
+        Assert.Empty(nav.Visits);
+        await vm.LoadAsync(fixture.ProjectId, runId: run.Id);
+        Assert.Equal(run, vm.PreviewRun);
+        vm.CloseWorkspace();
+        Assert.Equal($"/project/{fixture.ProjectId}/dashboard", Assert.Single(nav.Visits));
+        await vm.LoadAsync(fixture.ProjectId);
+        Assert.Null(vm.PreviewRun);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public void Sub_agents_include_nested_branches_but_not_external_or_human_steps()
+    {
+        var automatic = new LoopChainActionView("agentTask", "Inspect output", "result", AgentProvider: "automatic");
+        var stages = new[] { new JobChainStageView([], ElseBranch: [new([], Action: automatic)], Action: new LoopChainActionView("humanInput", "Approve", "approval")) };
+        Assert.Equal(automatic, Assert.Single(BuildChatViewModel.SubAgents(stages)));
+    }
+
+    private sealed class DashboardNavigation : NavigationManager
+    {
+        public List<string> Visits = [];
+        public DashboardNavigation(string path) => Initialize("http://localhost:7700/", "http://localhost:7700" + path);
+        protected override void NavigateToCore(string uri, NavigationOptions options)
+        {
+            Visits.Add(uri);
+            Uri = ToAbsoluteUri(uri).AbsoluteUri;
+        }
+    }
+
     [Fact]
     public void Anthropic_converts_images_tool_calls_and_multiple_results()
     {
@@ -1379,18 +1470,187 @@ public sealed class BuildChatTests
         }
     }
 
+    [Fact]
+    public async Task Chat_submits_workflows_durably_and_returns_a_reopenable_run_without_waiting_for_execution()
+    {
+        var projectId = Guid.NewGuid();
+        var workflow = new JobChainView(Guid.NewGuid(), projectId, "Review", null, [], DateTimeOffset.UtcNow);
+        var dispatcher = new ToolDispatcher(projectId) { Workflow = workflow };
+        var permissions = new Permissions();
+        var queue = new SubmissionQueue(projectId, workflow.Id);
+        var tools = new BuildTools(projectId, new(dispatcher, null!, null!, null!), permissions, null!, submissions: queue);
+        var result = await tools.run_workflow(workflow.Id, "{\"input\":1}", default);
+        Assert.Equal(1, queue.Submitted);
+        Assert.Equal("{\"input\":1}", queue.Payload);
+        Assert.Equal(0, dispatcher.Commands);
+        var json = JsonSerializer.SerializeToNode(result)!;
+        Assert.Equal(queue.Receipt.ChainRunId, json["id"]!.GetValue<Guid>());
+        Assert.Equal("Queued", json["status"]!.GetValue<string>());
+        permissions.Denied = Permission.JobsRun;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.run_workflow(workflow.Id, null, default));
+        permissions.Denied = null;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tools.run_workflow(Guid.NewGuid(), null, default));
+        Assert.Equal(1, queue.Submitted);
+    }
+
+    [Fact]
+    public async Task Chat_history_opens_a_queued_run_and_updates_steps_without_leaving_the_conversation()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var workflow = new JobChainView(Guid.NewGuid(), fixture.ProjectId, "Review", null, [], DateTimeOffset.UtcNow);
+        var queue = new SubmissionQueue(fixture.ProjectId, workflow.Id);
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Workflow = workflow };
+        var chat = new BuildConversation { ProjectId = fixture.ProjectId };
+        var lease = await fixture.Store.AcquireAsync(chat);
+        chat.Messages.Add(new JsonObject { ["role"] = "assistant", ["tool_calls"] = new JsonArray(new JsonObject
+            { ["id"] = "run-1", ["function"] = new JsonObject { ["name"] = "run_workflow" } }) });
+        chat.Messages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = "run-1", ["content"] = JsonSerializer.Serialize(new
+            { id = queue.Receipt.ChainRunId, chainId = workflow.Id, name = "Untrusted name", trackingId = queue.Receipt.TrackingId }) });
+        await fixture.Store.SaveAsync(chat, lease, true);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(),
+            new(dispatcher, null!, null!, null!), fixture.Permissions, submissions: queue);
+        await vm.LoadAsync(fixture.ProjectId, chat.Id);
+        Assert.True(vm.WorkspaceVisible);
+        Assert.Equal("Queued", vm.PreviewRunStatus);
+        Assert.Equal("Review", vm.PreviewItem!.Name);
+        Assert.Null(vm.PreviewRun);
+        dispatcher.Run = new(queue.Receipt.ChainRunId, workflow.Id, workflow.Name, "Succeeded",
+            [new(0, 0, 0, Guid.Empty, "First step", null, "Succeeded", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, Output: "{\"first_result\":1}"),
+             new(1, 1, 0, Guid.Empty, "Second step", null, "Succeeded", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, Output: "{\"second_result\":2}")],
+            "{\"combined\":true}", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow) { ProjectId = fixture.ProjectId };
+        await vm.RefreshPreviewRunAsync();
+        Assert.Equal("Succeeded", vm.PreviewRunStatus);
+        Assert.Equal(chat.Id, vm.Conversation.Id);
+        Assert.EndsWith($"/workflows/{workflow.Id}/runs/{dispatcher.Run.Id}", vm.PreviewEditorUrl);
+        await vm.SelectPreviewStepAsync(dispatcher.Run.Steps[0]);
+        Assert.Equal("{\"first_result\":1}", vm.PreviewStep!.Output);
+        var outputs = new List<RunOutputViewModel>();
+        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient(_ =>
+        {
+            var output = new RunOutputViewModel(new NoJs());
+            outputs.Add(output);
+            return output;
+        });
+        await using var provider = services.BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () => (await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.BuildChat>(
+            ParameterView.FromDictionary(new Dictionary<string, object?> { ["ProjectId"] = fixture.ProjectId, ["ConversationId"] = chat.Id }))).ToHtmlString());
+        Assert.Contains("Workflow run steps", html);
+        Assert.Contains("aria-label=\"Step output\"", html);
+        Assert.Contains("first_result", Assert.Single(outputs, x => x.Label == "Step output").Value);
+        Assert.DoesNotContain("second_result", Assert.Single(outputs, x => x.Label == "Step output").Value);
+        Assert.Contains("Open full run", html);
+        Assert.DoesNotContain("<iframe", html);
+        await vm.SelectPreviewStepAsync(dispatcher.Run.Steps[1]);
+        Assert.Equal("{\"second_result\":2}", vm.PreviewStep!.Output);
+        vm.CloseWorkspace();
+        Assert.Null(vm.PreviewRun);
+        Assert.False(vm.WorkspaceVisible);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Run_preview_rechecks_permissions_ownership_and_ignores_a_response_after_close()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var run = new ChainRunView(Guid.NewGuid(), Guid.NewGuid(), "Run", "Succeeded", [], null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+            { ProjectId = fixture.ProjectId };
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Run = run };
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(),
+            new(dispatcher, null!, null!, null!), fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        var item = new BuildChatViewModel.WorkspaceItem(run.Id, "workflow-run", "Run", run.ChainId);
+        await vm.OpenPreviewAsync(item);
+        Assert.NotNull(vm.PreviewRun);
+        fixture.Permissions.Denied = Permission.ChainsManage;
+        await vm.RefreshPreviewRunAsync();
+        Assert.Null(vm.PreviewRun);
+        Assert.NotNull(vm.PreviewError);
+        fixture.Permissions.Denied = null;
+        dispatcher.Run = run with { ProjectId = Guid.NewGuid() };
+        await vm.OpenPreviewAsync(item);
+        Assert.Null(vm.PreviewRun);
+        Assert.NotNull(vm.PreviewError);
+        dispatcher.Run = run;
+        dispatcher.PendingRun = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pending = vm.OpenPreviewAsync(item);
+        vm.CloseWorkspace();
+        dispatcher.PendingRun.SetResult(run);
+        await pending;
+        Assert.Null(vm.PreviewRun);
+        Assert.Null(vm.PreviewItem);
+        Assert.False(vm.WorkspaceVisible);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Step_logs_are_scoped_to_the_selected_run_and_project()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var step = new ChainStepRunView(0, 0, 0, Guid.NewGuid(), "Job", Guid.NewGuid(), "Succeeded", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        var run = new ChainRunView(Guid.NewGuid(), Guid.NewGuid(), "Run", "Succeeded", [step], null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+            { ProjectId = fixture.ProjectId };
+        var detail = new JobRunDetailView(step.RunId!.Value, step.JobId, fixture.ProjectId, "Succeeded", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow,
+            [new(0, 0, "Succeeded", "{\"real_output\":true}", "job log", [])], null, null!);
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Run = run, JobRun = detail };
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(),
+            new(dispatcher, null!, null!, null!), fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        await vm.OpenPreviewAsync(new(run.Id, "workflow-run", "Run", run.ChainId));
+        Assert.Equal(detail, vm.PreviewStepRun);
+        dispatcher.JobRun = detail with { ProjectId = Guid.NewGuid() };
+        await vm.SelectPreviewStepAsync(step);
+        Assert.Null(vm.PreviewStepRun);
+        Assert.NotNull(vm.PreviewStepError);
+        dispatcher.JobRun = detail;
+        fixture.Permissions.Denied = Permission.JobsView;
+        await vm.SelectPreviewStepAsync(step);
+        Assert.Null(vm.PreviewStepRun);
+        Assert.NotNull(vm.PreviewStepError);
+        await vm.DisposePageAsync();
+    }
+
+    private sealed class SubmissionQueue(Guid projectId, Guid workflowId) : IJobChainSubmissionQueue
+    {
+        public JobChainSubmission Receipt = new(Guid.NewGuid(), projectId, workflowId, Guid.NewGuid(), "Queued", 0, null, DateTimeOffset.UtcNow, null, null);
+        public int Submitted;
+        public string? Payload;
+        public Task<JobChainSubmission> EnqueueAsync(Guid projectId, Guid chainId, string? inputPayload, string? idempotencyKey = null,
+            CancellationToken ct = default, Guid? queueId = null, int? messageTtlSeconds = null, int receiptRetentionDays = 30,
+            int maxAttempts = 3, int retryDelaySeconds = 3, DateTimeOffset? availableAt = null,
+            IReadOnlyDictionary<int, string>? stepPayloadOverrides = null, Guid? replayOriginalRunId = null, int? replayFromStepIndex = null)
+        {
+            Assert.Equal(Receipt.ProjectId, projectId);
+            Assert.Equal(Receipt.ChainId, chainId);
+            Submitted++;
+            Payload = inputPayload;
+            return Task.FromResult(Receipt);
+        }
+        public Task<JobChainSubmission?> GetAsync(Guid trackingId, CancellationToken ct = default) => Task.FromResult<JobChainSubmission?>(trackingId == Receipt.TrackingId ? Receipt : null);
+        public Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
     private sealed class ToolDispatcher(Guid projectId) : IDispatcher
     {
         public int Commands;
         public ChainRunView? Run;
         public JobChainView? Workflow;
+        public JobRunDetailView? JobRun;
+        public TaskCompletionSource<ChainRunView?>? PendingRun;
         public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
         {
             Commands++;
             throw new InvalidOperationException();
         }
-        public Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default)
+        public async Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default)
         {
+            if (query is GetChainRunQuery && PendingRun is not null)
+            {
+                return (TResult)(object)(await PendingRun.Task)!;
+            }
             object result = query switch
             {
                 GetProjectByIdQuery => new ProjectSummaryView(projectId, "test", "/tmp", "Registered", false, 0, 0, 0),
@@ -1398,10 +1658,11 @@ public sealed class BuildChatTests
                 ListJobChainsQuery => Workflow is null ? Array.Empty<JobChainView>() : new[] { Workflow },
                 ListTriggersQuery => Array.Empty<TriggerView>(),
                 GetChainRunQuery => Run!,
+                GetJobRunQuery => JobRun!,
                 GetJobQuery => JsonSerializer.Deserialize<JobView>($$"""{"Id":"{{Guid.NewGuid()}}","ProjectId":"{{Guid.NewGuid()}}"}""")!,
                 _ => throw new InvalidOperationException(),
             };
-            return Task.FromResult((TResult)result);
+            return (TResult)result;
         }
     }
 
@@ -1464,7 +1725,8 @@ public sealed class BuildChatTests
     private sealed class Permissions : IPermissionService
     {
         public bool Allowed = true;
-        public Task<bool> HasAsync(string permission, CancellationToken ct = default) => Task.FromResult(Allowed);
+        public string? Denied;
+        public Task<bool> HasAsync(string permission, CancellationToken ct = default) => Task.FromResult(Allowed && permission != Denied);
         public Task<IReadOnlySet<string>> GetEffectivePermissionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlySet<string>>(Allowed ? Permission.All.ToHashSet() : new HashSet<string>());
         public Task<IReadOnlySet<string>> GetEffectivePermissionsForUserAsync(Guid userId, string roleName, CancellationToken ct = default) => GetEffectivePermissionsAsync(ct);
     }

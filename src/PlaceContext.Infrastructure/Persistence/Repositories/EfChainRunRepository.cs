@@ -163,6 +163,7 @@ public sealed class EfChainRunRepository : IChainRunRepository
         }
         public int RetryCount { get; set; }
         public IReadOnlyList<AgentActivity>? AgentActivity { get; set; }
+        public string? Output { get; set; }
 
         public static StepJson From(ChainStepRun s) => new()
         {
@@ -181,11 +182,12 @@ public sealed class EfChainRunRepository : IChainRunRepository
             Error = s.Error,
             RetryCount = s.RetryCount,
             AgentActivity = s.AgentActivity,
+            Output = s.Output,
         };
 
         public ChainStepRun ToDomain() => new(
             Index, StageIndex ?? Index, BranchIndex ?? 0, JobId, JobName, RunId,
             Enum.Parse<ChainStepStatus>(Status), StartedAt, FinishedAt,
-            ActionType, Provider, ExternalId, Error, RetryCount, AgentActivity);
+            ActionType, Provider, ExternalId, Error, RetryCount, AgentActivity, Output);
     }
 }

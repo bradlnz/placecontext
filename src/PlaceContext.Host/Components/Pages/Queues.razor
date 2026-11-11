@@ -64,7 +64,7 @@
             </div>
         </header>
         <section class="dccard queue-card queue-overview" aria-label="Queue details">
-            <header><h3>Details</h3><a href="@($"/project/{ProjectId}/workflows?workflow={selected.ChainId}")">View workflow <AppIcon Kind="arrow-right" /></a></header>
+            <header><h3>Details</h3><a href="@($"/project/{ProjectId}/workflows/{selected.ChainId}")">View workflow <AppIcon Kind="arrow-right" /></a></header>
             <dl class="queue-properties">
                 <div><dt>Queue name</dt><dd>@selected.Name</dd></div><div><dt>Queue ID</dt><dd><code>@selected.Id</code></dd></div>
                 <div><dt>Workflow</dt><dd>@Vm.ChainName(selected.ChainId)</dd></div><div><dt>Created</dt><dd>@Vm.Presentation.DateTime(selected.CreatedAt)</dd></div>

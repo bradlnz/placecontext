@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Jobs;
 using PlaceContext.Application.Observability;
 using PlaceContext.Application.Operations;
 using PlaceContext.Application.Tenancy;
@@ -16,7 +17,7 @@ public sealed partial class JobsViewModel : PageViewModel
     private static event EventHandler? McpOAuthCompleted;
     private readonly PlaceContextService _svc;
     private readonly OperationCenter _opCenter;
-    private readonly BackgroundOperationRunner _ops;
+    private readonly IJobRunSubmissionQueue _submissions;
     private readonly ParameterPromptState _runPrompt = new();
     private readonly IJSRuntime _js;
     private readonly NavigationManager _navigation;
@@ -28,12 +29,13 @@ public sealed partial class JobsViewModel : PageViewModel
         OperationCenter opCenter,
         IJSRuntime js,
         NavigationManager navigation,
-        ICurrentTenant? tenant = null
+        ICurrentTenant? tenant = null,
+        IJobRunSubmissionQueue? submissions = null
     )
     {
         _svc = svc;
         _opCenter = opCenter;
-        _ops = new BackgroundOperationRunner(opCenter);
+        _submissions = submissions ?? throw new InvalidOperationException("Durable job submissions are not configured.");
         _js = js;
         _navigation = navigation;
         _tenant = tenant;

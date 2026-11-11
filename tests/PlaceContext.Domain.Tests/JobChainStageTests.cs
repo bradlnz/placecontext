@@ -223,6 +223,22 @@ public class JobChainStageTests
     }
 
     [Fact]
+    public void Step_output_stays_with_its_step_and_is_cleared_before_retry()
+    {
+        var chain = FanOutJoinChain(out _, out _, out _, out _);
+        var run = ChainRun.Start(chain, ["a", "b1", "b2", "join"], T0);
+        run.MarkStepRunning(1, Guid.NewGuid(), T0);
+        run.MarkStepFinished(1, run.Steps[1].RunId, ChainStepStatus.Succeeded, T0, output: "first branch");
+        run.MarkStepRunning(2, Guid.NewGuid(), T0);
+        run.MarkStepFinished(2, run.Steps[2].RunId, ChainStepStatus.Succeeded, T0, output: "second branch");
+        Assert.Equal("first branch", run.Steps[1].Output);
+        Assert.Equal("second branch", run.Steps[2].Output);
+        run.RetryStep(1, null, T0, "Retry");
+        Assert.Null(run.Steps[1].Output);
+        Assert.Equal("second branch", run.Steps[2].Output);
+    }
+
+    [Fact]
     public void Stage_settles_only_once_every_branch_reaches_a_terminal_status()
     {
         var chain = FanOutJoinChain(out _, out _, out _, out _);

@@ -99,6 +99,25 @@ with agent tasks, human approval, conditional paths, and inspectable run results
 
 ## Agents, people, and decisions
 
+### Run and manage work from the dashboard
+
+The pinned **Run a workflow** tile starts a guided chat: choose an existing workflow, supply its inputs,
+and follow the run and each step's output in the side pane. Runs have refreshable routes. Add or remove
+personal quick-action tiles, such as job statistics or artifacts, through **Agent → Dashboard**.
+
+The **Agent** pane shows the current system prompt, the last recorded prompt and tool schemas used in
+the conversation, saved project memory, and workflow sub-agent instructions. Add personal instructions
+without changing platform safeguards. Context and tools remain scoped to your project and permissions;
+connected data is retrieved when needed, and vault credentials are not exposed through the panel.
+Automatic agent steps remain configured in the workflow editor, with their own model, task and recorded output.
+
+For a finished run, **Share demo** creates an expiring, revocable, read-only public snapshot. Review or edit
+the outcome and optionally include one recorded browser replay. Anyone with the link can view it without
+signing in; check screenshots for sensitive information before sharing. Links expire after 1–30 days,
+do not grant live browser or workspace access, and need a publicly reachable app address for external demos.
+
+### Compose agent and human decisions
+
 An agent can prepare the work. Jev or another LLM can assess it. A person can approve it.
 Your workflow decides how those responses affect the next action.
 

@@ -76,8 +76,30 @@ public sealed partial class JobChainsViewModel
     }
     public ChainRunView? QemuReplayRun { get; private set; }
     public int? QemuReplayStep { get; private set; }
+    public bool ShowQemuRunModal { get; private set; }
+    public string QemuRunTab { get; private set; } = "replay";
+    public string QemuEditorTab { get; private set; } = "task";
+    public VirtualMachineRunContext? QemuLiveContext => QemuReplayRun is { } run && QemuReplayStep is { } step
+        ? new VirtualMachineRunContext(run.ProjectId, run.Id, step)
+        : null;
     private int _qemuStageIndex;
     private bool _editingQemu;
+
+    public bool OpenQemuReplay(ChainStepRunView step)
+    {
+        if (OpenRun is null || step.ActionType != VirtualMachineChainAction.ActionType)
+        {
+            return false;
+        }
+        QemuEnvironment = _qemuCatalog?.Get() ?? new(false, []);
+        QemuReplayRun = OpenRun;
+        QemuReplayStep = step.Index;
+        QemuRunTab = "replay";
+        ShowQemuRunModal = true;
+        _ = LoadQemuEnvironmentAsync();
+        NotifyStateChanged();
+        return true;
+    }
 
     public void OpenQemuActionAt(int index)
     {
@@ -93,6 +115,7 @@ public sealed partial class JobChainsViewModel
             QemuReplayStep = null;
         }
         _editingQemu = false;
+        QemuEditorTab = "task";
         VirtualMachineImageProfile = QemuEnvironment.Images.FirstOrDefault(image => image.Available)?.Name ?? "";
         QemuCommand = "Start at https://example.com. Read the page and verify that its heading is Example Domain. Return the heading and final URL.";
         QemuOutputField = "qemu_result";
@@ -107,6 +130,18 @@ public sealed partial class JobChainsViewModel
         _ = LoadQemuLoginsAsync();
         _ = LoadQemuEnvironmentAsync();
         ShowQemuEditor = true;
+        NotifyStateChanged();
+    }
+
+    public void SetQemuRunTab(string tab)
+    {
+        QemuRunTab = tab.Equals("live", StringComparison.OrdinalIgnoreCase) ? "live" : "replay";
+        NotifyStateChanged();
+    }
+
+    public void SetQemuEditorTab(string tab)
+    {
+        QemuEditorTab = tab.Equals("settings", StringComparison.OrdinalIgnoreCase) ? "settings" : "task";
         NotifyStateChanged();
     }
 
@@ -202,6 +237,7 @@ public sealed partial class JobChainsViewModel
     public void CloseQemuEditor()
     {
         ShowQemuEditor = false;
+        ShowQemuRunModal = false;
         QemuReplayRun = null;
         QemuReplayStep = null;
         NotifyStateChanged();

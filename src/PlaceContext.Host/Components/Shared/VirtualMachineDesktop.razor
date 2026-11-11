@@ -4,7 +4,7 @@
 
 @if (Vm.Status is { } status)
 {
-    <section class="desktop-panel" aria-label="Live QEMU desktop">
+    <section class="desktop-panel" aria-label="Live browser workspace">
         <div class="desktop-head">
             <div><h3>Live preview <span class="desktop-lock">@(status.State == "Human" ? "Control unlocked" : "View only")</span></h3><p role="status">@(status.State switch {
                 "Starting" => "Starting the browser…", "Pausing" => "Waiting for the agent to reach a safe pause…",
@@ -31,6 +31,15 @@
             </div>
             <p class="desktop-note">Private to you in this project. Saving briefly restarts Chromium. Finish login before saving or resuming; closing this pane leaves the agent paused until the step times out.</p>
         }
+    </section>
+}
+else
+{
+    <section class="desktop-panel" aria-label="Live browser workspace">
+        <div class="desktop-empty" role="status">
+            <strong>No active live view</strong>
+            <p>The browser workspace is not currently running or paused. Start the workflow, or open a live step when it becomes available.</p>
+        </div>
     </section>
 }
 @code {

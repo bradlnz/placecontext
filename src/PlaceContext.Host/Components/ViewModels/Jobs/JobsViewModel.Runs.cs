@@ -184,21 +184,14 @@ public sealed partial class JobsViewModel
         Message = null;
         var jobName = Jobs?.FirstOrDefault(j => j.Id == jobId)?.Name ?? "job";
         var runId = Guid.NewGuid();
-        var err = _ops.TryRun(
-            ProjectId,
-            $"Run job — {jobName}",
-            $"/observability?run={runId}",
-            async (sp, ct) =>
-            {
-                var result = await sp.GetRequiredService<PlaceContextService>()
-                    .RunJobAsync(jobId, payload, runId, ct);
-                return $"run finished — {result.Status}";
-            },
-            correlationKey: RunStatusWatchService.JobRunKey(runId)
-        );
-        if (err is not null)
+        try
         {
-            Message = err;
+            var receipt = await _submissions.EnqueueAsync(ProjectId, jobId, payload, runId);
+            runId = receipt.RunId;
+        }
+        catch (Exception ex)
+        {
+            Message = ex.Message;
             NotifyStateChanged();
             return;
         }
@@ -234,7 +227,7 @@ public sealed partial class JobsViewModel
         NotifyStateChanged();
 
         Message =
-            $"Run of {jobName} started in the background — follow it in the notifications bell.";
+            $"Run of {jobName} queued durably — it will continue if the app restarts.";
         if (version == _paneVersion && ShowEditor)
         {
             StartRunPolling(jobId, runId);

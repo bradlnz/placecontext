@@ -1,5 +1,7 @@
 @using PlaceContext.Application.Access.Models
 @page "/project/{ProjectId:guid}/dashboard"
+@page "/project/{ProjectId:guid}/dashboard/runs/{RunId:guid}"
+@page "/project/{ProjectId:guid}/dashboard/runs/{RunId:guid}/submission/{SubmissionId:guid}"
 @attribute [Authorize(Policy = Permission.ProjectsView)]
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @implements IAsyncDisposable
@@ -34,6 +36,7 @@
                             </div>
             </div>
             <div class="chat-header-actions">
+                <button type="button" class="chat-toolbar-button" aria-expanded="@(Vm.AgentOpen ? "true" : "false")" disabled="@Vm.Loading" @onclick="Vm.OpenAgentAsync"><AppIcon Kind="agent" /><span>Agent</span></button>
                 @if (Vm.Conversation.Messages.Count > 0 && !Vm.WorkspaceVisible)
                 { <button type="button" class="chat-toolbar-button" aria-label="Open workspace" @onclick="Vm.OpenWorkspace"><AppIcon Kind="chain" /><span>Workspace</span></button> }
                 <a class="chat-toolbar-button" href="@($"/project/{ProjectId}/workflows")"><AppIcon Kind="chain" /><span>Workflows</span></a>
@@ -54,6 +57,20 @@
                         <span class="welcome-icon"><AppIcon Kind="agent" /></span>
                         <h1>What do you need to do?</h1>
                         <p>Check your project, explore the numbers, or build your next workflow.<br />Ask for a chart, describe an outcome, or choose a quick action.</p>
+                        <div class="dashboard-actions">
+                            <button type="button" class="dashboard-action" disabled="@(!Vm.CanStartChat || !string.IsNullOrWhiteSpace(Vm.Draft))" @onclick="Vm.StartWorkflowChatAsync">
+                                <span class="dashboard-action-icon"><AppIcon Kind="play" /></span>
+                                <span><strong>Run a workflow</strong><small>Choose a workflow, answer a few questions, and follow each step here.</small></span>
+                                <AppIcon Kind="arrow-right" />
+                            </button>
+                            @foreach (var action in Vm.Dashboard.Actions)
+                            {
+                                <button type="button" class="dashboard-action" disabled="@(!Vm.CanStartChat || !string.IsNullOrWhiteSpace(Vm.Draft))" @onclick="() => Vm.StartDashboardActionAsync(action.Prompt)">
+                                    <span class="dashboard-action-icon"><AppIcon Kind="message" /></span><span><strong>@action.Title</strong><small>@action.Prompt</small></span><AppIcon Kind="arrow-right" />
+                                </button>
+                            }
+                            <button type="button" class="chat-toolbar-button" @onclick='async () => { Vm.AgentTab = "Dashboard"; await Vm.OpenAgentAsync(); }'>Customize dashboard</button>
+                        </div>
                     </div>
                 }
                 @foreach (var message in Vm.Conversation.Messages.OfType<System.Text.Json.Nodes.JsonNode>())
@@ -66,7 +83,7 @@
                             { <button type="button" class="result-item" @onclick="() => Vm.OpenChart(chart)"><AppIcon Kind="data.graph" /><span>@(chart.Spec.Title ?? "Chart")<small>Open chart</small></span><AppIcon Kind="arrow-right" /></button> }
                             @foreach (var item in Vm.ResultItems(message))
                             {
-                                <button type="button" class="result-item" @onclick="() => Vm.OpenPreviewAsync(item)"><AppIcon Kind="@(item.Kind == "workflow" ? "chain" : "code")" /><span>@item.Name<small>Open @(item.Kind == "workflow" ? "canvas" : "job")</small></span><AppIcon Kind="arrow-right" /></button>
+                                <button type="button" class="result-item" @onclick="() => Vm.OpenPreviewAsync(item)"><AppIcon Kind="@(item.Kind == "job" ? "code" : "chain")" /><span>@item.Name<small>Open @(item.Kind == "workflow-run" ? "run" : item.Kind == "workflow" ? "canvas" : "job")</small></span><AppIcon Kind="arrow-right" /></button>
                             }
                         </div>
                         <details class="tool-result"><summary><AppIcon Kind="logs" /> Action result</summary><RunOutput Value="@(Vm.Presentation.Json(BuildChatViewModel.Text(message)))" Label="Action result JSON" /></details>
@@ -126,12 +143,18 @@
             <div class="build-divider" inert="@(Vm.Loading || !Vm.WorkspaceVisible)" role="separator" tabindex="0" aria-label="Resize chat and workspace" aria-orientation="vertical" aria-valuemin="30" aria-valuemax="70" aria-valuenow="42" aria-controls="@(Vm.ViewId + "-thread " + Vm.ViewId + "-workspace")" title="Drag to resize · arrow keys to adjust"></div>
             <section id="@(Vm.ViewId + "-workspace")" class="build-workspace" aria-label="Dashboard workspace" inert="@(Vm.Loading || !Vm.WorkspaceVisible)">
                 <header class="preview-heading">
-                    <h2>@(Vm.PreviewChart?.Spec.Title ?? Vm.PreviewItem?.Name ?? "Workspace")</h2>
-                    @if (Vm.PreviewItem is not null)
-                    { <a href="@Vm.PreviewEditorUrl" target="_blank" rel="noopener" class="chat-icon-button" aria-label="Open editor in a new tab" title="Open editor in a new tab"><AppIcon Kind="external-link" /></a> }
+                    <h2>@(Vm.AgentOpen ? "Agent" : Vm.PreviewChart?.Spec.Title ?? Vm.PreviewItem?.Name ?? "Workspace")</h2>
+                    @if (Vm.AgentOpen && Vm.PreviewItem is not null)
+                    { <button type="button" class="dcbtn" @onclick="Vm.ShowWorkspace">Back to run / output</button> }
+                    @if (!Vm.AgentOpen && Vm.PreviewEditorUrl is { } editorUrl)
+                    { <a href="@editorUrl" target="_blank" rel="noopener" class="chat-icon-button" aria-label="@(Vm.PreviewItem?.Kind == "workflow-run" ? "Open run in a new tab" : "Open editor in a new tab")" title="Open full view in a new tab"><AppIcon Kind="external-link" /></a> }
                     <button type="button" class="chat-icon-button" aria-label="Close workspace" title="Close workspace" @onclick="CloseWorkspace"><AppIcon Kind="close" /></button>
                 </header>
-                @if (Vm.PreviewChart is { } previewChart)
+                @if (Vm.AgentOpen)
+                {
+                    <DashboardAgentPanel Vm="Vm" />
+                }
+                else if (Vm.PreviewChart is { } previewChart)
                 {
                     <div class="preview-content"><BuildChart Spec="previewChart.Spec" Source="@previewChart.Source" /></div>
                 }
@@ -140,6 +163,66 @@
                     <div class="preview-content @(Vm.PreviewWorkflow is not null ? "preview-workflow" : "")">
                         @if (Vm.PreviewLoading) { <Skeleton Kind="list" Rows="3" /> }
                         else if (Vm.PreviewError is not null) { <p role="alert">@Vm.PreviewError</p><button class="dcbtn" @onclick="() => Vm.OpenPreviewAsync(preview)">Try again</button> }
+                        else if (preview.Kind == "workflow-run")
+                        {
+                            <div class="preview-run-summary">
+                                <span class="preview-run-status" role="status" style="color:@Vm.Presentation.StatusColor(Vm.PreviewRunStatus ?? "Queued")">@Vm.PreviewRunStatus</span>
+                                <a class="dcbtn" href="@Vm.PreviewEditorUrl">Open full run <AppIcon Kind="arrow-right" /></a>
+                                @if (Vm.CanShareDemo && Vm.PreviewRun?.FinishedAt is not null)
+                                { <button class="dcbtn" @onclick="Vm.OpenDemoShareAsync">Share demo</button> }
+                            </div>
+                            @if (Vm.PreviewRun is { } run)
+                            {
+                                @if (Vm.ShowDemoShare)
+                                {
+                                    <WorkflowDemoSharePanel Vm="Vm" Run="run" />
+                                }
+                                <p class="preview-description">Started @Vm.Presentation.DateTime(run.StartedAt) · @(run.FinishedAt is { } finished ? Vm.Presentation.Duration(run.StartedAt, finished) : "Updates automatically")</p>
+                                @if (run.InputRequest is { } request)
+                                {
+                                    <div class="preview-run-notice" role="status"><strong>Input needed</strong><p>@request.Instructions</p><a href="@Vm.PreviewEditorUrl">Respond in the run view</a></div>
+                                }
+                                <nav class="preview-run-steps" aria-label="Workflow run steps">
+                                    @foreach (var step in run.Steps)
+                                    {
+                                        <button type="button" @key="step.Index" class="preview-run-step" aria-pressed="@(Vm.PreviewStep?.Index == step.Index ? "true" : "false")" @onclick="() => Vm.SelectPreviewStepAsync(step)">
+                                            <span class="preview-step-number">@(step.Index + 1)</span><strong>@step.JobName</strong><span style="color:@Vm.Presentation.StatusColor(step.Status)">@step.Status</span>
+                                        </button>
+                                    }
+                                </nav>
+                                @if (Vm.PreviewStep is { } selected)
+                                {
+                                    <section class="preview-step-output" aria-label="Step output" @key="(run.Id, selected.Index)">
+                                        <h3>Step @(selected.Index + 1) · @selected.JobName</h3>
+                                        @if (selected.ActionType == "qemu")
+                                        { <VirtualMachineReplay Run="run" Step="selected.Index" /> }
+                                        @if (selected.Error is { } stepError) { <p role="alert">@stepError</p> }
+                                        @if (selected.Output is { } output) { <RunOutput Value="@Vm.Presentation.Json(output)" Label="Step output" /> }
+                                        @if (selected.Provider is { } provider) { <p class="preview-description">@provider @selected.ExternalId</p> }
+                                        @if (selected.AgentActivity is { Count: > 0 })
+                                        { <WorkflowAgentActivity Step="selected" OnRunClick="Vm.OpenPreviewStepLogsAsync" /> }
+                                        @if (Vm.PreviewStepError is { } outputError) { <p role="alert">@outputError</p> }
+                                        @if (Vm.PreviewStepRun is { } jobRun)
+                                        {
+                                            @foreach (var shard in jobRun.ShardResults.Where(x => x.Artifact is not null))
+                                            { <RunOutput Value="@Vm.Presentation.Json(shard.Artifact!)" Label="@($"Shard {shard.Index + 1} output")" /> }
+                                            @if (jobRun.ReduceResult?.Artifact is { } reduced) { <RunOutput Value="@Vm.Presentation.Json(reduced)" Label="Reduce output" /> }
+                                            <JobRunLogs @key="jobRun.Id" Run="jobRun" />
+                                        }
+                                        else if (selected.Output is null && selected.AgentActivity is not { Count: > 0 } && Vm.PreviewStepError is null)
+                                        { <p class="preview-description">@(selected.Status is "Pending" or "Running" ? "Waiting for step output… Updates appear here as the step runs." : "No output was recorded for this step.")</p> }
+                                    </section>
+                                }
+                                @if (run.FinalOutput is { Length: > 0 } finalOutput)
+                                { <details class="job-source"><summary>@(run.FinishedAt is null ? "Current workflow output" : "Final workflow output")</summary><RunOutput Value="@Vm.Presentation.Json(finalOutput)" /></details> }
+                            }
+                            else if (Vm.PreviewSubmission is { } receipt)
+                            {
+                                <p class="preview-description">Submitted @Vm.Presentation.DateTime(receipt.SubmittedAt)</p>
+                                @if (receipt.Error is { } error) { <p role="alert">@error</p> }
+                                <p class="preview-description">@(receipt.FinishedAt is null ? "Waiting for a worker. Steps and output will appear here automatically." : "This submission ended before a workflow run was available.")</p>
+                            }
+                        }
                         else if (Vm.PreviewWorkflow is { } workflow)
                         {
                             @if (!string.IsNullOrWhiteSpace(workflow.Description)) { <p class="preview-description">@workflow.Description</p> }
@@ -179,7 +262,7 @@
                                 @if (Vm.ResultChart(message) is { } chart)
                             { <button type="button" class="result-item" @onclick="() => Vm.OpenChart(chart)"><AppIcon Kind="data.graph" /><span>@(chart.Spec.Title ?? "Chart")<small>Open chart</small></span><AppIcon Kind="arrow-right" /></button> }
                             @foreach (var item in Vm.ResultItems(message))
-                                { <button type="button" class="result-item" @onclick="() => Vm.OpenPreviewAsync(item)"><AppIcon Kind="@(item.Kind == "workflow" ? "chain" : "code")" /><span>@item.Name<small>Open @(item.Kind == "workflow" ? "canvas" : "job")</small></span><AppIcon Kind="arrow-right" /></button> }
+                                { <button type="button" class="result-item" @onclick="() => Vm.OpenPreviewAsync(item)"><AppIcon Kind="@(item.Kind == "job" ? "code" : "chain")" /><span>@item.Name<small>Open @(item.Kind == "workflow-run" ? "run" : item.Kind == "workflow" ? "canvas" : "job")</small></span><AppIcon Kind="arrow-right" /></button> }
                             </div>
                             <details class="tool-result"><summary><AppIcon Kind="logs" /> Action result</summary><RunOutput Value="@(Vm.Presentation.Json(BuildChatViewModel.Text(message)))" Label="Action result JSON" /></details>
                         }
@@ -196,6 +279,8 @@
 }
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public Guid? RunId { get; set; }
+    [Parameter] public Guid? SubmissionId { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "conversation")] public Guid? ConversationId { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "task")] public string? TaskHint { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "source")] public Guid? SourceHint { get; set; }
@@ -210,7 +295,7 @@
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override async Task OnParametersSetAsync()
     {
-        await Vm.LoadAsync(ProjectId, ConversationId);
+        await Vm.LoadAsync(ProjectId, ConversationId, RunId, SubmissionId);
         var hint = (ProjectId, TaskHint, SourceHint);
         if (TaskHint == "sources" && _appliedSourceHint != hint)
         {

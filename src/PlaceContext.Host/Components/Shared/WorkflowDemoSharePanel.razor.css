@@ -1,0 +1,5 @@
+.demo-share { border:1px solid var(--border); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px; min-width:0; font-size:13px; }
+.demo-share h3,.demo-share p { margin:0; }
+.demo-share p { line-height:1.6; color:var(--text-3); }
+.demo-share textarea,.demo-share select,.demo-share input { width:100%; box-sizing:border-box; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--card); color:inherit; font:inherit; }
+.demo-actions { display:flex; gap:8px; flex-wrap:wrap; }

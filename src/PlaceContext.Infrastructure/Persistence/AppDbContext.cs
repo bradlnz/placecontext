@@ -39,6 +39,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<ModelConnectionRow> ModelConnections => Set<ModelConnectionRow>();
     public DbSet<BuildConversationRow> BuildConversations => Set<BuildConversationRow>();
     public DbSet<BuildMemoryRow> BuildMemories => Set<BuildMemoryRow>();
+    public DbSet<WorkflowDemoShareRow> WorkflowDemoShares => Set<WorkflowDemoShareRow>();
 
     public DbSet<TenantRow> Tenants => Set<TenantRow>();
     public DbSet<OAuthClientRow> OAuthClients => Set<OAuthClientRow>();
@@ -212,7 +213,17 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         b.Entity<BuildMemoryRow>(e =>
         {
             e.ToTable("build_memories");
+            e.Property(x => x.Settings).HasDefaultValue("");
             e.HasKey(x => new { x.TenantId, x.UserId, x.ProjectId });
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
+
+        b.Entity<WorkflowDemoShareRow>(e =>
+        {
+            e.ToTable("workflow_demo_shares");
+            e.HasKey(x => new { x.TenantId, x.UserId, x.RunId });
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.Property(x => x.TokenHash).HasMaxLength(64);
             e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
 

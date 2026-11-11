@@ -189,6 +189,7 @@ public sealed class ChainRun
             Status = ChainStepStatus.Pending,
             FinishedAt = null,
             Error = reason,
+            Output = null,
             RetryCount = _steps[index].RetryCount + 1
         };
     }
@@ -205,7 +206,7 @@ public sealed class ChainRun
             _steps[index] = step with
             {
                 Status = ChainStepStatus.Pending, RunId = null, StartedAt = null, FinishedAt = null,
-                Provider = null, ExternalId = null, Error = null,
+                Provider = null, ExternalId = null, Error = null, Output = null,
                 RetryCount = index == repeatIndex ? step.RetryCount + 1 : 0
             };
         }
@@ -243,7 +244,8 @@ public sealed class ChainRun
             RunId = runId,
             StartedAt = now,
             FinishedAt = null,
-            Error = null
+            Error = null,
+            Output = null
         };
 
     public void AppendAgentActivity(int index, AgentActivity activity)
@@ -257,7 +259,7 @@ public sealed class ChainRun
     }
 
     public void MarkStepFinished(int index, Guid? runId, ChainStepStatus outcome, DateTimeOffset now,
-        string? provider = null, string? externalId = null, string? error = null)
+        string? provider = null, string? externalId = null, string? error = null, string? output = null)
     {
         if (outcome is ChainStepStatus.Pending or ChainStepStatus.Running)
         {
@@ -271,6 +273,7 @@ public sealed class ChainRun
             Provider = provider,
             ExternalId = externalId,
             Error = error,
+            Output = output,
         };
     }
 

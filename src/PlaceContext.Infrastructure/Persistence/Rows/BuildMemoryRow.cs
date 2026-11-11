@@ -15,4 +15,5 @@ public sealed class BuildMemoryRow : ITenantOwned
         get; set;
     }
     public string Content { get; set; } = "";
+    public string Settings { get; set; } = "";
 }

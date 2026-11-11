@@ -13,6 +13,9 @@ public static class PageRoutes
     public static string WebhookIngestionWiki => WikiArticle("webhook-ingestion");
 
     public static string ProjectJobs(Guid projectId) => $"/project/{projectId}/jobs";
+    public static string ProjectWorkflows(Guid projectId) => $"/project/{projectId}/workflows";
+    public static string DashboardRun(Guid projectId, Guid runId, Guid? submissionId = null) =>
+        $"/project/{projectId}/dashboard/runs/{runId}" + (submissionId is { } id ? $"/submission/{id}" : "");
     public static string ApplicationDatabase(Guid projectId) => $"{ProjectData(projectId)}?database=application";
     public static string ProjectData(Guid projectId) => $"/project/{projectId}/data";
 

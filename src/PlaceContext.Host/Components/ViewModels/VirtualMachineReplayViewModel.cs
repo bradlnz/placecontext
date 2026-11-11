@@ -19,7 +19,6 @@ public sealed class VirtualMachineReplayViewModel(IVirtualMachineReplayStore sto
     public VirtualMachineReplayFrame? Current => Frames.ElementAtOrDefault(Position);
     public VirtualMachineReplayFrame? Pointer => Frames.Take(Position + 1).LastOrDefault(frame => frame.PointerX is not null && frame.PointerY is not null);
     public bool Recording => Steps.FirstOrDefault(step => step.Index == Step)?.Status == "Running";
-    public ChainStepRunView? ActiveDesktop => Steps.FirstOrDefault(step => step.Status == "Running");
     public bool Playing
     {
         get; private set;

@@ -8,8 +8,8 @@ public sealed class WorkflowInputNotificationContractTests
         var host = FindHostRoot();
         var razor = File.ReadAllText(Path.Combine(host, "Components", "Pages", "JobChains.razor"));
         var viewModel = File.ReadAllText(Path.Combine(host, "Components", "ViewModels", "JobChains", "JobChainsViewModel.cs"));
-        Assert.Contains("[SupplyParameterFromQuery(Name = \"run\")]", razor);
-        Assert.Contains("Vm.LoadPageAsync(ProjectId, WorkflowId ?? ChainId, RunId)", razor);
+        Assert.Contains("@page \"/project/{ProjectId:guid}/workflows/{WorkflowRouteId:guid}/{WorkflowRouteView}/{WorkflowRouteRunId:guid}\"", razor);
+        Assert.Contains("Vm.LoadPageAsync(ProjectId, WorkflowRouteId, WorkflowRouteRunId, WorkflowRouteView)", razor);
         Assert.Contains("run.ProjectId != projectId || run.ChainId != id", viewModel);
         Assert.Contains("await OpenChainRunAsync(run);", viewModel);
         Assert.Contains("workflow-input-banner", razor);

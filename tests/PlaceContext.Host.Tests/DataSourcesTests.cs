@@ -316,7 +316,7 @@ public sealed class DataSourcesTests
         await vm.CreateWorkflowAsync(sourceId);
 
         Assert.Equal(new CreateSourceWorkflowCommand(projectId, sourceId, expected), dispatcher.Workflow);
-        Assert.Equal($"/project/{projectId}/workflows?chain={dispatcher.WorkflowId}", vm.WorkflowUrl);
+        Assert.Equal($"/project/{projectId}/workflows/{dispatcher.WorkflowId}", vm.WorkflowUrl);
         Assert.False(vm.Busy);
     }
 

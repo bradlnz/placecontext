@@ -88,7 +88,7 @@ public sealed class RunStatusWatchService
             var key = ChainRunKey(chain.RunId);
             var title = $"Run chain — {chain.ChainName}";
             var link = chain.Status == ChainRunStatus.AwaitingInput
-                ? $"/project/{chain.ProjectId}/workflows?chain={chain.ChainId}&run={chain.RunId}"
+                ? $"/project/{chain.ProjectId}/workflows/{chain.ChainId}/runs/{chain.RunId}"
                 : $"/observability?tab=workflows&workflowRun={chain.RunId}";
 
             if (chain.Status is ChainRunStatus.Running or ChainRunStatus.Waiting or ChainRunStatus.AwaitingInput)

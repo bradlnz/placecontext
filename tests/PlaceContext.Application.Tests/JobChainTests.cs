@@ -137,6 +137,9 @@ public class JobChainTests
             Assert.Equal("guest_shell", json.RootElement.GetProperty("qemu_result").GetProperty("activity")[0].GetProperty("Tool").GetString());
             Assert.Equal(result.Id, replay.Captures[0].RunId);
             Assert.Equal(0, replay.Captures[0].Step);
+            using var stepOutput = System.Text.Json.JsonDocument.Parse(result.Steps[0].Output!);
+            Assert.Equal("guest output", stepOutput.RootElement.GetProperty("stdout").GetString());
+            Assert.False(stepOutput.RootElement.TryGetProperty("order", out _));
             Assert.DoesNotContain("c2NyZWVu", result.FinalOutput!);
         }
     }
@@ -1318,7 +1321,12 @@ public class JobChainTests
         var result = System.Text.Json.Nodes.JsonNode.Parse(run.FinalOutput!)!["gate"]!;
         Assert.Equal(!missing && score == 2, result["passed"]!.GetValue<bool>());
         Assert.NotEmpty(run.Steps[0].AgentActivity!);
-        if (!missing) { Assert.NotNull(result["evidence_sha256"]); Assert.Equal("{\"tests\":\"passing\"}", reviewer.State); }
+        if (!missing)
+        {
+            Assert.NotNull(result["evidence_sha256"]);
+            Assert.Equal("{\"tests\":\"passing\"}", reviewer.State);
+            Assert.Equal(result.ToJsonString(), run.Steps[0].Output);
+        }
     }
     [Theory]
     [InlineData(true, false, false, "Succeeded")]
@@ -1340,6 +1348,7 @@ public class JobChainTests
             var input = System.Text.Json.Nodes.JsonNode.Parse(Assert.Single(dispatcher.Payloads)!)!;
             Assert.Equal(42, input["keep"]!.GetValue<int>());
             Assert.Equal(empty ? 0 : 1, input["listings"]!["row_count"]!.GetValue<int>());
+            Assert.Equal(input["listings"]!.ToJsonString(), result.Steps[0].Output);
             if (!empty) { Assert.Equal("7", input["listings"]!["rows"]![0]!["id"]!.GetValue<string>()); Assert.Null(input["listings"]!["rows"]![0]!["title"]); }
         }
         else { Assert.Empty(dispatcher.Payloads); Assert.Null(System.Text.Json.Nodes.JsonNode.Parse(result.FinalOutput!)!["listings"]); }
@@ -1465,6 +1474,9 @@ public class JobChainTests
         {
             Assert.Contains("done", stored.FinalOutput);
             Assert.DoesNotContain("stale", stored.FinalOutput);
+            Assert.Equal(stored.Steps[0].Output, result.Steps[0].Output);
+            Assert.Contains("done", result.Steps[0].Output);
+            Assert.DoesNotContain("stale", result.Steps[0].Output);
         }
     }
 

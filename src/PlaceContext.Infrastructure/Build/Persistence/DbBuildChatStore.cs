@@ -316,4 +316,29 @@ public sealed class DbBuildChatStore(IServiceScopeFactory scopes, ICurrentUser u
         row.Content = encryption.Protect(memory, Purpose);
         await db.SaveChangesAsync(ct);
     }
+
+    public async Task<DashboardSettings> GetSettingsAsync(Guid projectId, CancellationToken ct = default)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await CheckAsync(db, projectId, ct);
+        var row = await db.BuildMemories.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == user.UserId && x.ProjectId == projectId, ct);
+        return string.IsNullOrEmpty(row?.Settings) ? new() : JsonSerializer.Deserialize<DashboardSettings>(encryption.Unprotect(row.Settings, Purpose))!;
+    }
+
+    public async Task SaveSettingsAsync(Guid projectId, DashboardSettings settings, CancellationToken ct = default)
+    {
+        settings.Validate();
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await CheckAsync(db, projectId, ct);
+        var row = await db.BuildMemories.SingleOrDefaultAsync(x => x.UserId == user.UserId && x.ProjectId == projectId, ct);
+        if (row is null)
+        {
+            row = new() { UserId = user.UserId, ProjectId = projectId };
+            db.BuildMemories.Add(row);
+        }
+        row.Settings = encryption.Protect(JsonSerializer.Serialize(settings), Purpose);
+        await db.SaveChangesAsync(ct);
+    }
 }

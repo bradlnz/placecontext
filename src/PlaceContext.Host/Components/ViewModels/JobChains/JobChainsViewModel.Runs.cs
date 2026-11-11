@@ -2,6 +2,7 @@ using System.Text.Json;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application;
+using PlaceContext.Application.Workload.VirtualMachines;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.ViewModels.Helpers;
 
@@ -330,47 +331,23 @@ public sealed partial class JobChainsViewModel
     {
         Message = null;
         var chainRunId = Guid.NewGuid();
-        if (_managedHosting)
+        try
         {
-            try
+            if (_submissions is null)
             {
-                if (_submissions is null)
-                {
-                    throw new InvalidOperationException("Managed workflow submissions are not configured.");
-                }
-                var receipt = await _submissions.EnqueueAsync(ProjectId, chain.Id, payload,
-                                    idempotencyKey: "portal:" + chainRunId.ToString("N"),
-                                    stepPayloadOverrides: stepOverrides);
-                chainRunId = receipt.ChainRunId;
-                _pendingSubmissionId = receipt.TrackingId;
+                throw new InvalidOperationException("Durable workflow submissions are not configured.");
             }
-            catch (Exception ex)
-            {
-                Message = ex.Message;
-                NotifyStateChanged();
-                return;
-            }
+            var receipt = await _submissions.EnqueueAsync(ProjectId, chain.Id, payload,
+                                idempotencyKey: "portal:" + chainRunId.ToString("N"),
+                                stepPayloadOverrides: stepOverrides);
+            chainRunId = receipt.ChainRunId;
+            _pendingSubmissionId = receipt.TrackingId;
         }
-        if (!_managedHosting)
+        catch (Exception ex)
         {
-            var err = _ops.TryRun(
-                ProjectId,
-                $"Run workflow — {chain.Name}",
-                $"/observability?tab=workflows&workflowRun={chainRunId}",
-                async (sp, ct) =>
-                {
-                    var result = await sp.GetRequiredService<PlaceContextService>()
-                        .RunJobChainAsync(chain.Id, payload, chainRunId, stepOverrides, ct);
-                    return $"workflow finished — {result.Status}";
-                },
-                correlationKey: RunStatusWatchService.ChainRunKey(chainRunId)
-            );
-            if (err is not null)
-            {
-                Message = err;
-                NotifyStateChanged();
-                return;
-            }
+            Message = ex.Message;
+            NotifyStateChanged();
+            return;
         }
 
         RunPromptChain = null;
@@ -379,19 +356,17 @@ public sealed partial class JobChainsViewModel
         RunAttachment = "";
         PendingChainRunId = chainRunId;
         PendingChainId = chain.Id;
-        Message = _managedHosting
-            ? $"Run of {chain.Name} queued durably — it will appear here when a worker starts it."
-            : $"Run of {chain.Name} started — follow it in the notifications bell.";
+        Message = $"Run of {chain.Name} queued durably — it will continue if the app restarts.";
 
-        // Open the editor and switch to the runs tab so the user sees the run appear live.
-        EditChainId = chain.Id;
-        EditorTab = "runs";
-        EditorView = "runs";
-        ShowEditor = true;
-        _executionStepIndex = null;
-        OpenRun = null;
-        StopPolling();
-        await RefreshRunsAsync(chain.Id, pendingChainRunId: chainRunId);
+        _navigation.NavigateTo(PageRoutes.DashboardRun(ProjectId, chainRunId, _pendingSubmissionId));
+    }
+
+    public void OpenRunInChat(ChainRunView run)
+    {
+        if (run.ProjectId == ProjectId)
+        {
+            _navigation.NavigateTo(PageRoutes.DashboardRun(ProjectId, run.Id));
+        }
     }
 
     // ── Cancel ────────────────────────────────────────────────────────────────────────────────
@@ -451,6 +426,8 @@ public sealed partial class JobChainsViewModel
         ClearHumanConfirmation();
         _executionStepIndex = null;
         OpenRun = run;
+        EditorTab = "runs";
+        EditorView = "runs";
         StepRunDetail = null;
         SelectedStepRunId = null;
         await RefreshStepOutputAsync(run);
@@ -458,11 +435,13 @@ public sealed partial class JobChainsViewModel
         {
             StartPolling(run.ChainId);
         }
+        NavigateToWorkflow(run.ChainId, run.Id, "runs");
         NotifyStateChanged();
     }
 
     public void CloseChainRun()
     {
+        var chainId = EditChainId;
         ClearHumanConfirmation();
         StopPolling();
         StepOutputError = null;
@@ -470,6 +449,7 @@ public sealed partial class JobChainsViewModel
         OpenRun = null;
         StepRunDetail = null;
         SelectedStepRunId = null;
+        NavigateToWorkflow(chainId, view: "runs");
         NotifyStateChanged();
     }
 
@@ -567,6 +547,11 @@ public sealed partial class JobChainsViewModel
                             _pendingSubmissionId = null;
                             FollowNewest = true;
                             await RefreshStepOutputAsync(pendingRun);
+                            NavigateToWorkflow(pendingRun.ChainId, pendingRun.Id, "runs");
+                            if (!IsTerminal(pendingRun.Status))
+                            {
+                                StartPolling(chainId);
+                            }
                             if (IsTerminal(pendingRun.Status))
                             {
                                 PendingChainRunId = null;

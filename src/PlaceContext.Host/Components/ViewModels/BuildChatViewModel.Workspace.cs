@@ -3,11 +3,97 @@ using System.Text.Json;
 using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Jobs;
 namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class BuildChatViewModel
 {
-    public sealed record WorkspaceItem(Guid Id, string Kind, string Name);
+    public sealed record WorkspaceItem(Guid Id, string Kind, string Name, Guid? WorkflowId = null, Guid? TrackingId = null);
+    public ChainRunView? PreviewRun { get; private set; }
+    public JobChainSubmission? PreviewSubmission { get; private set; }
+    public string? PreviewRunStatus => PreviewRun?.Status ?? PreviewSubmission?.Status;
+    private CancellationTokenSource? _previewPolling;
+    private bool PreviewRunActive => PreviewRunStatus is "Queued" or "Running" or "Waiting" or "Retrying" or "AwaitingInput";
+    private int? _previewStepIndex;
+    private Guid? _previewChildRunId;
+    private int _previewStepVersion;
+    public ChainStepRunView? PreviewStep => _previewStepIndex is { } index
+        ? PreviewRun?.Steps.FirstOrDefault(x => x.Index == index)
+        : PreviewRun?.Steps.FirstOrDefault(x => x.Status == "Running")
+            ?? PreviewRun?.Steps.LastOrDefault(x => x.StartedAt is not null) ?? PreviewRun?.Steps.FirstOrDefault();
+    public JobRunDetailView? PreviewStepRun { get; private set; }
+    public string? PreviewStepError { get; private set; }
+
+    public async Task SelectPreviewStepAsync(ChainStepRunView step)
+    {
+        if (PreviewRun?.Steps.Any(x => x.Index == step.Index) != true)
+        {
+            return;
+        }
+        _previewStepIndex = step.Index;
+        _previewChildRunId = null;
+        PreviewStepRun = null;
+        PreviewStepError = null;
+        NotifyStateChanged();
+        await RefreshPreviewStepAsync();
+    }
+
+    public async Task OpenPreviewStepLogsAsync(Guid runId)
+    {
+        if (PreviewStep?.AgentActivity?.Any(x => x.RunId == runId) != true)
+        {
+            return;
+        }
+        _previewChildRunId = runId;
+        PreviewStepRun = null;
+        await RefreshPreviewStepAsync();
+    }
+
+    private async Task RefreshPreviewStepAsync(CancellationToken ct = default)
+    {
+        var version = ++_previewStepVersion;
+        var previewVersion = _previewVersion;
+        var step = PreviewStep;
+        var child = step?.AgentActivity?.LastOrDefault(x => x.RunId.HasValue && (_previewChildRunId is null || x.RunId == _previewChildRunId));
+        var runId = _previewChildRunId ?? step?.RunId ?? child?.RunId;
+        var jobId = runId == step?.RunId ? step?.JobId : child?.JobId;
+        if (PreviewStepRun?.Id != runId)
+        {
+            PreviewStepRun = null;
+        }
+        PreviewStepError = null;
+        if (runId is null)
+        {
+            return;
+        }
+        try
+        {
+            if (!await permissions.HasAsync(Permission.ProjectsView, ct) || !await permissions.HasAsync(Permission.ChainsManage, ct)
+                || !await permissions.HasAsync(Permission.JobsView, ct))
+            {
+                throw new UnauthorizedAccessException();
+            }
+            var detail = await service.GetJobRunAsync(runId.Value, ct);
+            if (detail is not null && (detail.Id != runId || detail.ProjectId != Conversation.ProjectId || (jobId is { } expected && detail.JobId != expected)))
+            {
+                throw new UnauthorizedAccessException();
+            }
+            if (previewVersion == _previewVersion && version == _previewStepVersion && PreviewStep?.Index == step?.Index)
+            {
+                PreviewStepRun = detail;
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception)
+        {
+            if (previewVersion == _previewVersion && version == _previewStepVersion)
+            {
+                PreviewStepRun = null;
+                PreviewStepError = "Could not load this step's job output. Check access and select the step to retry.";
+            }
+        }
+        NotifyStateChanged();
+    }
     public sealed record ChartPreview(ChartSpec Spec, string Source);
     public ChartPreview? PreviewChart
     {
@@ -62,7 +148,11 @@ public sealed partial class BuildChatViewModel
         get; private set;
     }
     public string? PreviewEditorUrl => PreviewItem is not { } item ? null
-        : $"/project/{Conversation.ProjectId}/{(item.Kind == "workflow" ? "workflows?workflow" : "jobs?job")}={item.Id}";
+        : item.Kind == "workflow-run"
+            ? item.WorkflowId is { } workflowId ? $"/project/{Conversation.ProjectId}/workflows/{workflowId}/runs/{item.Id}" : null
+        : item.Kind == "workflow"
+            ? $"/project/{Conversation.ProjectId}/workflows/{item.Id}"
+            : $"/project/{Conversation.ProjectId}/jobs?job={item.Id}";
     private int _previewVersion;
     private string? _autoPreviewCall;
 
@@ -77,7 +167,7 @@ public sealed partial class BuildChatViewModel
                     .FirstOrDefault(x => x["id"]?.ToString() == callId);
         var function = call?["function"]?["name"]?.ToString();
         if (function is not ("project_context" or "list_workflows" or "get_workflow" or "save_workflow"
-            or "list_jobs" or "get_job" or "save_job"))
+            or "list_jobs" or "get_job" or "save_job" or "run_workflow" or "list_workflow_runs"))
         {
             return [];
         }
@@ -99,11 +189,13 @@ public sealed partial class BuildChatViewModel
                 {
                     return;
                 }
-                var id = obj.FirstOrDefault(x => x.Key.Equals("id", StringComparison.OrdinalIgnoreCase)).Value?.ToString();
-                var name = obj.FirstOrDefault(x => x.Key.Equals("name", StringComparison.OrdinalIgnoreCase)).Value?.ToString();
-                if (Guid.TryParse(id, out var parsed))
+                string? Read(string key) => obj.FirstOrDefault(x => x.Key.Equals(key, StringComparison.OrdinalIgnoreCase)).Value?.ToString();
+                var name = Read("name") ?? Read("chainName");
+                if (Guid.TryParse(Read("id"), out var parsed) && parsed != Guid.Empty)
                 {
-                    items.Add(new(parsed, kind, name ?? (kind == "workflow" ? "Workflow" : "Job")));
+                    items.Add(new(parsed, kind, name ?? (kind == "workflow-run" ? "Workflow run" : kind == "workflow" ? "Workflow" : "Job"),
+                        Guid.TryParse(Read("chainId"), out var workflowId) ? workflowId : null,
+                        Guid.TryParse(Read("trackingId"), out var trackingId) ? trackingId : null));
                 }
             }
             void ApplyToolContext()
@@ -114,7 +206,8 @@ public sealed partial class BuildChatViewModel
                     Add(context["Jobs"], "job");
                     return;
                 }
-                Add(value, function.Contains("workflow", StringComparison.Ordinal) ? "workflow" : "job");
+                Add(value, function is "run_workflow" or "list_workflow_runs" ? "workflow-run"
+                    : function.Contains("workflow", StringComparison.Ordinal) ? "workflow" : "job");
             }
             ApplyToolContext();
             return items.DistinctBy(x => (x.Kind, x.Id)).ToArray();
@@ -127,9 +220,16 @@ public sealed partial class BuildChatViewModel
 
     public async Task OpenPreviewAsync(WorkspaceItem item)
     {
-        if (item.Kind is not ("workflow" or "job"))
+        if (item.Kind is not ("workflow" or "job" or "workflow-run"))
         {
             return;
+        }
+        AgentOpen = false;
+        ClosePreview();
+        _autoPreviewCall = Conversation.Messages.OfType<JsonNode>().LastOrDefault(x => Role(x) == "tool")?["tool_call_id"]?.ToString();
+        if (item.Kind != "workflow-run")
+        {
+            NavigateToDashboard();
         }
         OpenWorkspace();
         PreviewChart = null;
@@ -143,6 +243,25 @@ public sealed partial class BuildChatViewModel
         NotifyStateChanged();
         try
         {
+            if (item.Kind == "workflow-run")
+            {
+                await RefreshPreviewRunAsync();
+                if (version == _previewVersion && PreviewError is null && navigation is not null)
+                {
+                    _requestedRunId = item.Id;
+                    var route = PageRoutes.DashboardRun(projectId, item.Id, item.TrackingId);
+                    if (navigation.Uri != navigation.ToAbsoluteUri(route).AbsoluteUri)
+                    {
+                        navigation.NavigateTo(route, replace: true);
+                    }
+                }
+                if (version == _previewVersion && PreviewError is null && PreviewRunActive)
+                {
+                    _previewPolling = new();
+                    _ = PollPreviewRunAsync(_previewPolling.Token);
+                }
+                return;
+            }
             var permission = item.Kind == "workflow" ? Permission.ChainsManage : Permission.JobsView;
             if (!await permissions.HasAsync(permission))
             {
@@ -200,9 +319,98 @@ public sealed partial class BuildChatViewModel
         }
     }
     public Task OpenJobPreviewAsync(Guid id) => OpenPreviewAsync(new(id, "job", "Job"));
+    public async Task RefreshPreviewRunAsync(CancellationToken ct = default)
+    {
+        if (PreviewItem is not { Kind: "workflow-run" } item)
+        {
+            return;
+        }
+        var version = _previewVersion;
+        var projectId = Conversation.ProjectId;
+        try
+        {
+            if (!await permissions.HasAsync(Permission.ProjectsView, ct) || !await permissions.HasAsync(Permission.ChainsManage, ct))
+            {
+                throw new UnauthorizedAccessException();
+            }
+            var run = await service.GetChainRunAsync(item.Id, ct);
+            JobChainSubmission? receipt = null;
+            var name = run?.ChainName ?? "Workflow run";
+            var workflowId = run?.ChainId ?? Guid.Empty;
+            if (run is not null && (run.Id != item.Id || run.ProjectId != projectId || (item.WorkflowId is { } expected && run.ChainId != expected)))
+            {
+                throw new InvalidOperationException();
+            }
+            if (run is null)
+            {
+                receipt = item.TrackingId is { } trackingId && submissions is not null ? await submissions.GetAsync(trackingId, ct) : null;
+                if (receipt is null || receipt.ProjectId != projectId || receipt.ChainRunId != item.Id
+                    || (item.WorkflowId is { } expectedReceipt && receipt.ChainId != expectedReceipt))
+                {
+                    throw new InvalidOperationException();
+                }
+                var workflow = (await service.ListJobChainsAsync(projectId, ct))
+                    .SingleOrDefault(x => x.Id == receipt.ChainId && x.ProjectId == projectId) ?? throw new InvalidOperationException();
+                name = workflow.Name;
+                workflowId = workflow.Id;
+            }
+            if (version != _previewVersion || ct.IsCancellationRequested)
+            {
+                return;
+            }
+            PreviewRun = run;
+            PreviewSubmission = receipt;
+            PreviewItem = item with { Name = name, WorkflowId = workflowId };
+            PreviewError = null;
+            await RefreshPreviewStepAsync(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+        catch (Exception)
+        {
+            if (version != _previewVersion)
+            {
+                return;
+            }
+            PreviewRun = null;
+            PreviewSubmission = null;
+            PreviewStepRun = null;
+            PreviewError = "Could not load this run. It may have been removed or access is restricted. Try again to reconnect.";
+        }
+        if (version == _previewVersion)
+        {
+            NotifyStateChanged();
+        }
+    }
+
+    private async Task PollPreviewRunAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (PreviewRunActive && !ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                await RefreshPreviewRunAsync(ct);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
+
     public void ClosePreview()
     {
+        ShowDemoShare = false;
+        DemoUrl = DemoError = null;
+        DemoExpiry = null;
         ++_previewVersion;
+        ++_previewStepVersion;
+        _previewStepIndex = null;
+        _previewChildRunId = null;
+        PreviewStepRun = null;
+        PreviewStepError = null;
+        _previewPolling?.Cancel();
+        _previewPolling?.Dispose();
+        _previewPolling = null;
+        PreviewRun = null;
+        PreviewSubmission = null;
         PreviewChart = null;
         PreviewItem = null;
         PreviewWorkflow = null;
@@ -212,13 +420,27 @@ public sealed partial class BuildChatViewModel
     }
     private void ResetWorkspace()
     {
-        CloseWorkspace();
+        AgentOpen = false;
+        ClosePreview();
         _workspaceVisible = null;
         _autoPreviewCall = null;
     }
+    private void NavigateToDashboard()
+    {
+        if (navigation is null)
+        {
+            return;
+        }
+        var route = $"/project/{Conversation.ProjectId}/dashboard";
+        if (new Uri(navigation.Uri).AbsolutePath.StartsWith(route + "/runs/", StringComparison.Ordinal))
+        {
+            _requestedRunId = null;
+            navigation.NavigateTo(route, replace: true);
+        }
+    }
     private async Task AutoPreviewAsync()
     {
-        if (PreviewLoading || _workspaceVisible == false)
+        if (AgentOpen || PreviewLoading || _workspaceVisible == false)
         {
             return;
         }

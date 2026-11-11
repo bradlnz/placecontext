@@ -8,7 +8,7 @@ namespace PlaceContext.Host.Tests;
 public sealed class VirtualMachineReplayViewModelTests
 {
     [Fact]
-    public async Task Live_desktop_follows_the_running_step_independently_of_selected_replay()
+    public async Task Selected_replay_does_not_follow_another_running_desktop()
     {
         var run = Run() with
         {
@@ -17,12 +17,13 @@ public sealed class VirtualMachineReplayViewModelTests
         using var vm = new VirtualMachineReplayViewModel(new FakeVirtualMachineReplayStore());
         await vm.SetRunAsync(run);
         Assert.Equal(0, vm.Step);
-        Assert.Equal(1, vm.ActiveDesktop!.Index);
+        Assert.False(vm.Recording);
         await vm.SetRunAsync(run with
         {
             Steps = run.Steps.Select(step => step with { Status = "Succeeded" }).ToArray()
         });
-        Assert.Null(vm.ActiveDesktop);
+        Assert.Equal(0, vm.Step);
+        Assert.False(vm.Recording);
     }
     private static ChainRunView Run(string status = "Succeeded") => new(Guid.NewGuid(), Guid.NewGuid(), "Desktop", status,
         [new(0, 0, 0, Guid.Empty, "QEMU environment", null, status, DateTimeOffset.UtcNow, null, VirtualMachineChainAction.ActionType),

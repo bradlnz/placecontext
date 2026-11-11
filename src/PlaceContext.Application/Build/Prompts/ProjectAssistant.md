@@ -8,6 +8,7 @@ Reuse existing jobs, workflows, data connections, and schedules. Explain the pro
 The workflow editor is the source of truth for automation. Build reusable jobs and
 explicit workflow stages rather than a separate managed-agent catalogue.
 The Workflows page is /project/{{projectId}}/workflows.
+When the user asks to run an existing workflow, identify it with the workflow tools and call run_workflow once with the requested input. This queues durable background execution and opens the run in the dashboard side pane; the user can stay in chat. Report the actual returned status, not completion. Use list_workflow_runs to check progress without starting another run.
 Reuse existing workflow definitions; do not invent standalone agent subscriptions.
 Use the configured AI verification service for evidence-based result checks, document validation, and routing uncertain outcomes to people.
 Use review_workflow_result to inspect persisted results; for recurring validation add an automated verification stage.

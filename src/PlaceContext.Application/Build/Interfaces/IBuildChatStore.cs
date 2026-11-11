@@ -14,4 +14,6 @@ public interface IBuildChatStore
     Task DeleteAsync(Guid projectId, Guid id, CancellationToken ct = default);
     Task<string> GetMemoryAsync(Guid projectId, CancellationToken ct = default);
     Task SaveMemoryAsync(Guid projectId, string memory, CancellationToken ct = default);
+    Task<DashboardSettings> GetSettingsAsync(Guid projectId, CancellationToken ct = default);
+    Task SaveSettingsAsync(Guid projectId, DashboardSettings settings, CancellationToken ct = default);
 }

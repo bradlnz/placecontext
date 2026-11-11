@@ -17,12 +17,10 @@ public sealed partial class JobChainsViewModel : PageViewModel
 {
     private readonly PlaceContextService _svc;
     private readonly OperationCenter _opCenter;
-    private readonly BackgroundOperationRunner _ops;
     private readonly IPermissionService _permissions;
     private readonly NavigationManager _navigation;
     private readonly ParameterPromptState _runPrompt = new();
     private readonly IJobChainSubmissionQueue? _submissions;
-    private readonly bool _managedHosting;
     private Guid? _pendingSubmissionId;
     private readonly IVirtualMachineEnvironmentCatalog? _qemuCatalog;
     private readonly IVirtualMachineLoginStore? _qemuLogins;
@@ -45,14 +43,12 @@ public sealed partial class JobChainsViewModel : PageViewModel
         _svc = svc;
         _modelConnections = modelConnections;
         _submissions = submissions;
-        _managedHosting = hosting?.Value.ManagedHosting ?? false;
         _qemuCatalog = qemuCatalog;
         _qemuLogins = qemuLogins;
         _tenant = tenant;
         _opCenter = opCenter;
         _permissions = permissions;
         _navigation = navigation;
-        _ops = new BackgroundOperationRunner(opCenter);
     }
 
     // ── Parameters ────────────────────────────────────────────────────────────────────────────
@@ -61,6 +57,7 @@ public sealed partial class JobChainsViewModel : PageViewModel
         get; private set;
     }
     public string JobsRoute => PageRoutes.ProjectJobs(ProjectId);
+    public string WorkflowsRoute => PageRoutes.ProjectWorkflows(ProjectId);
 
     public void NavigateToJobs() => _navigation.NavigateTo(JobsRoute);
 
@@ -89,25 +86,53 @@ public sealed partial class JobChainsViewModel : PageViewModel
     // ── Lifecycle ─────────────────────────────────────────────────────────────────────────────
     private int _pageVersion;
 
-    public async Task LoadPageAsync(Guid projectId, Guid? chainId, Guid? runId = null)
+    public async Task LoadPageAsync(Guid projectId, Guid? chainId, Guid? runId = null, string? view = null)
     {
         var version = ++_pageVersion;
+        var reuseLoadedPage = ProjectId == projectId && Chains is not null;
         Initialize(projectId);
-        await LoadAsync();
+        if (!reuseLoadedPage)
+        {
+            await LoadAsync();
+        }
         if (version != _pageVersion)
         {
             return;
         }
-        if (chainId is not { } id
-                    || Chains?.FirstOrDefault(chain => chain.Id == id) is not { } chain)
+        if (chainId is null)
+        {
+            if (ShowEditor && EditChainId is not null)
+            {
+                CloseEditor();
+            }
+            return;
+        }
+        if (Chains?.FirstOrDefault(chain => chain.Id == chainId) is not { } chain)
         {
             return;
         }
-        if (!ShowEditor || EditChainId != id)
+        var id = chain.Id;
+        var openEditor = !ShowEditor || EditChainId != id;
+        if (openEditor)
         {
-            await OpenChainEditorAsync(chain);
-        }        // A bell notification deep-links to the actual paused run and its inputs,
-        // not merely the workflow editor. Verify both project and chain ownership.
+            await OpenChainEditorAsync(chain, runId, view);
+        }
+        if (!openEditor)
+        {
+            EditorView = NormalizeEditorView(view ?? (runId.HasValue ? "runs" : "canvas"));
+            if (EditorView is "runs" or "details")
+            {
+                EditorTab = EditorView;
+            }
+            if (runId is null && OpenRun is not null)
+            {
+                StopPolling();
+                OpenRun = null;
+                StepRunDetail = null;
+                _executionStepIndex = null;
+            }
+        }
+        // Deep links must stay within the current project and workflow.
         if (runId is { } wanted && (OpenRun?.Id != wanted || !IsRunsTab))
         {
             var run = ChainRuns?.FirstOrDefault(x => x.Id == wanted)

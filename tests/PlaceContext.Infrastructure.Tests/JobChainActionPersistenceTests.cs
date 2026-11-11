@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.DataProtection;
+using PlaceContext.Application.Secrets;
+using PlaceContext.Infrastructure.Security;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Infrastructure.Persistence;
@@ -8,6 +11,31 @@ namespace PlaceContext.Infrastructure.Tests;
 
 public sealed class JobChainActionPersistenceTests
 {
+    [Fact]
+    public async Task Step_output_is_encrypted_round_trips_and_old_runs_without_output_still_load()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var encryptor = new DataProtectionEncryptor(new EphemeralDataProtectionProvider());
+        var repository = new EfChainRunRepository(db, encryptor);
+        var chain = JobChain.Create(Guid.NewGuid(), "review", null,
+            [ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Review", "result"))], T0);
+        var run = ChainRun.Start(chain, ["Review"], T0);
+        run.MarkStepRunning(0, null, T0);
+        run.MarkStepFinished(0, null, ChainStepStatus.Succeeded, T0, output: "{\"private_step_result\":42}");
+        await repository.AddAsync(run);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var row = await db.ChainRuns.SingleAsync();
+        Assert.DoesNotContain("private_step_result", row.StepsJson);
+        Assert.Equal(run.Steps[0].Output, (await repository.GetByIdAsync(run.Id))!.Steps[0].Output);
+        var steps = System.Text.Json.Nodes.JsonNode.Parse(encryptor.Unprotect(row.StepsJson, IDataEncryptor.Purpose.ChainRun))!;
+        steps[0]!.AsObject().Remove("output");
+        row.StepsJson = encryptor.Protect(steps.ToJsonString(), IDataEncryptor.Purpose.ChainRun);
+        await db.SaveChangesAsync();
+        Assert.Null((await repository.GetByIdAsync(run.Id))!.Steps[0].Output);
+    }
+
     [Fact]
     public async Task Query_data_preserves_SQL_and_output_field()
     {

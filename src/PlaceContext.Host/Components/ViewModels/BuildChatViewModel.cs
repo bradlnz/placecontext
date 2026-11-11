@@ -3,6 +3,7 @@ using Markdig.Syntax.Inlines;
 using Markdig.Syntax;
 using Markdig;
 using Microsoft.JSInterop;
+using Microsoft.AspNetCore.Components;
 using PlaceContext.Application.Build;
 using PlaceContext.Application.Operations;
 using PlaceContext.Application.Tenancy;
@@ -12,7 +13,9 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConnections connections, BuildChatAgent agent,
     PortalUiState ui, IJSRuntime js, PlaceContextService service, PlaceContext.Application.Access.IPermissionService permissions,
-    OperationCenter? operations = null, ICurrentTenant? tenant = null, ICurrentUser? user = null) : PageViewModel, IComponentViewModel
+    OperationCenter? operations = null, ICurrentTenant? tenant = null, ICurrentUser? user = null,
+    PlaceContext.Application.Jobs.IJobChainSubmissionQueue? submissions = null, NavigationManager? navigation = null,
+    IWorkflowDemoShares? demoShares = null) : PageViewModel, IComponentViewModel
 {
     private static readonly MarkdownPipeline ChatMarkdown = new MarkdownPipelineBuilder().DisableHtml().UsePipeTables().Build();
     public static string FormatReply(string text)
@@ -32,13 +35,15 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
     }
 
     private bool? _workspaceVisible;
-    public bool WorkspaceOpen => _workspaceVisible == true || PreviewItem is not null || PreviewChart is not null;
+    public bool WorkspaceOpen => AgentOpen || _workspaceVisible == true || PreviewItem is not null || PreviewChart is not null;
     public bool WorkspaceVisible => _workspaceVisible ?? (Conversation.Messages.Count > 0 || WorkspaceOpen);
     public void OpenWorkspace() => _workspaceVisible = true;
     public void CloseWorkspace()
     {
+        AgentOpen = false;
         ClosePreview();
         _workspaceVisible = false;
+        NavigateToDashboard();
     }
 
     public string ViewId { get; } = "build-" + Guid.NewGuid().ToString("N");
@@ -92,19 +97,26 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
     {
         get; private set;
     }
-    public bool CanSend => !Locked && !Listening && Conversation.ConnectionId != Guid.Empty
-        && Models.Contains(Conversation.Model) && Draft.Trim().Length > 0;
+    public bool CanStartChat => !Locked && !Listening && Conversation.ConnectionId != Guid.Empty && Models.Contains(Conversation.Model);
+    public bool CanSend => CanStartChat && Draft.Trim().Length > 0;
+    public async Task StartWorkflowChatAsync()
+    {
+        await StartDashboardActionAsync("Help me run an existing workflow in this project. Show me the available workflows and use clickable choices to ask which one. Ask for any required inputs before running it. Do not create or modify workflows.");
+    }
     private IDisposable? _conversationSubscription;
     private readonly SemaphoreSlim _updateGate = new(1, 1);
     private int _updateVersion;
     private bool _refreshPending, _disposed;
     private Guid? _requestedConversationId;
+    private Guid? _requestedRunId;
     private Task? _send;
     private IJSObjectReference? _module;
     private DotNetObjectReference<BuildChatViewModel>? _reference;
 
-    public async Task LoadAsync(Guid projectId, Guid? conversationId = null)
+    public async Task LoadAsync(Guid projectId, Guid? conversationId = null, Guid? runId = null, Guid? submissionId = null)
     {
+        var runChanged = _requestedRunId != runId;
+        _requestedRunId = runId;
         if (Conversation.ProjectId == projectId)
         {
             if (_requestedConversationId != conversationId && conversationId is { } id)
@@ -112,6 +124,14 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
                 await OpenAsync(id);
             }
             _requestedConversationId = conversationId;
+            if (runChanged)
+            {
+                ClosePreview();
+                if (runId is { } selectedRun)
+                {
+                    await OpenPreviewAsync(new(selectedRun, "workflow-run", "Workflow run", TrackingId: submissionId));
+                }
+            }
             return;
         }
         _requestedConversationId = conversationId;
@@ -125,6 +145,11 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         Error = Notice = null;
         Draft = "";
         ResetWorkspace();
+        Dashboard = new();
+        AgentDraft = new();
+        AgentPrompt = AgentTools = AgentMemory = NewActionTitle = NewActionPrompt = "";
+        AgentWorkflows = [];
+        CanShareDemo = false;
         Conversation = new()
         {
             ProjectId = projectId
@@ -137,6 +162,8 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             await Task.WhenAll(models, history);
             Connections = (await models).Where(x => x.Enabled).ToArray();
             Conversations = await history;
+            Dashboard = await store.GetSettingsAsync(projectId);
+            CanShareDemo = await permissions.HasAsync(PlaceContext.Application.Access.Models.Permission.ArtifactsShare);
             SelectDefaultModel();
             var active = Conversations.FirstOrDefault(x => x.Status is BuildRunStatus.Queued or BuildRunStatus.Running);
             async Task LoadConversationAsync()
@@ -152,7 +179,14 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
                 }
             }
             await LoadConversationAsync();
-            await AutoPreviewAsync();
+            if (runId is { } selectedRun)
+            {
+                await OpenPreviewAsync(new(selectedRun, "workflow-run", "Workflow run", TrackingId: submissionId));
+            }
+            if (runId is null)
+            {
+                await AutoPreviewAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -204,6 +238,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         ConfirmDelete = false;
         ShowHistory = false;
         ResetWorkspace();
+        NavigateToDashboard();
     }
     public async Task OpenAsync(Guid id)
     {
@@ -221,6 +256,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             await StopSpeechAsync();
             Conversation = await store.LoadAsync(Conversation.ProjectId, id);
             ResetWorkspace();
+            NavigateToDashboard();
             await AutoPreviewAsync();
             Draft = "";
             Error = Notice = null;
@@ -287,6 +323,10 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         Error = Notice = null;
         SubscribeToConversation();
         var text = Draft;
+        if (PreviewItem is { Kind: "workflow-run", WorkflowId: { } workflowId } selected && PreviewError is null)
+        {
+            text += $"\n\nSelected workflow run: {selected.Id} (workflow {workflowId}).";
+        }
         try
         {
             await agent.QueueAsync(Conversation, text);
@@ -528,6 +568,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
     public async ValueTask DisposePageAsync()
     {
         _disposed = true;
+        ClosePreview();
         Detach();
         StopUpdates();
         if (_send is not null)
