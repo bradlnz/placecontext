@@ -32,6 +32,8 @@ You decide what runs automatically, what needs review, and what happens next.
 
 ## Watch PlaceContext in action
 
+[![Watch the PlaceContext live demo: chat, automatic agents, approval, and the final result](docs/videos/platform-live/poster.png)](docs/videos/platform-live/placecontext-demo-branded.mp4)
+
 The live walkthrough follows a new sample project from data and the workflow canvas
 to chat launching a workflow, automatic agents, an approval checkpoint, and the successful result.
 
