@@ -36,7 +36,9 @@ public sealed class UserCircuitHandler : CircuitHandler
             {
                 await using var scope = _scopes.CreateAsyncScope();
                 var oldRole = state.User.FindFirstValue(ClaimTypes.Role);
-                if (_tenant.Tenant is null || !await PortalSession.ValidateAsync(state.User, _tenant.Tenant,
+                // Inbound activities overlap; refresh a private identity so shared claims remain readable.
+                var principal = new ClaimsPrincipal(state.User.Identities.Select(identity => identity.Clone()));
+                if (_tenant.Tenant is null || !await PortalSession.ValidateAsync(principal, _tenant.Tenant,
                     scope.ServiceProvider.GetRequiredService<IMembershipService>()))
                 {
                     _holder.User = null;
@@ -44,11 +46,14 @@ public sealed class UserCircuitHandler : CircuitHandler
                         host.SetAuthenticationState(Task.FromResult(new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()))));
                     throw new UnauthorizedAccessException("Workspace membership has expired. Sign in again.");
                 }
-                _holder.User = new UserIdentity(Guid.Parse(state.User.FindFirstValue(ClaimTypes.NameIdentifier)!),
-                    state.User.FindFirstValue(ClaimTypes.Role)!);
-                CurrentUser.Set(_holder.User);
-                if (oldRole != _holder.User.Role && _authentication is IHostEnvironmentAuthenticationStateProvider updated)
-                    updated.SetAuthenticationState(Task.FromResult(state));
+                var user = new UserIdentity(Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!),
+                    principal.FindFirstValue(ClaimTypes.Role)!);
+                _holder.User = user;
+                CurrentUser.Set(user);
+                if (oldRole != user.Role && _authentication is IHostEnvironmentAuthenticationStateProvider updated)
+                {
+                    updated.SetAuthenticationState(Task.FromResult(new AuthenticationState(principal)));
+                }
             }
             await next(context);
         };
