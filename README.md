@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/PlaceContext.Host/wwwroot/favicon.svg" width="112" alt="PlaceContext logo">
+  <img src="docs/images/placecontext-corgi.svg" width="112" height="112" alt="PlaceContext corgi logo">
 </p>
 
 <h1 align="center">PlaceContext</h1>
@@ -17,15 +17,61 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-43d675?style=flat-square"></a>
 </p>
 
-PlaceContext is an open-source agentic workflow platform. Give agents tasks, connect tools and
-data, and bring people in when a decision needs their judgement—all within a workflow you can
-run, inspect, and improve.
+PlaceContext is an open-source agentic workflow platform with a built-in agent harness. Create
+specialist agents, give each workflow step its own task and model, and connect their results to data,
+tools, and human decisions. The harness runs the model and tool loop, carries context between steps,
+and records the work so you can inspect and improve it.
 
 Use it to qualify a lead, review a document, prepare a report, or check a software release.
 You decide what runs automatically, what needs review, and what happens next.
 
-[Get started](#get-started) · [See the workflow](#from-data-to-a-decision) · [Use cases](#what-you-can-build) ·
-[Agents, people, and decisions](#agents-people-and-decisions) · [Documentation](#documentation)
+[Get started](#get-started) · [Multiple agents](#build-a-workflow-with-multiple-agents) ·
+[The agent harness](#the-harness-behind-the-workflow) · [See the workflow](#from-data-to-a-decision) ·
+[Documentation](#documentation)
+
+## Build a workflow with multiple agents
+
+Give each agent a clear responsibility. A researcher prepares the evidence, a reviewer checks it,
+and a handoff writer turns the approved result into the next team's brief. Each automatic step can
+use its own model and instructions; its named output becomes context for the following steps.
+
+| Agent | Responsibility | Recorded output |
+| --- | --- | --- |
+| **Researcher** | Assess the account records and recommend who is ready for onboarding. | `research` |
+| **Reviewer** | Check that recommendation against the original records and flag missing evidence. | `review` |
+| **Handoff writer** | Prepare the onboarding brief after a person approves it. | `handoff` |
+
+```mermaid
+flowchart TD
+    Data["Query account data"] --> Research["Researcher agent"]
+    Research --> Review["Reviewer agent"]
+    Review --> Human{"Human approval"}
+    Human -->|Yes| Handoff["Handoff writer agent"]
+    Human -->|No| Hold["Hold for follow-up"]
+```
+
+Create named chat agents through **Agent → Instructions → Add agent**, choose their models,
+instructions and MCP connections, then **Save agents**. Switch between them in the chat header.
+For workflow execution, add **Agent task** or **Agent in the loop** steps, choose **Automatic**,
+and configure each step's model, instructions and response field in the workflow editor.
+Saved chat profiles and workflow steps are configured separately. **Agent → Sub-agents** shows
+the automatic agents in your accessible workflows.
+
+[Build this three-agent example →](docs/multi-agent-workflows.md)
+
+## The harness behind the workflow
+
+The harness is the execution layer around your agents: it supplies project context and tools,
+runs model calls and tool responses, and saves each step's result for the next agent or decision.
+
+- **Work with context.** Pass named outputs between agents; query data wherever the workflow needs it.
+- **Act through tools.** Run code through sandboxed jobs and use MCP tools with project and permission checks.
+- **Keep execution bounded.** Automatic workflow agents have a 20-turn, 30-minute limit, with cancellation and recorded failures.
+- **Inspect and intervene.** Follow model activity, tool calls, job logs and JSON results; pause for human input and resume the workflow.
+
+Use the built-in dashboard assistant, or connect an external harness such as Codex or Claude Code
+through [MCP](docs/platform-reference.md#connect-your-ai-harness).
+[Explore agent execution and controls →](docs/platform-reference.md#agentic-workflows)
 
 ## From data to a decision
 
@@ -188,6 +234,7 @@ connection under **Settings → Models**.
 | --- | --- |
 | Connect and work with data | [Project data, sources, and queries](src/PlaceContext.Host/Wiki/project-data.md) |
 | Build and run workflows | [Jobs, workflows, and artifacts](src/PlaceContext.Host/Wiki/jobs-and-artifacts.md) |
+| Create and coordinate multiple agents | [Three-agent walkthrough](docs/multi-agent-workflows.md) |
 | Configure agents, decisions, and execution | [Platform reference](docs/platform-reference.md) |
 | Check data quality | [Data contracts and readiness checks](docs/job-data-saas-foundation.md) |
 | Integrate with other systems | [Management API](docs/management-api.md) · [Terraform](terraform/README.md) |
@@ -201,3 +248,4 @@ job definitions, runs, and artifacts. © Bradley Lietz / CTRL SIGNAL SOFTWARE PT
 Want to help shape it? See [Contributing](CONTRIBUTING.md) and the
 [Code of Conduct](CODE_OF_CONDUCT.md). Report vulnerabilities through the
 [security policy](SECURITY.md). [Third-party notices](THIRD-PARTY-NOTICES.md).
+
