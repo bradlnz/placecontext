@@ -1,0 +1,96 @@
+{
+  "source": "raw/platform-live.webm",
+  "editing": "Chronological cuts; one model wait sequence at 2.5x. No fabricated UI, statuses, messages or outputs.",
+  "scenes": [
+    {
+      "id": "01-project",
+      "start": 3.7270000000000003,
+      "end": 9.727,
+      "speed": 1,
+      "title": "A fresh project. A clear goal.",
+      "subtitle": "Northstar Onboarding · Five fictional accounts · One approval-gated workflow.",
+      "index": 1,
+      "total": 9
+    },
+    {
+      "id": "02-data",
+      "start": 38.717,
+      "end": 46.016000000000005,
+      "speed": 1,
+      "title": "Ground every decision in project data.",
+      "subtitle": "Read the source accounts before an agent makes a recommendation.",
+      "index": 2,
+      "total": 9
+    },
+    {
+      "id": "03-workflow",
+      "start": 164.063,
+      "end": 171.531,
+      "speed": 1,
+      "title": "Give each step a clear responsibility.",
+      "subtitle": "Query → Research → Independent review → Approval → Handoff.",
+      "index": 3,
+      "total": 9
+    },
+    {
+      "id": "04-chat",
+      "start": 173.569,
+      "end": 190.455,
+      "speed": 1,
+      "title": "Start the workflow in chat.",
+      "subtitle": "One request launches the saved workflow and opens its live run.",
+      "index": 4,
+      "total": 9
+    },
+    {
+      "id": "05-live",
+      "start": 194.455,
+      "end": 226.513,
+      "speed": 2.5,
+      "title": "Watch the specialists work.",
+      "subtitle": "Actual model execution · Model waiting time shown at 2.5× speed.",
+      "index": 5,
+      "total": 9
+    },
+    {
+      "id": "06-review",
+      "start": 235.35,
+      "end": 250.172,
+      "speed": 1,
+      "title": "Review the evidence behind the answer.",
+      "subtitle": "Three eligible accounts. Two held. Independent checks passed.",
+      "index": 6,
+      "total": 9
+    },
+    {
+      "id": "07-approval",
+      "start": 341.188,
+      "end": 358.317,
+      "speed": 1,
+      "title": "Keep a person at the decision point.",
+      "subtitle": "The workflow pauses until an explicit approval resumes it.",
+      "index": 7,
+      "total": 9
+    },
+    {
+      "id": "08-handoff",
+      "start": 372.331,
+      "end": 380.331,
+      "speed": 1,
+      "title": "Produce an approved internal handoff.",
+      "subtitle": "Five steps succeeded · No account changes or customer messages.",
+      "index": 8,
+      "total": 9
+    },
+    {
+      "id": "09-summary",
+      "start": 438.194,
+      "end": 449.675,
+      "speed": 1,
+      "title": "Bring the outcome back to the conversation.",
+      "subtitle": "Eligible accounts, exceptions, and next steps — together.",
+      "index": 9,
+      "total": 9
+    }
+  ]
+}
