@@ -117,6 +117,65 @@ public sealed class SecurityBoundaryTests
     }
 
     [Theory]
+    [InlineData("Owner")]
+    [InlineData("Viewer")]
+    public async Task Overlapping_circuit_activities_do_not_mutate_the_shared_authentication_identity(string role)
+    {
+        using var f = new Fixture();
+        var principal = f.Principal();
+        var originalClaims = principal.Claims.ToArray();
+        var authentication = new CircuitAuthentication(principal);
+        var roles = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var members = Stub.Create<IMembershipService>((method, _) => method == nameof(IMembershipService.GetRoleAsync)
+            ? roles.Task : throw new NotSupportedException(method));
+        using var services = new ServiceCollection().AddSingleton(members).BuildServiceProvider();
+        var holder = new UserHolder();
+        var handler = new UserCircuitHandler(holder,
+            new TenantHolder { Tenant = new TenantInfo(f.Tenant.TenantId, "test", "Test", "UTC") },
+            services.GetRequiredService<IServiceScopeFactory>(), authentication);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        var activity = handler.CreateInboundActivityHandler(async _ =>
+        {
+            Assert.Equal(new UserIdentity(f.User.Id, role), CurrentUser.Current);
+            if (Interlocked.Increment(ref calls) == 2)
+            {
+                entered.SetResult();
+            }
+            await release.Task;
+        });
+        var first = activity(null!);
+        var second = activity(null!);
+        roles.SetResult(role);
+        try
+        {
+            // JS completions must enter while another activity awaits them.
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            release.SetResult();
+        }
+        await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(originalClaims, principal.Claims.ToArray());
+        Assert.Equal("Owner", principal.FindFirstValue(ClaimTypes.Role));
+        Assert.Equal(role, holder.User!.Role);
+        var current = (await authentication.GetAuthenticationStateAsync()).User;
+        Assert.Equal(role, current.FindFirstValue(ClaimTypes.Role));
+        if (role == "Owner")
+        {
+            Assert.Same(principal, current);
+        }
+        else
+        {
+            Assert.NotSame(principal, current);
+            Assert.Equal(role, current.FindFirstValue("role"));
+        }
+    }
+
+    [Theory]
     [InlineData("plaintext")]
     [InlineData("tampered")]
     [InlineData("expired")]
