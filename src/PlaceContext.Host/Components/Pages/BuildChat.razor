@@ -35,7 +35,7 @@
                 <button class="chat-icon-button" aria-label="History" title="Conversation history" aria-expanded="@Vm.ShowHistory" aria-controls="@(Vm.ViewId + "-build-history")" @onclick="Vm.ToggleHistoryAsync"><AppIcon Kind="history" /></button>
                 <button class="chat-icon-button" aria-label="New chat" title="New chat" disabled="@Vm.NavigationLocked" @onclick="Vm.NewAsync"><AppIcon Kind="edit" /></button>
                             <div class="model-picker">
-                                <label for="@(Vm.ViewId + "-chat-agent")" class="visually-hidden">Agent</label><select id="@(Vm.ViewId + "-chat-agent")" value="@(Vm.Conversation.AgentId ?? DashboardSettings.DefaultAgentId)" @onchange="e => Vm.SelectAgent(e.Value?.ToString())" disabled="@Vm.Locked">@foreach (var profile in Vm.AvailableAgents) { <option value="@profile.Id">@profile.Name@(profile.Id == DashboardSettings.DefaultAgentId ? " (master)" : "")</option> }</select>
+                                <label for="@(Vm.ViewId + "-chat-agent")" class="visually-hidden">Agent</label><select id="@(Vm.ViewId + "-chat-agent")" value="@(Vm.Conversation.AgentId ?? DashboardSettings.DefaultAgentId)" @onchange="e => Vm.SelectAgent(e.Value?.ToString())" disabled="@Vm.Locked">@foreach (var profile in Vm.AvailableAgents) { <option value="@profile.Id">@profile.DisplayName</option> }</select>
                             </div>
             </div>
             <div class="chat-header-actions">
@@ -262,6 +262,11 @@
                         @if (Vm.WorkflowPickerLoading) { <Skeleton Kind="list" Rows="3" /> }
                         else if (Vm.WorkflowPickerError is { } pickerError)
                         { <p role="alert">@pickerError</p><button class="dcbtn" @onclick="Vm.StartWorkflowChatAsync">Try again</button> }
+                        else if (Vm.WorkflowPickerRestricted)
+                        {
+                            <p role="status">@(string.IsNullOrWhiteSpace(Vm.WorkflowPickerAgentName) ? "This agent" : Vm.WorkflowPickerAgentName) does not have access to run workflows. Choose an agent with run access or update its workflow capabilities.</p>
+                            <a class="dcbtn" href="@($"/project/{ProjectId}/agents")">Manage agents</a>
+                        }
                         else if (Vm.AvailableWorkflows.Count == 0)
                         { <p>No workflows yet in this project.</p><a class="dcbtn" href="@($"/project/{ProjectId}/workflows")">Open workflows</a> }
                         else
@@ -285,7 +290,7 @@
                 }
                 else if (Vm.PreviewArtifact is { } artifact)
                 {
-                    <ArtifactPreview @key="artifact.Id" Artifact="artifact" />
+                    <ArtifactPreview @key="artifact.Id" Artifact="artifact" Json="@Vm.PreviewArtifactJson" JsonError="@Vm.PreviewArtifactJsonError" JsonTruncated="@Vm.PreviewArtifactJsonTruncated" />
                 }
                 else if (Vm.PreviewChart is { } previewChart)
                 {

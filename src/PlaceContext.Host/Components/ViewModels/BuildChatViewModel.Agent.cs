@@ -109,6 +109,10 @@ public sealed partial class BuildChatViewModel
         }
         ApplyAgentModel();
         AgentOpen = false;
+        if (WorkflowPickerOpen)
+        {
+            _ = OpenWorkflowPickerAsync();
+        }
     }
 
     private void ApplyAgentModel()

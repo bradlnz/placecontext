@@ -34,6 +34,28 @@ A successful submission schedules the existing durable continuation worker.
 It resumes the same run at the paused stage, without rerunning earlier stages.
 The funding calculator still validates ranges and financial constraints.
 
+## Parent agent approvals
+
+Choose a parent in **Agents → Overview**. Agents without an explicit parent report
+to the master agent. Shared agents can select another shared agent; private agents
+can select another private agent. Cycles and unavailable parents are rejected,
+and children must be reassigned before their parent can be deleted.
+
+In dashboard chat and automatic agent tasks, the parent reviews the task, each
+proposed tool batch, and the final result. Reviews use the parent's system prompt
+and configured model (or the running model when unset), without tools. Approval
+never expands the child's permissions. These reviews add model calls and latency.
+Task and tool authorization gates check whether the proposed scope may proceed;
+they do not require completed findings that cannot exist before the work runs.
+Result approval reviews the completed evidence and rejects unsupported work.
+
+Automatic **Agent in the loop** steps ask the selected agent's parent directly;
+with no selected child, the master agent reviews the gate. The response field
+contains `{ "approved": true, "reason": "..." }` on success. Rejection, invalid
+approval output, unavailable parents, or model failures stop execution. Previously
+completed actions are not rolled back. Human handoffs and external/AI verification
+providers keep their existing behavior.
+
 ## Jev verification in an agent step
 
 In **Agent in the loop**, choose **Jev (TypeSafe)** under **Responding agent**.

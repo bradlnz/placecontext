@@ -1,6 +1,8 @@
 .artifact-preview { display:flex; flex-direction:column; flex:1; min-height:0; gap:12px; padding:16px; }
 .artifact-preview-toolbar { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:var(--text-3); }
 .artifact-frame { flex:1; min-height:400px; width:100%; border:0; background:#fff; }
+.artifact-json { display:flex; flex:1; min-height:0; }
+.artifact-json ::deep .run-output { height:100%; max-height:none; min-height:300px; }
 .artifact-image { flex:1; min-height:0; overflow:auto; }
 .artifact-image img { display:block; max-width:100%; height:auto; margin:auto; }
 .artifact-pdf-pages { display:flex; flex:1; min-height:0; flex-direction:column; gap:12px; overflow:auto; }

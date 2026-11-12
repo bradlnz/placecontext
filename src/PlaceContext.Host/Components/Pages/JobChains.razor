@@ -1310,7 +1310,7 @@ else
                                     @if (Vm.LoopKind == LoopChainAction.AgentType) { <option value="@LoopChainAction.JevAgent">AI verification — assess evidence</option> }
                                 </select>
                                 <span id="loop-agent-help" class="sub-note">@(Vm.LoopAgentProvider == LoopChainAction.AutomaticAgent
-                                    ? "Runs the selected model with project job tools, saves its JSON result and continues automatically."
+                                    ? Vm.LoopKind == LoopChainAction.AgentType ? "Asks the selected agent’s parent (or the master agent) for approval. Rejection stops the run." : "Runs the agent with parent approval before actions and completion, then saves its JSON result."
                                     : Vm.LoopAgentProvider == LoopChainAction.JevAgent
                                     ? "Sends the preceding output and a yes/no question to the configured AI verification service. An administrator must set up the provider."
                                     : "Waits for a connected agent to submit a written response. No agent is launched automatically.")</span>
@@ -1321,7 +1321,7 @@ else
                             <div class="dcfield"><label for="loop-project-agent">Agent</label>
                                 <select id="loop-project-agent" class="dcinput" @bind="Vm.LoopAgentId" @bind:after="Vm.SelectLoopAgent">
                                     <option value="">Custom step settings</option>
-                                    @foreach (var agent in Vm.LoopAgents) { <option value="@agent.Id">@(agent.Id == PlaceContext.Application.Build.DashboardSettings.DefaultAgentId ? "Dashboard agent (master)" : agent.Name)</option> }
+                                    @foreach (var agent in Vm.LoopAgents) { <option value="@agent.Id">@agent.DisplayName</option> }
                                     @if (Vm.LoopAgentId is not null && Vm.SelectedLoopAgent is null) { <option value="@Vm.LoopAgentId">Unavailable agent</option> }
                                 </select>
                                 @if (Vm.SelectedLoopAgent is { } selectedAgent)

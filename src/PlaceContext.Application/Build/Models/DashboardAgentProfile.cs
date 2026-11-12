@@ -4,6 +4,11 @@ public sealed class DashboardAgentProfile
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "New agent";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string DisplayName => Id == DashboardSettings.DefaultAgentId ? "Master agent" : Name;
+    public Guid? ParentAgentId { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Guid? EffectiveParentAgentId => Id == DashboardSettings.DefaultAgentId ? null : ParentAgentId ?? DashboardSettings.DefaultAgentId;
     public Guid ConnectionId { get; set; }
     public string Model { get; set; } = "";
     public string Instructions { get; set; } = "";
@@ -40,8 +45,26 @@ public sealed class DashboardAgentProfile
         _ => false
     };
 
+    public static void ValidateHierarchy(IReadOnlyList<DashboardAgentProfile> agents)
+    {
+        var byId = agents.ToDictionary(a => a.Id);
+        foreach (var agent in agents)
+        {
+            var visited = new HashSet<Guid> { agent.Id };
+            var parentId = agent.EffectiveParentAgentId;
+            while (parentId is { } id && id != DashboardSettings.DefaultAgentId)
+            {
+                if (!visited.Add(id)) throw new ArgumentException("An agent cannot report to itself or one of its descendants.");
+                if (!byId.TryGetValue(id, out var parent)) throw new ArgumentException("Choose an available parent agent. Reassign its children before deleting it.");
+                parentId = parent.EffectiveParentAgentId;
+            }
+        }
+    }
+
     public void Validate()
     {
+        if (ParentAgentId == Guid.Empty || ParentAgentId == Id || Id == DashboardSettings.DefaultAgentId && ParentAgentId is not null)
+            throw new ArgumentException("Choose another agent as parent. The master agent has no parent.");
         if (string.IsNullOrWhiteSpace(Name) || Name.Length > 60 || Model is null || Model.Length > 200
             || Instructions is null || Instructions.Length > 8000
             || McpConnectionIds is null || McpConnectionIds.Count > 32 || McpConnectionIds.Contains(Guid.Empty)

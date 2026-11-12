@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 using PlaceContext.Application.Access.Models;
+using PlaceContext.Application.Artifacts;
 using PlaceContext.Application.Build;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
@@ -212,6 +213,23 @@ public sealed partial class BuildChatTests
             return ValueTask.FromResult(default(TValue)!);
         }
         public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken ct, object?[]? args) => InvokeAsync<TValue>(identifier, args);
+    }
+
+    [Theory]
+    [InlineData("Assistant", "Master agent")]
+    [InlineData("Dashboard agent", "Master agent")]
+    [InlineData("My coordinator", "My coordinator")]
+    public void Master_agent_rename_preserves_custom_configuration(string name, string expected)
+    {
+        var settings = new DashboardSettings();
+        settings.Agents[0].Name = name;
+        settings.Agents[0].Instructions = "Keep the project context.";
+        var restored = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(settings))!;
+        var master = Assert.Single(restored.Agents);
+        Assert.Equal(expected, master.Name);
+        Assert.Equal("Master agent", master.DisplayName);
+        Assert.Equal("Keep the project context.", master.Instructions);
+        Assert.Equal("Researcher", new DashboardAgentProfile { Name = "Researcher" }.DisplayName);
     }
 
     [Fact]
@@ -744,6 +762,49 @@ public sealed partial class BuildChatTests
         Assert.NotNull(vm.WorkflowPickerError);
         Assert.Empty(vm.AvailableWorkflows);
         Assert.Equal(0, dispatcher.Commands);
+        await vm.DisposePageAsync();
+    }
+
+    [Theory]
+    [InlineData("none", false)]
+    [InlineData("read", false)]
+    [InlineData("run", true)]
+    [InlineData("manage", true)]
+    public async Task Workflow_picker_only_lists_workflows_the_selected_agent_can_run(string access, bool canRun)
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var workflow = new JobChainView(Guid.NewGuid(), fixture.ProjectId, "Report", null, [], DateTimeOffset.UtcNow);
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Workflow = workflow };
+        var settings = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        settings.Agents[0].WorkflowAccess = access;
+        await fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        await vm.StartWorkflowChatAsync();
+        Assert.True(vm.WorkflowPickerOpen);
+        Assert.Equal(canRun, !vm.WorkflowPickerRestricted);
+        Assert.Equal(canRun ? 1 : 0, vm.AvailableWorkflows.Count);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Workflow_picker_uses_the_selected_shared_agents_run_access()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var workflow = new JobChainView(Guid.NewGuid(), fixture.ProjectId, "Report", null, [], DateTimeOffset.UtcNow);
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { Workflow = workflow };
+        var projectStore = ProjectStore(fixture);
+        var restricted = new DashboardAgentProfile { Name = "Restricted", WorkflowAccess = "none" };
+        await projectStore.SaveAsync(fixture.ProjectId, new() { Agents = [restricted] });
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions, projectAgents: projectStore);
+        await vm.LoadAsync(fixture.ProjectId);
+        vm.SelectAgent(restricted.Id.ToString());
+        await vm.StartWorkflowChatAsync();
+        Assert.True(vm.WorkflowPickerRestricted);
+        Assert.Equal("Restricted", vm.WorkflowPickerAgentName);
+        Assert.Empty(vm.AvailableWorkflows);
         await vm.DisposePageAsync();
     }
 
@@ -1874,6 +1935,8 @@ public sealed partial class BuildChatTests
         public string? SystemPrompt;
         public Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null)
         {
+            if (messages[0]!["content"]!.ToString().StartsWith("You are the parent agent responsible"))
+                return Task.FromResult(new JsonObject { ["content"] = "{\"approved\":true,\"reason\":\"Within scope\"}" });
             Requests++;
             SystemPrompt = messages[0]!["content"]!.GetValue<string>();
             Assert.All(messages.OfType<JsonObject>(), message => Assert.False(message.ContainsKey("suggested_answers")));
@@ -2014,6 +2077,50 @@ public sealed partial class BuildChatTests
         await vm.OpenArtifactAsync(file.Id, file.RunId);
         Assert.Null(vm.PreviewArtifact);
         Assert.NotNull(vm.ArtifactPreviewError);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Json_artifact_preview_renders_monaco_json_instead_of_an_iframe()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        using var scope = fixture.Provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var file = new RunArtifactLinkRow
+        {
+            Id = Guid.NewGuid(), ProjectId = fixture.ProjectId, JobId = Guid.NewGuid(), RunId = Guid.NewGuid(),
+            Kind = "RawBundle", Title = "Report.json", ContentType = "application/json",
+            Bucket = "reports", ObjectKey = "runs/report.json", CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.RunArtifacts.Add(file);
+        await db.SaveChangesAsync();
+        var reader = new ArtifactReader(new EfRunArtifactLinkRepository(db), new JsonStore(file.Bucket, file.ObjectKey, """{"summary":"ok","rows":[1,2]}"""));
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(new ToolDispatcher(fixture.ProjectId), null!, null!, null!), fixture.Permissions, artifacts: reader);
+        await vm.LoadAsync(fixture.ProjectId);
+        await vm.OpenArtifactAsync(file.Id, file.RunId);
+        Assert.Equal(file.Id, vm.PreviewArtifact?.Id);
+        Assert.Null(vm.ArtifactPreviewError);
+        Assert.Null(vm.PreviewArtifactJsonError);
+        Assert.False(vm.PreviewArtifactJsonTruncated);
+        Assert.Contains("\"summary\": \"ok\"", vm.PreviewArtifactJson);
+        Assert.Contains("\n", vm.PreviewArtifactJson);
+        var outputs = new List<RunOutputViewModel>();
+        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient(_ =>
+        {
+            var output = new RunOutputViewModel(new NoJs());
+            outputs.Add(output);
+            return output;
+        });
+        await using var provider = services.BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.BuildChat>(ParameterView.FromDictionary(new Dictionary<string, object?> { ["ProjectId"] = fixture.ProjectId }))).ToHtmlString());
+        Assert.DoesNotContain("<iframe", html);
+        Assert.Contains("aria-label=\"Artifact JSON\"", html);
+        var output = Assert.Single(outputs, x => x.Label == "Artifact JSON");
+        Assert.Equal("json", output.Language);
+        Assert.Contains("\"summary\": \"ok\"", output.Value);
         await vm.DisposePageAsync();
     }
 
@@ -2343,6 +2450,8 @@ public sealed partial class BuildChatTests
         public string? UserText;
         public Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null)
         {
+            if (messages[0]!["content"]!.ToString().StartsWith("You are the parent agent responsible"))
+                return Task.FromResult(new JsonObject { ["content"] = "{\"approved\":true,\"reason\":\"Within scope\"}" });
             Assert.All(messages.OfType<JsonObject>(), message => Assert.False(message.ContainsKey("mcp_connections")));
             Assert.DoesNotContain(tools, tool => tool?["function"]?["name"]?.ToString() is "list_mcp_tools" or "call_mcp_tool");
             UserText = messages.Last()!["content"]![0]!["text"]!.GetValue<string>();
@@ -2518,6 +2627,23 @@ public sealed partial class BuildChatTests
             OnResume?.Invoke();
             return Task.FromResult("Waiting");
         }
+    }
+
+    private sealed class JsonStore(string bucket, string key, string json) : IObjectStore
+    {
+        public bool IsEnabled => true;
+        public string ReportsBucket => bucket;
+        public string DepsBucket => "placecontext-deps";
+        public Task<ObjectDownload?> OpenReadAsync(string requestedBucket, string requestedKey, CancellationToken ct = default) =>
+            Task.FromResult<ObjectDownload?>(requestedBucket == bucket && requestedKey == key
+                ? new ObjectDownload(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json)), "application/json")
+                : null);
+        public Task PutAsync(string bucket, string key, byte[] content, string contentType, CancellationToken ct = default) => Task.CompletedTask;
+        public Task DeleteAsync(string bucket, string key, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) => Task.FromResult(false);
+        public Task EnsureBucketAsync(string bucket, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<string> PresignDownloadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
+        public Task<string> PresignUploadAsync(string bucket, string key, TimeSpan ttl, CancellationToken ct = default) => Task.FromResult("");
     }
 
     private sealed class ToolDispatcher(Guid projectId) : IDispatcher

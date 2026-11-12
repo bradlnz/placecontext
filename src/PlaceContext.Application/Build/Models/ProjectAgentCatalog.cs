@@ -11,6 +11,7 @@ public sealed class ProjectAgentCatalog
             || Agents.Select(a => a.Id).Distinct().Count() != Agents.Count
             || Agents.Select(a => a.Name?.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != Agents.Count)
             throw new ArgumentException("Use up to 32 agents with unique names.");
+        DashboardAgentProfile.ValidateHierarchy(Agents);
         foreach (var agent in Agents)
         {
             agent.Validate();

@@ -72,7 +72,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
             + "Prefer existing linked workflows when suitable. When creating or editing an automatic agent step, select a suitable saved agent using Review.AgentId. "
             + "Agents execute inside workflow steps; do not claim to have delegated work before the workflow actually runs. "
             + "Respect each agent's capabilities and all user permissions. This role grants no additional tool access.\nAvailable project agents:\n"
-            + JsonSerializer.Serialize(catalog.Agents.Select(a => new { a.Id, a.Name, a.ConnectionId, a.Model, a.WorkflowAccess,
+            + JsonSerializer.Serialize(catalog.Agents.Select(a => new { a.Id, a.Name, ParentAgentId = a.EffectiveParentAgentId, a.ConnectionId, a.Model, a.WorkflowAccess,
                 TableAccess = a.EffectiveTableAccess, SourceAccess = a.EffectiveSourceAccess, ArtifactAccess = a.EffectiveArtifactAccess,
                 a.WorkflowIds })));
 
@@ -144,6 +144,14 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
             RepairInterruptedCalls(conversation.Messages);
             var settings = await store.GetSettingsAsync(conversation.ProjectId, deadline.Token);
             var (profile, _, catalog) = await ResolveAgentAsync(conversation.ProjectId, settings, conversation.AgentId, deadline.Token);
+            var parent = profile.EffectiveParentAgentId is not null
+                ? AgentApproval.Parent(profile, catalog.Agents.Concat(settings.Agents)) : null;
+            async Task ApproveAsync(string purpose, string evidence)
+            {
+                if (parent is null) return;
+                await AgentApproval.RequireAsync(model, parent, conversation.ConnectionId, conversation.Model, purpose, evidence, deadline.Token);
+            }
+            await ApproveAsync("Authorize sub-agent conversation task", conversation.Messages.ToJsonString());
             var tools = new BuildTools(conversation.ProjectId, service, permissions, store, reviewer, submissions: submissions, mcp: mcp,
                 mcpConnectionIds: profile.McpConnectionIds.ToHashSet(), profile: profile);
             var functions = tools.Functions().ToDictionary(x => x.Name);
@@ -201,6 +209,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                     {
                         throw new InvalidOperationException("The model returned no answer.");
                     }
+                    await ApproveAsync("Approve sub-agent response", messages.ToJsonString() + "\nProposed response:\n" + reply.ToJsonString());
                     conversation.Messages.Add(reply);
                     return;
                 }
@@ -213,6 +222,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                 {
                     throw new InvalidOperationException("The model must ask a question separately from other actions. Please retry.");
                 }
+                await ApproveAsync("Authorize sub-agent tool actions", messages.ToJsonString() + "\nProposed actions:\n" + reply.ToJsonString());
                 conversation.Messages.Add(reply);
                 await store.SaveAsync(conversation, lease, false, deadline.Token);
                 if (operation is not null)

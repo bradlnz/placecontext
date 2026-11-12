@@ -17,6 +17,8 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
     public ProjectAgentCatalog Catalog { get; private set; } = new();
     public DashboardSettings? Dashboard { get; private set; }
     public IEnumerable<DashboardAgentProfile> Agents => (Dashboard?.Agents ?? []).Concat(Catalog.Agents);
+    public IEnumerable<DashboardAgentProfile> ParentAgents => (EditingPrivateAgent ? Dashboard?.Agents ?? [] : Catalog.Agents)
+        .Where(a => a.Id != Agent?.Id && a.Id != DashboardSettings.DefaultAgentId);
     public bool EditingPrivateAgent { get; private set; }
     public bool CanEdit => EditingPrivateAgent || CanManage;
     public IReadOnlyList<ModelConnection> Connections { get; private set; } = [];

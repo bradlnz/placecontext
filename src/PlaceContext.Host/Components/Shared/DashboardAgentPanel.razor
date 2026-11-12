@@ -18,7 +18,7 @@
     else if (Vm.AgentTab == "Instructions")
     {
         <label for="agent-profile">Configure agent</label>
-        <select id="agent-profile" @bind="Vm.AgentEditId" disabled="@Vm.Locked">@foreach (var profile in Vm.AgentDraft.Agents) { <option value="@profile.Id">@profile.Name@(profile.Id == DashboardSettings.DefaultAgentId ? " (master)" : "")</option> }</select>
+        <select id="agent-profile" @bind="Vm.AgentEditId" disabled="@Vm.Locked">@foreach (var profile in Vm.AgentDraft.Agents) { <option value="@profile.Id">@profile.DisplayName</option> }</select>
         <button type="button" class="dcbtn" disabled="@(Vm.Locked || Vm.AgentDraft.Agents.Count >= 8)" @onclick="Vm.AddAgent">Add agent</button>
         @if (Vm.EditedAgent is { } edited)
         {
@@ -92,7 +92,7 @@
     else if (Vm.AgentTab == "Dashboard")
     {
         <h3>Quick actions</h3>
-        <p>Run a workflow opens the picker immediately, without waiting for AI. Custom tiles send a visible request to chat. The agent can ask follow-up questions before acting.</p>
+        <p>Run a workflow opens the picker immediately, without waiting for AI. It only lists workflows the selected agent can run. Custom tiles send a visible request to chat. The agent can ask follow-up questions before acting.</p>
         <div class="agent-card"><strong>Run a workflow</strong><span class="hint">System tile · always available · cannot be removed</span></div>
         @foreach (var action in Vm.AgentDraft.Actions.ToArray())
         {

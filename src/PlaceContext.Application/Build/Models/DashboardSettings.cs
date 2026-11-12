@@ -7,7 +7,7 @@ public sealed class DashboardSettings : System.Text.Json.Serialization.IJsonOnDe
     public static readonly Guid DefaultAgentId = new("c471b57a-35ae-4c91-a9d5-45783182b874");
 
     public string Instructions { get; set; } = "";
-    public List<DashboardAgentProfile> Agents { get; set; } = [new() { Id = DefaultAgentId, Name = "Assistant" }];
+    public List<DashboardAgentProfile> Agents { get; set; } = [new() { Id = DefaultAgentId, Name = "Master agent" }];
     public List<DashboardAction> Actions { get; set; } =
     [
         new("Job statistics", "Show this project's job statistics using project_activity. Do not run or change anything."),
@@ -26,7 +26,10 @@ public sealed class DashboardSettings : System.Text.Json.Serialization.IJsonOnDe
     {
         // Preserve settings saved before the default agent had a nonempty identity.
         foreach (var agent in Agents ?? [])
+        {
             if (agent is { Id: var id } && id == Guid.Empty) agent.Id = DefaultAgentId;
+            if (agent?.Id == DefaultAgentId && agent.Name is "Assistant" or "Dashboard agent") agent.Name = "Master agent";
+        }
     }
 
     public void Validate()
@@ -43,6 +46,7 @@ public sealed class DashboardSettings : System.Text.Json.Serialization.IJsonOnDe
         {
             throw new ArgumentException("Keep the default agent and use up to 8 agents with unique names up to 60 characters, models up to 200, instructions up to 8,000, and up to 32 distinct MCP connections each.");
         }
+        DashboardAgentProfile.ValidateHierarchy(Agents);
         if (Instructions is null || Instructions.Length > 8000 || Actions is null || Actions.Count > 8
             || Actions.Any(a => a is null || string.IsNullOrWhiteSpace(a.Title) || a.Title.Length > 60
                 || string.IsNullOrWhiteSpace(a.Prompt) || a.Prompt.Length > 2000))

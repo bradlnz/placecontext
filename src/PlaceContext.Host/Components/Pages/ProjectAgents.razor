@@ -8,7 +8,7 @@
 @inject ProjectAgentsViewModel Vm
 @implements IDisposable
 
-<PageTitle>PlaceContext — @(Vm.Agent is { Id: var agentId } selected ? agentId == DashboardSettings.DefaultAgentId ? "Dashboard agent" : selected.Name : "Agents")</PageTitle>
+<PageTitle>PlaceContext — @(Vm.Agent is { Id: var agentId } selected ? agentId == DashboardSettings.DefaultAgentId ? "Master agent" : selected.Name : "Agents")</PageTitle>
 
 @if (Vm.Loading)
 {
@@ -51,59 +51,19 @@ else
                 <div class="summary-count"><strong>@Vm.Mcps.Count</strong><span>MCP connections</span></div>
             </section>
 
-            <section class="dccard chain-suite" aria-label="Agent catalogue">
-                <header class="suite-head">
-                    <div>
-                        <span class="suite-caret"><AppIcon Kind="chevron-down" /></span>
-                        <strong>Agent catalogue</strong>
-                        <span>@Vm.Agents.Count() agent@(Vm.Agents.Count() == 1 ? "" : "s")</span>
-                    </div>
-                    <span class="suite-result">@Vm.Catalog.Agents.Count shared</span>
+            <section class="agent-canvas" aria-label="Agent organisation chart">
+                <header class="canvas-toolbar">
+                    <div><strong>Agent canvas</strong><p>Select an agent to edit its system prompt and capabilities. Scroll to explore.</p></div>
+                    <span>@Vm.Agents.Count() agents</span>
                 </header>
-
-                <div class="chain-rows">
-                    @foreach (var listedAgent in Vm.Agents.OrderBy(a => a.Id != DashboardSettings.DefaultAgentId).ThenBy(a => a.Name))
-                    {
-                        var isPrivate = Vm.Dashboard?.Agents.Any(a => a.Id == listedAgent.Id) == true;
-                        var isMaster = listedAgent.Id == DashboardSettings.DefaultAgentId;
-                        <article class="chain-row" @onclick="() => Vm.OpenAgent(listedAgent.Id)">
-                            <div class="status-icon"><AppIcon Kind="agent" /></div>
-                            <div class="chain-copy">
-                                <div class="chain-title">
-                                    <strong>@(isMaster ? "Dashboard agent" : listedAgent.Name)</strong>
-                                    @if (isMaster) { <span class="chain-chip brand-chip">Master agent</span> }
-                                    <span class="chain-chip">@(isPrivate ? "Private to you" : "Shared with project")</span>
-                                    <span class="chain-chip">@listedAgent.WorkflowIds.Count workflow link@(listedAgent.WorkflowIds.Count == 1 ? "" : "s")</span>
-                                    <span class="chain-chip">@listedAgent.McpConnectionIds.Count MCP@(listedAgent.McpConnectionIds.Count == 1 ? "" : "s")</span>
-                                </div>
-                                <div class="chain-detail">
-                                    <span>@(string.IsNullOrWhiteSpace(listedAgent.Instructions) ? "Project assistant" : listedAgent.Instructions)</span>
-                                </div>
-                                <div class="step-chips">
-                                    <span class="step-chip">Workflows · @listedAgent.WorkflowAccess</span>
-                                    <span class="step-chip">Tables · @listedAgent.EffectiveTableAccess</span>
-                                    <span class="step-chip">Sources · @listedAgent.EffectiveSourceAccess</span>
-                                    <span class="step-chip">Artifacts · @listedAgent.EffectiveArtifactAccess</span>
-                                </div>
-                            </div>
-                            <div class="chain-actions">
-                                @if (Vm.ConfirmDeleteId == listedAgent.Id)
-                                {
-                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="() => Vm.DeleteAgentAsync(listedAgent.Id, Section)">Delete</button>
-                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="() => Vm.ConfirmDeleteId = null">Keep</button>
-                                }
-                                else
-                                {
-                                    <a class="icon-action use-action" href="/project/@ProjectId/dashboard?agent=@listedAgent.Id" title="Use agent" aria-label="Use @listedAgent.Name" @onclick:stopPropagation="true"><AppIcon Kind="play" /></a>
-                                    <button class="icon-action" title="@(Vm.CanEditAgent(listedAgent) ? "Edit agent" : "View agent")" aria-label="@(Vm.CanEditAgent(listedAgent) ? "Edit agent" : "View agent")" @onclick:stopPropagation="true" @onclick="() => Vm.OpenAgent(listedAgent.Id)"><AppIcon Kind="edit" /></button>
-                                    @if (Vm.CanDeleteAgent(listedAgent))
-                                    {
-                                        <button class="icon-action" title="Delete agent" aria-label="Delete @listedAgent.Name" @onclick:stopPropagation="true" @onclick="() => Vm.ConfirmDeleteId = listedAgent.Id"><AppIcon Kind="trash" /></button>
-                                    }
-                                }
-                            </div>
-                        </article>
-                    }
+                <div class="canvas-viewport" tabindex="0" role="region" aria-label="Agent hierarchy. Scroll to see all agents.">
+                    <div class="agent-tree">
+                        @if (Vm.Agents.FirstOrDefault(a => a.Id == DashboardSettings.DefaultAgentId) is { } master)
+                        {
+                            <div class="agent-root">@AgentCard(master)</div>
+                        }
+                        @AgentChildren(DashboardSettings.DefaultAgentId, new HashSet<Guid>())
+                    </div>
                 </div>
             </section>
         }
@@ -116,7 +76,7 @@ else
     <div class="dcslide slide-640" tabindex="-1" @onkeydown="OnKeyDown">
         <div class="dcslide-head">
             <div class="flex-min">
-                <div class="title-14">@(agent.Id == DashboardSettings.DefaultAgentId ? "Dashboard agent" : Vm.Existing ? agent.Name : "New agent")</div>
+                <div class="title-14">@(agent.Id == DashboardSettings.DefaultAgentId ? "Master agent" : Vm.Existing ? agent.Name : "New agent")</div>
                 <div class="sub-115">@(Vm.EditingPrivateAgent ? "Private dashboard agent. Changes apply to your dashboard conversations." : "Shared project agent. Changes apply to new runs and conversation turns.")</div>
             </div>
             <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseEditor(Section)"><AppIcon Kind="close" /></button>
@@ -132,11 +92,20 @@ else
         <div class="dcslide-body editor-body">
             @if (agent.Id == DashboardSettings.DefaultAgentId)
             {
-                <p>The dashboard master agent coordinates workflows and the project agents assigned to their steps. Its instructions are private to you; its permissions still apply.</p>
+                <p>The master agent coordinates workflows and the project agents assigned to their steps. Its instructions are private to you; its permissions still apply.</p>
             }
 
             <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Overview")">
                 <label for="project-agent-name">Agent name</label><input id="project-agent-name" class="dcinput" maxlength="60" @bind="agent.Name" disabled="@(!Vm.CanEdit || Vm.Busy)" />
+                @if (agent.Id != DashboardSettings.DefaultAgentId)
+                {
+                    <label for="project-agent-parent">Parent agent</label>
+                    <select id="project-agent-parent" class="dcinput" @bind="agent.ParentAgentId" disabled="@(!Vm.CanEdit || Vm.Busy)">
+                        <option value="">Master agent</option>
+                        @foreach (var parent in Vm.ParentAgents.OrderBy(a => a.Name)) { <option value="@parent.Id">@parent.DisplayName</option> }
+                    </select>
+                    <p>The parent approves this agent's work and handles its automatic workflow approval gates. Shared agents can report to other shared agents; private agents to your private agents.</p>
+                }
                 <label for="project-agent-connection">Model connection</label>
                 <select id="project-agent-connection" class="dcinput" value="@agent.ConnectionId" @onchange="e => Vm.SelectConnection(e.Value?.ToString())" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="@Guid.Empty">Runner's default model</option>@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select>
                 @if (agent.ConnectionId != Guid.Empty)
@@ -208,6 +177,45 @@ else
 @code {
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public string? Section { get; set; }
+    private RenderFragment AgentChildren(Guid parentId, HashSet<Guid> ancestors) => @<text>
+        @if (!ancestors.Contains(parentId) && Vm.Agents.Any(a => a.EffectiveParentAgentId == parentId))
+        {
+            <ul class="agent-children" aria-label="Child agents">
+                @foreach (var child in Vm.Agents.Where(a => a.EffectiveParentAgentId == parentId).OrderBy(a => a.Name))
+                {
+                    <li @key="child.Id" class="agent-branch">
+                        <div class="agent-root">@AgentCard(child)</div>
+                        @AgentChildren(child.Id, new HashSet<Guid>(ancestors) { parentId })
+                    </li>
+                }
+            </ul>
+        }
+    </text>;
+
+    private RenderFragment AgentCard(DashboardAgentProfile profile) => @<article class="agent-node @(profile.Id == DashboardSettings.DefaultAgentId ? "master-node" : "")" data-agent-id="@profile.Id">
+        <button class="agent-node-main" @onclick="() => Vm.OpenAgent(profile.Id)" aria-label="@($"Open {profile.DisplayName}")">
+            <span class="node-heading"><span class="node-icon"><AppIcon Kind="agent" /></span><strong>@profile.DisplayName</strong></span>
+            <span class="node-role">@(profile.Id == DashboardSettings.DefaultAgentId ? "Coordinates the project" : Vm.Dashboard?.Agents.Any(a => a.Id == profile.Id) == true ? "Private agent" : "Project agent")</span>
+            <span class="node-description">@(string.IsNullOrWhiteSpace(profile.Instructions) ? "Configure its system prompt and capabilities." : profile.Instructions)</span>
+            <span class="node-capabilities"><span>@profile.WorkflowIds.Count workflows</span><span>@profile.McpConnectionIds.Count MCPs</span></span>
+        </button>
+        <footer class="node-actions">
+            <a class="dcbtn" href="/project/@ProjectId/dashboard?agent=@profile.Id" aria-label="@($"Use {profile.DisplayName}")"><AppIcon Kind="play" /> Use agent</a>
+            <button class="icon-action" aria-label="@($"{(Vm.CanEditAgent(profile) ? "Edit" : "View")} {profile.DisplayName}")" @onclick="() => Vm.OpenAgent(profile.Id)"><AppIcon Kind="edit" /></button>
+            @if (Vm.CanDeleteAgent(profile))
+            {
+                @if (Vm.ConfirmDeleteId == profile.Id)
+                {
+                    <button class="dcbtn" @onclick="() => Vm.DeleteAgentAsync(profile.Id, Section)">Delete</button>
+                    <button class="dcbtn" @onclick="() => Vm.ConfirmDeleteId = null">Keep</button>
+                }
+                else
+                {
+                    <button class="icon-action" aria-label="@($"Delete {profile.DisplayName}")" @onclick="() => Vm.ConfirmDeleteId = profile.Id"><AppIcon Kind="trash" /></button>
+                }
+            }
+        </footer>
+    </article>;
     private WorkflowInstructionsEditor? _instructions;
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override Task OnParametersSetAsync() => Vm.LoadPageAsync(ProjectId, Section);

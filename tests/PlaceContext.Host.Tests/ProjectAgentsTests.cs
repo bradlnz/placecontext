@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PlaceContext.Application;
@@ -14,6 +15,50 @@ namespace PlaceContext.Host.Tests;
 
 public sealed partial class BuildChatTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Parent_approval_is_required_in_dashboard_chat(bool approve)
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var parent = new DashboardAgentProfile { Name = "Supervisor", Instructions = "Check the task scope" };
+        var child = new DashboardAgentProfile { Name = "Worker", ParentAgentId = parent.Id };
+        var store = ProjectStore(f);
+        await store.SaveAsync(f.ProjectId, new() { Agents = [parent, child] });
+        Assert.Equal(parent.Id, (await store.GetAsync(f.ProjectId)).Agents.Single(a => a.Id == child.Id).ParentAgentId);
+        var catalog = await store.GetAsync(f.ProjectId);
+        catalog.Agents.RemoveAll(a => a.Id == parent.Id);
+        await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(f.ProjectId, catalog));
+        var model = new ApprovalChatModel(approve);
+        var agent = new BuildChatAgent(f.Store, model, f.Service, f.Permissions, f.Tenant, projectAgents: store);
+        var conversation = new BuildConversation { ProjectId = f.ProjectId, AgentId = child.Id, ConnectionId = f.ConnectionId, Model = "test" };
+        await agent.QueueAsync(conversation, "Explain the project");
+        await agent.RunAsync(conversation, default);
+        Assert.Equal(approve ? 1 : 0, model.ChildCalls);
+        Assert.Equal(approve ? 2 : 1, model.Approvals);
+        if (approve) Assert.Null(conversation.Error);
+        else Assert.Contains("Supervisor rejected approval", conversation.Error);
+    }
+
+    private sealed class ApprovalChatModel(bool approve) : IBuildModelGateway
+    {
+        public int ChildCalls, Approvals;
+        public Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null)
+        {
+            var prompt = messages[0]!["content"]!.ToString();
+            if (prompt.StartsWith("You are the parent agent responsible"))
+            {
+                Approvals++;
+                Assert.Empty(tools);
+                Assert.Contains("Supervisor", prompt);
+                return Task.FromResult(new JsonObject { ["content"] = JsonSerializer.Serialize(new { approved = approve, reason = "Task scope reviewed" }) });
+            }
+            ChildCalls++;
+            return Task.FromResult(new JsonObject { ["content"] = "Project explanation" });
+        }
+    }
+
     [Fact]
     public async Task Dashboard_master_discovers_project_agents_without_gaining_additional_permissions()
     {
@@ -335,8 +380,12 @@ public sealed partial class BuildChatTests
             var model = new ScriptedModel("""{"content":"{\"done\":true}"}""");
             var runner = new WorkflowAgentRunner(model, f.Connections, f.Service, f.Permissions, f.Store, projectAgents: store);
             await runner.RunAsync(f.ProjectId, Guid.NewGuid(), Guid.NewGuid(), 0, action, null, default);
-            Assert.Contains(profile.Name, model.SystemPrompt);
-            Assert.Contains(profile.Instructions, model.SystemPrompt);
+            if (kind == PlaceContext.Domain.ValueObjects.LoopChainAction.TaskType)
+            {
+                Assert.Contains(profile.Name, model.SystemPrompt);
+                Assert.Contains(profile.Instructions, model.SystemPrompt);
+            }
+            else Assert.Null(model.SystemPrompt);
             await vm.EditLoopAction(0);
             Assert.Equal(profile.Id, vm.LoopAgentId);
         }
