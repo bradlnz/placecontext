@@ -137,6 +137,8 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         return new
         {
             ProjectId = projectId,
+            LinkedWorkflows = workflows.Where(w => profile?.WorkflowIds.Contains(w.Id) == true)
+                .Select(w => new { w.Id, w.Name, w.Description }).ToArray(),
             McpConnections = _mcp is null ? [] : (await _mcp.ListConnectionsAsync(projectId, ct))
                 .Where(c => c.Enabled && (mcpConnectionIds is null || mcpConnectionIds.Contains(c.Id)))
                 .Select(c => new { c.Id, c.Name }).ToArray(),
@@ -233,7 +235,7 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
     public async Task<object> show_live_chart(string title, string type = "bar", string? sql = null, CancellationToken ct = default)
     {
         await RequireAsync(sql is null ? Permission.JobsView : Permission.DataRead, ct);
-        if (profile is not null && (sql is null ? profile.WorkflowAccess == "none" : profile.DataAccess == "none"))
+        if (profile is not null && (sql is null ? profile.WorkflowAccess == "none" : profile.EffectiveTableAccess != "read"))
             throw new UnauthorizedAccessException("This chart source is disabled for the selected agent.");
         var chart = await DashboardChartData.ReadAsync(service, permissions, projectId, title, type, sql, ct)
             ?? throw new InvalidOperationException("This query returned no data. Adjust the query or time range before pinning the chart.");

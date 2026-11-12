@@ -1,13 +1,16 @@
 @using PlaceContext.Application.Build
 <div class="agent-panel">
+    @if (ShowNavigation)
+    {
     <nav aria-label="Agent settings" class="agent-tabs">
         @foreach (var tab in new[] { "Instructions", "Context & tools", "Sub-agents", "Dashboard" })
         {
             <button type="button" class="dcbtn" aria-pressed="@(Vm.AgentTab == tab ? "true" : "false")" @onclick="() => Vm.AgentTab = tab">@tab</button>
         }
     </nav>
+    }
     <p class="hint">Private to you in this project. The agent uses your permissions; these settings cannot grant access or expose vault credentials.</p>
-    <a class="dcbtn" href="/project/@Vm.Conversation.ProjectId/agents">Manage project agents and skills</a>
+    <a class="dcbtn" href="/project/@Vm.Conversation.ProjectId/agents">Manage project agents</a>
     @if (Vm.AgentLoading)
     {
         <Skeleton Kind="list" Rows="3" />
@@ -15,7 +18,7 @@
     else if (Vm.AgentTab == "Instructions")
     {
         <label for="agent-profile">Configure agent</label>
-        <select id="agent-profile" @bind="Vm.AgentEditId" disabled="@Vm.Locked">@foreach (var profile in Vm.AgentDraft.Agents) { <option value="@profile.Id">@profile.Name</option> }</select>
+        <select id="agent-profile" @bind="Vm.AgentEditId" disabled="@Vm.Locked">@foreach (var profile in Vm.AgentDraft.Agents) { <option value="@profile.Id">@profile.Name@(profile.Id == DashboardSettings.DefaultAgentId ? " (master)" : "")</option> }</select>
         <button type="button" class="dcbtn" disabled="@(Vm.Locked || Vm.AgentDraft.Agents.Count >= 8)" @onclick="Vm.AddAgent">Add agent</button>
         @if (Vm.EditedAgent is { } edited)
         {
@@ -120,5 +123,6 @@
     <button type="button" class="dcbtn" disabled="@Vm.AgentLoading" @onclick="Vm.OpenAgentAsync">Refresh configuration</button>
 </div>
 @code {
+    [Parameter] public bool ShowNavigation { get; set; } = true;
     [Parameter, EditorRequired] public BuildChatViewModel Vm { get; set; } = null!;
 }

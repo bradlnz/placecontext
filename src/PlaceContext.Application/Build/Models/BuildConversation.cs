@@ -12,7 +12,7 @@ public sealed class BuildConversation
     public string Title { get; set; } = "New chat";
     public Guid? ParentConversationId { get; set; }
     public int? ParentMessageCount { get; set; }
-    public Guid? AgentId { get; set; }
+    public Guid? AgentId { get; set => field = value == Guid.Empty ? DashboardSettings.DefaultAgentId : value; }
     public Guid ConnectionId
     {
         get; set;

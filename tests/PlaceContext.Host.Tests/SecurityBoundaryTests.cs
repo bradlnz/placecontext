@@ -116,6 +116,34 @@ public sealed class SecurityBoundaryTests
         Assert.False((await authentication.GetAuthenticationStateAsync()).User.Identity!.IsAuthenticated);
     }
 
+    [Fact]
+    public async Task Overlapping_session_checks_do_not_dispatch_render_acknowledgements_concurrently()
+    {
+        using var f = new Fixture();
+        var roles = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var members = Stub.Create<IMembershipService>((method, _) => method == nameof(IMembershipService.GetRoleAsync)
+            ? roles.Task : throw new NotSupportedException(method));
+        using var services = new ServiceCollection().AddSingleton(members).BuildServiceProvider();
+        var handler = new UserCircuitHandler(new UserHolder(),
+            new TenantHolder { Tenant = new TenantInfo(f.Tenant.TenantId, "test", "Test", "UTC") },
+            services.GetRequiredService<IServiceScopeFactory>(), new CircuitAuthentication(f.Principal()));
+        var concurrent = 0;
+        var entries = new System.Collections.Concurrent.ConcurrentBag<int>();
+        var activity = handler.CreateInboundActivityHandler(_ =>
+        {
+            entries.Add(Interlocked.Increment(ref concurrent));
+            // The renderer peeks and dequeues a buffer synchronously before returning its task.
+            Thread.Sleep(10);
+            Interlocked.Decrement(ref concurrent);
+            return Task.CompletedTask;
+        });
+        var pending = Enumerable.Range(0, 24).Select(_ => activity(null!)).ToArray();
+        roles.SetResult("Owner");
+        await Task.WhenAll(pending).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(24, entries.Count);
+        Assert.All(entries, count => Assert.Equal(1, count));
+    }
+
     [Theory]
     [InlineData("Owner")]
     [InlineData("Viewer")]

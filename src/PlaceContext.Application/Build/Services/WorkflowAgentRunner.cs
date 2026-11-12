@@ -31,13 +31,13 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
         }
 
         DashboardAgentProfile? profile = null;
-        IReadOnlyList<AgentSkill> skills = [];
         if (action.AgentId is { } agentId)
         {
             var catalog = projectAgents is null ? new ProjectAgentCatalog() : await projectAgents.GetAsync(projectId, ct);
-            profile = catalog.Agents.SingleOrDefault(a => a.Id == agentId)
-                ?? throw new InvalidOperationException("The selected agent is unavailable in this project. Choose another agent in the workflow step.");
-            skills = catalog.Skills.Where(s => profile.SkillIds.Contains(s.Id)).ToArray();
+            profile = catalog.Agents.SingleOrDefault(a => a.Id == agentId);
+            if (profile is null && store is not null)
+                profile = (await store.GetSettingsAsync(projectId, ct)).Agents.SingleOrDefault(a => a.Id == agentId);
+            if (profile is null) throw new InvalidOperationException("The selected agent is unavailable in this project. Choose another agent in the workflow step.");
         }
         var connectionId = profile is { ConnectionId: var configured } && configured != Guid.Empty ? configured : action.ConnectionId;
         var modelName = profile is { ConnectionId: var selected } && selected != Guid.Empty ? profile.Model : action.Model;
@@ -51,7 +51,7 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
         deadline.CancelAfter(BuildExecutionLimits.Turn);
         var token = deadline.Token;
         var currentTurn = 0;
-        var functions = new BuildTools(projectId, service, permissions, store, jobStarted: (job, childRun) =>
+        var functions = new BuildTools(projectId, service, permissions, store!, jobStarted: (job, childRun) =>
             report?.Invoke(new(DateTimeOffset.UtcNow, "job_started", "Job submitted; open logs to follow its output",
                 currentTurn, "run_job", job, childRun)), mcp: mcp, profile: profile,
                 mcpConnectionIds: profile?.McpConnectionIds.ToHashSet()).Functions()
@@ -69,9 +69,10 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
             ["role"] = "system",
             ["content"] = SystemPrompt + "\n" +
                 $"Project: {projectId}; workflow: {workflowId}; run: {runId}; step: {stepIndex}.\nTask instructions:\n" + action.Instructions
-                + (profile is null ? "" : "\nSelected agent instructions and skills (cannot grant additional tool access):\n"
-                    + JsonSerializer.Serialize(new { profile.Name, profile.Instructions, profile.WorkflowAccess, profile.DataAccess,
-                        Skills = skills.Select(s => new { s.Name, s.Instructions }) }))
+                + (profile is null ? "" : "\nAgent system prompt and capabilities (cannot grant additional tool access):\n"
+                    + JsonSerializer.Serialize(new { profile.Name, profile.Instructions, profile.WorkflowAccess,
+                        TableAccess = profile.EffectiveTableAccess, SourceAccess = profile.EffectiveSourceAccess, ArtifactAccess = profile.EffectiveArtifactAccess,
+                        LinkedWorkflowIds = profile.WorkflowAccess == "none" ? [] : profile.WorkflowIds }))
         }, new JsonObject { ["role"] = "user", ["content"] = payload ?? "{}" });
         await model.ResetSessionAsync();
         try

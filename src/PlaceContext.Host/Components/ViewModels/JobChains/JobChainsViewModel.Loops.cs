@@ -51,14 +51,17 @@ public sealed partial class JobChainsViewModel
         LoopModel = null;
         LoopAgentId = null;
         LoopAgents = [];
-        if (kind != LoopChainAction.HumanType && _modelConnections is not null)
+        LoopConnections = [];
+        if (kind != LoopChainAction.HumanType)
         {
             try
             {
-                LoopConnections = (await _modelConnections.ListAsync()).Where(x => x.Enabled && x.Models.Count > 0).ToArray();
+                LoopConnections = (_modelConnections is null ? [] : await _modelConnections.ListAsync()).Where(x => x.Enabled && x.Models.Count > 0).ToArray();
                 LoopConnectionId = LoopConnections.FirstOrDefault()?.Id;
                 SelectLoopConnection();
-                LoopAgents = _projectAgents is null ? [] : (await _projectAgents.GetAsync(ProjectId)).Agents;
+                var shared = _projectAgents is null ? [] : (await _projectAgents.GetAsync(ProjectId)).Agents;
+                var personal = _dashboardStore is null ? [] : (await _dashboardStore.GetSettingsAsync(ProjectId)).Agents;
+                LoopAgents = shared.Concat(personal).DistinctBy(a => a.Id).ToArray();
             }
             catch (Exception ex) { LoopError = ex.Message; }
         }

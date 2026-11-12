@@ -11,19 +11,19 @@ namespace PlaceContext.Application.Tests;
 public sealed class WorkflowAgentRunnerTests
 {
     [Fact]
-    public async Task Selected_project_agent_applies_skills_access_and_configured_model()
+    public async Task Selected_project_agent_applies_access_and_configured_model()
     {
-        var skill = new AgentSkill { Name = "Review", Instructions = "Check every total against its evidence." };
-        var agent = new DashboardAgentProfile { Name = "Reviewer", Instructions = "Be precise.", WorkflowAccess = "read", DataAccess = "none",
-            ConnectionId = Connection, Model = "test-model", SkillIds = [skill.Id] };
-        var store = new Agents(new() { Agents = [agent], Skills = [skill] });
+        var agent = new DashboardAgentProfile { Name = "Reviewer", Instructions = "Be precise.", WorkflowAccess = "read", DataAccess = "manage",
+            TableAccess = "none", SourceAccess = "none", ArtifactAccess = "none",
+            ConnectionId = Connection, Model = "test-model", WorkflowIds = [Guid.NewGuid()] };
+        var store = new Agents(new() { Agents = [agent] });
         var model = new Gateway(Call("run_job", "{}"), new JsonObject { ["content"] = "{\"verified\":true}" });
         var runner = new WorkflowAgentRunner(model, new Connections(true), null!, new Permissions(true), null!, projectAgents: store);
         var action = new LoopChainAction(LoopChainAction.AgentType, "Review the result", "review", agentProvider: LoopChainAction.AutomaticAgent,
             connectionId: Guid.NewGuid(), model: "old-model", agentId: agent.Id);
         await runner.RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, action, null, default);
-        Assert.Contains(skill.Instructions, model.Messages![0]!["content"]!.ToString());
-        Assert.Contains("Be precise.", model.Messages[0]!["content"]!.ToString());
+        Assert.Contains("Be precise.", model.Messages![0]!["content"]!.ToString());
+        Assert.Contains(agent.WorkflowIds[0].ToString(), model.Messages[0]!["content"]!.ToString());
         Assert.Contains(model.Tools!, t => t!["function"]!["name"]!.ToString() == "get_job");
         Assert.DoesNotContain(model.Tools!, t => t!["function"]!["name"]!.ToString() is "run_job" or "list_project_tables" or "call_mcp_tool");
         Assert.Contains(model.Messages, m => m!["role"]!.ToString() == "tool" && m["content"]!.ToString().Contains("not available"));

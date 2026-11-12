@@ -33,7 +33,8 @@ public sealed class ReplayQueuePostgresTests
         var original = Guid.NewGuid();
         try
         {
-            await using (var schemaCommand = new NpgsqlCommand("""
+            await using (var schemaCommand = new NpgsqlCommand($"""
+                {PostgresProjectAccess.Schema}
                 CREATE TABLE job_chains ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "ProjectId" uuid NOT NULL);
                 CREATE TABLE chain_runs ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL,
                     "ProjectId" uuid NOT NULL, "ChainId" uuid NOT NULL, "Status" text NOT NULL);

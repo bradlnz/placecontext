@@ -162,7 +162,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         Conversation = new()
         {
             ProjectId = projectId,
-            AgentId = Guid.Empty
+            AgentId = DashboardSettings.DefaultAgentId
         };
         try
         {
@@ -351,7 +351,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         try
         {
             var pending = await PrepareSendConversationAsync();
-            pending.AgentId ??= Guid.Empty;
+            pending.AgentId ??= DashboardSettings.DefaultAgentId;
             await agent.QueueAsync(pending, text);
             if (BranchPending)
             {

@@ -44,6 +44,12 @@ public sealed class DbProjectAgentStore(IServiceScopeFactory scopes, ICurrentUse
             ?? throw new InvalidOperationException("Project not found.");
         if (row.AgentSettingsVersion != catalog.Version)
             throw new InvalidOperationException("Agents changed in another session. Close the editor and refresh before saving again.");
+        var previous = row.AgentSettings is null ? new ProjectAgentCatalog()
+            : JsonSerializer.Deserialize<ProjectAgentCatalog>(encryption.Unprotect(row.AgentSettings, Purpose))!;
+        // Deleted links must not block unrelated edits; validate only newly linked workflows.
+        var workflows = catalog.Agents.SelectMany(a => a.WorkflowIds.Except(previous.Agents.FirstOrDefault(p => p.Id == a.Id)?.WorkflowIds ?? [])).Distinct().ToArray();
+        if (workflows.Length > 0 && await db.JobChains.CountAsync(w => w.ProjectId == projectId && workflows.Contains(w.Id), ct) != workflows.Length)
+            throw new ArgumentException("Link only available workflows from this project.");
         var assigned = catalog.Agents.SelectMany(a => a.McpConnectionIds).Distinct().ToArray();
         if (await db.McpConnections.CountAsync(c => c.ProjectId == projectId && c.Enabled && assigned.Contains(c.Id), ct) != assigned.Length)
             throw new ArgumentException("Assign only enabled MCP connections from this project. Remove unavailable connections before saving.");

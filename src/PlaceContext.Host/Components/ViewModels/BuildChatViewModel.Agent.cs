@@ -71,8 +71,8 @@ public sealed partial class BuildChatViewModel
             }
             Dashboard = settings;
             AgentDraft = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(settings))!;
-            AgentEditId = Conversation.AgentId ?? Guid.Empty;
-            if (EditedAgent is { Id: var id, ConnectionId: var connectionId } profile && id == Guid.Empty && connectionId == Guid.Empty)
+            AgentEditId = Conversation.AgentId ?? DashboardSettings.DefaultAgentId;
+            if (EditedAgent is { Id: var id, ConnectionId: var connectionId } profile && id == DashboardSettings.DefaultAgentId && connectionId == Guid.Empty)
             {
                 profile.ConnectionId = Conversation.ConnectionId;
                 profile.Model = Conversation.Model;
@@ -103,7 +103,7 @@ public sealed partial class BuildChatViewModel
             return;
         }
         Conversation.AgentId = id;
-        if ((id == Guid.Empty || ProjectAgents.Any(a => a.Id == id)) && AvailableAgents.First(a => a.Id == id).ConnectionId == Guid.Empty)
+        if ((id == DashboardSettings.DefaultAgentId || ProjectAgents.Any(a => a.Id == id)) && AvailableAgents.First(a => a.Id == id).ConnectionId == Guid.Empty)
         {
             SelectDefaultModel();
         }
@@ -113,9 +113,9 @@ public sealed partial class BuildChatViewModel
 
     private void ApplyAgentModel()
     {
-        var profile = AvailableAgents.FirstOrDefault(a => a.Id == (Conversation.AgentId ?? Guid.Empty));
+        var profile = AvailableAgents.FirstOrDefault(a => a.Id == (Conversation.AgentId ?? DashboardSettings.DefaultAgentId));
         if (profile is { ConnectionId: var connectionId } && connectionId == Guid.Empty
-            && (profile.Id == Guid.Empty || ProjectAgents.Any(a => a.Id == profile.Id)))
+            && (profile.Id == DashboardSettings.DefaultAgentId || ProjectAgents.Any(a => a.Id == profile.Id)))
         {
             // Existing chats retain their model until the default agent is configured.
             return;
@@ -196,19 +196,22 @@ public sealed partial class BuildChatViewModel
         if (Locked || AgentLoading) return;
         AgentDraft.Actions.Remove(action);
         AgentDraft.TileOrder.Remove(action.Id.ToString());
+        AgentDraft.TileRowStarts.Remove(action.Id.ToString());
         AgentDraft.TileSizes.Remove(action.Id.ToString());
     }
 
-    public async Task MoveDashboardTileAsync(string key, int position)
+    public async Task MoveDashboardTileAsync(string key, int position, bool newRow = false)
     {
         if (Locked || AgentLoading || AgentOpen) return;
         var order = Dashboard.OrderedTiles().ToList();
         var index = order.IndexOf(key);
-        if (index < 0 || position < 0 || position >= order.Count || index == position) return;
+        if (index < 0 || position < 0 || position >= order.Count || index == position && !newRow && !Dashboard.TileRowStarts.Contains(key)) return;
         order.RemoveAt(index);
         order.Insert(position, key);
         var saved = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(Dashboard))!;
         saved.TileOrder = order;
+        saved.TileRowStarts.Remove(key);
+        if (newRow) saved.TileRowStarts.Add(key);
         await SaveDashboardAsync(saved);
     }
 
@@ -260,6 +263,7 @@ public sealed partial class BuildChatViewModel
         if (Locked || AgentLoading) return;
         AgentDraft.Charts.Remove(chart);
         AgentDraft.TileOrder.Remove(chart.Id.ToString());
+        AgentDraft.TileRowStarts.Remove(chart.Id.ToString());
         AgentDraft.TileSizes.Remove(chart.Id.ToString());
     }
 

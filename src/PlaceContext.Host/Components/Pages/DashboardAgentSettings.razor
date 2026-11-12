@@ -1,0 +1,44 @@
+@page "/project/{ProjectId:guid}/dashboard/settings"
+@page "/project/{ProjectId:guid}/dashboard/settings/{Section}"
+@using PlaceContext.Application.Access.Models
+@using PlaceContext.Host.Components.ViewModels
+@attribute [Authorize(Policy = Permission.ProjectsView)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@inject BuildChatViewModel Vm
+@implements IAsyncDisposable
+
+<PageTitle>PlaceContext — Agent settings</PageTitle>
+<div class="settings-page">
+    <header>
+        <div><h2>Agent settings</h2><p>Configure your dashboard agent, project context and dashboard.</p></div>
+        <a class="dcbtn" href="@DashboardHref">Back to dashboard</a>
+    </header>
+    <nav class="settings-tabs" aria-label="Agent settings sections">
+        @foreach (var (path, label) in Sections)
+        {
+            <a class="dctab @(ActiveSection == path ? "active" : "")" aria-current="@(ActiveSection == path ? "page" : null)" href="@($"/project/{ProjectId}/dashboard/settings/{path}{ConversationQuery}")">@label</a>
+        }
+    </nav>
+    <main class="settings-body">
+        @if (Vm.Loading) { <Skeleton Kind="list" Rows="5" /> }
+        else { <DashboardAgentPanel Vm="Vm" ShowNavigation="false" /> }
+    </main>
+</div>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public string? Section { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "conversation")] public Guid? ConversationId { get; set; }
+    private static readonly (string Path, string Label)[] Sections = [("instructions", "Instructions"), ("context", "Context & tools"), ("agents", "Sub-agents"), ("dashboard", "Dashboard")];
+    private string ActiveSection => Sections.Any(s => s.Path == Section) ? Section! : "instructions";
+    private string ConversationQuery => ConversationId is { } id ? $"?conversation={id}" : "";
+    private string DashboardHref => $"/project/{ProjectId}/dashboard{ConversationQuery}";
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override async Task OnParametersSetAsync()
+    {
+        await Vm.LoadAsync(ProjectId, ConversationId);
+        if (!Vm.AgentOpen) await Vm.OpenAgentAsync();
+        Vm.AgentTab = Sections.First(s => s.Path == ActiveSection).Label;
+    }
+    public async ValueTask DisposeAsync() => await Vm.DisposePageAsync();
+}

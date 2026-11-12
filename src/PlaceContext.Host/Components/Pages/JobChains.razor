@@ -1321,14 +1321,14 @@ else
                             <div class="dcfield"><label for="loop-project-agent">Agent</label>
                                 <select id="loop-project-agent" class="dcinput" @bind="Vm.LoopAgentId" @bind:after="Vm.SelectLoopAgent">
                                     <option value="">Custom step settings</option>
-                                    @foreach (var agent in Vm.LoopAgents) { <option value="@agent.Id">@agent.Name</option> }
+                                    @foreach (var agent in Vm.LoopAgents) { <option value="@agent.Id">@(agent.Id == PlaceContext.Application.Build.DashboardSettings.DefaultAgentId ? "Dashboard agent (master)" : agent.Name)</option> }
                                     @if (Vm.LoopAgentId is not null && Vm.SelectedLoopAgent is null) { <option value="@Vm.LoopAgentId">Unavailable agent</option> }
                                 </select>
                                 @if (Vm.SelectedLoopAgent is { } selectedAgent)
                                 {
-                                    <span class="sub-note">@selectedAgent.SkillIds.Count skills · Workflows: @selectedAgent.WorkflowAccess · Data: @selectedAgent.DataAccess · @selectedAgent.McpConnectionIds.Count MCPs. Saved instructions and access settings apply when this step runs.</span>
+                                    <span class="sub-note">Workflows: @selectedAgent.WorkflowAccess · Data: @selectedAgent.DataAccess · @selectedAgent.McpConnectionIds.Count MCPs. Saved instructions and access settings apply when this step runs.</span>
                                 }
-                                <a href="/project/@Vm.ProjectId/agents">Manage agents</a>
+                                <a class="dcbtn btn-2-8 btn-start" href="/project/@Vm.ProjectId/agents">Manage agents</a>
                             </div>
                             <div class="dcfield"><label for="loop-connection">Model connection</label>
                                 <select id="loop-connection" class="dcinput" @bind="Vm.LoopConnectionId" @bind:after="Vm.SelectLoopConnection" disabled="@(Vm.SelectedLoopAgent is { ConnectionId: var id } && id != Guid.Empty)">

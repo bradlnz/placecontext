@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using PlaceContext.Application;
 using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Build;
+using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Host.Components.ViewModels;
 using PlaceContext.Infrastructure.Build;
@@ -13,6 +15,267 @@ namespace PlaceContext.Host.Tests;
 public sealed partial class BuildChatTests
 {
     [Fact]
+    public async Task Dashboard_master_discovers_project_agents_without_gaining_additional_permissions()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var profile = new DashboardAgentProfile { Name = "Report reviewer", SourceAccess = "none" };
+        var store = ProjectStore(f);
+        await store.SaveAsync(f.ProjectId, new() { Agents = [profile] });
+        var settings = await f.Store.GetSettingsAsync(f.ProjectId);
+        settings.Agents[0].WorkflowAccess = "read";
+        settings.Agents[0].TableAccess = "none";
+        await f.Store.SaveSettingsAsync(f.ProjectId, settings);
+        var agent = new BuildChatAgent(f.Store, new PlainTextModel(), f.Service, f.Permissions, f.Tenant, projectAgents: store);
+        var inspection = await agent.InspectAsync(f.ProjectId);
+        Assert.Contains("You are the dashboard master agent", inspection.Prompt);
+        Assert.Contains("Review.AgentId", inspection.Prompt);
+        Assert.Contains(profile.Id.ToString(), inspection.Prompt);
+        Assert.Contains(profile.Name, inspection.Prompt);
+        Assert.Contains("\"SourceAccess\":\"none\"", inspection.Prompt);
+        var toolNames = JsonSerializer.Deserialize<JsonElement>(inspection.Tools).EnumerateArray().Select(t => t.GetProperty("Name").GetString()).ToArray();
+        Assert.DoesNotContain("run_workflow", toolNames);
+        Assert.DoesNotContain("save_workflow", toolNames);
+        Assert.DoesNotContain("list_project_tables", toolNames);
+        inspection = await agent.InspectAsync(f.ProjectId, agentId: profile.Id);
+        Assert.DoesNotContain("You are the dashboard master agent", inspection.Prompt);
+    }
+
+    [Fact]
+    public async Task Agent_routes_open_the_requested_agent_and_fail_closed_for_missing_agents()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var profile = new DashboardAgentProfile { Name = "Linked agent" };
+        var store = ProjectStore(f);
+        await store.SaveAsync(f.ProjectId, new() { Agents = [profile] });
+        var vm = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store);
+        await vm.LoadPageAsync(f.ProjectId, profile.Id.ToString());
+        Assert.Equal(profile.Id, vm.Agent!.Id);
+        Assert.False(vm.EditingPrivateAgent);
+        await vm.LoadPageAsync(f.ProjectId, Guid.Empty.ToString());
+        Assert.True(vm.EditingPrivateAgent);
+        Assert.Equal(DashboardSettings.DefaultAgentId, vm.Agent!.Id);
+        await vm.LoadPageAsync(f.ProjectId, DashboardSettings.DefaultAgentId.ToString());
+        Assert.True(vm.EditingPrivateAgent);
+        Assert.False(vm.CanDeleteAgent(vm.Agent!));
+        await vm.LoadPageAsync(f.ProjectId, "skills");
+        Assert.False(vm.EditorOpen);
+        Assert.Equal("Agent not found in this project.", vm.Error);
+        await vm.LoadPageAsync(f.ProjectId, Guid.NewGuid().ToString());
+        Assert.False(vm.EditorOpen);
+        Assert.Equal("Agent not found in this project.", vm.Error);
+        await vm.LoadPageAsync(f.ProjectId, "new");
+        Assert.NotNull(vm.Agent);
+        f.Permissions.Denied = Permission.ProjectsManage;
+        await vm.LoadPageAsync(f.ProjectId, "new");
+        Assert.False(vm.EditorOpen);
+        Assert.NotNull(vm.Error);
+    }
+
+    [Fact]
+    public async Task Navigating_during_agent_loading_keeps_the_latest_route()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var pending = new TaskCompletionSource<IReadOnlyList<JobChainView>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatcher = new ToolDispatcher(f.ProjectId) { PendingWorkflows = pending };
+        var service = new PlaceContextService(dispatcher, null!, null!, null!);
+        var vm = new ProjectAgentsViewModel(ProjectStore(f), f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store, service);
+        var first = vm.LoadPageAsync(f.ProjectId, Guid.Empty.ToString());
+        var second = vm.LoadPageAsync(f.ProjectId, "skills");
+        var latest = vm.LoadPageAsync(f.ProjectId, "new");
+        pending.SetResult([]);
+        await Task.WhenAll(first, second, latest);
+        Assert.NotNull(vm.Agent);
+        Assert.NotEqual(Guid.Empty, vm.Agent.Id);
+        Assert.False(vm.Existing);
+        Assert.Null(vm.Error);
+    }
+
+    [Theory]
+    [InlineData("none", "none", "none")]
+    [InlineData("read", "read", "read")]
+    [InlineData("manage", "read", "manage")]
+    public void Legacy_agents_keep_their_data_permissions(string legacy, string read, string sources)
+    {
+        var profile = JsonSerializer.Deserialize<DashboardAgentProfile>("{\"DataAccess\":\"" + legacy + "\"}")!;
+        profile.Validate();
+        Assert.Equal(read, profile.EffectiveTableAccess);
+        Assert.Equal(read, profile.EffectiveArtifactAccess);
+        Assert.Equal(sources, profile.EffectiveSourceAccess);
+        Assert.Equal(read == "read", profile.AllowsTool("list_project_tables"));
+        Assert.Equal(sources == "manage", profile.AllowsTool("prepare_data_source"));
+    }
+
+    [Theory]
+    [InlineData("manage", "read", "read")]
+    [InlineData("read", "invalid", "read")]
+    [InlineData("read", "read", "manage")]
+    public void Invalid_separate_data_permissions_are_rejected(string tables, string sources, string artifacts)
+    {
+        var profile = new DashboardAgentProfile { TableAccess = tables, SourceAccess = sources, ArtifactAccess = artifacts };
+        Assert.Throws<ArgumentException>(profile.Validate);
+    }
+
+    [Fact]
+    public async Task Separate_data_permissions_gate_tools_and_direct_calls_without_disabling_workflow_charts()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var dispatcher = new ToolDispatcher(f.ProjectId);
+        var service = new PlaceContextService(dispatcher, null!, null!, null!);
+        var profile = new DashboardAgentProfile { TableAccess = "none", SourceAccess = "none", ArtifactAccess = "none" };
+        var tools = new BuildTools(f.ProjectId, service, f.Permissions, f.Store, profile: profile);
+        Assert.DoesNotContain(tools.Functions(), t => t.Name is "list_project_tables" or "source_connectors" or "list_data_sources"
+            or "search_data_sources" or "prepare_data_source" or "create_data_pipeline" or "list_artifacts");
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.list_project_tables(default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.list_artifacts());
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.source_connectors(default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.list_data_sources(default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.search_data_sources("records", 10, default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.prepare_data_source("postgres", default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.create_data_pipeline(Guid.NewGuid(), "http://localhost", default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.show_live_chart("Denied", sql: "SELECT 1"));
+        Assert.Equal(0, dispatcher.DataQueries);
+        await tools.show_live_chart("Workflow counts");
+
+        profile.TableAccess = "read";
+        profile.DataAccess = "none";
+        await tools.list_project_tables(default);
+        await tools.show_live_chart("Allowed", sql: "SELECT status, total FROM records");
+        Assert.Equal(1, dispatcher.DataQueries);
+        Assert.False(profile.AllowsTool("search_data_sources"));
+        Assert.False(profile.AllowsTool("list_artifacts"));
+        f.Permissions.Denied = Permission.DataRead;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.list_project_tables(default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.show_live_chart("Denied by user permissions", sql: "SELECT 1"));
+        Assert.Equal(1, dispatcher.DataQueries);
+
+        profile.SourceAccess = "read";
+        Assert.True(profile.AllowsTool("search_data_sources"));
+        Assert.False(profile.AllowsTool("prepare_data_source"));
+        profile.SourceAccess = "manage";
+        Assert.True(profile.AllowsTool("prepare_data_source"));
+        Assert.True(profile.AllowsTool("create_data_pipeline"));
+        profile.WorkflowAccess = "read";
+        Assert.False(profile.AllowsTool("create_data_pipeline"));
+        profile.ArtifactAccess = "read";
+        await tools.list_artifacts();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Agent_workflow_links_save_reopen_and_can_remove_deleted_workflows(bool privateAgent)
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var workflow = new JobChainView(Guid.NewGuid(), f.ProjectId, "Review report", null, [], DateTimeOffset.UtcNow);
+        using var scope = f.Provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.JobChains.Add(new() { Id = workflow.Id, ProjectId = f.ProjectId, Name = workflow.Name });
+        await db.SaveChangesAsync();
+        var dispatcher = new ToolDispatcher(f.ProjectId) { Workflow = workflow };
+        var service = new PlaceContextService(dispatcher, null!, null!, null!);
+        var store = ProjectStore(f);
+        var vm = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store, service);
+        await vm.LoadAsync(f.ProjectId);
+        vm.EditAgent(privateAgent ? Assert.Single(vm.Agents) : null);
+        vm.Agent!.Name = "Reviewer";
+        vm.Agent.TableAccess = "none";
+        vm.Agent.SourceAccess = "read";
+        vm.Agent.ArtifactAccess = "none";
+        var id = vm.Agent.Id;
+        vm.ToggleWorkflow(Guid.NewGuid(), true);
+        Assert.Empty(vm.Agent.WorkflowIds);
+        vm.ToggleWorkflow(workflow.Id, true);
+        vm.ToggleWorkflow(workflow.Id, true);
+        Assert.Equal(workflow.Id, Assert.Single(vm.Agent.WorkflowIds));
+        await vm.SaveAsync("Review linked workflows");
+        Assert.Null(vm.Error);
+        await vm.LoadAsync(f.ProjectId);
+        vm.EditAgent(vm.Agents.Single(a => a.Id == id));
+        Assert.Equal(workflow.Id, Assert.Single(vm.Agent!.WorkflowIds));
+        Assert.Equal("none", vm.Agent.EffectiveTableAccess);
+        Assert.Equal("read", vm.Agent.EffectiveSourceAccess);
+        Assert.Equal("none", vm.Agent.EffectiveArtifactAccess);
+        if (privateAgent) Assert.Empty((await store.GetAsync(f.ProjectId)).Agents);
+
+        var agent = new BuildChatAgent(f.Store, new PlainTextModel(), service, f.Permissions, f.Tenant, projectAgents: store);
+        var inspection = await agent.InspectAsync(f.ProjectId, agentId: id);
+        Assert.Contains("\"LinkedWorkflows\":[{\"Id\":\"" + workflow.Id, inspection.Prompt);
+        Assert.Contains(workflow.Name, inspection.Prompt);
+
+        db.JobChains.Remove(await db.JobChains.SingleAsync());
+        await db.SaveChangesAsync();
+        dispatcher.Workflow = null;
+        await vm.SaveAsync("An unrelated change after deleting the workflow");
+        Assert.Null(vm.Error);
+        await vm.LoadAsync(f.ProjectId);
+        vm.EditAgent(vm.Agents.Single(a => a.Id == id));
+        Assert.Empty(vm.Workflows);
+        Assert.Single(vm.Agent!.WorkflowIds);
+        vm.ToggleWorkflow(workflow.Id, false);
+        await vm.SaveAsync("Review linked workflows");
+        Assert.Null(vm.Error);
+        await vm.LoadAsync(f.ProjectId);
+        Assert.Empty(vm.Agents.Single(a => a.Id == id).WorkflowIds);
+    }
+
+    [Fact]
+    public async Task Agent_workflow_links_reject_invalid_ids_and_other_projects_in_both_stores()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var workflowId = Guid.NewGuid();
+        using var scope = f.Provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.JobChains.Add(new() { Id = workflowId, ProjectId = Guid.NewGuid(), Name = "Foreign workflow" });
+        await db.SaveChangesAsync();
+        var settings = new DashboardSettings();
+        var profile = new DashboardAgentProfile();
+        var catalog = new ProjectAgentCatalog { Agents = [profile] };
+        foreach (var ids in new List<Guid>[] { [workflowId], [Guid.NewGuid()], [Guid.Empty], [workflowId, workflowId] })
+        {
+            profile.WorkflowIds = ids;
+            settings.Agents[0].WorkflowIds = ids;
+            await Assert.ThrowsAsync<ArgumentException>(() => ProjectStore(f).SaveAsync(f.ProjectId, catalog));
+            await Assert.ThrowsAsync<ArgumentException>(() => f.Store.SaveSettingsAsync(f.ProjectId, settings));
+        }
+        Assert.Empty((await ProjectStore(f).GetAsync(f.ProjectId)).Agents);
+        Assert.Empty((await f.Store.GetSettingsAsync(f.ProjectId)).Agents[0].WorkflowIds);
+    }
+
+    [Fact]
+    public async Task Linked_workflow_context_respects_capabilities_permissions_and_current_project_workflows()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var workflow = new JobChainView(Guid.NewGuid(), f.ProjectId, "Report", null, [], DateTimeOffset.UtcNow);
+        var dispatcher = new ToolDispatcher(f.ProjectId) { Workflow = workflow };
+        var service = new PlaceContextService(dispatcher, null!, null!, null!);
+        var profile = new DashboardAgentProfile { WorkflowIds = [workflow.Id, Guid.NewGuid()] };
+        var tools = new BuildTools(f.ProjectId, service, f.Permissions, f.Store, profile: profile);
+        var context = JsonSerializer.SerializeToElement(await tools.project_context(default));
+        Assert.Equal(workflow.Id, Assert.Single(context.GetProperty("LinkedWorkflows").EnumerateArray()).GetProperty("Id").GetGuid());
+        profile.WorkflowAccess = "none";
+        context = JsonSerializer.SerializeToElement(await tools.project_context(default));
+        Assert.Empty(context.GetProperty("LinkedWorkflows").EnumerateArray());
+        profile.WorkflowAccess = "manage";
+        f.Permissions.Denied = Permission.ChainsManage;
+        context = JsonSerializer.SerializeToElement(await tools.project_context(default));
+        Assert.Empty(context.GetProperty("LinkedWorkflows").EnumerateArray());
+        var vm = new ProjectAgentsViewModel(ProjectStore(f), f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store, service);
+        await vm.LoadAsync(f.ProjectId);
+        Assert.False(vm.CanViewWorkflows);
+        Assert.Empty(vm.Workflows);
+        vm.EditAgent();
+        vm.ToggleWorkflow(workflow.Id, true);
+        Assert.Empty(vm.Agent!.WorkflowIds);
+    }
+
+    [Fact]
     public async Task Agents_section_edits_the_private_dashboard_agent_without_publishing_or_replacing_tiles()
     {
         await using var f = new Fixture();
@@ -21,10 +284,10 @@ public sealed partial class BuildChatTests
         var vm = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store);
         await vm.LoadAsync(f.ProjectId);
         var dashboard = Assert.Single(vm.Agents);
-        Assert.Equal(Guid.Empty, dashboard.Id);
+        Assert.Equal(DashboardSettings.DefaultAgentId, dashboard.Id);
         vm.EditAgent(dashboard);
         Assert.True(vm.EditingPrivateAgent);
-        Assert.False(vm.CanDelete);
+        Assert.False(vm.CanDeleteAgent(vm.Agent!));
         var settings = await f.Store.GetSettingsAsync(f.ProjectId);
         settings.Actions.Add(new("Another tile", "Inspect jobs"));
         await f.Store.SaveSettingsAsync(f.ProjectId, settings);
@@ -35,6 +298,56 @@ public sealed partial class BuildChatTests
         Assert.Empty((await store.GetAsync(f.ProjectId)).Agents);
         f.User.UserId = Guid.NewGuid();
         Assert.Empty((await f.Store.GetSettingsAsync(f.ProjectId)).Agents[0].Instructions);
+    }
+
+    [Theory]
+    [InlineData(PlaceContext.Domain.ValueObjects.LoopChainAction.AgentType)]
+    [InlineData(PlaceContext.Domain.ValueObjects.LoopChainAction.TaskType)]
+    public async Task Workflow_steps_list_and_run_dashboard_and_private_agents(string kind)
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var settings = await f.Store.GetSettingsAsync(f.ProjectId);
+        var personal = new DashboardAgentProfile { Name = "Private reviewer", Instructions = "Check personal evidence.",
+            ConnectionId = f.ConnectionId, Model = "test" };
+        settings.Agents.Add(personal);
+        await f.Store.SaveSettingsAsync(f.ProjectId, settings);
+        var shared = new DashboardAgentProfile { Name = "Shared reviewer" };
+        var store = ProjectStore(f);
+        await store.SaveAsync(f.ProjectId, new() { Agents = [shared] });
+        var vm = new JobChainsViewModel(null!, null!, null!, new AgentNavigation(), modelConnections: f.Connections,
+            projectAgents: store, dashboardStore: f.Store);
+        vm.Initialize(f.ProjectId);
+        vm.NewChain();
+        await vm.OpenLoopActionAt(kind, 0);
+        Assert.Equal(3, vm.LoopAgents.Count);
+        Assert.Contains(vm.LoopAgents, a => a.Id == DashboardSettings.DefaultAgentId);
+        Assert.Contains(vm.LoopAgents, a => a.Id == shared.Id);
+        foreach (var profile in settings.Agents)
+        {
+            vm.LoopAgentId = profile.Id;
+            vm.SelectLoopAgent();
+            vm.LoopInstructions = "Review the output";
+            vm.SaveLoopAction();
+            Assert.Null(vm.LoopError);
+            var action = Assert.IsType<PlaceContext.Domain.ValueObjects.LoopChainAction>(WorkflowStage.FromView(vm.BuildCanvasStageViews()[0]).ToStage().Action);
+            Assert.Equal(profile.Id, action.AgentId);
+            var model = new ScriptedModel("""{"content":"{\"done\":true}"}""");
+            var runner = new WorkflowAgentRunner(model, f.Connections, f.Service, f.Permissions, f.Store, projectAgents: store);
+            await runner.RunAsync(f.ProjectId, Guid.NewGuid(), Guid.NewGuid(), 0, action, null, default);
+            Assert.Contains(profile.Name, model.SystemPrompt);
+            Assert.Contains(profile.Instructions, model.SystemPrompt);
+            await vm.EditLoopAction(0);
+            Assert.Equal(profile.Id, vm.LoopAgentId);
+        }
+        f.User.UserId = Guid.NewGuid();
+        var unavailable = new PlaceContext.Domain.ValueObjects.LoopChainAction(kind, "Review", "review",
+            agentProvider: PlaceContext.Domain.ValueObjects.LoopChainAction.AutomaticAgent,
+            connectionId: f.ConnectionId, model: "test", agentId: personal.Id);
+        var deniedModel = new ScriptedModel();
+        var deniedRunner = new WorkflowAgentRunner(deniedModel, f.Connections, f.Service, f.Permissions, f.Store, projectAgents: store);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => deniedRunner.RunAsync(f.ProjectId, Guid.NewGuid(), Guid.NewGuid(), 0, unavailable, null, default));
+        Assert.Equal(0, deniedModel.Requests);
     }
 
     [Fact]
@@ -102,7 +415,7 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
-    public async Task Project_agents_reject_stale_edits_unknown_skills_models_and_out_of_project_mcps()
+    public async Task Project_agents_reject_stale_edits_unknown_models_and_out_of_project_mcps()
     {
         await using var f = new Fixture();
         await f.SeedAsync();
@@ -110,9 +423,6 @@ public sealed partial class BuildChatTests
         var catalog = new ProjectAgentCatalog { Agents = [new() { Name = "Analyst" }] };
         await store.SaveAsync(f.ProjectId, catalog);
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.SaveAsync(f.ProjectId, new()));
-        catalog.Agents[0].SkillIds.Add(Guid.NewGuid());
-        await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(f.ProjectId, catalog));
-        catalog.Agents[0].SkillIds.Clear();
         catalog.Agents[0].ConnectionId = Guid.NewGuid();
         await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(f.ProjectId, catalog));
         catalog.Agents[0].ConnectionId = Guid.Empty;
@@ -123,18 +433,16 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
-    public async Task Project_agent_skills_and_capabilities_reach_prompt_tools_and_model_selection()
+    public async Task Project_agent_capabilities_reach_prompt_tools_and_model_selection()
     {
         await using var f = new Fixture();
         await f.SeedAsync();
-        var skill = new AgentSkill { Name = "Report", Instructions = "Write the findings as a concise report." };
-        var profile = new DashboardAgentProfile { Name = "Reporter", WorkflowAccess = "none", DataAccess = "none", SkillIds = [skill.Id] };
-        var catalog = new ProjectAgentCatalog { Agents = [profile], Skills = [skill] };
+        var profile = new DashboardAgentProfile { Name = "Reporter", WorkflowAccess = "none", DataAccess = "none" };
+        var catalog = new ProjectAgentCatalog { Agents = [profile] };
         var store = ProjectStore(f);
         await store.SaveAsync(f.ProjectId, catalog);
         var agent = new BuildChatAgent(f.Store, new PlainTextModel(), f.Service, f.Permissions, f.Tenant, projectAgents: store);
         var inspection = await agent.InspectAsync(f.ProjectId, agentId: profile.Id);
-        Assert.Contains(skill.Instructions, inspection.Prompt);
         Assert.Contains("Reporter", inspection.Prompt);
         Assert.DoesNotContain("run_workflow", inspection.Tools);
         Assert.DoesNotContain("list_project_tables", inspection.Tools);
@@ -146,32 +454,33 @@ public sealed partial class BuildChatTests
         var context = JsonSerializer.Serialize(await tools.project_context(default));
         Assert.Contains("\"Jobs\":false", context);
         var conversation = new BuildConversation { ProjectId = f.ProjectId, AgentId = profile.Id, ConnectionId = f.ConnectionId, Model = "test" };
-        await agent.QueueAsync(conversation, "Use the report skill");
+        await agent.QueueAsync(conversation, "Use the report agent");
         Assert.Equal(f.ConnectionId, conversation.ConnectionId);
         await agent.RunAsync(conversation, default);
-        Assert.Contains(skill.Instructions, conversation.SystemPrompt);
+        Assert.Contains("Reporter", conversation.SystemPrompt);
         Assert.Null(conversation.Error);
     }
 
     [Fact]
-    public async Task Skill_edits_and_deletion_preserve_agents_and_remove_assignments()
+    public async Task Deleting_an_agent_removes_only_that_agent_and_keeps_the_master()
     {
         await using var f = new Fixture();
         await f.SeedAsync();
         var store = ProjectStore(f);
-        var skill = new AgentSkill { Name = "Report", Instructions = "Original" };
-        await store.SaveAsync(f.ProjectId, new() { Skills = [skill], Agents = [new() { Name = "Reporter", SkillIds = [skill.Id] }] });
-        var vm = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new());
+        var keep = new DashboardAgentProfile { Name = "Keep" };
+        var remove = new DashboardAgentProfile { Name = "Remove" };
+        await store.SaveAsync(f.ProjectId, new() { Agents = [keep, remove] });
+        var vm = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store);
         await vm.LoadAsync(f.ProjectId);
-        vm.EditSkill(vm.Catalog.Skills[0]);
-        await vm.SaveAsync("Edited instructions");
+        var master = vm.Agents.Single(a => a.Id == DashboardSettings.DefaultAgentId);
+        Assert.False(vm.CanDeleteAgent(master));
+        await vm.DeleteAsync(master.Id);
+        Assert.Contains(vm.Agents, a => a.Id == DashboardSettings.DefaultAgentId);
+        await vm.DeleteAsync(remove.Id);
         Assert.Null(vm.Error);
-        Assert.Equal("Edited instructions", (await store.GetAsync(f.ProjectId)).Skills[0].Instructions);
-        vm.EditSkill(vm.Catalog.Skills[0]);
-        vm.ConfirmDelete = true;
-        await vm.SaveAsync("", true);
-        Assert.Empty(vm.Catalog.Skills);
-        Assert.Empty(Assert.Single(vm.Catalog.Agents).SkillIds);
+        Assert.DoesNotContain(vm.Agents, a => a.Id == remove.Id);
+        var saved = await store.GetAsync(f.ProjectId);
+        Assert.Equal(keep.Id, Assert.Single(saved.Agents).Id);
     }
 
     private sealed class EmptyMcp : PlaceContext.Application.Mcp.IMcpClientService

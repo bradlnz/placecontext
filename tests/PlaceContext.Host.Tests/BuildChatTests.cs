@@ -215,12 +215,30 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
+    public void Default_agent_identity_preserves_legacy_settings_and_conversations()
+    {
+        var settings = JsonSerializer.Deserialize<DashboardSettings>("""
+            {"Agents":[{"Id":"00000000-0000-0000-0000-000000000000","Name":"My assistant","Instructions":"Keep my preferences"}]}
+            """)!;
+        var profile = Assert.Single(settings.Agents);
+        Assert.NotEqual(Guid.Empty, profile.Id);
+        Assert.Equal(DashboardSettings.DefaultAgentId, profile.Id);
+        Assert.Equal("Keep my preferences", profile.Instructions);
+        settings.Validate();
+        var reloaded = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(settings))!;
+        Assert.Equal(profile.Id, Assert.Single(reloaded.Agents).Id);
+        var conversation = JsonSerializer.Deserialize<BuildConversation>("""{"AgentId":"00000000-0000-0000-0000-000000000000"}""")!;
+        Assert.Equal(profile.Id, conversation.AgentId);
+        Assert.Throws<ArgumentException>(() => new ProjectAgentCatalog { Agents = [profile] }.Validate());
+    }
+
+    [Fact]
     public async Task Agent_profiles_persist_model_and_prompt_and_reject_unknown_profiles()
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
         var settings = JsonSerializer.Deserialize<DashboardSettings>("""{"Instructions":"Legacy preference","Actions":[]}""")!;
-        Assert.Equal(Guid.Empty, Assert.Single(settings.Agents).Id);
+        Assert.Equal(DashboardSettings.DefaultAgentId, Assert.Single(settings.Agents).Id);
         var profile = new DashboardAgentProfile
         {
             Name = "Research", ConnectionId = fixture.ConnectionId, Model = "test", Instructions = "Cite evidence for reports"
@@ -278,7 +296,7 @@ public sealed partial class BuildChatTests
         await vm.SaveAgentAsync();
         Assert.True(vm.CanStartChat);
         vm.Conversation.Status = BuildRunStatus.Running;
-        vm.SelectAgent(Guid.Empty.ToString());
+        vm.SelectAgent(DashboardSettings.DefaultAgentId.ToString());
         Assert.Equal(id, vm.Conversation.AgentId);
         await vm.DisposePageAsync();
     }
@@ -451,6 +469,26 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
+    public async Task Dashboard_tiles_can_move_to_a_new_row_and_back()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        await vm.MoveDashboardTileAsync("workflow", vm.Dashboard.OrderedTiles().Count - 1, newRow: true);
+        var saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        Assert.Equal("workflow", saved.OrderedTiles().Last());
+        Assert.Contains("workflow", saved.TileRowStarts);
+        await vm.ResizeDashboardTileAsync("workflow", "large");
+        Assert.Contains("workflow", vm.Dashboard.TileRowStarts);
+        await vm.MoveDashboardTileAsync("workflow", 0);
+        saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        Assert.Equal("workflow", saved.OrderedTiles().First());
+        Assert.DoesNotContain("workflow", saved.TileRowStarts);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
     public async Task Dashboard_reorder_keeps_the_saved_layout_when_persistence_fails()
     {
         await using var fixture = new Fixture();
@@ -472,6 +510,9 @@ public sealed partial class BuildChatTests
     [InlineData("{\"TileOrder\":[\"chat\",\"chat\"]}")]
     [InlineData("{\"Charts\":[{\"ChartJson\":\"{}\",\"Source\":\"Invalid chart\"}]}")]
     [InlineData("{\"Charts\":null}")]
+    [InlineData("{\"TileRowStarts\":null}")]
+    [InlineData("{\"TileRowStarts\":[\"unknown\"]}")]
+    [InlineData("{\"TileRowStarts\":[\"chat\",\"chat\"]}")]
     [InlineData("{\"TileSizes\":null}")]
     [InlineData("{\"TileSizes\":{\"unknown\":\"wide\"}}")]
     [InlineData("{\"TileSizes\":{\"chat\":\"huge\"}}")]
@@ -2527,6 +2568,7 @@ public sealed partial class BuildChatTests
                 ListProjectTableSchemasQuery => Array.Empty<PlaceContext.Application.ProjectData.ProjectTableSchema>(),
                 ListJobChainsQuery => Workflow is null ? Array.Empty<JobChainView>() : new[] { Workflow },
                 ListTriggersQuery => Array.Empty<TriggerView>(),
+                ListChainRunsQuery => Array.Empty<ChainRunView>(),
                 GetChainRunQuery => Run!,
                 GetJobRunQuery => JobRun!,
                 ListRunArtifactsQuery artifactQuery => Artifacts.Where(a => a.RunId == artifactQuery.RunId).ToArray(),

@@ -27,6 +27,7 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly ICurrentTenant? _tenant;
     private readonly IModelConnections? _modelConnections;
     private readonly IProjectAgentStore? _projectAgents;
+    private readonly IBuildChatStore? _dashboardStore;
     private IDisposable? _operationSubscription;
 
     public JobChainsViewModel(
@@ -38,12 +39,13 @@ public sealed partial class JobChainsViewModel : PageViewModel
         IVirtualMachineEnvironmentCatalog? qemuCatalog = null,
         ICurrentTenant? tenant = null,
         IVirtualMachineLoginStore? qemuLogins = null,
-        IOptions<RunBillingDeploymentOptions>? hosting = null, IModelConnections? modelConnections = null, IProjectAgentStore? projectAgents = null
+        IOptions<RunBillingDeploymentOptions>? hosting = null, IModelConnections? modelConnections = null, IProjectAgentStore? projectAgents = null, IBuildChatStore? dashboardStore = null
     )
     {
         _svc = svc;
         _modelConnections = modelConnections;
         _projectAgents = projectAgents;
+        _dashboardStore = dashboardStore;
         _submissions = submissions;
         _qemuCatalog = qemuCatalog;
         _qemuLogins = qemuLogins;

@@ -19,6 +19,7 @@ public sealed class UserCircuitHandler : CircuitHandler
     private readonly TenantHolder _tenant;
     private readonly IServiceScopeFactory _scopes;
     private readonly AuthenticationStateProvider _authentication;
+    private readonly object _dispatchLock = new();
     public UserCircuitHandler(UserHolder holder, TenantHolder tenant, IServiceScopeFactory scopes,
         AuthenticationStateProvider authentication)
         => (_holder, _tenant, _scopes, _authentication) = (holder, tenant, scopes, authentication);
@@ -55,6 +56,10 @@ public sealed class UserCircuitHandler : CircuitHandler
                     updated.SetAuthenticationState(Task.FromResult(new AuthenticationState(principal)));
                 }
             }
-            await next(context);
+            Task activity;
+            // Async session checks break SignalR's serialized render ACK dispatch. Lock only the
+            // synchronous callback: awaiting it under the lock would block JS completions.
+            lock (_dispatchLock) activity = next(context);
+            await activity;
         };
 }
