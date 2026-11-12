@@ -1,29 +1,16 @@
-<section class="demo-share" aria-label="Share workflow demo">
-    <h3>Share a read-only demo</h3>
-    <p>Anyone with the link can view the outcome text below and the selected replay without signing in. Review screenshots and remove sensitive details before sharing. Prompts, chat, credentials and live access are not included automatically.</p>
-    <label for="demo-outcome">Outcome to share (editable)</label>
-    <textarea id="demo-outcome" rows="6" maxlength="250000" @bind="Vm.DemoOutcome" disabled="@Vm.SharingDemo"></textarea>
-    <label for="demo-step">Include visual replay</label>
-    <select id="demo-step" @bind="Vm.DemoReplayStep" disabled="@Vm.SharingDemo">
-        <option value="">No replay</option>
-        @foreach (var step in Run.Steps.Where(x => x.ActionType == "qemu"))
-        { <option value="@step.Index">@(step.Index + 1). @step.JobName</option> }
-    </select>
-    @if (Vm.DemoReplayStep is { } replayStep)
-    { <VirtualMachineReplay Run="Run" Step="replayStep" @key="replayStep" /> }
+<section class="demo-share" aria-label="Share conversation">
+    <p>Anyone with this link can read a snapshot of these messages, action results, the selected workflow run and its artifacts. Future messages stay private. The link expires and can be revoked here.</p>
     <label for="demo-expiry">Expires in</label><select id="demo-expiry" @bind="Vm.DemoLifetimeDays" disabled="@Vm.SharingDemo"><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option></select>
-    <div class="demo-actions"><button class="dcbtn primary" disabled="@Vm.SharingDemo" @onclick="Vm.CreateDemoAsync">@(Vm.SharingDemo ? "Working…" : Vm.DemoExpiry is null ? "Create public demo link" : "Replace public demo link")</button>
+    <div class="demo-actions"><button class="dcbtn primary" disabled="@Vm.SharingDemo" @onclick="Vm.CreateDemoAsync">@(Vm.SharingDemo ? "Working…" : Vm.DemoExpiry is null ? "Create share link" : "Replace share link")</button>
     @if (Vm.DemoExpiry is not null) { <button class="dcbtn" disabled="@Vm.SharingDemo" @onclick="Vm.RevokeDemoAsync">Revoke link</button> }</div>
-    @if (Vm.DemoExpiry is { } expiry) { <p role="status">Your demo link expires @Vm.Presentation.DateTime(expiry). Replacing it invalidates the previous link.</p> }
+    @if (Vm.DemoExpiry is { } expiry) { <p role="status">Expires @Vm.Presentation.DateTime(expiry). Replacing the link invalidates the previous one.</p> }
     @if (Vm.DemoUrl is { } url)
     {
-        <label for="demo-link">Public link</label><input id="demo-link" readonly value="@url" />
-        <div class="demo-actions"><button class="dcbtn" @onclick="Vm.CopyDemoAsync">Copy link</button><a class="dcbtn" href="@url" target="_blank" rel="noopener noreferrer">Open demo</a></div>
-        <p>Links use this app's address. A localhost link only works on this computer; use a publicly reachable deployment to send demos.</p>
+        <label for="demo-link">Share link</label><input id="demo-link" readonly value="@url" />
+        <div class="demo-actions"><button class="dcbtn" @onclick="Vm.CopyDemoAsync">Copy link</button><a class="dcbtn" href="@url" target="_blank" rel="noopener noreferrer">Open conversation</a></div>
     }
     @if (Vm.DemoError is { } error) { <p role="alert">@error</p> }
 </section>
 @code {
     [Parameter, EditorRequired] public BuildChatViewModel Vm { get; set; } = null!;
-    [Parameter, EditorRequired] public ChainRunView Run { get; set; } = null!;
 }

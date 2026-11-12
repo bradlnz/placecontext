@@ -14,11 +14,12 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Build;
 
-public sealed partial class BuildTools(Guid projectId, PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IOutcomeReviewer? reviewer = null, Action<Guid, Guid>? jobStarted = null, IMcpClientService? mcp = null, IJobChainSubmissionQueue? submissions = null, IReadOnlySet<Guid>? mcpConnectionIds = null)
+public sealed partial class BuildTools(Guid projectId, PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IOutcomeReviewer? reviewer = null, Action<Guid, Guid>? jobStarted = null, IMcpClientService? mcp = null, IJobChainSubmissionQueue? submissions = null, IReadOnlySet<Guid>? mcpConnectionIds = null, DashboardAgentProfile? profile = null)
 {
     private readonly IMcpClientService? _mcp = mcpConnectionIds is { Count: 0 } ? null : mcp;
     public IReadOnlyList<AIFunction> Functions() => GetType().GetMethods()
         .Where(m => m.GetCustomAttribute<DescriptionAttribute>() is not null)
+        .Where(m => profile is null || profile.AllowsTool(m.Name))
         .Where(m => _mcp is not null || m.Name is not (nameof(list_mcp_tools) or nameof(call_mcp_tool)))
         .Select(m => AIFunctionFactory.Create(m, this, m.Name, m.GetCustomAttribute<DescriptionAttribute>()!.Description)).ToArray();
 
@@ -46,8 +47,10 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         };
     }
 
-    private async Task RequireAsync(string permission, CancellationToken ct)
+    private async Task RequireAsync(string permission, CancellationToken ct, [System.Runtime.CompilerServices.CallerMemberName] string tool = "")
     {
+        if (profile is not null && !profile.AllowsTool(tool))
+            throw new UnauthorizedAccessException("This tool is disabled for the selected agent.");
         if (!await permissions.HasAsync(Permission.ProjectsView, ct) || !await permissions.HasAsync(permission, ct))
         {
             throw new UnauthorizedAccessException($"Missing permission: {permission}.");
@@ -107,9 +110,9 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
     public async Task<object> project_context(CancellationToken ct)
     {
         await RequireAsync(Permission.ProjectsView, ct);
-        var canJobs = await permissions.HasAsync(Permission.JobsView, ct);
-        var canWorkflows = await permissions.HasAsync(Permission.ChainsManage, ct);
-        var canSchedules = await permissions.HasAsync(Permission.TriggersManage, ct);
+        var canJobs = profile?.WorkflowAccess != "none" && await permissions.HasAsync(Permission.JobsView, ct);
+        var canWorkflows = profile?.WorkflowAccess != "none" && await permissions.HasAsync(Permission.ChainsManage, ct);
+        var canSchedules = profile?.WorkflowAccess != "none" && await permissions.HasAsync(Permission.TriggersManage, ct);
         var jobs = canJobs ? await service.ListJobsAsync(projectId, ct) : [];
         var workflows = canWorkflows ? await service.ListJobChainsAsync(projectId, ct) : [];
         var schedules = canSchedules ? await service.ListTriggersAsync(projectId, ct) : [];
@@ -187,7 +190,14 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         };
     }
 
-    [Description("Display a chart in the conversation's side panel. Use bar, line or pie; up to 24 labels and 4 series (one for pie), with one finite numeric value per label. Read real tool results first, or use numbers explicitly supplied by the user. Source must identify the data and time range, including sampling or limits. Never invent values. Charts are saved with this conversation; this does not modify project data.")]
+    [Description("List recent artifact files from this project, including PDFs, reports, images and downloads. Returned files can be opened in the workspace. Returns metadata, not file contents.")]
+    public async Task<IReadOnlyList<ArtifactFileView>> list_artifacts(int take = 20, CancellationToken ct = default)
+    {
+        await RequireAsync(Permission.ArtifactsView, ct);
+        return await service.ListProjectArtifactsAsync(projectId, Math.Clamp(take, 1, 100), ct: ct);
+    }
+
+    [Description("Display a static chart in the conversation's side panel. For dashboard tiles use show_live_chart instead. Use bar, line or pie; up to 24 labels and 4 series (one for pie), with one finite numeric value per label. Read real tool results first, or use numbers explicitly supplied by the user. Source must identify the data and time range, including sampling or limits. Never invent values. Charts are saved with this conversation; this does not modify project data.")]
     public async Task<object> show_chart(ChartSpec chart, string source, CancellationToken ct)
     {
         await RequireAsync(Permission.ProjectsView, ct);
@@ -209,6 +219,31 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         {
             chart = validated,
             source = source.Trim()
+        };
+    }
+
+    [Description("Inspect the project's data tables and columns before writing a live chart query. Read-only; does not change data.")]
+    public async Task<object> list_project_tables(CancellationToken ct)
+    {
+        await RequireAsync(Permission.DataRead, ct);
+        return await service.ListProjectTableSchemasAsync(projectId, ct);
+    }
+
+    [Description("Create a chart that can be pinned to the dashboard and queries fresh data every 10 seconds without AI. Omit sql for current project job counts (running, queued, failed and succeeded in the last 24h). For project data, inspect list_project_tables first and supply one read-only SELECT: first text column labels, numeric columns values. Aggregate and order explicitly; at most 24 rows and 3 numeric series are shown (one for pie). Use relative time filters such as CURRENT_TIMESTAMP for rolling windows. Type is bar, line or pie. This does not modify data.")]
+    public async Task<object> show_live_chart(string title, string type = "bar", string? sql = null, CancellationToken ct = default)
+    {
+        await RequireAsync(sql is null ? Permission.JobsView : Permission.DataRead, ct);
+        if (profile is not null && (sql is null ? profile.WorkflowAccess == "none" : profile.DataAccess == "none"))
+            throw new UnauthorizedAccessException("This chart source is disabled for the selected agent.");
+        var chart = await DashboardChartData.ReadAsync(service, permissions, projectId, title, type, sql, ct)
+            ?? throw new InvalidOperationException("This query returned no data. Adjust the query or time range before pinning the chart.");
+        return new
+        {
+            chart,
+            source = sql is null ? "Project job runs: all active runs and completed runs started in the last 24 hours."
+                : "Project data query · up to 24 labels and 3 numeric series (one for pie).",
+            live = true,
+            sql
         };
     }
 

@@ -1,0 +1,10 @@
+.artifact-preview { display:flex; flex-direction:column; flex:1; min-height:0; gap:12px; padding:16px; }
+.artifact-preview-toolbar { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:var(--text-3); }
+.artifact-frame { flex:1; min-height:400px; width:100%; border:0; background:#fff; }
+.artifact-image { flex:1; min-height:0; overflow:auto; }
+.artifact-image img { display:block; max-width:100%; height:auto; margin:auto; }
+.artifact-pdf-pages { display:flex; flex:1; min-height:0; flex-direction:column; gap:12px; overflow:auto; }
+.artifact-pdf-pages ::deep .pdf-page-shell { flex:none; position:relative; min-height:min(72vh, 720px); background:#fff; }
+.artifact-pdf-pages ::deep canvas { display:block; max-width:100%; height:auto !important; }
+.artifact-pdf-pages ::deep .pdf-page-label { position:absolute; top:8px; right:8px; background:#333; color:#fff; padding:3px 6px; border-radius:4px; font-size:11px; }
+.artifact-pdf-pages ::deep .pdf-render-error { color:var(--bad); }

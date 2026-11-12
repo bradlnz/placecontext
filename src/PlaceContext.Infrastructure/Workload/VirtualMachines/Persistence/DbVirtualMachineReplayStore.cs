@@ -40,7 +40,7 @@ public sealed class DbVirtualMachineReplayStore(DbContextOptions<AppDbContext> o
         {
             throw new ArgumentException("Replay images must be bounded PNG screenshots.");
         }
-        await using var db = new AppDbContext(options, tenant);
+        await using var db = new AppDbContext(options, tenant, new CurrentUser());
         var run = await new EfChainRunRepository(db, encryptor).GetByIdAsync(runId, ct);
         if (run is null || !run.Steps.Any(s => s.Index == step && s.ActionType == VirtualMachineChainAction.ActionType))
         {
@@ -83,7 +83,7 @@ public sealed class DbVirtualMachineReplayStore(DbContextOptions<AppDbContext> o
     public async Task<IReadOnlyList<VirtualMachineReplayFrame>> ListAsync(Guid projectId, Guid runId, int step, CancellationToken ct)
     {
         await RequireReadAsync(ct);
-        await using var db = new AppDbContext(options, tenant);
+        await using var db = new AppDbContext(options, tenant, new CurrentUser());
         if (!await CanReadRunAsync(db, projectId, runId, ct))
         {
             return [];
@@ -106,7 +106,7 @@ public sealed class DbVirtualMachineReplayStore(DbContextOptions<AppDbContext> o
         {
             return null;
         }
-        await using var db = new AppDbContext(options, tenant);
+        await using var db = new AppDbContext(options, tenant, new CurrentUser());
         if (!await CanReadRunAsync(db, projectId, runId, ct))
         {
             return null;

@@ -1,0 +1,177 @@
+@page "/project/{ProjectId:guid}/agents"
+@page "/project/{ProjectId:guid}/agents/{Section}"
+@using PlaceContext.Application.Access.Models
+@using PlaceContext.Application.Build
+@using PlaceContext.Host.Components.ViewModels
+@attribute [Authorize(Policy = Permission.ProjectsView)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@inject ProjectAgentsViewModel Vm
+@implements IDisposable
+
+<PageTitle>PlaceContext — Agents</PageTitle>
+<div class="agents-page">
+    <header class="agents-header">
+        <div><h2>@(Vm.ShowingSkills ? "Agent skills" : "Agents")</h2><p>@(Vm.ShowingSkills ? "Define reusable instructions and assign them to your agents." : "Define how agents work across this project.")</p></div>
+        <div class="head-actions">
+        <button class="dcbtn" disabled="@(Vm.Busy || Vm.Loading)" @onclick="() => Vm.LoadAsync(ProjectId)">Refresh</button>
+        <a class="dcbtn" href="@(Vm.ShowingSkills ? $"/project/{ProjectId}/agents" : $"/project/{ProjectId}/agents/skills")">@(Vm.ShowingSkills ? "Back to agents" : "Manage skills")</a>
+        @if (Vm.CanManage)
+        {
+            <button class="dcbtn primary" disabled="@(Vm.Loading || (Vm.ShowingSkills ? Vm.Catalog.Skills.Count : Vm.Catalog.Agents.Count) >= 32)" @onclick="Create"><AppIcon Kind="plus" /> @(Vm.ShowingSkills ? "New skill" : "New agent")</button>
+        }
+        </div>
+    </header>
+    @if (Vm.Error is { } error) { <div class="status-message" role="alert">@error</div> }
+    @if (Vm.Notice is { } notice) { <div class="status-message" role="status">@notice</div> }
+    @if (Vm.Loading) { <Skeleton Kind="list" Rows="3" /> }
+    else if (Vm.ShowingSkills)
+    {
+        @if (Vm.Catalog.Skills.Count == 0) { <div class="dccard empty-state"><div class="empty-icon"><AppIcon Kind="file" /></div><strong>No skills yet</strong><span>Add instructions for a task or process, then assign them to your agents.</span></div> }
+        else
+        {
+        <section class="dccard agent-suite" aria-label="Skill catalogue">
+            <header class="suite-head"><div><span class="suite-caret"><AppIcon Kind="chevron-down" /></span><strong>Skill catalogue</strong><span>@Vm.Catalog.Skills.Count reusable skills</span></div></header>
+            @foreach (var skill in Vm.Catalog.Skills.OrderBy(s => s.Name))
+            {
+                <article class="agent-row" @onclick="() => Vm.EditSkill(skill)">
+                    <div class="status-icon"><AppIcon Kind="file" /></div>
+                    <div class="agent-copy">
+                        <div class="agent-title"><h3><button class="agent-name" @onclick:stopPropagation="true" @onclick="() => Vm.EditSkill(skill)">@skill.Name</button></h3><span class="agent-chip">@Vm.Agents.Count(a => a.SkillIds.Contains(skill.Id)) agents</span></div>
+                        <div class="agent-detail">@skill.Instructions</div>
+                    </div>
+                    <button class="icon-action" title="@(Vm.CanManage ? "Edit skill" : "View skill")" aria-label="@(Vm.CanManage ? "Edit skill" : "View skill")" @onclick:stopPropagation="true" @onclick="() => Vm.EditSkill(skill)"><AppIcon Kind="edit" /></button>
+                </article>
+            }
+        </section>
+        }
+    }
+    else
+    {
+        @if (!Vm.Agents.Any()) { <div class="dccard empty-state"><div class="empty-icon"><AppIcon Kind="agent" /></div><strong>No agents yet</strong><span>Choose instructions, skills, workflow capabilities, data access and MCP connections.</span></div> }
+        else
+        {
+        <section class="summary-strip" aria-label="Agent summary">
+            <div class="summary-count"><strong>@Vm.Agents.Count()</strong><span>agents</span></div>
+            <div class="summary-count"><strong>@Vm.Catalog.Agents.Count</strong><span>shared</span></div>
+            <div class="summary-count"><strong>@Vm.Catalog.Skills.Count</strong><span>skills</span></div>
+            <div class="summary-count"><strong>@Vm.Mcps.Count</strong><span>MCP connections</span></div>
+        </section>
+        <section class="dccard agent-suite" aria-label="Agent catalogue">
+            <header class="suite-head"><div><span class="suite-caret"><AppIcon Kind="chevron-down" /></span><strong>Agent catalogue</strong><span>@Vm.Agents.Count() agents</span></div></header>
+            @foreach (var agent in Vm.Agents.OrderBy(a => a.Id != Guid.Empty).ThenBy(a => a.Name))
+            {
+                var isPrivate = Vm.Dashboard?.Agents.Any(a => a.Id == agent.Id) == true;
+                <article class="agent-row" @onclick="() => Vm.EditAgent(agent)">
+                    <div class="status-icon"><AppIcon Kind="agent" /></div>
+                    <div class="agent-copy">
+                        <div class="agent-title">
+                            <h3><button class="agent-name" @onclick:stopPropagation="true" @onclick="() => Vm.EditAgent(agent)">@(agent.Id == Guid.Empty ? "Dashboard agent" : agent.Name)</button></h3>
+                            <span class="agent-chip">@(isPrivate ? "Private to you" : "Shared with project")</span><span class="agent-chip">@agent.SkillIds.Count skills</span><span class="agent-chip">@agent.McpConnectionIds.Count MCPs</span>
+                        </div>
+                        <div class="agent-detail">@(string.IsNullOrWhiteSpace(agent.Instructions) ? "Project assistant" : agent.Instructions)</div>
+                        <div class="capability-chips"><span>Workflows · @agent.WorkflowAccess</span><span>Data · @agent.DataAccess</span></div>
+                    </div>
+                    <div class="agent-actions">
+                        <a class="icon-action use-action" href="/project/@ProjectId/dashboard?agent=@agent.Id" title="Use agent" aria-label="Use agent" @onclick:stopPropagation="true"><AppIcon Kind="play" /></a>
+                        <button class="icon-action" title="@(Vm.CanManage || isPrivate ? "Edit agent" : "View agent")" aria-label="@(Vm.CanManage || isPrivate ? "Edit agent" : "View agent")" @onclick:stopPropagation="true" @onclick="() => Vm.EditAgent(agent)"><AppIcon Kind="edit" /></button>
+                    </div>
+                </article>
+            }
+        </section>
+        }
+    }
+</div>
+@if (Vm.EditorOpen)
+{
+    <div class="dcmodal-overlay" @onclick="Vm.Close" @onkeydown="OnKeyDown">
+        <aside class="dcmodal agents-pane" role="dialog" aria-modal="true" aria-labelledby="agent-editor-title" @onclick:stopPropagation="true">
+            <header class="dcmodal-head"><h2 id="agent-editor-title">@(Vm.Agent is null ? "Skill settings" : "Agent settings")</h2><button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.Close" aria-label="Close settings">Close</button></header>
+            @if (Vm.Agent is not null)
+            {
+                <nav class="dctabs agent-settings-tabs" aria-label="Agent settings sections">
+                    @foreach (var tab in new[] { "Overview", "Skills", "Workflows", "Data", "MCPs" })
+                    {
+                        <button type="button" class="dctab @(Vm.AgentTab == tab ? "active" : "")" aria-pressed="@(Vm.AgentTab == tab)" disabled="@Vm.Busy" @onclick="() => Vm.AgentTab = tab">@tab</button>
+                    }
+                </nav>
+            }
+            <div class="agents-form">
+                @if (Vm.Agent is { } agent)
+                {
+                    <p>@(Vm.EditingPrivateAgent ? "Private dashboard agent. Changes apply to your dashboard conversations." : "Shared project agent. Changes apply to new runs and conversation turns.")</p>
+                    <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Overview")">
+                    <label for="project-agent-name">Agent name</label><input id="project-agent-name" class="dcinput" maxlength="60" @bind="agent.Name" disabled="@(!Vm.CanEdit || Vm.Busy)" />
+                    <label for="project-agent-connection">Model connection</label>
+                    <select id="project-agent-connection" class="dcinput" value="@agent.ConnectionId" @onchange="e => Vm.SelectConnection(e.Value?.ToString())" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="@Guid.Empty">Runner's default model</option>@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select>
+                    @if (agent.ConnectionId != Guid.Empty)
+                    {
+                        <label for="project-agent-model">Model</label><select id="project-agent-model" class="dcinput" @bind="agent.Model" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="">Select model</option>@foreach (var model in Vm.Models) { <option>@model</option> }</select>
+                    }
+                    <label>Instructions</label>
+                    @if (Vm.CanEdit) { <div class="instructions-editor"><WorkflowInstructionsEditor @key="agent.Id" @ref="_instructions" Value="@agent.Instructions" Label="Agent instructions" /></div> }
+                    else { <RunOutput Value="@agent.Instructions" Language="markdown" Label="Agent instructions" /> }
+                    </div>
+                    <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Skills")">
+                    <fieldset disabled="@(!Vm.CanEdit || Vm.Busy)"><legend>Skills</legend>
+                        @foreach (var skill in Vm.Catalog.Skills.OrderBy(s => s.Name)) { <label class="check"><input type="checkbox" checked="@agent.SkillIds.Contains(skill.Id)" @onchange="e => Vm.ToggleSkill(skill.Id, e.Value is true)" />@skill.Name</label> }
+                        @if (Vm.Catalog.Skills.Count == 0) { <p>Create reusable skills, then assign them here.</p> }
+                    </fieldset>
+                    <a href="/project/@ProjectId/agents/skills">Manage skills</a>
+                    </div>
+                    <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Workflows")">
+                    <label for="agent-workflows">Workflow capabilities</label><select id="agent-workflows" class="dcinput" @bind="agent.WorkflowAccess" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="none">No access</option><option value="read">Inspect workflows, jobs and run output</option><option value="run">Inspect and run workflows and jobs</option><option value="manage">Create, edit, run and schedule</option></select>
+                    <p>Limit the agent's workflow tools within your permissions. Workflow agent steps also apply their own tool limits.</p>
+                    </div>
+                    <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Data")">
+                    <label for="agent-data">Data access</label><select id="agent-data" class="dcinput" @bind="agent.DataAccess" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="none">No data tools</option><option value="read">Read project data, sources and artifacts</option><option value="manage">Read data and configure sources</option></select>
+                    <p>Limit the agent's data tools within your permissions. Workflows run with their configured data access.</p>
+                    </div>
+                    <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "MCPs")">
+                    <p>Assign the connections this agent can use. MCP tools have their own external access.</p>
+                    <fieldset disabled="@(!Vm.CanEdit || Vm.Busy)"><legend>MCP connections</legend>
+                        @foreach (var connection in Vm.Mcps)
+                        {
+                            <label class="check"><input type="checkbox" checked="@agent.McpConnectionIds.Contains(connection.Id)" disabled="@(!connection.Enabled && !agent.McpConnectionIds.Contains(connection.Id))" @onchange="e => Vm.ToggleMcp(connection.Id, e.Value is true)" />@connection.Name @(!connection.Enabled ? "(disabled)" : "")</label>
+                        }
+                        @foreach (var missing in agent.McpConnectionIds.Where(id => !Vm.Mcps.Any(c => c.Id == id)).ToArray()) { <label class="check"><input type="checkbox" checked @onchange="e => Vm.ToggleMcp(missing, false)" />Unavailable connection</label> }
+                        @if (Vm.Mcps.Count == 0) { <p>No MCP connections in this project.</p> }
+                        <a href="/settings/mcp">Manage MCP connections</a>
+                    </fieldset>
+                    </div>
+                }
+                @if (Vm.Skill is { } skillDraft)
+                {
+                    <label for="project-skill-name">Skill name</label><input id="project-skill-name" class="dcinput" maxlength="60" @bind="skillDraft.Name" disabled="@(!Vm.CanEdit || Vm.Busy)" />
+                    <label>Instructions</label><p>Write the steps and guidance an agent should follow when using this skill.</p>
+                    @if (Vm.CanEdit) { <div class="instructions-editor"><WorkflowInstructionsEditor @key="skillDraft.Id" @ref="_instructions" Value="@skillDraft.Instructions" Label="Skill instructions" /></div> }
+                    else { <RunOutput Value="@skillDraft.Instructions" Language="markdown" Label="Skill instructions" /> }
+                }
+                @if (Vm.Error is { } editorError) { <p role="alert">@editorError</p> }
+                @if (Vm.ConfirmDelete) { <p role="alert">Remove this @(Vm.Agent is null ? "skill from all agents" : "agent")? Existing conversations and runs will be kept.</p> }
+            </div>
+            <footer class="dcmodal-foot">
+                @if (Vm.CanEdit)
+                {
+                    @if (Vm.CanDelete) { <button class="dcbtn danger" disabled="@Vm.Busy" @onclick="DeleteAsync">@(Vm.ConfirmDelete ? "Confirm delete" : "Delete")</button> }
+                    <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="SaveAsync">@(Vm.Busy ? "Saving…" : "Save")</button>
+                }
+            </footer>
+        </aside>
+    </div>
+}
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public string? Section { get; set; }
+    private WorkflowInstructionsEditor? _instructions;
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override async Task OnParametersSetAsync()
+    {
+        Vm.ShowingSkills = Section == "skills";
+        await Vm.LoadAsync(ProjectId);
+    }
+    private void Create() { if (Vm.ShowingSkills) Vm.EditSkill(); else Vm.EditAgent(); }
+    private async Task SaveAsync() => await Vm.SaveAsync(_instructions is null ? "" : await _instructions.ReadAsync());
+    private Task DeleteAsync() { if (Vm.ConfirmDelete) return Vm.SaveAsync("", true); Vm.ConfirmDelete = true; return Task.CompletedTask; }
+    private void OnKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape") Vm.Close(); }
+    public void Dispose() => Vm.Detach();
+}

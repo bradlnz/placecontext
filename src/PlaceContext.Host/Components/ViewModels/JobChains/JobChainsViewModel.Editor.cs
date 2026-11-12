@@ -1099,7 +1099,7 @@ public sealed partial class JobChainsViewModel
             QueryDataChainAction query => new QueryDataChainActionView(query.Sql, query.OutputField),
         ScoringGateChainAction score => new ScoringGateChainActionView(score.InputField, score.OutputField, score.Criteria, score.PassScore, score.MinimumConfidence, score.StopOnFailure),
         RepeatFlowChainAction repeat => new RepeatFlowChainActionView(repeat.UntilCondition, repeat.MaxAttempts),
-            LoopChainAction loop => new LoopChainActionView(loop.Type, loop.Instructions, loop.ResponseField, loop.ResponseType, loop.AgentProvider, loop.ConnectionId, loop.Model),
+            LoopChainAction loop => new LoopChainActionView(loop.Type, loop.Instructions, loop.ResponseField, loop.ResponseType, loop.AgentProvider, loop.ConnectionId, loop.Model, loop.AgentId),
             SendEmailChainAction email => new SendEmailChainActionView(email.Recipient, email.RecipientName, email.Subject, email.Body, email.AttachmentPath),
             SendSmsChainAction sms => new SendSmsChainActionView(sms.Recipient, sms.Body),
             null => null,

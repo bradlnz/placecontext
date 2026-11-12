@@ -22,6 +22,9 @@ public sealed class BuildConversationRow : ITenantOwned
     }
     public string Content { get; set; } = "";
     public string Title { get; set; } = "";
+    public string? ShareTokenHash { get; set; }
+    public DateTimeOffset? ShareExpiresAt { get; set; }
+    public string? SharedContent { get; set; }
     public DateTimeOffset UpdatedAt
     {
         get; set;

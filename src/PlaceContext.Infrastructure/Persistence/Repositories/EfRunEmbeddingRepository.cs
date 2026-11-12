@@ -42,6 +42,7 @@ public sealed class EfRunEmbeddingRepository : IRunEmbeddingRepository
 
     public async Task AddAsync(RunEmbedding embedding, CancellationToken ct = default)
     {
+        await _db.EnsureProjectAccessAsync(embedding.ProjectId, ct);
         if (!await EnsureReadyAsync(ct))
         {
             return;
@@ -68,6 +69,7 @@ public sealed class EfRunEmbeddingRepository : IRunEmbeddingRepository
     public async Task<IReadOnlyList<RunEmbeddingMatch>> SearchAsync(
         Guid projectId, float[] queryVector, int take, CancellationToken ct = default)
     {
+        await _db.EnsureProjectAccessAsync(projectId, ct);
         if (queryVector.Length == 0 || !await EnsureReadyAsync(ct))
         {
             return Array.Empty<RunEmbeddingMatch>();
@@ -104,6 +106,7 @@ public sealed class EfRunEmbeddingRepository : IRunEmbeddingRepository
     public async Task<IReadOnlyList<RunEmbedding>> ListForProjectAsync(
         Guid projectId, int take = 200, CancellationToken ct = default)
     {
+        await _db.EnsureProjectAccessAsync(projectId, ct);
         if (!await EnsureReadyAsync(ct))
         {
             return Array.Empty<RunEmbedding>();

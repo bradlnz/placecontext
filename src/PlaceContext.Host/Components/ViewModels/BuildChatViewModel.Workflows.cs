@@ -8,6 +8,8 @@ public sealed partial class BuildChatViewModel
     public bool WorkflowPickerOpen { get; private set; }
     public bool WorkflowPickerLoading { get; private set; }
     public string? WorkflowPickerError { get; private set; }
+    public bool WorkflowSelectedForRun { get; private set; }
+    public bool PreparingWorkflowRun { get; private set; }
     public IReadOnlyList<JobChainView> AvailableWorkflows { get; private set; } = [];
     private int _workflowPickerVersion;
     private int _handledWorkflowPicker;
@@ -72,6 +74,7 @@ public sealed partial class BuildChatViewModel
             return;
         }
         await OpenPreviewAsync(new(workflow.Id, "workflow", workflow.Name));
+        WorkflowSelectedForRun = true;
     }
 
     public async Task PrepareWorkflowRunAsync()
@@ -82,7 +85,9 @@ public sealed partial class BuildChatViewModel
         {
             return;
         }
+        PreparingWorkflowRun = true;
         await StartDashboardActionAsync($"Help me run the existing workflow {System.Text.Json.JsonSerializer.Serialize(workflow.Name)} (ID: {workflow.Id}). Inspect its required inputs and ask me for any missing values before running it. Do not create or modify workflows.");
+        if (Error is not null) PreparingWorkflowRun = false;
     }
 
     private void CloseWorkflowPicker()

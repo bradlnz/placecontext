@@ -33,7 +33,7 @@ using PlaceContext.Application.Access;
 
 namespace PlaceContext.Host.Tests;
 
-public sealed class BuildChatTests
+public sealed partial class BuildChatTests
 {
     [Fact]
     public async Task Editing_a_message_preserves_the_original_and_queues_a_separate_conversation()
@@ -403,6 +403,213 @@ public sealed class BuildChatTests
     }
 
     [Fact]
+    public async Task Dashboard_edits_order_and_pinned_charts_survive_reload_without_losing_settings()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var legacy = JsonSerializer.Deserialize<DashboardSettings>("""{"Instructions":"Keep this","Actions":[{"Title":"Inspect","Prompt":"Show statistics"}]}""")!;
+        await fixture.Store.SaveSettingsAsync(fixture.ProjectId, legacy);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections,
+            fixture.Provider.GetRequiredService<BuildChatAgent>(), new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        var actionId = Assert.Single(vm.Dashboard.Actions).Id;
+        Assert.Equal("square", vm.Dashboard.TileSize(actionId.ToString()));
+        await vm.ResizeDashboardTileAsync(actionId.ToString(), "wide");
+        Assert.Equal("wide", (await fixture.Store.GetSettingsAsync(fixture.ProjectId)).TileSize(actionId.ToString()));
+        await vm.MoveDashboardTileAsync(actionId.ToString(), 0);
+        Assert.Equal(actionId.ToString(), (await fixture.Store.GetSettingsAsync(fixture.ProjectId)).OrderedTiles()[0]);
+        var chart = new BuildChatViewModel.ChartPreview(ChartSpec.TryParse("""{"type":"bar","title":"Runs","labels":["Succeeded"],"series":[{"name":"Runs","values":[12]}]}""")!, "Project runs in the last 24 hours", Live: true);
+        await vm.PinDashboardChartAsync(chart);
+        await vm.PinDashboardChartAsync(chart);
+        Assert.True(vm.IsChartPinned(chart));
+        var pinned = Assert.Single(vm.Dashboard.Charts);
+        await vm.MoveDashboardTileAsync(pinned.Id.ToString(), 1);
+        await vm.OpenAgentAsync();
+        vm.EditDashboardAction(actionId, "Run report", "Report recent run results without making changes.");
+        vm.NewActionTitle = "Artifacts";
+        vm.NewActionPrompt = "List recent artifacts.";
+        vm.AddDashboardAction();
+        await vm.SaveAgentAsync();
+        Assert.Null(vm.AgentError);
+        var saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        Assert.Equal("Keep this", saved.Instructions);
+        Assert.Equal("Run report", saved.Actions[0].Title);
+        Assert.Equal("Report recent run results without making changes.", saved.Actions[0].Prompt);
+        Assert.Equal(pinned, Assert.Single(saved.Charts));
+        Assert.Equal("wide", saved.TileSize(actionId.ToString()));
+        Assert.Equal(new[] { actionId.ToString(), pinned.Id.ToString(), "workflow", "chat", saved.Actions[1].Id.ToString() }, saved.OrderedTiles());
+        vm.RemoveDashboardAction(vm.AgentDraft.Actions[0]);
+        vm.RemoveDashboardChart(Assert.Single(vm.AgentDraft.Charts));
+        await vm.SaveAgentAsync();
+        Assert.Null(vm.AgentError);
+        saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        Assert.Empty(saved.Charts);
+        Assert.DoesNotContain(actionId.ToString(), saved.TileOrder);
+        Assert.DoesNotContain(pinned.Id.ToString(), saved.TileOrder);
+        Assert.Empty(saved.TileSizes);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Dashboard_reorder_keeps_the_saved_layout_when_persistence_fails()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        var order = vm.Dashboard.OrderedTiles().ToArray();
+        fixture.Permissions.Allowed = false;
+        await vm.MoveDashboardTileAsync("chat", 0);
+        Assert.NotNull(vm.Error);
+        Assert.Equal(order, vm.Dashboard.OrderedTiles());
+        await vm.ResizeDashboardTileAsync("chat", "large");
+        Assert.Equal("square", vm.Dashboard.TileSize("chat"));
+        await vm.DisposePageAsync();
+    }
+
+    [Theory]
+    [InlineData("{\"TileOrder\":[\"unknown\"]}")]
+    [InlineData("{\"TileOrder\":[\"chat\",\"chat\"]}")]
+    [InlineData("{\"Charts\":[{\"ChartJson\":\"{}\",\"Source\":\"Invalid chart\"}]}")]
+    [InlineData("{\"Charts\":null}")]
+    [InlineData("{\"TileSizes\":null}")]
+    [InlineData("{\"TileSizes\":{\"unknown\":\"wide\"}}")]
+    [InlineData("{\"TileSizes\":{\"chat\":\"huge\"}}")]
+    public void Dashboard_rejects_invalid_layouts_and_chart_data(string json)
+    {
+        var settings = JsonSerializer.Deserialize<DashboardSettings>(json)!;
+        Assert.Throws<ArgumentException>(settings.Validate);
+    }
+
+    [Fact]
+    public async Task Live_dashboard_charts_query_again_clear_stale_values_and_recover_without_chat()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var dispatcher = new ToolDispatcher(fixture.ProjectId);
+        var service = new PlaceContextService(dispatcher, null!, null!, null!);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        var tools = new BuildTools(fixture.ProjectId, service, fixture.Permissions, fixture.Store);
+        const string sql = "SELECT status, count(*) AS total FROM orders GROUP BY status";
+        var output = JsonSerializer.SerializeToNode(await tools.show_live_chart("Orders", sql: sql))!;
+        vm.Conversation.Messages.Add(new JsonObject
+        {
+            ["role"] = "assistant", ["tool_calls"] = new JsonArray(new JsonObject
+            { ["id"] = "live-chart", ["function"] = new JsonObject { ["name"] = "show_live_chart" } })
+        });
+        var preview = vm.ResultChart(new JsonObject { ["role"] = "tool", ["tool_call_id"] = "live-chart", ["content"] = output.ToJsonString() })!;
+        Assert.True(preview.Live);
+        Assert.Equal(sql, preview.Sql);
+        await vm.NewAsync();
+        await vm.PinDashboardChartAsync(preview with { Live = false });
+        Assert.Empty(vm.Dashboard.Charts);
+        await vm.PinDashboardChartAsync(preview);
+        var pinned = Assert.Single(vm.Dashboard.Charts);
+        Assert.Equal(2, vm.DashboardChartResults[pinned.Id].Spec!.Series[0].Values[0]);
+        vm.OpenDashboardChart(pinned);
+        dispatcher.Data = dispatcher.Data with { Rows = [["Ready", "9"]] };
+        await vm.RefreshDashboardChartsAsync();
+        Assert.Equal(9, vm.DashboardChartResults[pinned.Id].Spec!.Series[0].Values[0]);
+        Assert.Equal(9, vm.PreviewChart!.Spec.Series[0].Values[0]);
+        Assert.Equal(fixture.ProjectId, dispatcher.DataProject);
+        Assert.Equal(sql, dispatcher.DataSql);
+        Assert.False(vm.ChatOpen);
+        Assert.Empty(vm.Conversation.Messages);
+        Assert.Equal(0, dispatcher.Commands);
+        fixture.Permissions.Denied = Permission.DataRead;
+        var queries = dispatcher.DataQueries;
+        await vm.RefreshDashboardChartsAsync();
+        Assert.Equal(queries, dispatcher.DataQueries);
+        Assert.Null(vm.DashboardChartResults[pinned.Id].Spec);
+        Assert.NotNull(vm.DashboardChartResults[pinned.Id].Error);
+        fixture.Permissions.Denied = null;
+        dispatcher.Data = dispatcher.Data with { Rows = [] };
+        await vm.RefreshDashboardChartsAsync();
+        Assert.Null(vm.DashboardChartResults[pinned.Id].Spec);
+        Assert.Null(vm.DashboardChartResults[pinned.Id].Error);
+        dispatcher.Data = dispatcher.Data with { Rows = [["Ready", "13"]] };
+        await vm.RefreshDashboardChartsAsync();
+        Assert.Equal(13, vm.DashboardChartResults[pinned.Id].Spec!.Series[0].Values[0]);
+        await vm.PinDashboardChartAsync(vm.PreviewChart!);
+        Assert.Single(vm.Dashboard.Charts);
+        vm.CloseWorkspace();
+        Assert.Null(vm.ExpandedDashboardChartId);
+        dispatcher.PendingData = new();
+        var pending = vm.RefreshDashboardChartsAsync();
+        await vm.DisposePageAsync();
+        dispatcher.PendingData.SetResult(dispatcher.Data);
+        await pending;
+        Assert.Empty(vm.DashboardChartResults);
+    }
+
+    [Fact]
+    public async Task Live_activity_charts_use_current_counts_and_check_permissions_each_time()
+    {
+        var projectId = Guid.NewGuid();
+        var dispatcher = new ToolDispatcher(projectId);
+        var permissions = new Permissions();
+        var tools = new BuildTools(projectId, new PlaceContextService(dispatcher, null!, null!, null!), permissions, null!);
+        var first = JsonSerializer.SerializeToNode(await tools.show_live_chart("Runs"))!;
+        Assert.Equal(3, first["chart"]!["series"]![0]!["values"]![0]!.GetValue<int>());
+        dispatcher.Counts["Running"] = 8;
+        var second = JsonSerializer.SerializeToNode(await tools.show_live_chart("Runs"))!;
+        Assert.Equal(8, second["chart"]!["series"]![0]!["values"]![0]!.GetValue<int>());
+        permissions.Denied = Permission.JobsView;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.show_live_chart("Runs"));
+        permissions.Denied = Permission.DataRead;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.show_live_chart("Orders", sql: "SELECT status, count(*) FROM orders GROUP BY status"));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.list_project_tables(default));
+        Assert.Equal(0, dispatcher.DataQueries);
+        await Assert.ThrowsAsync<ArgumentException>(() => tools.show_live_chart("Runs", type: "script"));
+        Assert.Equal(0, dispatcher.Commands);
+    }
+
+    [Fact]
+    public async Task Chart_query_edits_preserve_layout_and_keep_the_previous_query_on_failure()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var dispatcher = new ToolDispatcher(fixture.ProjectId);
+        var service = new PlaceContextService(dispatcher, null!, null!, null!);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        var spec = new ChartSpec("bar", "Orders", ["Ready"], [new("Total", [2])]);
+        await vm.PinDashboardChartAsync(new(spec, "Project data", true, "SELECT status, total FROM orders"));
+        var chart = Assert.Single(vm.Dashboard.Charts);
+        await vm.ResizeDashboardTileAsync(chart.Id.ToString(), "tall");
+        await vm.MoveDashboardTileAsync(chart.Id.ToString(), 0);
+        await vm.EditChartQueryAsync(chart);
+        Assert.Null(vm.ChartQueryError);
+        Assert.Equal(chart.Sql, vm.ChartSqlDraft);
+        await vm.SaveChartQueryAsync("");
+        Assert.NotNull(vm.ChartQueryError);
+        Assert.Equal(chart, Assert.Single(vm.Dashboard.Charts));
+        dispatcher.DataError = "SQL is invalid";
+        await vm.SaveChartQueryAsync("broken SQL");
+        Assert.Equal("SQL is invalid", vm.ChartQueryError);
+        Assert.Equal(chart.Sql, Assert.Single((await fixture.Store.GetSettingsAsync(fixture.ProjectId)).Charts).Sql);
+        dispatcher.DataError = null;
+        dispatcher.Data = dispatcher.Data with { Rows = [["Ready", "27"]] };
+        const string updatedSql = "SELECT status, sum(total) AS total FROM orders GROUP BY status";
+        await vm.SaveChartQueryAsync(updatedSql);
+        Assert.Null(vm.ChartQueryError);
+        Assert.Null(vm.EditingChart);
+        var saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        Assert.Equal(updatedSql, Assert.Single(saved.Charts).Sql);
+        Assert.Equal("tall", saved.TileSize(chart.Id.ToString()));
+        Assert.Equal(chart.Id.ToString(), saved.OrderedTiles()[0]);
+        Assert.Equal(27, vm.DashboardChartResults[chart.Id].Spec!.Series[0].Values[0]);
+        await vm.EditChartQueryAsync(Assert.Single(vm.Dashboard.Charts));
+        Assert.Equal(updatedSql, vm.ChartSqlDraft);
+        fixture.Permissions.Denied = Permission.DataRead;
+        await vm.SaveChartQueryAsync("SELECT status, total FROM other_orders");
+        Assert.NotNull(vm.ChartQueryError);
+        Assert.Equal(updatedSql, Assert.Single(vm.Dashboard.Charts).Sql);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
     public async Task Agent_panel_uses_execution_prompt_and_saves_tiles_without_removing_system_action()
     {
         await using var fixture = new Fixture();
@@ -413,6 +620,8 @@ public sealed class BuildChatTests
         await vm.OpenAgentAsync();
         Assert.Null(vm.AgentError);
         Assert.True(vm.AgentOpen);
+        Assert.False(vm.WorkspaceOpen);
+        Assert.False(vm.ChatOpen);
         Assert.Contains(fixture.ProjectId.ToString(), vm.AgentPrompt);
         Assert.Contains("run_workflow", vm.AgentTools);
         vm.AgentDraft.Instructions = "Prefer concise summaries";
@@ -422,6 +631,11 @@ public sealed class BuildChatTests
         Assert.Empty(vm.Dashboard.Actions);
         await vm.StartWorkflowChatAsync();
         Assert.False(vm.AgentOpen);
+        Assert.True(vm.WorkflowPickerOpen);
+        await vm.OpenAgentAsync();
+        Assert.True(vm.WorkflowPickerOpen);
+        vm.CloseAgent();
+        Assert.True(vm.WorkspaceOpen);
         Assert.True(vm.WorkflowPickerOpen);
         Assert.Empty(vm.Conversation.Messages);
         vm.Draft = "Explain how to run an existing workflow";
@@ -445,9 +659,11 @@ public sealed class BuildChatTests
         var dispatcher = new ToolDispatcher(fixture.ProjectId) { Workflow = workflow };
         var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions);
         await vm.LoadAsync(fixture.ProjectId);
+        Assert.False(vm.ChatOpen);
         vm.Conversation.ConnectionId = Guid.Empty;
         vm.Draft = "Keep my draft";
         await vm.StartWorkflowChatAsync();
+        Assert.True(vm.ChatOpen);
         Assert.True(vm.WorkflowPickerOpen);
         Assert.False(vm.WorkflowPickerLoading);
         Assert.Equal(workflow, Assert.Single(vm.AvailableWorkflows));
@@ -456,6 +672,7 @@ public sealed class BuildChatTests
         Assert.Null(vm.PreviewWorkflow);
         await vm.SelectWorkflowAsync(workflow.Id);
         Assert.Equal(workflow, vm.PreviewWorkflow);
+        Assert.True(vm.WorkflowSelectedForRun);
         Assert.False(vm.WorkflowPickerOpen);
         Assert.Equal("Keep my draft", vm.Draft);
         await vm.PrepareWorkflowRunAsync();
@@ -522,8 +739,10 @@ public sealed class BuildChatTests
         await vm.LoadAsync(fixture.ProjectId);
         await vm.StartWorkflowChatAsync();
         await vm.SelectWorkflowAsync(dispatcher.Workflow.Id);
+        Assert.False(vm.ChatOpen);
         await vm.PrepareWorkflowRunAsync();
         Assert.Equal(BuildRunStatus.Queued, vm.Conversation.Status);
+        Assert.True(vm.PreparingWorkflowRun);
         var prompt = BuildChatViewModel.Text(Assert.Single(vm.Conversation.Messages)!);
         Assert.Contains(dispatcher.Workflow.Id.ToString(), prompt);
         Assert.Contains("required inputs", prompt);
@@ -1004,6 +1223,7 @@ public sealed class BuildChatTests
         var vm = new BuildChatViewModel(null!, null!, null!, new PortalUiState(), new NoJs(), null!, null!);
         const string prompt = "Help me connect a data source.";
         Assert.True(vm.ApplyTaskHint(prompt));
+        Assert.True(vm.ChatOpen);
         Assert.Equal(prompt, vm.Draft);
         Assert.Empty(vm.Conversation.Messages);
         Assert.False(vm.Busy);
@@ -1017,28 +1237,50 @@ public sealed class BuildChatTests
     }
 
     [Fact]
-    public async Task New_chat_renders_a_plain_composer_without_dashboard_extras()
+    public async Task Dashboard_starts_with_tiles_and_opens_chat_only_after_selection()
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
-        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new PortalUiState(), new NoJs(), fixture.Service, fixture.Permissions);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections,
+            fixture.Provider.GetRequiredService<BuildChatAgent>(), new PortalUiState(), new NoJs(), fixture.Service, fixture.Permissions);
         var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
-        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+        async Task<string> RenderAsync() => await renderer.Dispatcher.InvokeAsync(async () =>
         {
             var rendered = await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.BuildChat>(
                 ParameterView.FromDictionary(new Dictionary<string, object?> { ["ProjectId"] = fixture.ProjectId }));
             return rendered.ToHtmlString();
         });
-        Assert.Contains("What do you need to do?", html);
-        Assert.Contains("aria-label=\"Message assistant\"", html);
+        var html = await RenderAsync();
+        Assert.False(vm.ChatOpen);
+        Assert.DoesNotContain("Choose a task", html);
+        Assert.Contains("Run a workflow", html);
+        Assert.Contains("Job statistics", html);
+        Assert.Contains("Start a chat", html);
+        Assert.Contains("class=\"chat-entry\" hidden", html);
         Assert.DoesNotContain("Quick picks", html);
         Assert.DoesNotContain("aria-label=\"Runs\"", html);
         Assert.DoesNotContain("aria-label=\"Charts\"", html);
         Assert.DoesNotContain("aria-label=\"Data\"", html);
         Assert.DoesNotContain("aria-label=\"Project memory\"", html);
         Assert.DoesNotContain("MCP tools", html);
+        vm.OpenChat();
+        html = await RenderAsync();
+        Assert.DoesNotContain("What do you need to do?", html);
+        Assert.DoesNotContain("class=\"dashboard-actions\"", html);
+        Assert.DoesNotContain("class=\"chat-entry\" hidden", html);
+        Assert.Contains("aria-label=\"Message assistant\"", html);
+        await vm.NewAsync();
+        Assert.Contains("class=\"chat-entry\" hidden", await RenderAsync());
+        const string prompt = "Show this project's job statistics.";
+        await vm.StartDashboardActionAsync(prompt);
+        html = await RenderAsync();
+        Assert.True(vm.ChatOpen);
+        Assert.Equal(BuildRunStatus.Queued, vm.Conversation.Status);
+        Assert.Equal(prompt, BuildChatViewModel.Text(Assert.Single(vm.Conversation.Messages)!));
+        Assert.DoesNotContain("class=\"dashboard-actions\"", html);
+        Assert.DoesNotContain("class=\"chat-entry\" hidden", html);
         await vm.DisposePageAsync();
     }
 
@@ -1660,7 +1902,7 @@ public sealed class BuildChatTests
     }
 
     [Fact]
-    public void Tool_results_offer_only_recognized_workflow_and_job_previews()
+    public void Tool_results_offer_only_recognized_workflow_job_and_artifact_previews()
     {
         var vm = new BuildChatViewModel(null!, null!, null!, new PortalUiState(), new NoJs(), null!, null!);
         var id = Guid.NewGuid();
@@ -1670,9 +1912,81 @@ public sealed class BuildChatTests
         Assert.Equal(new BuildChatViewModel.WorkspaceItem(id, "workflow", "Review"), Assert.Single(vm.ResultItems(result)));
         call["function"]!["name"] = "run_job";
         Assert.Empty(vm.ResultItems(result));
+        call["function"]!["name"] = "list_artifacts";
+        var runId = Guid.NewGuid();
+        result["content"] = $$"""[{"id":"{{id}}","runId":"{{runId}}","title":"Report.pdf","downloadUrl":"https://untrusted.test/file"}]""";
+        Assert.Equal(new BuildChatViewModel.WorkspaceItem(id, "artifact", "Report.pdf", RunId: runId), Assert.Single(vm.ResultItems(result)));
         call["function"]!["name"] = "get_job";
         result["content"] = "not JSON";
         Assert.Empty(vm.ResultItems(result));
+    }
+
+    [Fact]
+    public async Task Completed_workflow_opens_its_pdf_in_workspace_and_checks_artifact_access()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        using var scope = fixture.Provider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var file = new RunArtifactLinkRow
+        {
+            Id = Guid.NewGuid(), ProjectId = fixture.ProjectId, JobId = Guid.NewGuid(), RunId = Guid.NewGuid(),
+            Kind = "RawBundle", Title = "Report.pdf", ContentType = "application/pdf", CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.RunArtifacts.Add(file);
+        await db.SaveChangesAsync();
+        var step = new ChainStepRunView(0, 0, 0, file.JobId, "Create report", file.RunId, "Succeeded", file.CreatedAt, file.CreatedAt);
+        var run = new ChainRunView(Guid.NewGuid(), Guid.NewGuid(), "Report", "Succeeded", [step], "{}", file.CreatedAt, file.CreatedAt) { ProjectId = fixture.ProjectId };
+        var dispatcher = new ToolDispatcher(fixture.ProjectId)
+        {
+            Run = run,
+            Artifacts = [new(file.Id, file.RunId, PostJobActionKind.RawBundle, file.Title, file.ContentType, 100, file.CreatedAt)]
+        };
+        var reader = new ArtifactReader(new EfRunArtifactLinkRepository(db), null!);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions, artifacts: reader);
+        await vm.LoadAsync(fixture.ProjectId, runId: run.Id);
+        Assert.Equal(file.Id, vm.PreviewArtifact?.Id);
+        Assert.Equal(run, vm.PreviewRun);
+        Assert.Null(vm.ArtifactPreviewError);
+        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>();
+        await using var provider = services.BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.BuildChat>(ParameterView.FromDictionary(new Dictionary<string, object?> { ["ProjectId"] = fixture.ProjectId, ["RunId"] = run.Id }))).ToHtmlString());
+        Assert.Contains($"data-pdf-url=\"{ArtifactsViewModel.Url(vm.PreviewArtifact!)}\"", html);
+        Assert.Contains("Back to run", html);
+        Assert.Contains("data-pc-pdf", html);
+        vm.CloseArtifactPreview();
+        await vm.RefreshPreviewRunAsync();
+        Assert.Null(vm.PreviewArtifact);
+        Assert.Equal(run, vm.PreviewRun);
+        await vm.OpenArtifactAsync(file.Id, Guid.NewGuid());
+        Assert.Null(vm.PreviewArtifact);
+        Assert.NotNull(vm.ArtifactPreviewError);
+        fixture.Permissions.Denied = Permission.ArtifactsView;
+        await vm.OpenArtifactAsync(file.Id, file.RunId);
+        Assert.Null(vm.PreviewArtifact);
+        Assert.NotNull(vm.ArtifactPreviewError);
+        fixture.Permissions.Denied = null;
+        file.ProjectId = Guid.NewGuid();
+        await db.SaveChangesAsync();
+        await vm.OpenArtifactAsync(file.Id, file.RunId);
+        Assert.Null(vm.PreviewArtifact);
+        Assert.NotNull(vm.ArtifactPreviewError);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Artifact_tool_requires_permission_and_returns_project_files()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var file = new ArtifactFileView(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), fixture.ProjectId, "RawBundle", "Report.pdf", "application/pdf", 100, DateTimeOffset.UtcNow);
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { ProjectArtifacts = [file] };
+        var tools = new BuildTools(fixture.ProjectId, new(dispatcher, null!, null!, null!), fixture.Permissions, fixture.Store);
+        Assert.Equal(file, Assert.Single(await tools.list_artifacts()));
+        fixture.Permissions.Denied = Permission.ArtifactsView;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.list_artifacts());
     }
 
     [Fact]
@@ -1724,7 +2038,7 @@ public sealed class BuildChatTests
     }
 
     [Fact]
-    public async Task Home_renders_build_for_the_selected_project()
+    public async Task Home_renders_tiles_for_the_selected_project()
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
@@ -1736,7 +2050,8 @@ public sealed class BuildChatTests
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
             (await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.Dashboard>()).ToHtmlString());
-        Assert.Contains("What do you need to do?", html);
+        Assert.DoesNotContain("Choose a task", html);
+        Assert.Contains("class=\"chat-entry\" hidden", html);
         Assert.DoesNotContain("aria-label=\"Runs\"", html);
         Assert.DoesNotContain("aria-label=\"Charts\"", html);
         Assert.DoesNotContain("aria-label=\"Data\"", html);
@@ -2142,6 +2457,8 @@ public sealed class BuildChatTests
         public JobChainSubmission Receipt = new(Guid.NewGuid(), projectId, workflowId, Guid.NewGuid(), "Queued", 0, null, DateTimeOffset.UtcNow, null, null);
         public int Submitted;
         public string? Payload;
+        public List<(Guid RunId, Guid RequestId, string Values)> Responses = [];
+        public Action? OnResume;
         public Task<JobChainSubmission> EnqueueAsync(Guid projectId, Guid chainId, string? inputPayload, string? idempotencyKey = null,
             CancellationToken ct = default, Guid? queueId = null, int? messageTtlSeconds = null, int receiptRetentionDays = 30,
             int maxAttempts = 3, int retryDelaySeconds = 3, DateTimeOffset? availableAt = null,
@@ -2154,15 +2471,29 @@ public sealed class BuildChatTests
             return Task.FromResult(Receipt);
         }
         public Task<JobChainSubmission?> GetAsync(Guid trackingId, CancellationToken ct = default) => Task.FromResult<JobChainSubmission?>(trackingId == Receipt.TrackingId ? Receipt : null);
-        public Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default)
+        {
+            Responses.Add((chainRunId, inputRequestId, valuesJson));
+            OnResume?.Invoke();
+            return Task.FromResult("Waiting");
+        }
     }
 
     private sealed class ToolDispatcher(Guid projectId) : IDispatcher
     {
+        public Dictionary<string, int> Counts = new() { ["Running"] = 3 };
+        public PlaceContext.Application.ProjectData.ProjectQueryResult Data = new(["status", "total"], [["Ready", "2"]], 0, false);
+        public TaskCompletionSource<PlaceContext.Application.ProjectData.ProjectQueryResult>? PendingData;
+        public int DataQueries;
+        public Guid DataProject;
+        public string? DataSql;
+        public string? DataError;
         public int Commands;
         public ChainRunView? Run;
         public JobChainView? Workflow;
         public JobRunDetailView? JobRun;
+        public IReadOnlyList<RunArtifactLinkView> Artifacts = [];
+        public IReadOnlyList<ArtifactFileView> ProjectArtifacts = [];
         public TaskCompletionSource<ChainRunView?>? PendingRun;
         public TaskCompletionSource<IReadOnlyList<JobChainView>>? PendingWorkflows;
         public Task<TResult> Send<TResult>(ICommand<TResult> command, CancellationToken ct = default)
@@ -2172,6 +2503,14 @@ public sealed class BuildChatTests
         }
         public async Task<TResult> Query<TResult>(IQuery<TResult> query, CancellationToken ct = default)
         {
+            if (query is QueryProjectDataQuery dataQuery)
+            {
+                ++DataQueries;
+                DataProject = dataQuery.ProjectId;
+                DataSql = dataQuery.Sql;
+                if (DataError is not null) throw new InvalidOperationException(DataError);
+                return (TResult)(object)(PendingData is null ? Data : await PendingData.Task);
+            }
             if (query is ListJobChainsQuery && PendingWorkflows is not null)
             {
                 return (TResult)(object)await PendingWorkflows.Task;
@@ -2184,10 +2523,14 @@ public sealed class BuildChatTests
             {
                 GetProjectByIdQuery => new ProjectSummaryView(projectId, "test", "/tmp", "Registered", false, 0, 0, 0),
                 ListJobsQuery => Array.Empty<JobView>(),
+                GetProjectRunCountsQuery => Counts,
+                ListProjectTableSchemasQuery => Array.Empty<PlaceContext.Application.ProjectData.ProjectTableSchema>(),
                 ListJobChainsQuery => Workflow is null ? Array.Empty<JobChainView>() : new[] { Workflow },
                 ListTriggersQuery => Array.Empty<TriggerView>(),
                 GetChainRunQuery => Run!,
                 GetJobRunQuery => JobRun!,
+                ListRunArtifactsQuery artifactQuery => Artifacts.Where(a => a.RunId == artifactQuery.RunId).ToArray(),
+                ListProjectArtifactsQuery => ProjectArtifacts,
                 GetJobQuery => JsonSerializer.Deserialize<JobView>($$"""{"Id":"{{Guid.NewGuid()}}","ProjectId":"{{Guid.NewGuid()}}"}""")!,
                 _ => throw new InvalidOperationException(),
             };

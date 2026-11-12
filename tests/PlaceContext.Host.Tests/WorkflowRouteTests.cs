@@ -80,6 +80,21 @@ public sealed class WorkflowRouteTests
     private static string Path(JobChainView chain) => $"/project/{chain.ProjectId}/workflows/{chain.Id}";
 
     [Fact]
+    public async Task Opening_a_run_from_history_uses_the_full_run_route()
+    {
+        var chain = Chain();
+        var run = Run(chain);
+        var navigation = new Navigation(Path(chain) + "/runs");
+        var vm = Create(chain, navigation, run);
+        await vm.LoadPageAsync(chain.ProjectId, chain.Id, view: "runs");
+        await vm.OpenChainRunAsync(run);
+        Assert.Equal(run, vm.OpenRun);
+        Assert.Equal($"{Path(chain)}/runs/{run.Id}", Assert.Single(navigation.Visits));
+        await vm.OpenChainRunAsync(run with { ProjectId = Guid.NewGuid() });
+        Assert.Single(navigation.Visits);
+    }
+
+    [Fact]
     public async Task Route_changes_update_a_retained_page_without_reopening_or_redirecting()
     {
         var chain = Chain();

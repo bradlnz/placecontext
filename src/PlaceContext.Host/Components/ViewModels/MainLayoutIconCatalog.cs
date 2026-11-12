@@ -31,6 +31,7 @@ internal static class MainLayoutIconCatalog
             "chevron-up" => "<path d='m6 15 6-6 6 6'/>",
             "chevron-right" => "<path d='m9 6 6 6-6 6'/>",
             "external-link" => "<path d='M14 3h7v7m0-7L10 14M10 3H3v18h18v-7'/>",
+            "share" => "<circle cx='18' cy='5' r='3'/><circle cx='6' cy='12' r='3'/><circle cx='18' cy='19' r='3'/><path d='m8.6 10.5 6.8-4m-6.8 7 6.8 4'/>",
             "mail" => "<rect x='3' y='5' width='18' height='14' rx='2'/><path d='m3 7 9 6 9-6'/>",
             "message" => "<path d='M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z'/><path d='M8 9h8M8 13h5'/>",
             "branch" => "<circle cx='6' cy='5' r='2'/><circle cx='18' cy='5' r='2'/><circle cx='12' cy='19' r='2'/><path d='M6 7v2a4 4 0 0 0 4 4h2M18 7v2a4 4 0 0 1-4 4h-2v4'/>",

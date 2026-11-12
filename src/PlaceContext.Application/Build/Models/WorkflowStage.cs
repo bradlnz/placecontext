@@ -12,7 +12,7 @@ public sealed record WorkflowStage(Guid[] JobIds, double? WaitSeconds = null, st
         (stage.Gate as WaitGateView)?.DurationSeconds, (stage.Gate as ConditionGateView)?.Expression,
         (stage.ElseBranch ?? (stage.Gate as ConditionGateView)?.ElseBranch)?.Select(FromView).ToArray(),
         stage.Action is VirtualMachineChainActionView q ? new(q.ImageProfile, q.Command, q.OutputField, q.MemoryMb, q.Cpus, q.TimeoutSeconds, q.AllowNetwork, q.PauseForLogin, q.LoginProfileId) : null,
-        stage.Action is LoopChainActionView r ? new(r.Kind, r.Instructions, r.ResponseField, r.ResponseType, r.AgentProvider, r.ConnectionId, r.Model) : null,
+        stage.Action is LoopChainActionView r ? new(r.Kind, r.Instructions, r.ResponseField, r.ResponseType, r.AgentProvider, r.ConnectionId, r.Model, r.AgentId) : null,
         stage.Action is SendEmailChainActionView e ? new(e.Recipient, e.RecipientName, e.Subject, e.Body, e.AttachmentPath) : null,
         stage.Action is SendSmsChainActionView sms ? new(sms.Recipient, sms.Body) : null,
         stage.Action is RepeatFlowChainActionView repeat ? new(repeat.UntilCondition, repeat.MaxAttempts) : null,

@@ -81,7 +81,9 @@ public static class DependencyInjection
             configuration.GetSection("PlaceContext:OpenSearch"));
 
         services.AddScoped<PlaceContext.Application.Build.IBuildChatStore, Build.DbBuildChatStore>();
+        services.AddScoped<PlaceContext.Application.Build.IProjectAgentStore, Build.DbProjectAgentStore>();
         services.AddScoped<PlaceContext.Application.Build.IWorkflowDemoShares, Build.WorkflowDemoShares>();
+        services.AddScoped<PlaceContext.Application.Build.IConversationShares, Build.ConversationShares>();
         services.AddScoped<Build.LocalCliModels>();
         services.AddScoped<Build.ModelConnections>();
         services.AddScoped<PlaceContext.Application.Build.IModelConnections>(sp => sp.GetRequiredService<Build.ModelConnections>());
@@ -123,6 +125,7 @@ public static class DependencyInjection
         // Portal authentication (tenant-scoped users) + persisted OAuth clients.
         services.AddScoped<IAuthService, Auth.AuthService>();
         services.AddScoped<IMembershipService, Auth.MembershipService>();
+        services.AddScoped<IProjectAssignments, Auth.ProjectAssignments>();
         services.AddScoped<IUserApiTokenService, Auth.UserApiTokenService>();
         services.AddScoped<IJobDataTokenService, Auth.JobDataTokenService>();
         services.AddScoped<IOAuthClientStore, EfOAuthClientStore>();

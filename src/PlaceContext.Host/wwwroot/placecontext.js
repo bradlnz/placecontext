@@ -383,9 +383,9 @@ window.placecontext = {
     sync();
   },
 
-  async renderPdf(elementId, url) {
+  async renderPdf(elementId, url, compactOnly = true) {
     const container = document.getElementById(elementId);
-    if (!container || !window.matchMedia('(max-width: 950px)').matches) {
+    if (!container || (compactOnly && !window.matchMedia('(max-width: 950px)').matches)) {
       return;
     }
     if (container.dataset.pdfUrl === url && container.dataset.pdfState) {

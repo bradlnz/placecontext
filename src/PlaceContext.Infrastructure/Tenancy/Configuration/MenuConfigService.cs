@@ -40,6 +40,7 @@ public sealed class MenuConfigService : IMenuConfigService
     internal static readonly CatalogItem[] WorkspaceCatalog =
     {
         new("build.chat", "Dashboard", "link", "/project/{projectId}/dashboard", Permission.ProjectsView, "agent", null, null),
+        new("project.agents", "Agents", "link", "/project/{projectId}/agents", Permission.ProjectsView, "agent", null, null),
         new("chains", "Workflows", "link", "/project/{projectId}/workflows", Permission.ChainsManage, "chain", null, null),
         new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", "Automation", null),
         new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", "Automation", null),

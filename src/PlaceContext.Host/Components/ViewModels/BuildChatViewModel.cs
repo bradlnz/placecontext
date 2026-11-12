@@ -15,7 +15,9 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
     PortalUiState ui, IJSRuntime js, PlaceContextService service, PlaceContext.Application.Access.IPermissionService permissions,
     OperationCenter? operations = null, ICurrentTenant? tenant = null, ICurrentUser? user = null,
     PlaceContext.Application.Jobs.IJobChainSubmissionQueue? submissions = null, NavigationManager? navigation = null,
-    IWorkflowDemoShares? demoShares = null, PlaceContext.Application.Mcp.IMcpClientService? mcp = null) : PageViewModel, IComponentViewModel
+    PlaceContext.Application.Mcp.IMcpClientService? mcp = null,
+    PlaceContext.Application.Jobs.ArtifactReader? artifacts = null, IProjectAgentStore? projectAgents = null,
+    IConversationShares? conversationShares = null) : PageViewModel, IComponentViewModel
 {
     private static readonly MarkdownPipeline ChatMarkdown = new MarkdownPipelineBuilder().DisableHtml().UsePipeTables().Build();
     public static string FormatReply(string text)
@@ -35,7 +37,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
     }
 
     private bool? _workspaceVisible;
-    public bool WorkspaceOpen => AgentOpen || _workspaceVisible == true || PreviewItem is not null || PreviewChart is not null;
+    public bool WorkspaceOpen => _workspaceVisible == true || PreviewItem is not null || PreviewChart is not null;
     public bool WorkspaceVisible => _workspaceVisible ?? (Conversation.Messages.Count > 0 || WorkspaceOpen);
     public void OpenWorkspace() => _workspaceVisible = true;
     public void CloseWorkspace()
@@ -53,12 +55,17 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
     public IEnumerable<string> Models => Connections.FirstOrDefault(x => x.Id == Conversation.ConnectionId)?.Models ?? [];
     public string? ModelSetupHint => Connections.FirstOrDefault(x => x.Id == Conversation.ConnectionId)?.SetupHint;
     public string Draft { get; set; } = "";
+    private bool _chatOpen;
+    public bool ChatOpen => _chatOpen || Conversation.Messages.Count > 0 || Busy
+        || !string.IsNullOrWhiteSpace(Draft) || PreviewItem?.Kind == "workflow-run";
+    public void OpenChat() => _chatOpen = true;
     public bool ApplyTaskHint(string prompt)
     {
         if (Locked || Listening || !string.IsNullOrWhiteSpace(Draft))
         {
             return false;
         }
+        OpenChat();
         Draft = prompt;
         return true;
     }
@@ -140,10 +147,13 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         Loading = true;
         Error = Notice = null;
         Draft = "";
+        _chatOpen = false;
         _branch = null;
         HistoryQuery = "";
         ResetWorkspace();
+        ResetDashboardCharts();
         Dashboard = new();
+        ProjectAgents = [];
         AgentDraft = new();
         AgentPrompt = AgentTools = AgentMemory = NewActionTitle = NewActionPrompt = "";
         AgentWorkflows = [];
@@ -163,6 +173,8 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             Connections = (await models).Where(x => x.Enabled).ToArray();
             Conversations = await history;
             Dashboard = await store.GetSettingsAsync(projectId);
+            ProjectAgents = projectAgents is null ? [] : (await projectAgents.GetAsync(projectId)).Agents;
+            await RefreshDashboardChartsAsync();
             CanShareDemo = await permissions.HasAsync(PlaceContext.Application.Access.Models.Permission.ArtifactsShare);
             SelectDefaultModel();
             var active = Conversations.FirstOrDefault(x => x.Status is BuildRunStatus.Queued or BuildRunStatus.Running);
@@ -230,6 +242,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             Model = Conversation.Model
         };
         Draft = "";
+        _chatOpen = false;
         _branch = null;
         Error = Notice = null;
         ConfirmDelete = false;
@@ -237,6 +250,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         ResetWorkspace();
         ApplyAgentModel();
         NavigateToDashboard();
+        await RefreshDashboardChartsAsync();
     }
     public async Task OpenAsync(Guid id)
     {
@@ -518,7 +532,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             _module ??= await js.InvokeAsync<IJSObjectReference>("import", "./build-chat.js");
             _reference ??= DotNetObjectReference.Create(this);
             SpeechSupported = await _module.InvokeAsync<bool>("supportsSpeech");
-            await _module.InvokeVoidAsync("mountChat", ViewId);
+            await _module.InvokeVoidAsync("mountChat", ViewId, _reference);
             NotifyStateChanged();
         }
         catch (JSException)
@@ -586,6 +600,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
     public async ValueTask DisposePageAsync()
     {
         _disposed = true;
+        ResetDashboardCharts();
         ClosePreview();
         Detach();
         StopUpdates();

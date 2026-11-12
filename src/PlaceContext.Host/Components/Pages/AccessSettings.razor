@@ -14,7 +14,7 @@
     <header class="settings-head">
         <div>
             <h2>Access</h2>
-            <p>Manage members, roles and permission overrides. Explicit overrides take precedence over role permissions.</p>
+            <p>Manage members, project access, roles and permission overrides.</p>
         </div>
 @if (_isImpersonating)
 {
@@ -130,6 +130,7 @@
                             <button class="dcbtn perm-toggle" @onclick="@(() => Vm.ToggleMatrixAsync(m.Id))">
                                 @(Vm.Expanded == m.Id ? "Hide permissions" : "Permissions")
                             </button>
+                            <button class="dcbtn" disabled="@(Vm.Busy || Vm.LoadingProjects)" @onclick="() => Vm.EditProjectsAsync(m.Id)">Projects</button>
                             @if (Vm.CanRemoveMember(m))
                             {
                                 @if (Vm.ConfirmRemoveId == m.Id)
@@ -274,6 +275,31 @@
 </div>
 
 
+@if (Vm.ProjectMemberId is { } projectMember)
+{
+    <div class="dcmodal-overlay" @onclick="() => { if (!Vm.Busy && !Vm.LoadingProjects) Vm.ProjectMemberId = null; }">
+        <section class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="member-projects-title" @onclick:stopPropagation="true">
+            <header class="dcmodal-head"><h3 id="member-projects-title">Project access · @Vm.Members.FirstOrDefault(m => m.Id == projectMember)?.DisplayName</h3><button class="dcbtn" disabled="@(Vm.Busy || Vm.LoadingProjects)" @onclick="() => Vm.ProjectMemberId = null">Close</button></header>
+            <div class="dcmodal-body">
+                @if (Vm.LoadingProjects) { <p>Loading projects…</p> }
+                else
+                {
+                    <label><input type="checkbox" @bind="Vm.AllProjects" disabled="@Vm.Busy" /> All projects, including future projects</label>
+                    <p class="dchint">Turn this off to choose projects. With none selected, this member has no project access. Their role still controls what they can do within assigned projects.</p>
+                    <fieldset disabled="@(Vm.Busy || Vm.AllProjects)" class="project-assignment-list"><legend>Selected projects</legend>
+                        @foreach (var project in Vm.AssignmentProjects.OrderBy(p => p.Name))
+                        {
+                            <label><input type="checkbox" checked="@Vm.AssignedProjects.Contains(project.Id)" @onchange="e => Vm.ToggleProject(project.Id, e.Value is true)" />@project.Name</label>
+                        }
+                        @if (Vm.AssignmentProjects.Count == 0) { <p>No projects in this workspace.</p> }
+                    </fieldset>
+                }
+                @if (Vm.ProjectError is { } projectError) { <p role="alert">@projectError</p> }
+            </div>
+            <footer class="dcmodal-foot"><button class="dcbtn primary" disabled="@(Vm.Busy || Vm.LoadingProjects || !Vm.ProjectsLoaded)" @onclick="Vm.SaveProjectsAsync">Save project access</button></footer>
+        </section>
+    </div>
+}
 @code {
     protected override void OnInitialized()
         => Vm.Attach(() => InvokeAsync(StateHasChanged));

@@ -7,6 +7,7 @@
         }
     </nav>
     <p class="hint">Private to you in this project. The agent uses your permissions; these settings cannot grant access or expose vault credentials.</p>
+    <a class="dcbtn" href="/project/@Vm.Conversation.ProjectId/agents">Manage project agents and skills</a>
     @if (Vm.AgentLoading)
     {
         <Skeleton Kind="list" Rows="3" />
@@ -92,14 +93,27 @@
         <div class="agent-card"><strong>Run a workflow</strong><span class="hint">System tile · always available · cannot be removed</span></div>
         @foreach (var action in Vm.AgentDraft.Actions.ToArray())
         {
-            <div class="agent-card">
-                <strong>@action.Title</strong><p>@action.Prompt</p>
-                <button class="dcbtn" disabled="@Vm.Locked" @onclick="() => Vm.AgentDraft.Actions.Remove(action)">Remove @action.Title</button>
+            <div class="agent-card" @key="action.Id">
+                <label for="@($"tile-title-{action.Id}")">Tile title</label>
+                <input id="@($"tile-title-{action.Id}")" maxlength="60" value="@action.Title" @onchange="@(e => Vm.EditDashboardAction(action.Id, e.Value?.ToString() ?? "", action.Prompt))" disabled="@(Vm.Locked || Vm.AgentLoading)" />
+                <label for="@($"tile-prompt-{action.Id}")">Request sent to chat</label>
+                <textarea id="@($"tile-prompt-{action.Id}")" rows="4" maxlength="2000" value="@action.Prompt" @onchange="@(e => Vm.EditDashboardAction(action.Id, action.Title, e.Value?.ToString() ?? ""))" disabled="@(Vm.Locked || Vm.AgentLoading)"></textarea>
+                <button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="() => Vm.RemoveDashboardAction(action)">Remove @action.Title</button>
             </div>
         }
         <label for="dashboard-action-title">Tile title</label><input id="dashboard-action-title" maxlength="60" @bind="Vm.NewActionTitle" disabled="@Vm.Locked" />
         <label for="dashboard-action-prompt">Request sent to chat</label><textarea id="dashboard-action-prompt" rows="3" maxlength="2000" @bind="Vm.NewActionPrompt" disabled="@Vm.Locked"></textarea>
-        <div class="agent-actions"><button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentDraft.Actions.Count >= 8)" @onclick="Vm.AddDashboardAction">Add tile</button><button class="dcbtn primary" disabled="@Vm.Locked" @onclick="Vm.SaveAgentAsync">Save dashboard</button></div>
+        <button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading || Vm.AgentDraft.Actions.Count >= 8)" @onclick="Vm.AddDashboardAction">Add tile</button>
+        <h3>Pinned charts</h3>
+        <p>Ask the assistant for a live chart, then choose Pin to dashboard. Charts query current project data when opened and every 10 seconds.</p>
+        @foreach (var chart in Vm.AgentDraft.Charts.ToArray())
+        {
+            <div class="agent-card" @key="chart.Id">
+                <strong>@(PlaceContext.Application.Features.ChartSpec.TryParse(chart.ChartJson)?.Title ?? "Chart")</strong><p>@chart.Source</p>
+                <button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="() => Vm.RemoveDashboardChart(chart)">Remove chart</button>
+            </div>
+        }
+        <button class="dcbtn primary" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="Vm.SaveAgentAsync">Save dashboard</button>
     }
     @if (Vm.AgentError is { } error) { <p role="alert">@error</p> }
     @if (Vm.AgentNotice is { } notice) { <p role="status">@notice</p> }

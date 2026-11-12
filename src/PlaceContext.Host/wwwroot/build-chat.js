@@ -55,7 +55,7 @@ export function mountWorkspaceResize(root) {
   if (!divider || !body) {
     return () => {};
   }
-  let width = Number(divider.getAttribute('aria-valuenow')) || 42;
+  let width = Number(divider.getAttribute('aria-valuenow')) || 50;
   let pointer = null;
   const resize = (value) => {
     width = Math.max(30, Math.min(70, value));
@@ -115,7 +115,85 @@ export function mountWorkspaceResize(root) {
   };
 }
 
-export function mountChat(viewId) {
+export function mountDashboardResize(root, receiver) {
+  if (!root || !receiver) return () => {};
+  let drag = null, saving = false;
+  const shape = (handle) => {
+    const tile = handle.closest('.dashboard-tile');
+    const grid = getComputedStyle(tile.parentElement);
+    const bounds = tile.getBoundingClientRect();
+    const gapX = parseFloat(grid.columnGap) || 0, gapY = parseFloat(grid.rowGap) || 0;
+    const stepX = parseFloat(grid.gridTemplateColumns) + gapX;
+    const stepY = parseFloat(grid.gridAutoRows) + gapY;
+    return { handle, tile, bounds, gapX, gapY, stepX, stepY,
+      maxWidth: Math.min(2, grid.gridTemplateColumns.trim().split(/\s+/).length),
+      width: Math.round((bounds.width + gapX) / stepX), height: Math.round((bounds.height + gapY) / stepY) };
+  };
+  const preview = (state, width, height) => {
+    state.width = Math.max(1, Math.min(state.maxWidth, width));
+    state.height = Math.max(1, Math.min(2, height));
+    state.tile.style.gridColumn = `span ${state.width}`;
+    state.tile.style.gridRow = `span ${state.height}`;
+  };
+  const clear = (state) => {
+    state.tile.style.removeProperty('grid-column');
+    state.tile.style.removeProperty('grid-row');
+  };
+  const save = async (state) => {
+    const size = state.width === 2 ? (state.height === 2 ? 'large' : 'wide') : (state.height === 2 ? 'tall' : 'square');
+    saving = true;
+    try {
+      if (size !== state.tile.dataset.tileSize)
+        await receiver.invokeMethodAsync('ResizeDashboardTileAsync', state.tile.dataset.tile, size);
+    } catch { /* The circuit may have closed; discard the local preview. */ }
+    finally { saving = false; clear(state); }
+  };
+  const stop = (commit) => {
+    if (!drag) return;
+    const state = drag;
+    drag = null;
+    if (state.handle.hasPointerCapture(state.pointer)) state.handle.releasePointerCapture(state.pointer);
+    root.classList.remove('dashboard-resizing');
+    if (commit) void save(state); else clear(state);
+  };
+  const handlers = {
+    pointerdown(event) {
+      const handle = event.target.closest?.('.dashboard-resize');
+      if (!handle || handle.disabled || event.button !== 0 || drag || saving) return;
+      drag = { ...shape(handle), pointer: event.pointerId, x: event.clientX, y: event.clientY };
+      handle.setPointerCapture(event.pointerId);
+      handle.focus();
+      root.classList.add('dashboard-resizing');
+      event.preventDefault();
+    },
+    pointermove(event) {
+      if (!drag || event.pointerId !== drag.pointer) return;
+      preview(drag, Math.round((drag.bounds.width + event.clientX - drag.x + drag.gapX) / drag.stepX),
+        Math.round((drag.bounds.height + event.clientY - drag.y + drag.gapY) / drag.stepY));
+    },
+    pointerup(event) { if (event.pointerId === drag?.pointer) stop(true); },
+    pointercancel(event) { if (event.pointerId === drag?.pointer) stop(false); },
+    lostpointercapture(event) { if (event.pointerId === drag?.pointer) stop(false); },
+    dragstart(event) { if (drag) event.preventDefault(); },
+    keydown(event) {
+      if (event.key === 'Escape' && drag) { event.preventDefault(); stop(false); return; }
+      const handle = event.target.closest?.('.dashboard-resize');
+      const delta = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+      if (!handle || handle.disabled || !delta || drag || saving) return;
+      event.preventDefault();
+      const state = shape(handle);
+      preview(state, state.width + delta[0], state.height + delta[1]);
+      void save(state);
+    },
+  };
+  for (const [name, handler] of Object.entries(handlers)) root.addEventListener(name, handler);
+  return () => {
+    for (const [name, handler] of Object.entries(handlers)) root.removeEventListener(name, handler);
+    stop(false);
+  };
+}
+
+export function mountChat(viewId, receiver) {
   chats.get(viewId)?.();
   const root = viewId ? document.getElementById(viewId) : document;
   const messages = root?.querySelector('.chat-messages');
@@ -124,6 +202,7 @@ export function mountChat(viewId) {
     return;
   }
   const unmountResize = mountWorkspaceResize(root);
+  const unmountDashboardResize = mountDashboardResize(root, receiver);
   let following = true;
   const onScroll = () => {
     following = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;
@@ -153,6 +232,7 @@ export function mountChat(viewId) {
   input.addEventListener('keydown', onKey);
   chats.set(viewId, () => {
     unmountResize();
+    unmountDashboardResize();
     observer.disconnect();
     messages.removeEventListener('scroll', onScroll);
     input.removeEventListener('keydown', onKey);

@@ -13,6 +13,8 @@ public sealed class ProjectRow : ITenantOwned
     public string Name { get; set; } = "";
     public string Path { get; set; } = "";
     public string Status { get; set; } = "";
+    public string? AgentSettings { get; set; }
+    public int AgentSettingsVersion { get; set; }
     public DateTimeOffset DiscoveredAt
     {
         get; set;

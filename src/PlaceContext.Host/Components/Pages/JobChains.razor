@@ -364,7 +364,7 @@ else
                                     {
                                         @foreach (var run in Vm.ChainRuns.OrderByDescending(run => run.Status == "AwaitingInput").ThenByDescending(run => run.StartedAt))
                                         {
-                                            <div class="dccard run-card" @onclick="@(() => Vm.OpenRunInChat(run))">
+                                            <div class="dccard run-card" @onclick="@(() => Vm.OpenChainRunAsync(run))">
                                                 <div class="run-row">
                                                     <span class="status-chip" style="color:@Vm.Presentation.StatusColor(run.Status); background:@Vm.Presentation.StatusBackground(run.Status)">@run.Status</span>
                                                     @if (run.Status == "AwaitingInput")
@@ -1289,7 +1289,7 @@ else
         @if (Vm.ShowLoopEditor)
         {
             <div class="dcmodal-overlay" @onclick="Vm.CloseLoopEditor">
-                <div class="dcmodal loop-modal @(Vm.LoopKind != LoopChainAction.HumanType ? "agent-instructions-modal" : "")" role="dialog" aria-modal="true" aria-labelledby="loop-editor-title" @onclick:stopPropagation="true">
+                <div class="dcmodal loop-modal agent-instructions-modal" role="dialog" aria-modal="true" aria-labelledby="loop-editor-title" @onclick:stopPropagation="true">
                     <div class="dcmodal-head"><WorkflowDialogHandle />
                         <div>
                             <span class="workflow-eyebrow">Workflow step</span>
@@ -1318,27 +1318,31 @@ else
                         }
                         @if (Vm.LoopAgentProvider == LoopChainAction.AutomaticAgent)
                         {
+                            <div class="dcfield"><label for="loop-project-agent">Agent</label>
+                                <select id="loop-project-agent" class="dcinput" @bind="Vm.LoopAgentId" @bind:after="Vm.SelectLoopAgent">
+                                    <option value="">Custom step settings</option>
+                                    @foreach (var agent in Vm.LoopAgents) { <option value="@agent.Id">@agent.Name</option> }
+                                    @if (Vm.LoopAgentId is not null && Vm.SelectedLoopAgent is null) { <option value="@Vm.LoopAgentId">Unavailable agent</option> }
+                                </select>
+                                @if (Vm.SelectedLoopAgent is { } selectedAgent)
+                                {
+                                    <span class="sub-note">@selectedAgent.SkillIds.Count skills · Workflows: @selectedAgent.WorkflowAccess · Data: @selectedAgent.DataAccess · @selectedAgent.McpConnectionIds.Count MCPs. Saved instructions and access settings apply when this step runs.</span>
+                                }
+                                <a href="/project/@Vm.ProjectId/agents">Manage agents</a>
+                            </div>
                             <div class="dcfield"><label for="loop-connection">Model connection</label>
-                                <select id="loop-connection" class="dcinput" @bind="Vm.LoopConnectionId" @bind:after="Vm.SelectLoopConnection">
+                                <select id="loop-connection" class="dcinput" @bind="Vm.LoopConnectionId" @bind:after="Vm.SelectLoopConnection" disabled="@(Vm.SelectedLoopAgent is { ConnectionId: var id } && id != Guid.Empty)">
                                     <option value="">Choose a connection</option>
                                     @foreach (var connection in Vm.LoopConnections) { <option value="@connection.Id">@connection.Name</option> }
                                 </select>
                             </div>
                             <div class="dcfield"><label for="loop-model">Model</label>
-                                <select id="loop-model" class="dcinput" @bind="Vm.LoopModel">
+                                <select id="loop-model" class="dcinput" @bind="Vm.LoopModel" disabled="@(Vm.SelectedLoopAgent is { ConnectionId: var modelConnection } && modelConnection != Guid.Empty)">
                                     <option value="">Choose a model</option>
                                     @foreach (var model in Vm.LoopModels) { <option value="@model">@model</option> }
                                 </select>
                                 @if (Vm.LoopConnections.Count == 0) { <span class="sub-note">Add an enabled model connection in Settings → Models.</span> }
                             </div>
-                        }
-                        @if (Vm.LoopKind == LoopChainAction.HumanType)
-                        {
-                        <div class="dcfield">
-                            <label for="loop-instructions">Task or review instructions <span class="req">*</span></label>
-                            <textarea id="loop-instructions" class="dcinput" rows="6" maxlength="4000" @bind="Vm.LoopInstructions"
-                                      placeholder="@(Vm.LoopKind == LoopChainAction.HumanType ? "Ask the user to confirm the proposed changes are correct." : "Ask the agent to verify the action output against the expected result and provide evidence.")"></textarea>
-                        </div>
                         }
                         @if (Vm.LoopKind == LoopChainAction.HumanType)
                         {
@@ -1359,13 +1363,10 @@ else
                         </div>
                         @if (Vm.LoopError is not null) { <p class="danger" role="alert">@Vm.LoopError</p> }
                         </div>
-                        @if (Vm.LoopKind != LoopChainAction.HumanType)
-                        {
-                            <section class="loop-instructions-pane" aria-labelledby="loop-markdown-title">
-                                <div class="loop-instructions-toolbar"><strong id="loop-markdown-title">Task instructions</strong><span>Markdown · up to 4,000 characters</span></div>
-                                <WorkflowInstructionsEditor @ref="_loopInstructionsEditor" Value="@Vm.LoopInstructions" />
-                            </section>
-                        }
+                        <section class="loop-instructions-pane" aria-labelledby="loop-markdown-title">
+                            <div class="loop-instructions-toolbar"><strong id="loop-markdown-title">Task or review instructions <span class="req">*</span></strong><span>Markdown · up to 4,000 characters</span></div>
+                            <WorkflowInstructionsEditor @ref="_loopInstructionsEditor" Value="@Vm.LoopInstructions" Label="@(Vm.LoopKind == LoopChainAction.HumanType ? "Human review instructions in Markdown" : "Agent task instructions in Markdown")" />
+                        </section>
                     </div>
                     <div class="dcmodal-foot">
                         <button class="dcbtn" @onclick="Vm.CloseLoopEditor">Cancel</button>
@@ -1829,7 +1830,7 @@ else
 
     private async Task SaveLoopInstructionsAsync()
     {
-        if (Vm.LoopKind != LoopChainAction.HumanType && _loopInstructionsEditor is not null)
+        if (_loopInstructionsEditor is not null)
             Vm.LoopInstructions = await _loopInstructionsEditor.ReadAsync();
         Vm.SaveLoopAction();
     }

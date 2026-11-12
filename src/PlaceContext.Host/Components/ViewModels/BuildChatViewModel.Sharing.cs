@@ -7,8 +7,6 @@ public sealed partial class BuildChatViewModel
     public bool CanShareDemo { get; private set; }
     public bool ShowDemoShare { get; private set; }
     public bool SharingDemo { get; private set; }
-    public string DemoOutcome { get; set; } = "";
-    public int? DemoReplayStep { get; set; }
     public int DemoLifetimeDays { get; set; } = 7;
     public string? DemoUrl { get; private set; }
     public DateTimeOffset? DemoExpiry { get; private set; }
@@ -16,19 +14,18 @@ public sealed partial class BuildChatViewModel
 
     public async Task OpenDemoShareAsync()
     {
-        if (PreviewRun is not { FinishedAt: not null } run || demoShares is null)
+        if (Conversation.Messages.Count == 0 || conversationShares is null)
         {
             return;
         }
         ShowDemoShare = true;
-        DemoOutcome = run.FinalOutput ?? "";
-        DemoReplayStep = null;
+        var id = Conversation.Id;
         DemoError = DemoUrl = null;
         DemoExpiry = null;
         try
         {
-            var expiry = await demoShares.GetExpiryAsync(Conversation.ProjectId, run.Id);
-            if (PreviewRun?.Id == run.Id)
+            var expiry = await conversationShares.GetExpiryAsync(Conversation.ProjectId, id);
+            if (Conversation.Id == id)
             {
                 DemoExpiry = expiry;
             }
@@ -41,18 +38,20 @@ public sealed partial class BuildChatViewModel
 
     public async Task CreateDemoAsync()
     {
-        if (SharingDemo || PreviewRun is not { } run || demoShares is null || navigation is null)
+        if (SharingDemo || Conversation.Messages.Count == 0 || conversationShares is null || navigation is null)
         {
             return;
         }
+        var id = Conversation.Id;
         SharingDemo = true;
         DemoError = null;
         try
         {
-            var link = await demoShares.CreateAsync(Conversation.ProjectId, run.Id, DemoOutcome, DemoReplayStep, DemoLifetimeDays);
-            if (PreviewRun?.Id == run.Id)
+            var link = await conversationShares.CreateAsync(Conversation.ProjectId, id, PreviewRun?.Id,
+                PreviewRunArtifacts.Select(a => a.Id).Concat(PreviewArtifact is { } file ? [file.Id] : []).Distinct().ToArray(), DemoLifetimeDays);
+            if (Conversation.Id == id)
             {
-                DemoUrl = navigation.ToAbsoluteUri($"/share/workflows/{link.Token}").AbsoluteUri;
+                DemoUrl = navigation.ToAbsoluteUri($"/share/conversations/{link.Token}").AbsoluteUri;
                 DemoExpiry = link.ExpiresAt;
             }
         }
@@ -68,14 +67,15 @@ public sealed partial class BuildChatViewModel
 
     public async Task RevokeDemoAsync()
     {
-        if (SharingDemo || PreviewRun is not { } run || demoShares is null)
+        if (SharingDemo || conversationShares is null)
         {
             return;
         }
+        var id = Conversation.Id;
         SharingDemo = true;
         try
         {
-            await demoShares.RevokeAsync(Conversation.ProjectId, run.Id);
+            await conversationShares.RevokeAsync(Conversation.ProjectId, id);
             DemoUrl = null;
             DemoExpiry = null;
             DemoError = null;
@@ -89,6 +89,8 @@ public sealed partial class BuildChatViewModel
             SharingDemo = false;
         }
     }
+
+    public void CloseDemoShare() { if (!SharingDemo) ShowDemoShare = false; }
 
     public async Task CopyDemoAsync()
     {

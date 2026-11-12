@@ -16,6 +16,17 @@ public sealed partial class JobChainsViewModel
     public string LoopAgentProvider { get; set; } = LoopChainAction.ExternalAgent;
     public Guid? LoopConnectionId { get; set; }
     public string? LoopModel { get; set; }
+    public Guid? LoopAgentId { get; set; }
+    public IReadOnlyList<DashboardAgentProfile> LoopAgents { get; private set; } = [];
+    public DashboardAgentProfile? SelectedLoopAgent => LoopAgents.FirstOrDefault(a => a.Id == LoopAgentId);
+    public void SelectLoopAgent()
+    {
+        if (SelectedLoopAgent is { ConnectionId: var connectionId } profile && connectionId != Guid.Empty)
+        {
+            LoopConnectionId = connectionId;
+            LoopModel = profile.Model;
+        }
+    }
     public IReadOnlyList<ModelConnection> LoopConnections { get; private set; } = [];
     public IReadOnlyList<string> LoopModels => LoopConnections.FirstOrDefault(x => x.Id == LoopConnectionId)?.Models ?? [];
     public void SelectLoopConnection() => LoopModel = LoopModels.FirstOrDefault();
@@ -38,6 +49,8 @@ public sealed partial class JobChainsViewModel
         LoopError = null;
         LoopConnectionId = null;
         LoopModel = null;
+        LoopAgentId = null;
+        LoopAgents = [];
         if (kind != LoopChainAction.HumanType && _modelConnections is not null)
         {
             try
@@ -45,6 +58,7 @@ public sealed partial class JobChainsViewModel
                 LoopConnections = (await _modelConnections.ListAsync()).Where(x => x.Enabled && x.Models.Count > 0).ToArray();
                 LoopConnectionId = LoopConnections.FirstOrDefault()?.Id;
                 SelectLoopConnection();
+                LoopAgents = _projectAgents is null ? [] : (await _projectAgents.GetAsync(ProjectId)).Agents;
             }
             catch (Exception ex) { LoopError = ex.Message; }
         }
@@ -66,6 +80,8 @@ public sealed partial class JobChainsViewModel
         LoopAgentProvider = loop.AgentProvider;
         LoopConnectionId = loop.ConnectionId ?? LoopConnectionId;
         LoopModel = loop.Model ?? LoopModel;
+        LoopAgentId = loop.AgentId;
+        SelectLoopAgent();
     }
 
     public void SaveLoopAction()
@@ -73,9 +89,12 @@ public sealed partial class JobChainsViewModel
         LoopError = null;
         try
         {
+            if (LoopAgentProvider == LoopChainAction.AutomaticAgent && LoopAgentId is not null && SelectedLoopAgent is null)
+                throw new ArgumentException("The selected agent is unavailable. Choose another agent or use custom step settings.");
             var action = new LoopChainAction(LoopKind, LoopInstructions, LoopResponseField, LoopResponseType, LoopAgentProvider,
                 LoopAgentProvider == LoopChainAction.AutomaticAgent ? LoopConnectionId : null,
-                LoopAgentProvider == LoopChainAction.AutomaticAgent ? LoopModel : null);
+                LoopAgentProvider == LoopChainAction.AutomaticAgent ? LoopModel : null,
+                LoopAgentProvider == LoopChainAction.AutomaticAgent ? LoopAgentId : null);
             if (!_editingLoop)
             {
                 ShiftGatesForInsert(_loopStageIndex);

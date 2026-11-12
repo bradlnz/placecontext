@@ -13,7 +13,7 @@ public sealed class LoopChainAction : ChainAction
     public const string AutomaticAgent = "automatic";
 
     public LoopChainAction(string type, string instructions, string responseField, string responseType = TextResponse,
-        string agentProvider = ExternalAgent, Guid? connectionId = null, string? model = null)
+        string agentProvider = ExternalAgent, Guid? connectionId = null, string? model = null, Guid? agentId = null)
     {
         if (type is not (HumanType or AgentType or TaskType))
         {
@@ -42,9 +42,11 @@ public sealed class LoopChainAction : ChainAction
         if (agentProvider == AutomaticAgent && (connectionId is null || connectionId == Guid.Empty
             || string.IsNullOrWhiteSpace(model) || model.Length > 200))
             throw new ArgumentException("Choose a model connection and model for automatic execution.");
-        if (agentProvider != AutomaticAgent && (connectionId is not null || model is not null))
+        if (agentId == Guid.Empty) throw new ArgumentException("Choose an agent from this project.");
+        if (agentProvider != AutomaticAgent && (connectionId is not null || model is not null || agentId is not null))
             throw new ArgumentException("Model selection is only used by automatic execution.");
         ConnectionId = connectionId;
+        AgentId = agentId;
         Model = model?.Trim();
         Type = type;
         Instructions = instructions.Trim();
@@ -72,6 +74,7 @@ public sealed class LoopChainAction : ChainAction
     }
     public Guid? ConnectionId { get; }
     public string? Model { get; }
+    public Guid? AgentId { get; }
     public string AgentProvider
     {
         get;

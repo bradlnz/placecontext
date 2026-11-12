@@ -69,9 +69,10 @@ public sealed class JobChainActionPersistenceTests
         await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
         var repository = new EfJobChainRepository(db);
         var connection = Guid.NewGuid();
+        var agent = Guid.NewGuid();
         var chain = JobChain.Create(Guid.NewGuid(), "agent", null,
             [ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Build", "result",
-                agentProvider: LoopChainAction.AutomaticAgent, connectionId: connection, model: "test-model"))], T0);
+                agentProvider: LoopChainAction.AutomaticAgent, connectionId: connection, model: "test-model", agentId: agent))], T0);
         await repository.AddAsync(chain);
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
@@ -79,6 +80,7 @@ public sealed class JobChainActionPersistenceTests
         Assert.Equal(LoopChainAction.AutomaticAgent, loaded.AgentProvider);
         Assert.Equal(connection, loaded.ConnectionId);
         Assert.Equal("test-model", loaded.Model);
+        Assert.Equal(agent, loaded.AgentId);
     }
 
     [Fact]
