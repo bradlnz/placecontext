@@ -15,6 +15,7 @@ public sealed partial class BuildChatViewModel
     public string? AgentNotice { get; private set; }
     public DashboardSettings Dashboard { get; private set; } = new();
     public IReadOnlyList<DashboardAgentProfile> ProjectAgents { get; private set; } = [];
+    public IEnumerable<DashboardAgentProfile> DashboardAgents => Dashboard.Agents;
     public IEnumerable<DashboardAgentProfile> AvailableAgents => Dashboard.Agents.Concat(ProjectAgents);
     public DashboardSettings AgentDraft { get; private set; } = new();
     public Guid AgentEditId { get; set; }
@@ -98,12 +99,12 @@ public sealed partial class BuildChatViewModel
 
     public void SelectAgent(string? value)
     {
-        if (Locked || !Guid.TryParse(value, out var id) || !AvailableAgents.Any(a => a.Id == id))
+        if (Locked || !Guid.TryParse(value, out var id) || !DashboardAgents.Any(a => a.Id == id))
         {
             return;
         }
         Conversation.AgentId = id;
-        if ((id == DashboardSettings.DefaultAgentId || ProjectAgents.Any(a => a.Id == id)) && AvailableAgents.First(a => a.Id == id).ConnectionId == Guid.Empty)
+        if (id == DashboardSettings.DefaultAgentId && DashboardAgents.First(a => a.Id == id).ConnectionId == Guid.Empty)
         {
             SelectDefaultModel();
         }

@@ -789,16 +789,17 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
-    public async Task Workflow_picker_uses_the_selected_shared_agents_run_access()
+    public async Task Workflow_picker_uses_the_selected_dashboard_agents_run_access()
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
         var workflow = new JobChainView(Guid.NewGuid(), fixture.ProjectId, "Report", null, [], DateTimeOffset.UtcNow);
         var dispatcher = new ToolDispatcher(fixture.ProjectId) { Workflow = workflow };
-        var projectStore = ProjectStore(fixture);
         var restricted = new DashboardAgentProfile { Name = "Restricted", WorkflowAccess = "none" };
-        await projectStore.SaveAsync(fixture.ProjectId, new() { Agents = [restricted] });
-        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions, projectAgents: projectStore);
+        var settings = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        settings.Agents.Add(restricted);
+        await fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions);
         await vm.LoadAsync(fixture.ProjectId);
         vm.SelectAgent(restricted.Id.ToString());
         await vm.StartWorkflowChatAsync();
