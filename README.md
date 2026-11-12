@@ -32,18 +32,21 @@ You decide what runs automatically, what needs review, and what happens next.
 
 ## Watch PlaceContext in action
 
-[![Watch the PlaceContext live demo: chat, automatic agents, approval, and the final result](docs/videos/platform-live/poster.png)](docs/videos/platform-live/placecontext-demo-branded.mp4)
+[![Watch the PlaceContext live demo: create a workflow, run it with review and approval, and open its PDF artifact](docs/videos/platform-live/poster.png)](docs/videos/platform-live/placecontext-demo-branded.mp4)
 
-The live walkthrough follows a new sample project from data and the workflow canvas
-to chat launching a workflow, automatic agents, an approval checkpoint, and the successful result.
+The walkthrough starts in a new project with an agent creating a workflow in chat.
+It then reopens and runs the saved workflow, shows **Agent in the loop** and
+**Human in the loop**, visits **Data**, and opens the finished **PDF in Artifacts**.
 
-[**Watch the live walkthrough (1080p MP4, 1:51)**](docs/videos/platform-live/placecontext-demo-branded.mp4)
+[**Watch the live walkthrough (1080p MP4, 2:40)**](docs/videos/platform-live/placecontext-demo-branded.mp4)
 · [Clean footage](docs/videos/platform-live/placecontext-demo-clean.mp4)
+· [Resulting PDF](docs/videos/platform-live/northstar-onboarding-brief.pdf)
 
 > **Demo disclosure:** Actual local application footage with fictional accounts and real
-> automatic model execution. The approval checkpoint was answered through browser automation.
-> Idle time is cut and one model-wait scene plays at a labelled 2.5× speed. The video is silent,
-> with chapter captions. See the [capture evidence](docs/videos/platform-live/capture-evidence.json).
+> model execution. The approval checkpoint was answered through browser automation.
+> Idle time and authoring refinements are cut; selected scenes play at labelled 2× or 2.5×
+> speed. The video is silent, with chapter captions. See the
+> [capture evidence](docs/videos/platform-live/capture-evidence.json).
 
 ## What you can build
 

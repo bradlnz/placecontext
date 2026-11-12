@@ -13,8 +13,8 @@ body.hero-mode .screen,body.hero-mode .bottom,body.hero-mode .progress{display:n
 <div class="top"><img src="../../../website/assets/logo.svg" alt="PlaceContext corgi"><span class="wordmark">placecontext</span><span class="divider"></span><span class="eyebrow">AGENTIC WORKFLOWS + DATA</span><span class="badge"><i></i>RECORDED LOCALLY · FICTIONAL DATA</span></div>
 <div class="screen"></div>
 <div class="bottom"><span class="index">01</span><div><div class="caption-title">Start with a conversation.</div><div class="caption-subtitle">A new project. Five fictional accounts. One clear outcome.</div></div><span class="domain">placecontext.io</span></div><div class="progress"><div></div></div>
-<div class="hero"><div class="kicker">A LIVE PLATFORM WALKTHROUGH</div><h1>From a request<br>to a <em>reviewed result.</em></h1><p>Chat starts the workflow. Specialists do the work.<br>You stay in control of the next step.</p><div class="journey"><span>Project data</span><b>→</b><span>Chat</span><b>→</b><span>Specialist agents</span><b>→</b><span>Human review</span><b>→</b><span>Result</span></div></div>
-<img class="hero-logo" src="../../../website/assets/logo.svg" alt=""><div class="hero-note" hidden>Northstar Onboarding · Actual application footage · Model waits shortened</div>
+<div class="hero"><div class="kicker">A LIVE PLATFORM WALKTHROUGH</div><h1>From a conversation<br>to an <em>approved PDF.</em></h1><p>Ask an agent to build the workflow. Run it with review.<br>Inspect the data, then open the finished PDF.</p><div class="journey"><span>Create in chat</span><b>→</b><span>Reopen &amp; run</span><b>→</b><span>Agent review</span><b>→</b><span>Human approval</span><b>→</b><span>Data</span><b>→</b><span>PDF artifact</span></div></div>
+<img class="hero-logo" src="../../../website/assets/logo.svg" alt=""><div class="hero-note" hidden>Northstar Customer Success · Actual application footage · Model waits shortened</div>
 <script>
 window.setFrame = ({title,subtitle,index=1,total=7,hero=false,closing=false}) => {
  document.body.classList.toggle('hero-mode',hero);
@@ -23,6 +23,6 @@ window.setFrame = ({title,subtitle,index=1,total=7,hero=false,closing=false}) =>
  document.querySelector('.caption-subtitle').textContent=subtitle||'';
  document.querySelector('.index').textContent=String(index).padStart(2,'0');
  document.querySelector('.progress div').style.width=(100*index/total)+'%';
- if(closing){document.querySelector('.hero .kicker').textContent='PLACECONTEXT';document.querySelector('.hero h1').innerHTML='Put agents to work.<br><em>Keep people in control.</em>';document.querySelector('.hero p').textContent='Explore the platform at placecontext.io';document.querySelector('.journey').style.display='none';}
+ if(closing){document.querySelector('.hero .kicker').textContent='PLACECONTEXT';document.querySelector('.hero h1').innerHTML='An approved PDF.<br><em>Ready for the next step.</em>';document.querySelector('.hero p').textContent='Explore the platform at placecontext.io';document.querySelector('.journey').style.display='none';}
 };
 </script></html>

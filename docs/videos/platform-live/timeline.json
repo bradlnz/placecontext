@@ -1,155 +1,250 @@
 {
-  "started": 1794438883864,
+  "started": 1794440380350,
   "marks": [
     {
-      "name": "dashboard-intro",
-      "at": 1794438886891,
-      "seconds": 3.027
+      "name": "creation-start",
+      "at": 1794440383301,
+      "seconds": 2.951
     },
     {
-      "name": "dashboard-intro-end",
-      "at": 1794438913077,
-      "seconds": 29.213
+      "name": "creation-sent",
+      "at": 1794440395406,
+      "seconds": 15.056
     },
     {
-      "name": "data-open",
-      "at": 1794438918534,
-      "seconds": 34.67
+      "name": "creation-progress",
+      "at": 1794440395632,
+      "seconds": 15.282
     },
     {
-      "name": "data-ready",
-      "at": 1794438923281,
-      "seconds": 39.417
+      "name": "creation-tools-check",
+      "at": 1794440421615,
+      "seconds": 41.265
     },
     {
-      "name": "data-end",
-      "at": 1794438930180,
-      "seconds": 46.316
+      "name": "creation-state",
+      "at": 1794440433324,
+      "seconds": 52.974
     },
     {
-      "name": "workflow-ready",
-      "at": 1794438933129,
-      "seconds": 49.265
+      "name": "creation-check",
+      "at": 1794440446120,
+      "seconds": 65.77
+    },
+    {
+      "name": "creation-check-2",
+      "at": 1794440467229,
+      "seconds": 86.879
+    },
+    {
+      "name": "workflow-save-check",
+      "at": 1794440482179,
+      "seconds": 101.829
+    },
+    {
+      "name": "creation-latest",
+      "at": 1794440506733,
+      "seconds": 126.383
+    },
+    {
+      "name": "creation-latest-2",
+      "at": 1794440572465,
+      "seconds": 192.115
+    },
+    {
+      "name": "creation-tools-latest",
+      "at": 1794440579731,
+      "seconds": 199.381
+    },
+    {
+      "name": "workflow-created",
+      "at": 1794440602961,
+      "seconds": 222.611
+    },
+    {
+      "name": "creation-confirmation-end",
+      "at": 1794440607518,
+      "seconds": 227.168
+    },
+    {
+      "name": "pdf-refinement-sent",
+      "at": 1794440609604,
+      "seconds": 229.254
+    },
+    {
+      "name": "refinement-check",
+      "at": 1794440618253,
+      "seconds": 237.903
+    },
+    {
+      "name": "refinement-progress",
+      "at": 1794440637650,
+      "seconds": 257.3
+    },
+    {
+      "name": "refinement-latest",
+      "at": 1794440645875,
+      "seconds": 265.525
+    },
+    {
+      "name": "refinement-job-save",
+      "at": 1794440657160,
+      "seconds": 276.81
+    },
+    {
+      "name": "refinement-state-2",
+      "at": 1794440668230,
+      "seconds": 287.88
+    },
+    {
+      "name": "authoring-complete",
+      "at": 1794440687747,
+      "seconds": 307.397
+    },
+    {
+      "name": "catalogue-open",
+      "at": 1794440689966,
+      "seconds": 309.616
     },
     {
       "name": "canvas-ready",
-      "at": 1794439036802,
-      "seconds": 152.938
+      "at": 1794440695810,
+      "seconds": 315.46
     },
     {
       "name": "canvas-tour-start",
-      "at": 1794439047927,
-      "seconds": 164.063
+      "at": 1794440718441,
+      "seconds": 338.091
     },
     {
       "name": "canvas-tour-end",
-      "at": 1794439055495,
-      "seconds": 171.631
+      "at": 1794440725290,
+      "seconds": 344.94
     },
     {
-      "name": "chat-prompt-start",
-      "at": 1794439057733,
-      "seconds": 173.869
+      "name": "reopen-picker",
+      "at": 1794440726308,
+      "seconds": 345.958
     },
     {
-      "name": "chat-sent",
-      "at": 1794439068319,
-      "seconds": 184.455
+      "name": "reopened-workflow",
+      "at": 1794440730695,
+      "seconds": 350.345
     },
     {
-      "name": "chat-check",
-      "at": 1794439068323,
-      "seconds": 184.459
+      "name": "run-prompt-start",
+      "at": 1794440730715,
+      "seconds": 350.365
     },
     {
-      "name": "chat-running",
-      "at": 1794439081128,
-      "seconds": 197.264
+      "name": "run-sent",
+      "at": 1794440736685,
+      "seconds": 356.335
     },
     {
-      "name": "research-live",
-      "at": 1794439108377,
-      "seconds": 224.513
+      "name": "run-check",
+      "at": 1794440743784,
+      "seconds": 363.434
     },
     {
-      "name": "review-evidence-start",
-      "at": 1794439119214,
-      "seconds": 235.35
+      "name": "run-agent-check",
+      "at": 1794440758941,
+      "seconds": 378.591
     },
     {
-      "name": "research-output-end",
-      "at": 1794439125209,
-      "seconds": 241.345
+      "name": "agent-review-start",
+      "at": 1794440773008,
+      "seconds": 392.658
     },
     {
-      "name": "review-output-end",
-      "at": 1794439131536,
-      "seconds": 247.672
+      "name": "agent-review-end",
+      "at": 1794440780005,
+      "seconds": 399.655
     },
     {
       "name": "approval-open",
-      "at": 1794439219516,
-      "seconds": 335.652
+      "at": 1794440780635,
+      "seconds": 400.285
     },
     {
       "name": "approval-ready",
-      "at": 1794439225052,
-      "seconds": 341.188
+      "at": 1794440784364,
+      "seconds": 404.014
     },
     {
-      "name": "approve-start",
-      "at": 1794439235359,
-      "seconds": 351.495
+      "name": "approval-action-start",
+      "at": 1794440895638,
+      "seconds": 515.288
+    },
+    {
+      "name": "approval-confirm",
+      "at": 1794440898999,
+      "seconds": 518.649
     },
     {
       "name": "approved",
-      "at": 1794439240181,
-      "seconds": 356.317
+      "at": 1794440901216,
+      "seconds": 520.866
     },
     {
-      "name": "return-to-chat",
-      "at": 1794439249004,
-      "seconds": 365.14
+      "name": "post-approval-run",
+      "at": 1794440904486,
+      "seconds": 524.136
     },
     {
-      "name": "handoff-show",
-      "at": 1794439256195,
-      "seconds": 372.331
+      "name": "pdf-execution-check",
+      "at": 1794440910204,
+      "seconds": 529.854
     },
     {
-      "name": "handoff-evidence-end",
-      "at": 1794439266853,
-      "seconds": 382.989
+      "name": "pdf-status",
+      "at": 1794440925570,
+      "seconds": 545.22
     },
     {
-      "name": "summary-prompt-start",
-      "at": 1794439285882,
-      "seconds": 402.018
+      "name": "run-success",
+      "at": 1794440934735,
+      "seconds": 554.385
     },
     {
-      "name": "summary-sent",
-      "at": 1794439293951,
-      "seconds": 410.087
+      "name": "data-open",
+      "at": 1794440939803,
+      "seconds": 559.453
     },
     {
-      "name": "summary-check",
-      "at": 1794439299197,
-      "seconds": 415.333
+      "name": "data-ready",
+      "at": 1794440946318,
+      "seconds": 565.968
     },
     {
-      "name": "summary-inspect",
-      "at": 1794439315966,
-      "seconds": 432.102
+      "name": "artifacts-open",
+      "at": 1794440961172,
+      "seconds": 580.822
     },
     {
-      "name": "summary-ready",
-      "at": 1794439321758,
-      "seconds": 437.894
+      "name": "pdf-open",
+      "at": 1794440965075,
+      "seconds": 584.725
     },
     {
-      "name": "recording-end",
-      "at": 1794439333839,
-      "seconds": 449.975
+      "name": "pdf-preview-ready",
+      "at": 1794440980029,
+      "seconds": 599.679
+    },
+    {
+      "name": "pdf-focus-start",
+      "at": 1794440997338,
+      "seconds": 616.988
+    },
+    {
+      "name": "pdf-focus-end",
+      "at": 1794441006723,
+      "seconds": 626.373
+    },
+    {
+      "name": "capture-end",
+      "at": 1794441011048,
+      "seconds": 630.698
     }
   ]
 }
