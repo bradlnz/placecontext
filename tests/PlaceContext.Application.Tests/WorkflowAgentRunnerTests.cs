@@ -10,6 +10,123 @@ namespace PlaceContext.Application.Tests;
 
 public sealed class WorkflowAgentRunnerTests
 {
+    [Fact]
+    public async Task Selected_project_agent_applies_access_and_configured_model()
+    {
+        var agent = new DashboardAgentProfile { Name = "Reviewer", Instructions = "Be precise.", WorkflowAccess = "read", DataAccess = "manage",
+            TableAccess = "none", SourceAccess = "none", ArtifactAccess = "none",
+            ConnectionId = Connection, Model = "test-model", WorkflowIds = [Guid.NewGuid()] };
+        var store = new Agents(new() { Agents = [agent] });
+        var model = new Gateway(Call("run_job", "{}"), new JsonObject { ["content"] = "{\"verified\":true}" });
+        var runner = new WorkflowAgentRunner(model, new Connections(true), null!, new Permissions(true), null!, projectAgents: store);
+        var action = new LoopChainAction(LoopChainAction.TaskType, "Review the result", "review", agentProvider: LoopChainAction.AutomaticAgent,
+            connectionId: Guid.NewGuid(), model: "old-model", agentId: agent.Id);
+        await runner.RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, action, null, default);
+        Assert.Contains("Be precise.", model.Messages![0]!["content"]!.ToString());
+        Assert.Contains(agent.WorkflowIds[0].ToString(), model.Messages[0]!["content"]!.ToString());
+        Assert.Contains(model.Tools!, t => t!["function"]!["name"]!.ToString() == "get_job");
+        Assert.DoesNotContain(model.Tools!, t => t!["function"]!["name"]!.ToString() is "run_job" or "list_project_tables" or "call_mcp_tool");
+        Assert.Contains(model.Messages, m => m!["role"]!.ToString() == "tool" && m["content"]!.ToString().Contains("not available"));
+        store.Catalog.Agents.Clear();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, action, null, default));
+    }
+
+    [Theory]
+    [InlineData(LoopChainAction.TaskType)]
+    [InlineData(LoopChainAction.AgentType)]
+    public async Task Parent_approves_tasks_and_handles_workflow_gates(string kind)
+    {
+        var parent = new DashboardAgentProfile { Name = "Supervisor", Instructions = "Require evidence", ConnectionId = Connection, Model = "test-model" };
+        var child = new DashboardAgentProfile { Name = "Worker", ParentAgentId = parent.Id };
+        var model = new Gateway(new JsonObject { ["content"] = "{\"done\":true}" });
+        var runner = new WorkflowAgentRunner(model, new Connections(true), null!, new Permissions(true), null!,
+            projectAgents: new Agents(new() { Agents = [parent, child] }));
+        var action = new LoopChainAction(kind, "Check the evidence", "review", agentProvider: LoopChainAction.AutomaticAgent,
+            connectionId: Connection, model: "test-model", agentId: child.Id);
+        var result = await runner.RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, action, "{\"evidence\":42}", default);
+        Assert.Equal(kind == LoopChainAction.TaskType ? 2 : 1, model.Approvals.Count);
+        Assert.All(model.Approvals, approval =>
+        {
+            Assert.Equal(Connection, approval.Connection);
+            Assert.Contains("Supervisor", approval.Prompt);
+            Assert.Contains("Require evidence", approval.Prompt);
+            Assert.Contains("42", approval.Evidence);
+            Assert.Contains("Do not reject only because completed findings", approval.Prompt);
+        });
+        if (kind == LoopChainAction.TaskType)
+        {
+            Assert.Contains("Authorize sub-agent task", model.Approvals[0].Prompt);
+            Assert.DoesNotContain("Proposed result", model.Approvals[0].Evidence);
+            Assert.Contains("Approve sub-agent result", model.Approvals[1].Prompt);
+            Assert.Contains("Proposed result", model.Approvals[1].Evidence);
+        }
+        if (kind == LoopChainAction.AgentType) { Assert.Null(model.Messages); Assert.True(result["approved"]!.GetValue<bool>()); }
+        else Assert.True(result["done"]!.GetValue<bool>());
+    }
+
+    [Theory]
+    [InlineData("{\"approved\":false,\"reason\":\"Missing evidence\"}")]
+    [InlineData("{\"approved\":\"true\",\"reason\":\"ok\"}")]
+    [InlineData("{\"approved\":true}")]
+    [InlineData("not JSON")]
+    public async Task Denied_or_invalid_parent_approval_stops_the_child(string decision)
+    {
+        var child = new DashboardAgentProfile { Name = "Worker" };
+        var model = new Gateway { ApprovalReply = decision };
+        var runner = new WorkflowAgentRunner(model, new Connections(true), null!, new Permissions(true), null!,
+            projectAgents: new Agents(new() { Agents = [child] }));
+        var action = new LoopChainAction(LoopChainAction.TaskType, "Work", "result", agentProvider: LoopChainAction.AutomaticAgent,
+            connectionId: Connection, model: "test-model", agentId: child.Id);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, action, null, default));
+        Assert.Null(model.Messages);
+        Assert.Single(model.Approvals);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Parent_rejection_blocks_tool_execution_and_final_results(bool tool)
+    {
+        var child = new DashboardAgentProfile { Name = "Worker" };
+        var model = new Gateway(tool ? Call("job_authoring_guide", "{}") : new JsonObject { ["content"] = "{\"done\":true}" });
+        model.ApprovalReplies.Enqueue("{\"approved\":true,\"reason\":\"Task authorized\"}");
+        model.ApprovalReplies.Enqueue("{\"approved\":false,\"reason\":\"Outside task scope\"}");
+        var runner = new WorkflowAgentRunner(model, new Connections(true), null!, new Permissions(true), null!,
+            projectAgents: new Agents(new() { Agents = [child] }));
+        var action = new LoopChainAction(LoopChainAction.TaskType, "Work", "result", agentProvider: LoopChainAction.AutomaticAgent,
+            connectionId: Connection, model: "test-model", agentId: child.Id);
+        var events = new List<AgentActivity>();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, action, null, default, events.Add));
+        Assert.Contains("Outside task scope", error.Message);
+        Assert.DoesNotContain(events, e => e.Kind is "tool_started" or "completed");
+        Assert.Equal(2, model.Approvals.Count);
+    }
+
+    [Fact]
+    public void Hierarchy_rejects_cycles_missing_parents_and_parent_deletion()
+    {
+        var parent = new DashboardAgentProfile { Name = "Parent" };
+        var child = new DashboardAgentProfile { Name = "Child", ParentAgentId = parent.Id };
+        var catalog = new ProjectAgentCatalog { Agents = [parent, child] };
+        catalog.Validate();
+        parent.ParentAgentId = child.Id;
+        Assert.Throws<ArgumentException>(catalog.Validate);
+        parent.ParentAgentId = null;
+        catalog.Agents.Remove(parent);
+        Assert.Throws<ArgumentException>(catalog.Validate);
+        child.ParentAgentId = child.Id;
+        Assert.Throws<ArgumentException>(catalog.Validate);
+        child.ParentAgentId = null;
+        catalog.Validate();
+        Assert.Equal(DashboardSettings.DefaultAgentId, child.EffectiveParentAgentId);
+    }
+
+    private sealed class Agents(ProjectAgentCatalog catalog) : IProjectAgentStore
+    {
+        public ProjectAgentCatalog Catalog => catalog;
+        public Task<ProjectAgentCatalog> GetAsync(Guid id, CancellationToken ct = default) => Task.FromResult(catalog);
+        public Task SaveAsync(Guid id, ProjectAgentCatalog value, CancellationToken ct = default) => throw new NotSupportedException();
+    }
     private static readonly Guid Connection = Guid.NewGuid();
     private static LoopChainAction Action() => new(LoopChainAction.TaskType, "Define requirements", "requirements",
         agentProvider: LoopChainAction.AutomaticAgent, connectionId: Connection, model: "test-model");
@@ -217,6 +334,9 @@ public sealed class WorkflowAgentRunnerTests
     {
         private readonly Queue<JsonObject> _replies = new(replies);
         public int Resets;
+        public Queue<string> ApprovalReplies = new();
+        public string ApprovalReply = "{\"approved\":true,\"reason\":\"Within the assigned task\"}";
+        public List<(Guid Connection, string Prompt, string Evidence)> Approvals = [];
         public bool Block;
         public string? Progress;
         public JsonArray? Messages;
@@ -225,6 +345,11 @@ public sealed class WorkflowAgentRunnerTests
         public ValueTask ResetSessionAsync() { Resets++; return ValueTask.CompletedTask; }
         public async Task<JsonObject> CompleteAsync(Guid connectionId, string model, JsonArray messages, JsonArray tools, CancellationToken ct, Action<string>? report = null)
         {
+            if (messages[0]!["content"]!.ToString().StartsWith("You are the parent agent responsible"))
+            {
+                Approvals.Add((connectionId, messages[0]!["content"]!.ToString(), messages[1]!["content"]!.ToString()));
+                return new JsonObject { ["content"] = ApprovalReplies.Count > 0 ? ApprovalReplies.Dequeue() : ApprovalReply };
+            }
             Messages = (JsonArray)messages.DeepClone(); Tools = tools;
             if (Progress is not null) report?.Invoke(Progress);
             Started.TrySetResult();

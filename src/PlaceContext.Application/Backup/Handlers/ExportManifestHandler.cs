@@ -131,7 +131,7 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
                 ScoringGateChainAction score => new ChainActionManifest(score.Type, InputField: score.InputField, OutputField: score.OutputField, Criteria: score.Criteria, PassScore: score.PassScore, MinimumConfidence: score.MinimumConfidence, StopOnFailure: score.StopOnFailure),
                 RepeatFlowChainAction repeat => new ChainActionManifest(repeat.Type, UntilCondition: repeat.UntilCondition, MaxAttempts: repeat.MaxAttempts),
                 LoopChainAction loop => new ChainActionManifest(loop.Type,
-                    Instructions: loop.Instructions, ResponseField: loop.ResponseField, ResponseType: loop.ResponseType, AgentProvider: loop.AgentProvider, ConnectionId: loop.ConnectionId, Model: loop.Model),
+                    Instructions: loop.Instructions, ResponseField: loop.ResponseField, ResponseType: loop.ResponseType, AgentProvider: loop.AgentProvider, ConnectionId: loop.ConnectionId, Model: loop.Model, AgentId: loop.AgentId),
                 SendEmailChainAction email => new ChainActionManifest(
                     SendEmailChainAction.ActionType,
                     email.Recipient,

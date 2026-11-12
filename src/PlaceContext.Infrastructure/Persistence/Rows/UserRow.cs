@@ -24,6 +24,7 @@ public sealed class UserRow : ITenantOwned
         get; set;
     }
     public string Role { get; set; } = "Member";   // UserRole name
+    public Guid[]? AssignedProjectIds { get; set; }
     /// <summary>
     /// The tenant's bootstrap administrator — the first real (human-password) Owner, stamped by
     /// /setup (<c>AuthService.CreateFirstAdminAsync</c>) or by the AddDefaultAdminAndRoleDefinitions

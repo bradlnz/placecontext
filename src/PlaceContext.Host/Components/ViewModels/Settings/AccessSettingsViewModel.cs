@@ -45,6 +45,13 @@ public sealed class AccessSettingsViewModel(
     public Guid? Expanded;
     public UserPermissionsView? Matrix;
     public Guid? ConfirmRemoveId;
+    public Guid? ProjectMemberId;
+    public IReadOnlyList<ProjectSummaryView> AssignmentProjects = [];
+    public HashSet<Guid> AssignedProjects = [];
+    public bool AllProjects;
+    public bool LoadingProjects;
+    public bool ProjectsLoaded;
+    public string? ProjectError;
     public string? PendingScrollId;
 
     public Guid? EditRoleId;
@@ -108,6 +115,48 @@ public sealed class AccessSettingsViewModel(
         Members = await InScopeAsync<IMembershipService, IReadOnlyList<MemberView>>(service =>
             service.ListMembersAsync()
         );
+
+    public async Task EditProjectsAsync(Guid userId)
+    {
+        if (Busy || LoadingProjects) return;
+        ProjectMemberId = userId;
+        LoadingProjects = true;
+        ProjectsLoaded = false;
+        ProjectError = null;
+        AssignmentProjects = [];
+        AssignedProjects = [];
+        try
+        {
+            AssignmentProjects = await InScopeAsync<PlaceContextService, IReadOnlyList<ProjectSummaryView>>(s => s.GetProjectsAsync());
+            var assigned = await InScopeAsync<IProjectAssignments, IReadOnlyList<Guid>?>(s => s.GetAsync(userId));
+            AllProjects = assigned is null;
+            AssignedProjects = assigned?.ToHashSet() ?? [];
+            ProjectsLoaded = true;
+        }
+        catch (Exception ex) { ProjectError = ex.Message; }
+        finally { LoadingProjects = false; }
+    }
+
+    public void ToggleProject(Guid projectId, bool selected)
+    {
+        if (Busy || LoadingProjects) return;
+        if (selected) AssignedProjects.Add(projectId); else AssignedProjects.Remove(projectId);
+    }
+
+    public async Task SaveProjectsAsync()
+    {
+        if (ProjectMemberId is not { } userId || Busy || LoadingProjects || !ProjectsLoaded) return;
+        Busy = true;
+        ProjectError = null;
+        try
+        {
+            await InScopeAsync<IProjectAssignments>(s => s.SaveAsync(userId, AllProjects ? null : AssignedProjects.Intersect(AssignmentProjects.Select(p => p.Id)).ToArray()));
+            Message = "Project access updated.";
+            ProjectMemberId = null;
+        }
+        catch (Exception ex) { ProjectError = ex.Message; }
+        finally { Busy = false; }
+    }
 
     public async Task LoadRolesAsync() =>
         Roles = await InScopeAsync<PlaceContextService, IReadOnlyList<RoleView>>(service =>

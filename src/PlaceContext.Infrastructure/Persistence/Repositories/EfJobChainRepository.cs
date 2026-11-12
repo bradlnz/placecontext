@@ -117,7 +117,7 @@ public sealed class EfJobChainRepository : IJobChainRepository
             responseField = loop.ResponseField,
             responseType = loop.ResponseType,
             agentProvider = loop.AgentProvider,
-            connectionId = loop.ConnectionId, model = loop.Model,
+            connectionId = loop.ConnectionId, model = loop.Model, agentId = loop.AgentId,
         },
         SendEmailChainAction email => new
         {
@@ -227,7 +227,8 @@ public sealed class EfJobChainRepository : IJobChainRepository
                 element.TryGetProperty("responseType", out var responseType) ? responseType.GetString() ?? LoopChainAction.TextResponse : LoopChainAction.TextResponse,
                 element.TryGetProperty("agentProvider", out var agentProvider) ? agentProvider.GetString() ?? LoopChainAction.ExternalAgent : LoopChainAction.ExternalAgent,
                 element.TryGetProperty("connectionId", out var connection) && connection.ValueKind == JsonValueKind.String ? connection.GetGuid() : null,
-                element.TryGetProperty("model", out var model) && model.ValueKind == JsonValueKind.String ? model.GetString() : null),
+                element.TryGetProperty("model", out var model) && model.ValueKind == JsonValueKind.String ? model.GetString() : null,
+                element.TryGetProperty("agentId", out var agentId) && agentId.ValueKind == JsonValueKind.String ? agentId.GetGuid() : null),
             SendEmailChainAction.ActionType => new SendEmailChainAction(
                 element.TryGetProperty("recipient", out var recipient) ? recipient.GetString() ?? "" : "",
                 element.TryGetProperty("recipientName", out var name) ? name.GetString() ?? "" : "",

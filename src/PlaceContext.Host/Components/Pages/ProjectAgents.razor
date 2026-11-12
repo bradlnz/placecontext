@@ -1,0 +1,228 @@
+@page "/project/{ProjectId:guid}/agents"
+@page "/project/{ProjectId:guid}/agents/{Section}"
+@using PlaceContext.Application.Access.Models
+@using PlaceContext.Application.Build
+@using PlaceContext.Host.Components.ViewModels
+@attribute [Authorize(Policy = Permission.ProjectsView)]
+@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@inject ProjectAgentsViewModel Vm
+@implements IDisposable
+
+<PageTitle>PlaceContext — @(Vm.Agent is { Id: var agentId } selected ? agentId == DashboardSettings.DefaultAgentId ? "Master agent" : selected.Name : "Agents")</PageTitle>
+
+@if (Vm.Loading)
+{
+    <Skeleton Kind="list" Rows="5" Padded />
+}
+else
+{
+    <div class="chains-page">
+        <header class="chains-head">
+            <div>
+                <h2>Agents</h2>
+                <p>Define how agents work across this project.</p>
+            </div>
+            <div class="head-actions">
+                <button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.LoadPageAsync(ProjectId, Section)">Refresh</button>
+                @if (Vm.CanManage)
+                {
+                    <button class="dcbtn primary" @onclick="Vm.CreateAgent"><AppIcon Kind="plus" /> New agent</button>
+                }
+            </div>
+        </header>
+
+        @if (Vm.Error is { } error) { <div class="status-message" role="alert">@error</div> }
+        @if (Vm.Notice is { } notice) { <div class="status-message" role="status">@notice</div> }
+
+        @if (!Vm.Agents.Any())
+        {
+            <div class="dccard empty-state">
+                <div class="empty-icon"><AppIcon Kind="agent" /></div>
+                <strong>No agents yet</strong>
+                <span>Choose instructions, workflow capabilities, data access and MCP connections.</span>
+            </div>
+        }
+        else
+        {
+            <section class="summary-strip" aria-label="Agent summary">
+                <div class="summary-count"><strong>@Vm.Agents.Count()</strong><span>agents</span></div>
+                <div class="summary-count"><strong>@Vm.Catalog.Agents.Count</strong><span>shared</span></div>
+                <div class="summary-count"><strong>@Vm.Agents.Sum(a => a.WorkflowIds.Count)</strong><span>workflow links</span></div>
+                <div class="summary-count"><strong>@Vm.Mcps.Count</strong><span>MCP connections</span></div>
+            </section>
+
+            <section class="agent-canvas" aria-label="Agent organisation chart">
+                <header class="canvas-toolbar">
+                    <div><strong>Agent canvas</strong><p>Select an agent to edit its system prompt and capabilities. Scroll to explore.</p></div>
+                    <span>@Vm.Agents.Count() agents</span>
+                </header>
+                <div class="canvas-viewport" tabindex="0" role="region" aria-label="Agent hierarchy. Scroll to see all agents.">
+                    <div class="agent-tree">
+                        @if (Vm.Agents.FirstOrDefault(a => a.Id == DashboardSettings.DefaultAgentId) is { } master)
+                        {
+                            <div class="agent-root">@AgentCard(master)</div>
+                        }
+                        @AgentChildren(DashboardSettings.DefaultAgentId, new HashSet<Guid>())
+                    </div>
+                </div>
+            </section>
+        }
+    </div>
+}
+
+@if (Vm.EditorOpen && Vm.Agent is { } agent)
+{
+    <div class="dcslide-scrim" @onclick="() => Vm.CloseEditor(Section)"></div>
+    <div class="dcslide slide-640" tabindex="-1" @onkeydown="OnKeyDown">
+        <div class="dcslide-head">
+            <div class="flex-min">
+                <div class="title-14">@(agent.Id == DashboardSettings.DefaultAgentId ? "Master agent" : Vm.Existing ? agent.Name : "New agent")</div>
+                <div class="sub-115">@(Vm.EditingPrivateAgent ? "Private dashboard agent. Changes apply to your dashboard conversations." : "Shared project agent. Changes apply to new runs and conversation turns.")</div>
+            </div>
+            <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseEditor(Section)"><AppIcon Kind="close" /></button>
+        </div>
+
+        <div class="dctabs editor-tabs" aria-label="Agent settings sections">
+            @foreach (var tab in new[] { "Overview", "System prompt", "Workflows", "Data", "MCPs" })
+            {
+                <button type="button" class="dctab @(Vm.AgentTab == tab ? "active" : "")" aria-pressed="@(Vm.AgentTab == tab)" disabled="@Vm.Busy" @onclick="() => Vm.AgentTab = tab">@tab</button>
+            }
+        </div>
+
+        <div class="dcslide-body editor-body">
+            @if (agent.Id == DashboardSettings.DefaultAgentId)
+            {
+                <p>The master agent coordinates workflows and the project agents assigned to their steps. Its instructions are private to you; its permissions still apply.</p>
+            }
+
+            <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Overview")">
+                <label for="project-agent-name">Agent name</label><input id="project-agent-name" class="dcinput" maxlength="60" @bind="agent.Name" disabled="@(!Vm.CanEdit || Vm.Busy)" />
+                @if (agent.Id != DashboardSettings.DefaultAgentId)
+                {
+                    <label for="project-agent-parent">Parent agent</label>
+                    <select id="project-agent-parent" class="dcinput" @bind="agent.ParentAgentId" disabled="@(!Vm.CanEdit || Vm.Busy)">
+                        <option value="">Master agent</option>
+                        @foreach (var parent in Vm.ParentAgents.OrderBy(a => a.Name)) { <option value="@parent.Id">@parent.DisplayName</option> }
+                    </select>
+                    <p>The parent approves this agent's work and handles its automatic workflow approval gates. Shared agents can report to other shared agents; private agents to your private agents.</p>
+                }
+                <label for="project-agent-connection">Model connection</label>
+                <select id="project-agent-connection" class="dcinput" value="@agent.ConnectionId" @onchange="e => Vm.SelectConnection(e.Value?.ToString())" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="@Guid.Empty">Runner's default model</option>@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select>
+                @if (agent.ConnectionId != Guid.Empty)
+                {
+                    <label for="project-agent-model">Model</label><select id="project-agent-model" class="dcinput" @bind="agent.Model" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="">Select model</option>@foreach (var model in Vm.Models) { <option>@model</option> }</select>
+                }
+            </div>
+
+            <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "System prompt")">
+                <label>System prompt</label>
+                <p>Define this agent's role, behavior and response style for chats and workflow steps. Changes apply on the next turn or run. Up to 8,000 characters.</p>
+                @if (Vm.CanEdit) { <div class="instructions-editor"><WorkflowInstructionsEditor @key="agent.Id" @ref="_instructions" Value="@agent.Instructions" Label="Agent system prompt" /></div> }
+                else { <RunOutput Value="@agent.Instructions" Language="markdown" Label="Agent system prompt" /> }
+            </div>
+
+            <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Workflows")">
+                <label for="agent-workflows">Workflow capabilities</label><select id="agent-workflows" class="dcinput" @bind="agent.WorkflowAccess" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="none">No access</option><option value="read">Inspect workflows, jobs and run output</option><option value="run">Inspect and run workflows and jobs</option><option value="manage">Create, edit, run and schedule</option></select>
+                <p>Limit the agent's workflow tools within your permissions. Workflow agent steps also apply their own tool limits.</p>
+                <fieldset disabled="@(!Vm.CanEdit || Vm.Busy || !Vm.CanViewWorkflows)"><legend>Linked workflows</legend>
+                    <p>Give this agent workflows to use as context. Links do not restrict access to other project workflows; the capabilities above still apply.</p>
+                    @if (!Vm.CanViewWorkflows) { <p>Workflow access is required to view and change links.</p> }
+                    else
+                    {
+                        @foreach (var workflow in Vm.Workflows.OrderBy(w => w.Name))
+                        {
+                            <label class="check"><input type="checkbox" checked="@agent.WorkflowIds.Contains(workflow.Id)" @onchange="e => Vm.ToggleWorkflow(workflow.Id, e.Value is true)" />@workflow.Name</label>
+                        }
+                        @foreach (var missing in agent.WorkflowIds.Where(id => !Vm.Workflows.Any(w => w.Id == id)).ToArray())
+                        {
+                            <label class="check"><input type="checkbox" checked @onchange="e => Vm.ToggleWorkflow(missing, false)" />Unavailable workflow — remove link</label>
+                        }
+                        @if (Vm.Workflows.Count == 0) { <p>No workflows in this project yet.</p> }
+                    }
+                </fieldset>
+            </div>
+
+            <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Data")">
+                <label for="agent-tables">Tables and charts</label><select id="agent-tables" class="dcinput" @bind="agent.TableAccess" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="none">No access</option><option value="read">Inspect tables and query data for charts</option></select>
+                <label for="agent-sources">Data sources</label><select id="agent-sources" class="dcinput" @bind="agent.SourceAccess" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="none">No access</option><option value="read">Read source metadata and search content</option><option value="manage">Read, search and configure sources</option></select>
+                <label for="agent-artifacts">Artifacts</label><select id="agent-artifacts" class="dcinput" @bind="agent.ArtifactAccess" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="none">No access</option><option value="read">List project artifacts</option></select>
+                <p>These permissions control the agent's data tools within your access. Workflow execution, run output and MCP tools have their own access settings.</p>
+            </div>
+
+            <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "MCPs")">
+                <p>Assign the connections this agent can use. MCP tools have their own external access.</p>
+                <fieldset disabled="@(!Vm.CanEdit || Vm.Busy)"><legend>MCP connections</legend>
+                    @foreach (var connection in Vm.Mcps)
+                    {
+                        <label class="check"><input type="checkbox" checked="@agent.McpConnectionIds.Contains(connection.Id)" disabled="@(!connection.Enabled && !agent.McpConnectionIds.Contains(connection.Id))" @onchange="e => Vm.ToggleMcp(connection.Id, e.Value is true)" />@connection.Name @(!connection.Enabled ? "(disabled)" : "")</label>
+                    }
+                    @foreach (var missing in agent.McpConnectionIds.Where(id => !Vm.Mcps.Any(c => c.Id == id)).ToArray()) { <label class="check"><input type="checkbox" checked @onchange="e => Vm.ToggleMcp(missing, false)" />Unavailable connection</label> }
+                    @if (Vm.Mcps.Count == 0) { <p>No MCP connections in this project.</p> }
+                    <a href="/settings/mcp">Manage MCP connections</a>
+                </fieldset>
+            </div>
+        </div>
+
+        <div class="dcslide-foot">
+            @if (Vm.Error is { } editorError) { <div class="editor-err" role="alert">@editorError</div> }
+            <button class="dcbtn" @onclick="() => Vm.CloseEditor(Section)">Cancel</button>
+            @if (Vm.CanEdit)
+            {
+                <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="SaveAsync">@(Vm.Busy ? "Saving…" : "Save agent")</button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public string? Section { get; set; }
+    private RenderFragment AgentChildren(Guid parentId, HashSet<Guid> ancestors) => @<text>
+        @if (!ancestors.Contains(parentId) && Vm.Agents.Any(a => a.EffectiveParentAgentId == parentId))
+        {
+            <ul class="agent-children" aria-label="Child agents">
+                @foreach (var child in Vm.Agents.Where(a => a.EffectiveParentAgentId == parentId).OrderBy(a => a.Name))
+                {
+                    <li @key="child.Id" class="agent-branch">
+                        <div class="agent-root">@AgentCard(child)</div>
+                        @AgentChildren(child.Id, new HashSet<Guid>(ancestors) { parentId })
+                    </li>
+                }
+            </ul>
+        }
+    </text>;
+
+    private RenderFragment AgentCard(DashboardAgentProfile profile) => @<article class="agent-node @(profile.Id == DashboardSettings.DefaultAgentId ? "master-node" : "")" data-agent-id="@profile.Id">
+        <button class="agent-node-main" @onclick="() => Vm.OpenAgent(profile.Id)" aria-label="@($"Open {profile.DisplayName}")">
+            <span class="node-heading"><span class="node-icon"><AppIcon Kind="agent" /></span><strong>@profile.DisplayName</strong></span>
+            <span class="node-role">@(profile.Id == DashboardSettings.DefaultAgentId ? "Coordinates the project" : Vm.Dashboard?.Agents.Any(a => a.Id == profile.Id) == true ? "Private agent" : "Project agent")</span>
+            <span class="node-description">@(string.IsNullOrWhiteSpace(profile.Instructions) ? "Configure its system prompt and capabilities." : profile.Instructions)</span>
+            <span class="node-capabilities"><span>@profile.WorkflowIds.Count workflows</span><span>@profile.McpConnectionIds.Count MCPs</span></span>
+        </button>
+        <footer class="node-actions">
+            <a class="dcbtn" href="/project/@ProjectId/dashboard?agent=@profile.Id" aria-label="@($"Use {profile.DisplayName}")"><AppIcon Kind="play" /> Use agent</a>
+            <button class="icon-action" aria-label="@($"{(Vm.CanEditAgent(profile) ? "Edit" : "View")} {profile.DisplayName}")" @onclick="() => Vm.OpenAgent(profile.Id)"><AppIcon Kind="edit" /></button>
+            @if (Vm.CanDeleteAgent(profile))
+            {
+                @if (Vm.ConfirmDeleteId == profile.Id)
+                {
+                    <button class="dcbtn" @onclick="() => Vm.DeleteAgentAsync(profile.Id, Section)">Delete</button>
+                    <button class="dcbtn" @onclick="() => Vm.ConfirmDeleteId = null">Keep</button>
+                }
+                else
+                {
+                    <button class="icon-action" aria-label="@($"Delete {profile.DisplayName}")" @onclick="() => Vm.ConfirmDeleteId = profile.Id"><AppIcon Kind="trash" /></button>
+                }
+            }
+        </footer>
+    </article>;
+    private WorkflowInstructionsEditor? _instructions;
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override Task OnParametersSetAsync() => Vm.LoadPageAsync(ProjectId, Section);
+    private async Task SaveAsync()
+    {
+        await Vm.SaveAgentAsync(_instructions is null ? "" : await _instructions.ReadAsync(), Section);
+    }
+    private void OnKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape") Vm.CloseEditor(Section); }
+    public void Dispose() => Vm.Detach();
+}

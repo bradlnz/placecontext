@@ -1,0 +1,31 @@
+.build-chat :is(.chat-message) { margin: 0 0 30px; }
+.build-chat :is(.message-author) { display: flex; gap: 9px; align-items: center; margin-bottom: 12px; font-size: 12px; }
+.build-chat :is(.message-author>span) { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--brand-bg); color: var(--brand); }
+.build-chat :is(.user .message-author>span) { background: var(--card-2); color: var(--text-3); }
+.build-chat :is(.message-author  svg) { width: 16px; height: 16px; }
+.build-chat :is(.message-text) { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; font-size: 14px; color: var(--text-2); }
+.build-chat :is(.message-markdown) { white-space: normal; min-width: 0; }
+.build-chat :is(.message-markdown  > :first-child) { margin-top: 0; }
+.build-chat :is(.message-markdown  > :last-child) { margin-bottom: 0; }
+.build-chat :is(.message-markdown  p) { margin: 0 0 12px; }
+.build-chat :is(.message-markdown  :is(h1,h2,h3,h4,h5,h6)) { margin: 20px 0 10px; line-height: 1.4; color: var(--text); }
+.build-chat :is(.message-markdown  h1) { font-size: 22px; }
+.build-chat :is(.message-markdown  h2) { font-size: 19px; }
+.build-chat :is(.message-markdown  :is(h3,h4,h5,h6)) { font-size: 16px; }
+.build-chat :is(.message-markdown  :is(ul,ol)) { margin: 0 0 12px; padding-left: 24px; }
+.build-chat :is(.message-markdown  li) { margin: 4px 0; }
+.build-chat :is(.message-markdown  li > :is(ul,ol)) { margin-bottom: 0; }
+.build-chat :is(.message-markdown  a) { color: var(--brand); text-decoration: underline; }
+.build-chat :is(.message-markdown  blockquote) { margin: 12px 0; padding-left: 16px; border-left: 3px solid var(--border-2); }
+.build-chat :is(.message-markdown  code) { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .9em; background: var(--chat-surface); padding: 2px 5px; border-radius: 4px; }
+.build-chat :is(.message-markdown  pre) { overflow: auto; padding: 14px; border-radius: 8px; background: var(--chat-surface); white-space: pre; }
+.build-chat :is(.message-markdown  pre code) { padding: 0; background: none; }
+.build-chat :is(.message-markdown  table) { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 12px 0; }
+.build-chat :is(.message-markdown  :is(th,td)) { padding: 8px 12px; border: 1px solid var(--border); text-align: left; }
+.build-chat :is(.message-markdown  th) { background: var(--chat-surface); color: var(--text); }
+.build-chat :is(.message-markdown  img) { max-width: 100%; }
+.build-chat :is(.user) { display: flex; flex-direction: column; align-items: flex-end; }
+.build-chat :is(.user .message-author) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.build-chat :is(.user .message-text) { max-width: 85%; box-sizing: border-box; background: var(--chat-surface); padding: 12px 18px; border-radius: 24px; }
+.build-chat :is(.message-image) { max-width: min(260px, 100%); max-height: 240px; border-radius: 10px; margin: 10px 10px 0 0; }
+.build-chat :is(.tool-call,.tool-result) { border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; margin: 8px 0 18px; font-size: 11px; color: var(--text-3); }

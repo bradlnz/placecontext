@@ -1,0 +1,66 @@
+@using System.Text.Json.Nodes
+@using PlaceContext.Application.Build
+@using PlaceContext.Host.Components.ViewModels
+<div id="dcshell" data-theme="light">
+    <main class="build-chat shared-conversation">
+        <header class="shared-header"><div><strong>PlaceContext</strong><span>Shared conversation</span></div><h1>@Conversation.Title</h1><p>Snapshot @Conversation.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC · Expires @Conversation.ExpiresAt.ToString("yyyy-MM-dd HH:mm") UTC</p></header>
+        <div class="shared-body">
+            <section class="chat-messages" aria-label="Conversation">
+                @foreach (var message in Conversation.Messages.OfType<JsonNode>())
+                {
+                    var role = BuildChatViewModel.Role(message);
+                    if (role == "tool")
+                    { <details class="tool-result"><summary>Action result</summary><pre>@BuildChatViewModel.Text(message)</pre></details> }
+                    else
+                    {
+                        <article class="chat-message @role">
+                            <div class="message-author"><span>@if (role == "user") { <AppIcon Kind="human" /> } else { <AssistantAvatar /> }</span><strong>@(role == "user" ? "You" : "Assistant")</strong></div>
+                            @if (role == "assistant") { <div class="message-text message-markdown">@((MarkupString)BuildChatViewModel.FormatReply(BuildChatViewModel.Text(message)))</div> }
+                            else { <div class="message-text">@BuildChatViewModel.Text(message)</div> }
+                            @foreach (var url in BuildChatViewModel.ImageUrls(message).Where(url => url.StartsWith("data:image/png;base64,", StringComparison.Ordinal) || url.StartsWith("data:image/jpeg;base64,", StringComparison.Ordinal) || url.StartsWith("data:image/webp;base64,", StringComparison.Ordinal)))
+                            { <img class="message-image" src="@url" alt="Image attached to the conversation" /> }
+                        </article>
+                    }
+                }
+            </section>
+            @if (Conversation.Run is not null || Conversation.Artifacts.Count > 0)
+            {
+                <aside class="shared-workspace" aria-label="Workflow result">
+                    @if (Conversation.Artifacts.Count > 0)
+                    {
+                        <h2>Artifacts</h2>
+                        @foreach (var (file, index) in Conversation.Artifacts.Select((file, index) => (file, index)))
+                        {
+                            <details class="shared-artifact" open="@(index == 0)">
+                                <summary>@file.Title</summary>
+                                <a class="dcbtn" href="@ArtifactUrl(index)" target="_blank" rel="noopener">Open file</a>
+                                @if (file.ContentType.Split(';')[0].Trim().Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+                                { <div id="@($"shared-pdf-{index}")" class="artifact-pdf-pages" data-shared-pdf="@ArtifactUrl(index)" aria-label="PDF pages"><p>Preparing PDF pages…</p></div> }
+                                else if (file.ContentType is "image/png" or "image/jpeg" or "image/webp")
+                                { <img class="shared-image" src="@ArtifactUrl(index)" alt="@file.Title" /> }
+                            </details>
+                        }
+                    }
+                    @if (Conversation.Run is { } run)
+                    {
+                        <h2>@run.ChainName</h2><p class="shared-status">@run.Status</p>
+                        @if (run.InputRequest?.Instructions is { } question) { <p>@question</p> }
+                        @foreach (var step in run.Steps)
+                        {
+                            <details class="tool-result"><summary>@(step.Index + 1). @step.JobName · @step.Status</summary>
+                                @if (step.Output is { } output) { <pre>@output</pre> }
+                                @if (step.Error is { } error) { <p>@error</p> }
+                            </details>
+                        }
+                        @if (run.FinalOutput is { } final) { <details class="tool-result"><summary>Workflow output</summary><pre>@final</pre></details> }
+                    }
+                </aside>
+            }
+        </div>
+    </main>
+</div>
+@code {
+    [Parameter, EditorRequired] public SharedConversation Conversation { get; set; } = null!;
+    [Parameter, EditorRequired] public string Token { get; set; } = "";
+    private string ArtifactUrl(int index) => $"/share/conversations/{Uri.EscapeDataString(Token)}/artifacts/{index}";
+}

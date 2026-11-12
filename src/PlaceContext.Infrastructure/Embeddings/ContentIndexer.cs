@@ -55,6 +55,7 @@ public sealed class ContentIndexer : IContentIndexer
     public async Task IndexManyAsync(
         Guid projectId, string kind, IReadOnlyList<(string SourceKey, string Text)> items, CancellationToken ct = default)
     {
+        await _db.EnsureProjectAccessAsync(projectId, ct);
         if (!IsEnabled || items.Count == 0)
         {
             return;
@@ -129,6 +130,7 @@ public sealed class ContentIndexer : IContentIndexer
     public async Task<IReadOnlyList<ContentSearchHit>> SearchAsync(
         Guid projectId, string query, int take = 10, string? kind = null, CancellationToken ct = default)
     {
+        await _db.EnsureProjectAccessAsync(projectId, ct);
         if (!IsEnabled || string.IsNullOrWhiteSpace(query) || !await EnsureReadyAsync(ct))
         {
             return Array.Empty<ContentSearchHit>();

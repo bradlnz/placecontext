@@ -361,14 +361,6 @@ public sealed partial class JobChainsViewModel
         _navigation.NavigateTo(PageRoutes.DashboardRun(ProjectId, chainRunId, _pendingSubmissionId));
     }
 
-    public void OpenRunInChat(ChainRunView run)
-    {
-        if (run.ProjectId == ProjectId)
-        {
-            _navigation.NavigateTo(PageRoutes.DashboardRun(ProjectId, run.Id));
-        }
-    }
-
     // ── Cancel ────────────────────────────────────────────────────────────────────────────────
     public async Task CancelChainRunAsync(Guid chainRunId)
     {
@@ -421,6 +413,7 @@ public sealed partial class JobChainsViewModel
 
     public async Task OpenChainRunAsync(ChainRunView run)
     {
+        if (run.ProjectId != ProjectId) return;
         StopPolling();
         StepOutputError = null;
         ClearHumanConfirmation();

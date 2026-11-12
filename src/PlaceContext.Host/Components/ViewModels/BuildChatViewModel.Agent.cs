@@ -14,6 +14,9 @@ public sealed partial class BuildChatViewModel
     public string? AgentError { get; private set; }
     public string? AgentNotice { get; private set; }
     public DashboardSettings Dashboard { get; private set; } = new();
+    public IReadOnlyList<DashboardAgentProfile> ProjectAgents { get; private set; } = [];
+    public IEnumerable<DashboardAgentProfile> DashboardAgents => Dashboard.Agents;
+    public IEnumerable<DashboardAgentProfile> AvailableAgents => Dashboard.Agents.Concat(ProjectAgents);
     public DashboardSettings AgentDraft { get; private set; } = new();
     public Guid AgentEditId { get; set; }
     public DashboardAgentProfile? EditedAgent => AgentDraft.Agents.FirstOrDefault(a => a.Id == AgentEditId);
@@ -47,8 +50,6 @@ public sealed partial class BuildChatViewModel
             return;
         }
         AgentOpen = true;
-        CloseWorkflowPicker();
-        OpenWorkspace();
         AgentLoading = true;
         AgentError = AgentNotice = null;
         AgentPrompt = AgentTools = AgentMemory = "";
@@ -71,8 +72,8 @@ public sealed partial class BuildChatViewModel
             }
             Dashboard = settings;
             AgentDraft = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(settings))!;
-            AgentEditId = Conversation.AgentId ?? Guid.Empty;
-            if (EditedAgent is { Id: var id, ConnectionId: var connectionId } profile && id == Guid.Empty && connectionId == Guid.Empty)
+            AgentEditId = Conversation.AgentId ?? DashboardSettings.DefaultAgentId;
+            if (EditedAgent is { Id: var id, ConnectionId: var connectionId } profile && id == DashboardSettings.DefaultAgentId && connectionId == Guid.Empty)
             {
                 profile.ConnectionId = Conversation.ConnectionId;
                 profile.Model = Conversation.Model;
@@ -94,27 +95,32 @@ public sealed partial class BuildChatViewModel
         }
     }
 
-    public void ShowWorkspace() => AgentOpen = false;
+    public void CloseAgent() => AgentOpen = false;
 
     public void SelectAgent(string? value)
     {
-        if (Locked || !Guid.TryParse(value, out var id) || !Dashboard.Agents.Any(a => a.Id == id))
+        if (Locked || !Guid.TryParse(value, out var id) || !DashboardAgents.Any(a => a.Id == id))
         {
             return;
         }
         Conversation.AgentId = id;
-        if (id == Guid.Empty && Dashboard.Agents.First(a => a.Id == id).ConnectionId == Guid.Empty)
+        if (id == DashboardSettings.DefaultAgentId && DashboardAgents.First(a => a.Id == id).ConnectionId == Guid.Empty)
         {
             SelectDefaultModel();
         }
         ApplyAgentModel();
         AgentOpen = false;
+        if (WorkflowPickerOpen)
+        {
+            _ = OpenWorkflowPickerAsync();
+        }
     }
 
     private void ApplyAgentModel()
     {
-        var profile = Dashboard.Agents.FirstOrDefault(a => a.Id == (Conversation.AgentId ?? Guid.Empty));
-        if (profile is { Id: var id, ConnectionId: var connectionId } && id == Guid.Empty && connectionId == Guid.Empty)
+        var profile = AvailableAgents.FirstOrDefault(a => a.Id == (Conversation.AgentId ?? DashboardSettings.DefaultAgentId));
+        if (profile is { ConnectionId: var connectionId } && connectionId == Guid.Empty
+            && (profile.Id == DashboardSettings.DefaultAgentId || ProjectAgents.Any(a => a.Id == profile.Id)))
         {
             // Existing chats retain their model until the default agent is configured.
             return;
@@ -166,8 +172,10 @@ public sealed partial class BuildChatViewModel
 
     public void AddDashboardAction()
     {
+        if (Locked || AgentLoading) return;
         var action = new DashboardAction(NewActionTitle.Trim(), NewActionPrompt.Trim());
-        var proposed = new DashboardSettings { Instructions = AgentDraft.Instructions, Agents = AgentDraft.Agents, Actions = [.. AgentDraft.Actions, action] };
+        var proposed = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(AgentDraft))!;
+        proposed.Actions.Add(action);
         try
         {
             proposed.Validate();
@@ -179,6 +187,89 @@ public sealed partial class BuildChatViewModel
         {
             AgentError = ex.Message;
         }
+    }
+
+    public void EditDashboardAction(Guid id, string title, string prompt)
+    {
+        if (Locked || AgentLoading) return;
+        var index = AgentDraft.Actions.FindIndex(a => a.Id == id);
+        if (index >= 0) AgentDraft.Actions[index] = AgentDraft.Actions[index] with { Title = title, Prompt = prompt };
+    }
+
+    public void RemoveDashboardAction(DashboardAction action)
+    {
+        if (Locked || AgentLoading) return;
+        AgentDraft.Actions.Remove(action);
+        AgentDraft.TileOrder.Remove(action.Id.ToString());
+        AgentDraft.TileRowStarts.Remove(action.Id.ToString());
+        AgentDraft.TileSizes.Remove(action.Id.ToString());
+    }
+
+    public async Task MoveDashboardTileAsync(string key, int position, bool newRow = false)
+    {
+        if (Locked || AgentLoading || AgentOpen) return;
+        var order = Dashboard.OrderedTiles().ToList();
+        var index = order.IndexOf(key);
+        if (index < 0 || position < 0 || position >= order.Count || index == position && !newRow && !Dashboard.TileRowStarts.Contains(key)) return;
+        order.RemoveAt(index);
+        order.Insert(position, key);
+        var saved = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(Dashboard))!;
+        saved.TileOrder = order;
+        saved.TileRowStarts.Remove(key);
+        if (newRow) saved.TileRowStarts.Add(key);
+        await SaveDashboardAsync(saved);
+    }
+
+    [Microsoft.JSInterop.JSInvokable]
+    public async Task ResizeDashboardTileAsync(string key, string size)
+    {
+        if (Locked || AgentLoading || AgentOpen || !Dashboard.TileKeys().Contains(key)
+            || size is not ("square" or "wide" or "tall" or "large") || Dashboard.TileSize(key) == size) return;
+        var saved = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(Dashboard))!;
+        saved.TileSizes[key] = size;
+        await SaveDashboardAsync(saved);
+    }
+
+    private async Task SaveDashboardAsync(DashboardSettings settings)
+    {
+        AgentLoading = true;
+        Error = null;
+        var projectId = Conversation.ProjectId;
+        try
+        {
+            await store.SaveSettingsAsync(projectId, settings);
+            if (Conversation.ProjectId == projectId) Dashboard = settings;
+        }
+        catch (Exception ex)
+        {
+            if (Conversation.ProjectId == projectId) Error = ex.Message;
+        }
+        finally
+        {
+            AgentLoading = false;
+            NotifyStateChanged();
+        }
+    }
+
+    public bool IsChartPinned(ChartPreview chart) => Dashboard.Charts.Any(c => c.Live == chart.Live && c.Sql == chart.Sql
+        && ChartSpec.TryParse(c.ChartJson) is { } spec && spec.Title == chart.Spec.Title && spec.Type == chart.Spec.Type);
+
+    public async Task PinDashboardChartAsync(ChartPreview chart)
+    {
+        if (Locked || AgentLoading || !chart.Live || IsChartPinned(chart)) return;
+        var saved = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(Dashboard))!;
+        saved.Charts.Add(new(chart.Spec.ToJson(), chart.Source) { Live = true, Sql = chart.Sql });
+        await SaveDashboardAsync(saved);
+        await RefreshDashboardChartsAsync();
+    }
+
+    public void RemoveDashboardChart(DashboardChart chart)
+    {
+        if (Locked || AgentLoading) return;
+        AgentDraft.Charts.Remove(chart);
+        AgentDraft.TileOrder.Remove(chart.Id.ToString());
+        AgentDraft.TileRowStarts.Remove(chart.Id.ToString());
+        AgentDraft.TileSizes.Remove(chart.Id.ToString());
     }
 
     public async Task SaveAgentAsync()
@@ -254,6 +345,7 @@ public sealed partial class BuildChatViewModel
             return;
         }
         AgentOpen = false;
+        OpenChat();
         Draft = prompt;
         await SendAsync();
     }

@@ -29,8 +29,9 @@ public sealed class ChainQueueTests
         await connection.OpenAsync();
         await using (var setup = new NpgsqlCommand($"""
             CREATE SCHEMA "{schema}";
+            {PostgresProjectAccess.Schema}
             CREATE TABLE job_chains ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "ProjectId" uuid NOT NULL);
-            CREATE TABLE chain_runs ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "Status" text NOT NULL, "FinishedAt" timestamptz);
+            CREATE TABLE chain_runs ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "Status" text NOT NULL, "FinishedAt" timestamptz, "ProjectId" uuid);
             """, connection))
         {
             await setup.ExecuteNonQueryAsync();
@@ -154,7 +155,7 @@ public sealed class ChainQueueTests
             var established = await queues.SubmitAsync(second.Id, payload, null);
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE rpc_chain_submissions SET \"ExpiresAt\" = now() - interval '1 second' WHERE \"Id\" IN ({expired.TrackingId}, {stale.TrackingId}, {established.TrackingId})");
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE rpc_chain_submissions SET \"Status\" = 'Running', \"HeartbeatAt\" = now() - interval '3 minutes' WHERE \"Id\" = {stale.TrackingId}");
-            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chain_runs VALUES ({established.ChainRunId}, {tenant.TenantId}, 'AwaitingInput', NULL)");
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chain_runs (\"Id\", \"TenantId\", \"Status\", \"FinishedAt\") VALUES ({established.ChainRunId}, {tenant.TenantId}, 'AwaitingInput', NULL)");
             Assert.Equal(established.TrackingId, Assert.Single(await firstWorker.Claim()));
             Assert.Equal("Expired", (await queues.GetMessageAsync(second.Id, expired.TrackingId))!.Status);
             Assert.Equal("Expired", (await queues.GetMessageAsync(second.Id, stale.TrackingId))!.Status);
@@ -171,13 +172,13 @@ public sealed class ChainQueueTests
             Assert.Null(await queues.GetMessageAsync(second.Id, expired.TrackingId));
             Assert.NotNull(await queues.GetMessageAsync(queue.Id, receipt.TrackingId));
             Assert.NotNull(await queues.GetMessageAsync(second.Id, established.TrackingId));
-            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chain_runs VALUES ({receipt.ChainRunId}, {tenant.TenantId}, 'Succeeded', now())");
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chain_runs (\"Id\", \"TenantId\", \"Status\", \"FinishedAt\") VALUES ({receipt.ChainRunId}, {tenant.TenantId}, 'Succeeded', now())");
             Assert.Equal("Succeeded", (await queues.GetMessageAsync(queue.Id, receipt.TrackingId))!.Status);
             await Assert.ThrowsAsync<ArgumentException>(() => queues.SaveAsync(null, project, chain, "bad retry", true, 60, 1, 0));
             await queues.SaveAsync(second.Id, project, chain, "retrying", true, 3600, 1, 2, 60);
             var retry = await queues.SubmitAsync(second.Id, payload, "retry-me");
             Assert.Equal(retry.TrackingId, Assert.Single(await firstWorker.Claim()));
-            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chain_runs VALUES ({retry.ChainRunId}, {tenant.TenantId}, 'Failed', now())");
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chain_runs (\"Id\", \"TenantId\", \"Status\", \"FinishedAt\") VALUES ({retry.ChainRunId}, {tenant.TenantId}, 'Failed', now())");
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE rpc_chain_submissions SET \"Status\" = 'AwaitingInput' WHERE \"Id\" = {retry.TrackingId}");
             Assert.Equal("RetryPending", (await queues.GetMessageAsync(second.Id, retry.TrackingId))!.Status);
             var reconcilers = await Task.WhenAll(firstWorker.Claim(), secondWorker.Claim());
@@ -192,7 +193,7 @@ public sealed class ChainQueueTests
             Assert.Equal("Queued", (await queues.GetMessageAsync(second.Id, retry.TrackingId))!.Status);
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE rpc_chain_submissions SET \"NextAttemptAt\" = now() WHERE \"Id\" = {retry.TrackingId}");
             Assert.Equal(retry.TrackingId, Assert.Single(await firstWorker.Claim()));
-            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chain_runs VALUES ({next.ChainRunId}, {tenant.TenantId}, 'Failed', now())");
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chain_runs (\"Id\", \"TenantId\", \"Status\", \"FinishedAt\") VALUES ({next.ChainRunId}, {tenant.TenantId}, 'Failed', now())");
             Assert.Empty(await firstWorker.Claim());
             var exhausted = (await queues.GetMessageAsync(second.Id, retry.TrackingId))!;
             Assert.Equal("Failed", exhausted.Status);

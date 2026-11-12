@@ -26,6 +26,7 @@ public sealed class RunStatusReconciliationTests
         await connection.OpenAsync();
         await using (var setup = new NpgsqlCommand($"""
             CREATE SCHEMA {schema};
+            {PostgresProjectAccess.Schema}
             CREATE TABLE chain_runs (
               "Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "ChainId" uuid NOT NULL, "ProjectId" uuid NOT NULL,
               "ChainName" text NOT NULL, "Status" text NOT NULL, "StepsJson" text NOT NULL, "FinalOutput" text,
@@ -34,7 +35,7 @@ public sealed class RunStatusReconciliationTests
               "ContinuationOverrides" text, "InputRequest" text, "InitiatedBy" uuid);
             CREATE TABLE job_runs ("Id" uuid PRIMARY KEY,"TenantId" uuid,"JobId" uuid,"ProjectId" uuid,"Status" text,
               "OriginalRunId" uuid,"AttemptNumber" int,"StartedAt" timestamptz,"FinishedAt" timestamptz);
-            CREATE TABLE jobs ("Id" uuid PRIMARY KEY,"TenantId" uuid,"Name" text,"RetryDelaySeconds" int);
+            CREATE TABLE jobs ("Id" uuid PRIMARY KEY,"TenantId" uuid,"ProjectId" uuid,"Name" text,"RetryDelaySeconds" int);
             CREATE TABLE rpc_chain_submissions ("TenantId" uuid,"ChainRunId" uuid,"Status" text,"HeartbeatAt" timestamptz,"FinishedAt" timestamptz,"ClaimedBy" text,"QueueId" uuid,
               "Attempts" int NOT NULL DEFAULT 0,"MaxAttempts" int NOT NULL DEFAULT 1,"PreviousRunIds" uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
               "NextAttemptAt" timestamptz,"ExpiresAt" timestamptz,"StartedAt" timestamptz,"ClaimedAt" timestamptz,
@@ -67,7 +68,7 @@ public sealed class RunStatusReconciliationTests
                 await new EfChainRunRepository(db, encryptor).AddAsync(run);
                 await db.SaveChangesAsync();
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    INSERT INTO jobs VALUES ({chain.StepJobIds[0]}, {owner.TenantId}, 'first', 0);
+                    INSERT INTO jobs VALUES ({chain.StepJobIds[0]}, {owner.TenantId}, {chain.ProjectId}, 'first', 0);
                     INSERT INTO job_runs VALUES ({jobRun},{owner.TenantId},{chain.StepJobIds[0]},{chain.ProjectId},{(kind == "cancelled-job" ? "Cancelled" : "Failed")},NULL,1,{old},{old});
                     INSERT INTO rpc_chain_submissions ("TenantId","ChainRunId","Status","HeartbeatAt","FinishedAt","ClaimedBy","QueueId") VALUES ({owner.TenantId},{run.Id},'Running',{(kind == "heartbeat" ? DateTimeOffset.UtcNow : old)},NULL,{(kind == "heartbeat" ? "worker" : null)},NULL);
                     """);

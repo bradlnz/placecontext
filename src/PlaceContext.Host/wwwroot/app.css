@@ -171,7 +171,7 @@ button, a, [role="button"] { touch-action: manipulation; }
 .dcinput:hover { border-color:var(--border-2); }
 .dcinput:focus { border-color:var(--brand); background:var(--card); box-shadow:0 0 0 1px var(--brand); }
 .dcinput::placeholder { color:var(--text-3); }
-select.dcinput { cursor:pointer; }
+select.dcinput { appearance:auto; cursor:pointer; }
 textarea.dcinput { line-height:1.55; }
 
 .dcfield { display:flex; flex-direction:column; gap:5px; min-width:0; }

@@ -1,10 +1,51 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { supportsSpeech, startSpeech, stopSpeech, mountChat, unmountChat, mountWorkspaceResize } from '../../src/PlaceContext.Host/wwwroot/build-chat.js';
+import { supportsSpeech, startSpeech, stopSpeech, mountChat, unmountChat, mountWorkspaceResize, mountDashboardResize } from '../../src/PlaceContext.Host/wwwroot/build-chat.js';
+
+test('tile handles preview grid sizes, save on release, cancel safely, and support keyboard resizing', async () => {
+    const handlers = new Map(), calls = [], classes = new Set();
+    let pointer = null;
+    const tile = {
+        dataset: { tile: 'workflow', tileSize: 'square' }, parentElement: {},
+        style: { removeProperty(name) { delete this[name === 'grid-column' ? 'gridColumn' : 'gridRow']; } },
+        getBoundingClientRect: () => ({ width: 210, height: 210 })
+    };
+    const handle = { closest: selector => selector === '.dashboard-resize' ? handle : tile,
+        setPointerCapture: id => pointer = id, hasPointerCapture: id => pointer === id,
+        releasePointerCapture: () => pointer = null, focus() {} };
+    const root = { addEventListener: (name, handler) => handlers.set(name, handler), removeEventListener: name => handlers.delete(name),
+        classList: { add: name => classes.add(name), remove: name => classes.delete(name) } };
+    globalThis.getComputedStyle = () => ({ columnGap: '16px', rowGap: '16px', gridTemplateColumns: '210px 210px 210px', gridAutoRows: '210px' });
+    const unmount = mountDashboardResize(root, { invokeMethodAsync: (...args) => { calls.push(args); return Promise.resolve(); } });
+    const send = (name, values = {}) => handlers.get(name)?.({ target: handle, pointerId: 1, button: 0, clientX: 200, clientY: 200, preventDefault() {}, ...values });
+    send('pointerdown');
+    send('pointermove', { pointerId: 2, clientX: 500 });
+    assert.equal(tile.style.gridColumn, undefined);
+    send('pointermove', { clientX: 440, clientY: 450 });
+    assert.equal(tile.style.gridColumn, 'span 2');
+    assert.equal(tile.style.gridRow, 'span 2');
+    assert.equal(calls.length, 0);
+    send('pointerup');
+    await Promise.resolve();
+    assert.deepEqual(calls, [['ResizeDashboardTileAsync', 'workflow', 'large']]);
+    assert.equal(tile.style.gridColumn, undefined);
+    assert.equal(pointer, null);
+    send('pointerdown'); send('pointermove', { clientX: 5000 }); send('pointercancel');
+    assert.equal(calls.length, 1);
+    assert.equal(tile.style.gridColumn, undefined);
+    send('keydown', { key: 'ArrowDown' });
+    await Promise.resolve();
+    assert.deepEqual(calls[1], ['ResizeDashboardTileAsync', 'workflow', 'tall']);
+    send('pointerdown'); send('pointermove', { clientX: 500 }); unmount();
+    assert.equal(tile.style.gridColumn, undefined);
+    assert.equal(handlers.size, 0);
+    assert.equal(classes.size, 0);
+    delete globalThis.getComputedStyle;
+});
 
 test('workspace divider supports bounded dragging, keyboard resizing and cleanup', () => {
     const divider = new EventTarget();
-    const attributes = new Map([['aria-valuenow', '42']]);
+    const attributes = new Map([['aria-valuenow', '50']]);
     let captured = null, size;
     Object.assign(divider, {
         getAttribute: name => attributes.get(name), setAttribute: (name, value) => attributes.set(name, value),

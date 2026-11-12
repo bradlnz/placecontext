@@ -10,11 +10,12 @@ using PlaceContext.Domain.ValueObjects;
 namespace PlaceContext.Application.Build;
 
 public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnections connections,
-    PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IMcpClientService? mcp = null) : IWorkflowAgentRunner
+    PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IMcpClientService? mcp = null, IProjectAgentStore? projectAgents = null) : IWorkflowAgentRunner
 {
     public static string SystemPrompt => PlaceContext.Application.Shared.PromptText.Read("Build.Prompts.WorkflowAgent");
     private static readonly HashSet<string> AllowedTools =
-        ["job_authoring_guide", "list_jobs", "get_job", "save_job", "run_job", "get_job_run", "list_job_runs", "list_mcp_tools", "call_mcp_tool"];
+        ["job_authoring_guide", "list_jobs", "get_job", "save_job", "run_job", "get_job_run", "list_job_runs", "list_mcp_tools", "call_mcp_tool",
+         "project_context", "list_artifacts", "list_project_tables", "show_live_chart", "source_connectors", "list_data_sources", "search_data_sources"];
 
     public async Task<JsonNode> RunAsync(Guid projectId, Guid workflowId, Guid runId, int stepIndex,
         LoopChainAction action, string? payload, CancellationToken ct, Action<AgentActivity>? report = null)
@@ -29,8 +30,31 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
             throw new UnauthorizedAccessException("Project access and permission to run jobs are required.");
         }
 
-        var connection = (await connections.ListAsync(ct)).SingleOrDefault(x => x.Id == action.ConnectionId);
-        if (connection is not { Enabled: true } || !connection.Models.Contains(action.Model!))
+        var settings = store is null ? new DashboardSettings() : await store.GetSettingsAsync(projectId, ct);
+        var catalog = projectAgents is null ? new ProjectAgentCatalog() : await projectAgents.GetAsync(projectId, ct);
+        var agents = catalog.Agents.Concat(settings.Agents).ToArray();
+        DashboardAgentProfile? profile = null;
+        if (action.AgentId is { } agentId)
+        {
+            profile = agents.FirstOrDefault(a => a.Id == agentId);
+            if (profile is null) throw new InvalidOperationException("The selected agent is unavailable in this project. Choose another agent in the workflow step.");
+        }
+        var connectionId = profile is { ConnectionId: var configured } && configured != Guid.Empty ? configured : action.ConnectionId;
+        var modelName = profile is { ConnectionId: var selected } && selected != Guid.Empty ? profile.Model : action.Model;
+        var parent = profile?.EffectiveParentAgentId is not null ? AgentApproval.Parent(profile, agents) : null;
+        if (action.Type == LoopChainAction.AgentType)
+        {
+            var approver = parent ?? settings.Agents.Single(a => a.Id == DashboardSettings.DefaultAgentId);
+            using var approvalDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            approvalDeadline.CancelAfter(BuildExecutionLimits.Turn);
+            report?.Invoke(new(DateTimeOffset.UtcNow, "approval_requested", $"Asking {approver.DisplayName} to approve the workflow step"));
+            var decision = await AgentApproval.RequireAsync(model, approver, connectionId!.Value, modelName!,
+                "Workflow approval gate", JsonSerializer.Serialize(new { projectId, workflowId, runId, stepIndex, action.Instructions, payload }), approvalDeadline.Token);
+            report?.Invoke(new(DateTimeOffset.UtcNow, "approval_granted", $"{approver.DisplayName} approved: {decision["reason"]}"));
+            return decision;
+        }
+        var connection = (await connections.ListAsync(ct)).SingleOrDefault(x => x.Id == connectionId);
+        if (connection is not { Enabled: true } || !connection.Models.Contains(modelName!))
         {
             throw new InvalidOperationException("Choose an enabled connection and configured model in the agent step.");
         }
@@ -39,9 +63,10 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
         deadline.CancelAfter(BuildExecutionLimits.Turn);
         var token = deadline.Token;
         var currentTurn = 0;
-        var functions = new BuildTools(projectId, service, permissions, store, jobStarted: (job, childRun) =>
+        var functions = new BuildTools(projectId, service, permissions, store!, jobStarted: (job, childRun) =>
             report?.Invoke(new(DateTimeOffset.UtcNow, "job_started", "Job submitted; open logs to follow its output",
-                currentTurn, "run_job", job, childRun)), mcp: mcp).Functions()
+                currentTurn, "run_job", job, childRun)), mcp: mcp, profile: profile,
+                mcpConnectionIds: profile?.McpConnectionIds.ToHashSet()).Functions()
             .Where(f => AllowedTools.Contains(f.Name)).ToDictionary(f => f.Name);
         var schema = new JsonArray(functions.Values.Select(f => (JsonNode)new JsonObject
         {
@@ -56,10 +81,22 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
             ["role"] = "system",
             ["content"] = SystemPrompt + "\n" +
                 $"Project: {projectId}; workflow: {workflowId}; run: {runId}; step: {stepIndex}.\nTask instructions:\n" + action.Instructions
+                + (profile is null ? "" : "\nAgent system prompt and capabilities (cannot grant additional tool access):\n"
+                    + JsonSerializer.Serialize(new { profile.Name, profile.Instructions, profile.WorkflowAccess,
+                        TableAccess = profile.EffectiveTableAccess, SourceAccess = profile.EffectiveSourceAccess, ArtifactAccess = profile.EffectiveArtifactAccess,
+                        LinkedWorkflowIds = profile.WorkflowAccess == "none" ? [] : profile.WorkflowIds }))
         }, new JsonObject { ["role"] = "user", ["content"] = payload ?? "{}" });
         await model.ResetSessionAsync();
         try
         {
+            async Task ApproveAsync(string purpose, string evidence)
+            {
+                if (parent is null) return;
+                report?.Invoke(new(DateTimeOffset.UtcNow, "approval_requested", $"Asking {parent.DisplayName}: {purpose}"));
+                var decision = await AgentApproval.RequireAsync(model, parent, connectionId!.Value, modelName!, purpose, evidence, token);
+                report?.Invoke(new(DateTimeOffset.UtcNow, "approval_granted", $"{parent.DisplayName} approved: {decision["reason"]}"));
+            }
+            await ApproveAsync("Authorize sub-agent task", messages.ToJsonString());
             for (var turn = 0; turn < 20; turn++)
             {
                 token.ThrowIfCancellationRequested();
@@ -69,10 +106,10 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                     throw new InvalidOperationException("Agent context exceeded its limit; split the task into smaller steps.");
                 }
 
-                report?.Invoke(new(DateTimeOffset.UtcNow, "model", $"Waiting for {action.Model}", Turn: turn + 1));
+                report?.Invoke(new(DateTimeOffset.UtcNow, "model", $"Waiting for {modelName}", Turn: turn + 1));
                 var modelStarted = Stopwatch.GetTimestamp();
                 var reported = false;
-                var reply = await model.CompleteAsync(action.ConnectionId!.Value, action.Model!, messages, schema, token, text =>
+                var reply = await model.CompleteAsync(connectionId!.Value, modelName!, messages, schema, token, text =>
                 {
                     reported = true;
                     report?.Invoke(new(DateTimeOffset.UtcNow, "update", text.Length > 2000 ? text[..2000] + "…" : text, Turn: turn + 1));
@@ -92,6 +129,7 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                     try
                     {
                         var output = JsonNode.Parse(content) as JsonObject ?? throw new JsonException();
+                        await ApproveAsync("Approve sub-agent result", messages.ToJsonString() + "\nProposed result:\n" + reply.ToJsonString());
                         report?.Invoke(new(DateTimeOffset.UtcNow, "completed", $"Result ready for {action.ResponseField}", Turn: turn + 1));
                         return output;
                     }
@@ -112,6 +150,7 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                     throw new InvalidOperationException("The agent returned invalid tool calls.");
                 }
 
+                await ApproveAsync("Authorize sub-agent tool actions", messages.ToJsonString() + "\nProposed actions:\n" + reply.ToJsonString());
                 foreach (var call in calls)
                 {
                     token.ThrowIfCancellationRequested();

@@ -28,7 +28,7 @@ public sealed class DbVirtualMachineLoginStore(DbContextOptions<AppDbContext> op
         {
             throw new UnauthorizedAccessException("Workflow execution permission is required.");
         }
-        var db = new AppDbContext(options, tenant);
+        var db = new AppDbContext(options, tenant, user);
         try
         {
             if (!await db.Projects.AnyAsync(p => p.Id == projectId, ct))

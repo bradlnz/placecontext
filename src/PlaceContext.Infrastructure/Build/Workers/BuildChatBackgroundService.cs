@@ -140,6 +140,10 @@ public sealed class BuildChatBackgroundService(IServiceScopeFactory scopes, ILog
 
     private async Task FailUnclaimedAsync(BuildConversationRow candidate, BuildRunStatus status, string error)
     {
+        var previousUser = CurrentUser.Current;
+        var previousTenant = CurrentTenant.Current;
+        CurrentUser.Clear(); // Worker cleanup must still mark a failed run after its user's access is revoked.
+        CurrentTenant.Set(new(candidate.TenantId, "", "", "UTC"));
         try
         {
             await using var scope = scopes.CreateAsyncScope();
@@ -183,6 +187,11 @@ public sealed class BuildChatBackgroundService(IServiceScopeFactory scopes, ILog
         catch (Exception ex)
         {
             log.LogError(ex, "Could not persist failed Build run {ConversationId}.", candidate.Id);
+        }
+        finally
+        {
+            if (previousUser is null) CurrentUser.Clear(); else CurrentUser.Set(previousUser);
+            if (previousTenant is null) CurrentTenant.Clear(); else CurrentTenant.Set(previousTenant);
         }
     }
 }

@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
+using System.Linq.Expressions;
+using PlaceContext.Application.Auth;
 using PlaceContext.Application.Shared;
 using PlaceContext.Application.Tenancy;
 
@@ -17,6 +20,13 @@ namespace PlaceContext.Infrastructure.Persistence;
 public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyContext
 {
     private readonly ICurrentTenant _tenant;
+    private readonly ICurrentUser? _user;
+    private Guid CurrentUserId => _user is { IsAuthenticated: true } ? _user.UserId : Guid.Empty;
+    internal async Task EnsureProjectAccessAsync(Guid projectId, CancellationToken ct)
+    {
+        if (CurrentUserId != Guid.Empty && !await Projects.AnyAsync(p => p.Id == projectId, ct))
+            throw new UnauthorizedAccessException("Project access is required.");
+    }
     internal DbContextOptions<AppDbContext> ContextOptions
     {
         get;
@@ -30,8 +40,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     public DbSet<AgentSubscriptionRow> AgentSubscriptions => Set<AgentSubscriptionRow>();
     public DbSet<AgentRunRow> AgentRuns => Set<AgentRunRow>();
 
-    public AppDbContext(DbContextOptions<AppDbContext> options, ICurrentTenant tenant) : base(options)
-        => (_tenant, ContextOptions) = (tenant, options);
+    public AppDbContext(DbContextOptions<AppDbContext> options, ICurrentTenant tenant, ICurrentUser? user = null) : base(options)
+        => (_tenant, ContextOptions, _user) = (tenant, options, user);
 
     /// <summary>Shared ASP.NET Data Protection key ring (so every replica decrypts the same auth cookie).</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
@@ -82,16 +92,57 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
 
     Task<int> IUnitOfWork.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
-    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken ct = default)
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken ct = default)
     {
         StampTenant();
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess, ct);
+        await CheckProjectWritesAsync(ct);
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, ct);
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         StampTenant();
+        CheckProjectWritesAsync(default).GetAwaiter().GetResult();
         return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    private async Task CheckProjectWritesAsync(CancellationToken ct)
+    {
+        if (CurrentUserId == Guid.Empty || CurrentUserId == TrustedServicePrincipals.ManagementApiUserId) return;
+        var entries = ChangeTracker.Entries().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted).ToArray();
+        var projectIds = new HashSet<Guid>();
+        var created = entries.Where(e => e.Entity is ProjectRow && e.State == EntityState.Added).Select(e => ((ProjectRow)e.Entity).Id).ToHashSet();
+        foreach (var entry in entries)
+        {
+            if (entry.Entity is ProjectRow project && entry.State != EntityState.Added) projectIds.Add(project.Id);
+            if (entry.Metadata.FindProperty("ProjectId") is not null)
+            {
+                if (entry.Property("ProjectId").CurrentValue is Guid id) projectIds.Add(id);
+                if (entry.State != EntityState.Added && entry.Property("ProjectId").OriginalValue is Guid original) projectIds.Add(original);
+            }
+            if (entry.Entity is SourceDocumentRow document)
+            {
+                var source = ChangeTracker.Entries<DataSourceRow>().FirstOrDefault(e => e.Entity.Id == document.SourceId)?.Entity
+                    ?? await DataSources.AsNoTracking().SingleOrDefaultAsync(s => s.Id == document.SourceId, ct);
+                if (source is null) throw new UnauthorizedAccessException("Project access is required.");
+                projectIds.Add(source.ProjectId);
+            }
+            if (entry.Entity is ArtifactShareTokenRow share)
+            {
+                var artifact = await RunArtifacts.AsNoTracking().SingleOrDefaultAsync(a => a.Id == share.ArtifactId, ct);
+                if (artifact is null) throw new UnauthorizedAccessException("Project access is required.");
+                projectIds.Add(artifact.ProjectId);
+            }
+        }
+        projectIds.ExceptWith(created);
+        if (projectIds.Count > 0 && await Projects.CountAsync(p => projectIds.Contains(p.Id), ct) != projectIds.Count)
+            throw new UnauthorizedAccessException("Project access is required.");
+        if (created.Count > 0)
+        {
+            var member = await Users.SingleOrDefaultAsync(u => u.Id == CurrentUserId, ct);
+            if (member?.AssignedProjectIds is { } assigned)
+                member.AssignedProjectIds = assigned.Union(created).ToArray();
+        }
     }
 
     /// <summary>Stamps new rows and rejects missing or changed tenant ownership before writes.</summary>
@@ -204,6 +255,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         {
             e.ToTable("build_conversations");
             e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ShareTokenHash).IsUnique();
+            e.Property(x => x.ShareTokenHash).HasMaxLength(64);
             e.HasIndex(x => new { x.TenantId, x.UserId, x.ProjectId, x.UpdatedAt });
             e.Property(x => x.Version).IsConcurrencyToken();
             e.Property(x => x.Status).HasConversion<string>();
@@ -308,6 +361,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
         {
             e.ToTable("projects");
             e.HasKey(x => x.Id);
+            e.Property(x => x.AgentSettingsVersion).IsConcurrencyToken();
             e.HasIndex(x => new { x.TenantId, x.Path }).IsUnique(); // path unique within a tenant
             e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
         });
@@ -628,10 +682,41 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasQueryFilter(r => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && r.TenantId == _tenant.TenantId);
         });
 
+        AddProjectFilter<ProjectRow>(b, p => CurrentUserId == Guid.Empty
+            || CurrentUserId == TrustedServicePrincipals.ManagementApiUserId
+            || Users.Any(u => u.Id == CurrentUserId && (u.IsDefaultAdmin || u.IsExternalAdmin || u.Role == "Owner"
+                || u.AssignedProjectIds == null || u.AssignedProjectIds.Contains(p.Id))));
+        foreach (var entity in b.Model.GetEntityTypes().Where(e => typeof(ITenantOwned).IsAssignableFrom(e.ClrType)
+            && e.FindProperty("ProjectId") is not null).ToArray())
+        {
+            var parameter = Expression.Parameter(entity.ClrType, "row");
+            var projectId = Expression.Property(parameter, "ProjectId");
+            var project = Expression.Parameter(typeof(ProjectRow), "project");
+            var matches = Expression.Equal(Expression.Convert(Expression.Property(project, "Id"), projectId.Type), projectId);
+            var any = Expression.Call(typeof(Queryable), nameof(Queryable.Any), [typeof(ProjectRow)],
+                Expression.Property(Expression.Constant(this), nameof(Projects)), Expression.Lambda<Func<ProjectRow, bool>>(matches, project));
+            Expression allowed = Expression.OrElse(Expression.Equal(Expression.Property(Expression.Constant(this), nameof(CurrentUserId)), Expression.Constant(Guid.Empty)), any);
+            if (projectId.Type == typeof(Guid?)) allowed = Expression.OrElse(Expression.Equal(projectId, Expression.Constant(null, typeof(Guid?))), allowed);
+            var existing = entity.GetDeclaredQueryFilters().Single().Expression!;
+            b.Entity(entity.ClrType).HasQueryFilter(Expression.Lambda(Expression.AndAlso(
+                ReplacingExpressionVisitor.Replace(existing.Parameters[0], parameter, existing.Body), allowed), parameter));
+        }
+        AddProjectFilter<SourceDocumentRow>(b, d => CurrentUserId == Guid.Empty || DataSources.Any(s => s.Id == d.SourceId));
+        AddProjectFilter<ArtifactShareTokenRow>(b, s => CurrentUserId == Guid.Empty || RunArtifacts.Any(a => a.Id == s.ArtifactId));
+
         // Include ownership in UPDATE/DELETE predicates, including detached entities attached by ID.
         foreach (var entity in b.Model.GetEntityTypes().Where(e => typeof(ITenantOwned).IsAssignableFrom(e.ClrType)))
         {
             b.Entity(entity.ClrType).Property(nameof(ITenantOwned.TenantId)).IsConcurrencyToken();
+            if (entity.FindProperty("ProjectId") is not null)
+                b.Entity(entity.ClrType).Property("ProjectId").IsConcurrencyToken();
         }
+    }
+
+    private static void AddProjectFilter<T>(ModelBuilder builder, Expression<Func<T, bool>> filter) where T : class
+    {
+        var existing = builder.Entity<T>().Metadata.GetDeclaredQueryFilters().Single().Expression!;
+        builder.Entity<T>().HasQueryFilter(Expression.Lambda<Func<T, bool>>(Expression.AndAlso(
+            ReplacingExpressionVisitor.Replace(existing.Parameters[0], filter.Parameters[0], existing.Body), filter.Body), filter.Parameters));
     }
 }

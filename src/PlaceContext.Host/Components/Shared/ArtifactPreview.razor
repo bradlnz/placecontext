@@ -1,0 +1,55 @@
+@using PlaceContext.Application.Features
+@inject IJSRuntime JS
+
+<div class="artifact-preview">
+    <div class="artifact-preview-toolbar"><span>@Artifact.ContentType</span><a class="dcbtn" href="@ArtifactsViewModel.Url(Artifact)" target="_blank" rel="noopener">Open file <AppIcon Kind="external-link" /></a></div>
+    @if (ArtifactsViewModel.IsPdf(Artifact.ContentType))
+    {
+        <div id="@_pdfId" class="artifact-pdf-pages" data-pc-pdf data-pdf-url="@ArtifactsViewModel.Url(Artifact)" aria-label="PDF pages"><p>Preparing PDF pages…</p></div>
+    }
+    else if (ArtifactsViewModel.IsImage(Artifact))
+    {
+        <div class="artifact-image"><img src="@ArtifactsViewModel.Url(Artifact)" alt="@Artifact.Title" /></div>
+    }
+    else if (ArtifactsViewModel.IsJson(Artifact.ContentType))
+    {
+        @if (JsonError is { } jsonError)
+        {
+            <p role="alert">@jsonError Use Open file to fetch it directly.</p>
+        }
+        else
+        {
+            <div class="artifact-json">
+                <RunOutput Value="@Json" Label="Artifact JSON" />
+            </div>
+            @if (JsonTruncated)
+            {
+                <p class="hint">Showing the first 2 MB. Use Open file for the complete artifact.</p>
+            }
+        }
+    }
+    else if (ArtifactsViewModel.Previewable(Artifact.ContentType))
+    {
+        @* The authenticated artifact endpoint applies the HTML/SVG sandbox after the request. *@
+        <iframe class="artifact-frame" src="@ArtifactsViewModel.Url(Artifact)" title="@Artifact.Title" referrerpolicy="no-referrer"></iframe>
+    }
+    else
+    {
+        <p>No inline preview is available for this file. Use Open file to download it.</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ArtifactFileView Artifact { get; set; } = null!;
+    [Parameter] public string? Json { get; set; }
+    [Parameter] public string? JsonError { get; set; }
+    [Parameter] public bool JsonTruncated { get; set; }
+    private readonly string _pdfId = "workspace-pdf-" + Guid.NewGuid().ToString("N");
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!ArtifactsViewModel.IsPdf(Artifact.ContentType)) return;
+        try { await JS.InvokeVoidAsync("placecontext.renderPdf", _pdfId, ArtifactsViewModel.Url(Artifact), false); }
+        catch (JSException) { }
+        catch (TaskCanceledException) { }
+    }
+}

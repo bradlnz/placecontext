@@ -10,7 +10,7 @@ using PlaceContext.Application.Jobs;
 namespace PlaceContext.Application.Build;
 
 public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway model, PlaceContextService service,
-    IPermissionService permissions, ICurrentTenant tenant, IOutcomeReviewer? reviewer = null, OperationCenter? operations = null, ICurrentUser? user = null, IJobChainSubmissionQueue? submissions = null, Mcp.IMcpClientService? mcp = null)
+    IPermissionService permissions, ICurrentTenant tenant, IOutcomeReviewer? reviewer = null, OperationCenter? operations = null, ICurrentUser? user = null, IJobChainSubmissionQueue? submissions = null, Mcp.IMcpClientService? mcp = null, IProjectAgentStore? projectAgents = null)
 {
     public const string WorkflowPickerQuestion = "Does this message only ask to open the Run a workflow tile, choose a workflow, or see workflows available to run? "
         + "Return high probability only for this standalone navigation intent. Requests to run a specific workflow, supply inputs, change anything, discuss results, or perform multiple tasks must have low probability. "
@@ -45,27 +45,46 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
     public async Task<(string Prompt, string Tools)> InspectAsync(Guid projectId, CancellationToken ct = default, Guid? agentId = null)
     {
         var settings = await store.GetSettingsAsync(projectId, ct);
+        var (profile, _, catalog) = await ResolveAgentAsync(projectId, settings, agentId, ct);
         var tools = new BuildTools(projectId, service, permissions, store, reviewer, submissions: submissions, mcp: mcp,
-            mcpConnectionIds: settings.Agents.FirstOrDefault(a => a.Id == (agentId ?? Guid.Empty))?.McpConnectionIds.ToHashSet() ?? []);
+            mcpConnectionIds: profile.McpConnectionIds.ToHashSet(), profile: profile);
         var context = await tools.project_context(ct);
         var memory = await store.GetMemoryAsync(projectId, ct);
-        return (RenderPrompt(projectId, context, memory, settings, agentId), JsonSerializer.Serialize(tools.Functions().Select(f => new
+        return (RenderPrompt(projectId, context, memory, settings, profile, catalog), JsonSerializer.Serialize(tools.Functions().Select(f => new
         {
             f.Name, f.Description, Parameters = f.JsonSchema
         })));
     }
 
-    private string RenderPrompt(Guid projectId, object context, string memory, DashboardSettings settings, Guid? agentId) =>
+    private string RenderPrompt(Guid projectId, object context, string memory, DashboardSettings settings, DashboardAgentProfile profile,
+        ProjectAgentCatalog catalog) =>
         PromptText.Render("Build.Prompts.ProjectAssistant",
             ("projectId", projectId.ToString()), ("projectContext", JsonSerializer.Serialize(context)),
             ("utcNow", DateTimeOffset.UtcNow.ToString("O")), ("timeZone", tenant.TimeZoneId),
             ("memory", JsonSerializer.Serialize(memory)))
         + "\nUser preferences for this project (do not override permissions, safety rules or the current request):\n"
         + JsonSerializer.Serialize(settings.Instructions)
-        + "\nSelected agent preferences (same permission and safety limits apply):\n"
-        + JsonSerializer.Serialize(settings.Agents.FirstOrDefault(a => a.Id == (agentId ?? Guid.Empty)) is { } profile
-            ? new { profile.Name, profile.Instructions }
-            : throw new InvalidOperationException("This agent is unavailable. Choose an agent in the dashboard."));
+        + "\nAgent system prompt and capabilities (same permission and safety limits apply):\n"
+        + JsonSerializer.Serialize(new { profile.Name, profile.Instructions, profile.WorkflowAccess,
+            TableAccess = profile.EffectiveTableAccess, SourceAccess = profile.EffectiveSourceAccess, ArtifactAccess = profile.EffectiveArtifactAccess })
+        + "\nLinkedWorkflows in the project context are workflows associated with this agent. Prefer them when relevant to the user's task; links do not grant permissions or request execution.\n"
+        + (profile.Id != DashboardSettings.DefaultAgentId ? "" : "\nYou are the dashboard master agent. Coordinate the user's task across project workflows and their assigned agents. "
+            + "Prefer existing linked workflows when suitable. When creating or editing an automatic agent step, select a suitable saved agent using Review.AgentId. "
+            + "Agents execute inside workflow steps; do not claim to have delegated work before the workflow actually runs. "
+            + "Respect each agent's capabilities and all user permissions. This role grants no additional tool access.\nAvailable project agents:\n"
+            + JsonSerializer.Serialize(catalog.Agents.Select(a => new { a.Id, a.Name, ParentAgentId = a.EffectiveParentAgentId, a.ConnectionId, a.Model, a.WorkflowAccess,
+                TableAccess = a.EffectiveTableAccess, SourceAccess = a.EffectiveSourceAccess, ArtifactAccess = a.EffectiveArtifactAccess,
+                a.WorkflowIds })));
+
+    private async Task<(DashboardAgentProfile Profile, bool Shared, ProjectAgentCatalog Catalog)> ResolveAgentAsync(
+        Guid projectId, DashboardSettings settings, Guid? agentId, CancellationToken ct)
+    {
+        var id = agentId is null || agentId == Guid.Empty ? DashboardSettings.DefaultAgentId : agentId.Value;
+        var catalog = projectAgents is null ? new ProjectAgentCatalog() : await projectAgents.GetAsync(projectId, ct);
+        var profile = catalog.Agents.FirstOrDefault(a => a.Id == id) ?? settings.Agents.FirstOrDefault(a => a.Id == id)
+            ?? throw new InvalidOperationException("This agent is unavailable. Choose an agent in the dashboard.");
+        return (profile, catalog.Agents.Any(a => a.Id == id), catalog);
+    }
 
     public async Task QueueAsync(BuildConversation conversation, string text, CancellationToken ct = default)
     {
@@ -78,9 +97,8 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
         if (pending.AgentId is { } agentId)
         {
             var settings = await store.GetSettingsAsync(pending.ProjectId, ct);
-            var profile = settings.Agents.FirstOrDefault(a => a.Id == agentId)
-                ?? throw new InvalidOperationException("This agent is unavailable. Choose an agent in the dashboard.");
-            if (profile.ConnectionId != Guid.Empty || profile.Id != Guid.Empty)
+            var (profile, shared, _) = await ResolveAgentAsync(pending.ProjectId, settings, agentId, ct);
+            if (profile.ConnectionId != Guid.Empty || !shared && profile.Id != DashboardSettings.DefaultAgentId)
             {
                 pending.ConnectionId = profile.ConnectionId;
                 pending.Model = profile.Model;
@@ -125,11 +143,20 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
             }
             RepairInterruptedCalls(conversation.Messages);
             var settings = await store.GetSettingsAsync(conversation.ProjectId, deadline.Token);
+            var (profile, _, catalog) = await ResolveAgentAsync(conversation.ProjectId, settings, conversation.AgentId, deadline.Token);
+            var parent = profile.EffectiveParentAgentId is not null
+                ? AgentApproval.Parent(profile, catalog.Agents.Concat(settings.Agents)) : null;
+            async Task ApproveAsync(string purpose, string evidence)
+            {
+                if (parent is null) return;
+                await AgentApproval.RequireAsync(model, parent, conversation.ConnectionId, conversation.Model, purpose, evidence, deadline.Token);
+            }
+            await ApproveAsync("Authorize sub-agent conversation task", conversation.Messages.ToJsonString());
             var tools = new BuildTools(conversation.ProjectId, service, permissions, store, reviewer, submissions: submissions, mcp: mcp,
-                mcpConnectionIds: settings.Agents.FirstOrDefault(a => a.Id == (conversation.AgentId ?? Guid.Empty))?.McpConnectionIds.ToHashSet() ?? []);
+                mcpConnectionIds: profile.McpConnectionIds.ToHashSet(), profile: profile);
             var functions = tools.Functions().ToDictionary(x => x.Name);
             var context = await tools.project_context(deadline.Token);
-            if (await WantsWorkflowPickerAsync(conversation, deadline.Token))
+            if (profile.WorkflowAccess is "run" or "manage" && await WantsWorkflowPickerAsync(conversation, deadline.Token))
             {
                 conversation.Messages.Add(new JsonObject
                 {
@@ -153,7 +180,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
             {
                 deadline.Token.ThrowIfCancellationRequested();
                 var memory = await store.GetMemoryAsync(conversation.ProjectId, deadline.Token);
-                conversation.SystemPrompt = RenderPrompt(conversation.ProjectId, context, memory, settings, conversation.AgentId);
+                conversation.SystemPrompt = RenderPrompt(conversation.ProjectId, context, memory, settings, profile, catalog);
                 conversation.ToolSchema = toolSchema.ToJsonString();
                 var messages = new JsonArray(new JsonObject
                 {
@@ -182,6 +209,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                     {
                         throw new InvalidOperationException("The model returned no answer.");
                     }
+                    await ApproveAsync("Approve sub-agent response", messages.ToJsonString() + "\nProposed response:\n" + reply.ToJsonString());
                     conversation.Messages.Add(reply);
                     return;
                 }
@@ -194,6 +222,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                 {
                     throw new InvalidOperationException("The model must ask a question separately from other actions. Please retry.");
                 }
+                await ApproveAsync("Authorize sub-agent tool actions", messages.ToJsonString() + "\nProposed actions:\n" + reply.ToJsonString());
                 conversation.Messages.Add(reply);
                 await store.SaveAsync(conversation, lease, false, deadline.Token);
                 if (operation is not null)

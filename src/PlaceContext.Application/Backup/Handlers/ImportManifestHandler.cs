@@ -366,7 +366,7 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
         RepeatFlowChainAction.ActionType => new RepeatFlowChainAction(action.UntilCondition ?? "", action.MaxAttempts),
         LoopChainAction.HumanType or LoopChainAction.AgentType or LoopChainAction.TaskType => new LoopChainAction(
             action.Type, action.Instructions ?? "", action.ResponseField ?? "", action.ResponseType ?? LoopChainAction.TextResponse,
-            action.AgentProvider ?? LoopChainAction.ExternalAgent, action.ConnectionId, action.Model),
+            action.AgentProvider ?? LoopChainAction.ExternalAgent, action.ConnectionId, action.Model, action.AgentId),
         SendEmailChainAction.ActionType => new SendEmailChainAction(
             action.Recipient ?? "",
             action.RecipientName ?? "",

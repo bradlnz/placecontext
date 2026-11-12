@@ -40,6 +40,7 @@ public sealed class ChainInputResumeTests
         await connection.OpenAsync();
         await using (var setup = new NpgsqlCommand($"""
             CREATE SCHEMA "{schema}";
+            {PostgresProjectAccess.Schema}
             CREATE TABLE chain_runs (
               "Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "ChainId" uuid NOT NULL, "ProjectId" uuid NOT NULL,
               "ChainName" text NOT NULL, "Status" text NOT NULL, "StepsJson" text NOT NULL, "FinalOutput" text,

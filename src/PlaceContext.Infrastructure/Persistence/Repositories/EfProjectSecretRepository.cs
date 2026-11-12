@@ -31,5 +31,8 @@ public sealed class EfProjectSecretRepository : IProjectSecretRepository
     }
 
     public async Task<IReadOnlyDictionary<string, string>> GetCiphersAsync(Guid projectId, CancellationToken ct = default)
-        => await _db.JobSecrets.Where(s => s.ProjectId == projectId).ToDictionaryAsync(s => s.Name, s => s.Cipher, ct);
+    {
+        await _db.EnsureProjectAccessAsync(projectId, ct);
+        return await _db.JobSecrets.Where(s => s.ProjectId == projectId).ToDictionaryAsync(s => s.Name, s => s.Cipher, ct);
+    }
 }

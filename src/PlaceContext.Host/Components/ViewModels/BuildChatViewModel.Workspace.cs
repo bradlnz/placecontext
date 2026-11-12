@@ -8,7 +8,7 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class BuildChatViewModel
 {
-    public sealed record WorkspaceItem(Guid Id, string Kind, string Name, Guid? WorkflowId = null, Guid? TrackingId = null);
+    public sealed record WorkspaceItem(Guid Id, string Kind, string Name, Guid? WorkflowId = null, Guid? TrackingId = null, Guid? RunId = null);
     public ChainRunView? PreviewRun { get; private set; }
     public JobChainSubmission? PreviewSubmission { get; private set; }
     public string? PreviewRunStatus => PreviewRun?.Status ?? PreviewSubmission?.Status;
@@ -94,7 +94,7 @@ public sealed partial class BuildChatViewModel
         }
         NotifyStateChanged();
     }
-    public sealed record ChartPreview(ChartSpec Spec, string Source);
+    public sealed record ChartPreview(ChartSpec Spec, string Source, bool Live = false, string? Sql = null);
     public ChartPreview? PreviewChart
     {
         get; private set;
@@ -103,7 +103,7 @@ public sealed partial class BuildChatViewModel
     {
         var callId = message["tool_call_id"]?.ToString();
         if (callId is null || !Conversation.Messages.OfType<JsonNode>().SelectMany(Calls)
-            .Any(call => call["id"]?.ToString() == callId && call["function"]?["name"]?.ToString() == "show_chart"))
+            .Any(call => call["id"]?.ToString() == callId && call["function"]?["name"]?.ToString() is "show_chart" or "show_live_chart"))
         {
             return null;
         }
@@ -113,7 +113,7 @@ public sealed partial class BuildChatViewModel
             var spec = result?["chart"]?.ToJsonString();
             var source = result?["source"]?.GetValue<string>();
             return spec is not null && ChartSpec.TryParse(spec) is { } chart && !string.IsNullOrWhiteSpace(source)
-                ? new(chart, source) : null;
+                ? new(chart, source, result?["live"]?.GetValue<bool>() == true, result?["sql"]?.GetValue<string>()) : null;
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
@@ -167,7 +167,7 @@ public sealed partial class BuildChatViewModel
                     .FirstOrDefault(x => x["id"]?.ToString() == callId);
         var function = call?["function"]?["name"]?.ToString();
         if (function is not ("project_context" or "list_workflows" or "get_workflow" or "save_workflow"
-            or "list_jobs" or "get_job" or "save_job" or "run_workflow" or "list_workflow_runs"))
+            or "list_jobs" or "get_job" or "save_job" or "run_workflow" or "list_workflow_runs" or "list_artifacts"))
         {
             return [];
         }
@@ -190,12 +190,13 @@ public sealed partial class BuildChatViewModel
                     return;
                 }
                 string? Read(string key) => obj.FirstOrDefault(x => x.Key.Equals(key, StringComparison.OrdinalIgnoreCase)).Value?.ToString();
-                var name = Read("name") ?? Read("chainName");
+                var name = Read("name") ?? Read("chainName") ?? Read("title");
                 if (Guid.TryParse(Read("id"), out var parsed) && parsed != Guid.Empty)
                 {
                     items.Add(new(parsed, kind, name ?? (kind == "workflow-run" ? "Workflow run" : kind == "workflow" ? "Workflow" : "Job"),
                         Guid.TryParse(Read("chainId"), out var workflowId) ? workflowId : null,
-                        Guid.TryParse(Read("trackingId"), out var trackingId) ? trackingId : null));
+                        Guid.TryParse(Read("trackingId"), out var trackingId) ? trackingId : null,
+                        Guid.TryParse(Read("runId"), out var runId) ? runId : null));
                 }
             }
             void ApplyToolContext()
@@ -206,7 +207,7 @@ public sealed partial class BuildChatViewModel
                     Add(context["Jobs"], "job");
                     return;
                 }
-                Add(value, function is "run_workflow" or "list_workflow_runs" ? "workflow-run"
+                Add(value, function == "list_artifacts" ? "artifact" : function is "run_workflow" or "list_workflow_runs" ? "workflow-run"
                     : function.Contains("workflow", StringComparison.Ordinal) ? "workflow" : "job");
             }
             ApplyToolContext();
@@ -220,6 +221,11 @@ public sealed partial class BuildChatViewModel
 
     public async Task OpenPreviewAsync(WorkspaceItem item)
     {
+        if (item.Kind == "artifact")
+        {
+            await OpenArtifactAsync(item.Id, item.RunId);
+            return;
+        }
         if (item.Kind is not ("workflow" or "job" or "workflow-run"))
         {
             return;
@@ -233,6 +239,7 @@ public sealed partial class BuildChatViewModel
         }
         OpenWorkspace();
         PreviewChart = null;
+        ExpandedDashboardChartId = null;
         var version = ++_previewVersion;
         var projectId = Conversation.ProjectId;
         PreviewItem = item;
@@ -354,15 +361,19 @@ public sealed partial class BuildChatViewModel
                 name = workflow.Name;
                 workflowId = workflow.Id;
             }
+            var canRespond = submissions is not null && await permissions.HasAsync(Permission.JobsRun, ct);
             if (version != _previewVersion || ct.IsCancellationRequested)
             {
                 return;
             }
             PreviewRun = run;
+            CanRespondToWorkflow = canRespond;
+            SyncHumanInput();
             PreviewSubmission = receipt;
             PreviewItem = item with { Name = name, WorkflowId = workflowId };
             PreviewError = null;
             await RefreshPreviewStepAsync(ct);
+            if (run?.FinishedAt is not null) await RefreshRunArtifactsAsync(run, version, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception)
@@ -397,6 +408,11 @@ public sealed partial class BuildChatViewModel
 
     public void ClosePreview()
     {
+        WorkflowSelectedForRun = PreparingWorkflowRun = false;
+        CloseArtifactPreview();
+        PreviewRunArtifacts = [];
+        RunArtifactsError = null;
+        _artifactOpenedForRun = null;
         CloseWorkflowPicker();
         ShowDemoShare = false;
         DemoUrl = DemoError = null;
@@ -411,8 +427,12 @@ public sealed partial class BuildChatViewModel
         _previewPolling?.Dispose();
         _previewPolling = null;
         PreviewRun = null;
+        SyncHumanInput();
+        CanRespondToWorkflow = SubmittingHumanInput = false;
+        HumanInputNotice = HumanInputError = null;
         PreviewSubmission = null;
         PreviewChart = null;
+        ExpandedDashboardChartId = null;
         PreviewItem = null;
         PreviewWorkflow = null;
         PreviewJob = null;
@@ -468,6 +488,8 @@ public sealed partial class BuildChatViewModel
                 return;
             }
             var items = ResultItems(message);
+            if (WorkflowSelectedForRun || PreviewItem?.Kind == "workflow-run")
+                items = items.Where(x => x.Kind is "workflow-run" or "artifact").ToArray();
             if (items.Count == 0)
             {
                 continue;

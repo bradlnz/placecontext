@@ -16,6 +16,7 @@ public sealed class DbWorkerNetworkService(AppDbContext db, ICurrentTenant tenan
 {
     public async Task<WorkerNetworkState> LoadAsync(Guid projectId, CancellationToken ct = default)
     {
+        await db.EnsureProjectAccessAsync(projectId, ct);
         if (!tenant.IsResolved || (!await permissions.HasAsync(Permission.SettingsManage, ct) && !await permissions.HasAsync(Permission.BackupManage, ct)))
         {
             throw new UnauthorizedAccessException("Network administration or backup permission is required.");
