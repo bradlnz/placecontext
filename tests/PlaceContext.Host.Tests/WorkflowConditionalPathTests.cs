@@ -42,6 +42,23 @@ public sealed class WorkflowConditionalPathTests
     }
 
     [Fact]
+    public void Gate_retry_inserts_a_bounded_repeat_before_delivery_and_preserves_all_conditions()
+    {
+        var vm = new JobChainsViewModel(new PlaceContextService(new RecordingDispatcher(), null!, null!, null!), null!, null!, new Navigation());
+        vm.NewChain(); vm.AddStage(Guid.NewGuid()); vm.AddStage(Guid.NewGuid());
+        vm.OpenGateEditor(1); vm.GateEditorType = "condition";
+        vm.GateEditorConditions[0].Operator = "gte"; vm.GateEditorConditions[0].Path = "review.noul"; vm.GateEditorConditions[0].Value = "0.9";
+        vm.AddCondition(); vm.GateEditorConditions[1].Operator = "eq"; vm.GateEditorConditions[1].Path = "approved"; vm.GateEditorConditions[1].Value = "true";
+        var condition = vm.ConditionPreview();
+        vm.RetryGateProcess(); vm.RepeatMaxAttempts = 3; vm.SaveRepeatAction();
+        Assert.Null(vm.RepeatError); Assert.Equal(3, vm.EdStages.Count);
+        var repeat = Assert.IsType<RepeatFlowChainAction>(vm.EdStageActions[1]);
+        Assert.Equal(condition, repeat.UntilCondition); Assert.Equal(3, repeat.MaxAttempts);
+        Assert.Equal(condition, Assert.IsType<ConditionGate>(vm.EdStageGates[2]).Expression);
+        vm.OpenGateEditor(2); Assert.False(vm.CanRetryGate);
+    }
+
+    [Fact]
     public async Task Qemu_dialog_saves_updated_task_through_the_workflow_service()
     {
         var dispatcher = new RecordingDispatcher();

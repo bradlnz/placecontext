@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 using PlaceContext.Application.Secrets;
+using PlaceContext.Application.Features;
 using PlaceContext.Infrastructure.Security;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
@@ -23,6 +24,13 @@ public sealed class JobChainActionPersistenceTests
         var loaded = (await repository.GetByIdAsync(schedule.Id))!;
         Assert.Null(loaded.JobId); Assert.Equal(workflow, loaded.WorkflowId); Assert.Equal(owner, loaded.ScheduledBy);
         Assert.Equal(T0.AddDays(1), loaded.NextRunAt);
+        var handler = new UpdateTriggerHandler(repository, new FakeCronSchedule(), new FakeCurrentTenant(Guid.NewGuid()), db, new FakeClock(T0));
+        await handler.HandleAsync(new UpdateTriggerCommand(schedule.Id, "Renamed", "0 10 * * *", EventName: null, Enabled: false));
+        db.ChangeTracker.Clear();
+        loaded = (await repository.GetByIdAsync(schedule.Id))!;
+        Assert.Equal("Renamed", loaded.Name); Assert.Equal("0 10 * * *", loaded.CronExpression);
+        Assert.False(loaded.Enabled); Assert.Equal(owner, loaded.ScheduledBy);
+
     }
 
     [Fact]

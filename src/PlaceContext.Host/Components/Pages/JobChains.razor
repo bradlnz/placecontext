@@ -1402,7 +1402,7 @@ else
                         <button class="dcslide-x" aria-label="Close repeat settings" @onclick="Vm.CloseRepeatEditor"><AppIcon Kind="close" /></button>
                     </div>
                     <div class="dcmodal-body">
-                        <p>Repeat all preceding stages with their latest output. This must be the final step. The workflow fails if the condition still fails on the last attempt.</p>
+                        <p>When this condition is false, repeat all preceding stages with their latest output. Continue to the next step only when it passes. Fail the workflow after the maximum total attempts.</p>
                         <div class="dcfield"><label for="repeat-condition">Completion condition</label><input id="repeat-condition" class="dcinput" @bind="Vm.RepeatCondition" maxlength="500" /></div>
                         <div class="dcfield"><label for="repeat-attempts">Maximum total attempts</label><input id="repeat-attempts" class="dcinput" type="number" min="1" max="10" @bind="Vm.RepeatMaxAttempts" /></div>
                         @if (Vm.RepeatError is not null) { <p class="danger" role="alert">@Vm.RepeatError</p> }
@@ -1559,6 +1559,12 @@ else
                             <div class="sub-note">
                                 When true, run this stage's jobs. When false, run the steps below instead.
                                 Both paths rejoin at the next workflow stage.
+                            </div>
+                            <div class="dcform-section">
+                                <h4>Retry on a failed condition</h4>
+                                <p>Insert a Repeat step before this gate. Retry the preceding process until these conditions pass, or fail after a fixed number of attempts.</p>
+                                <button class="dcbtn" disabled="@(!Vm.CanRetryGate)" @onclick="Vm.RetryGateProcess">Add bounded retry</button>
+                                @if (!Vm.CanRetryGate) { <p class="sub-note">A preceding step is required, and a workflow can have one Repeat step.</p> }
                             </div>
                             <div class="dcform-section">
                                 <h4>False path</h4>

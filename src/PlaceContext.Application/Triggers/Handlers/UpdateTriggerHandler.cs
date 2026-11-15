@@ -77,6 +77,7 @@ public sealed class UpdateTriggerHandler : ICommandHandler<UpdateTriggerCommand,
             ApplyEnabledState();
         }
 
+        await _triggers.UpdateAsync(trigger, ct);
         await _uow.SaveChangesAsync(ct);
         return TriggerViewMapper.ToView(trigger);
     }

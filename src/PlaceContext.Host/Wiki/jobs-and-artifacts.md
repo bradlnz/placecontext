@@ -305,7 +305,7 @@ running a general-purpose agent. Human approval remains a separate step.
 It stops the workflow when the criteria fail by default. If you disable **Stop on failure**, branch
 explicitly on the saved result, for example `eq:release_review.passed:true`.
 
-Add **Repeat flow** as the final stage to repeat all preceding steps with their accumulated output until
+Add **Repeat flow** after the process to repeat all preceding steps with their accumulated output until
 its completion condition passes. It allows 1–10 total attempts (default 3), persists its attempt count
 across restarts and input handoffs, and fails when the last attempt does not meet the condition.
 Use conditions and evidence-producing jobs to distinguish failed quality assertions from execution errors,
@@ -339,3 +339,5 @@ Add **Parallel if gates** to choose two to eight sub-workflows, each with its ow
 ### Schedule a workflow
 
 In **Schedules**, select a workflow and choose its frequency and time or a cron expression. Times use the workspace time zone. The schedule starts the complete workflow with its stored inputs, including its agents, gates and sub-workflows. Scheduled executions use the schedule creator's current permissions and the normal durable workflow queue. Revoked execution permission or a deleted workflow pauses the schedule. Existing job schedules and event triggers remain manageable for compatibility.
+
+To retry a failed IF condition, open its gate and choose **Add bounded retry**. This inserts a Repeat step immediately before the gate using the same condition, including AND/OR groups. It retries all preceding steps, continues only on success, and fails after 1–10 total attempts (the first pass counts). Put delivery actions after the Repeat step to keep them outside the retried process. One Repeat step is allowed per workflow.

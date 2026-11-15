@@ -127,11 +127,13 @@ public sealed class JobChain
         }        // Defensive copy — each ChainStage already validated its own job ids at construction, and a
         // stage may legitimately repeat a job (e.g. transform → verify → transform, or fan-out
         // branches sharing a job) — no dedup.
+        if (stages.Count(stage => stage.Action is RepeatFlowChainAction) > 1)
+            throw new ArgumentException("A workflow can have one Repeat flow step.", nameof(stages));
         for (var index = 0; index < stages.Count; index++)
         {
             if (stages[index].Action is RepeatFlowChainAction &&
-                (index == 0 || index != stages.Count - 1 || stages[index].Gate is not null))
-                throw new ArgumentException("Repeat flow must be the final stage, after at least one step, with no gate of its own.", nameof(stages));
+                (index == 0 || stages[index].Gate is not null))
+                throw new ArgumentException("Repeat flow must follow at least one step and have no gate of its own.", nameof(stages));
         }
         return stages.Select(s => new ChainStage(s.JobIds, s.Gate, s.ElseBranch, s.Action)).ToList();
     }

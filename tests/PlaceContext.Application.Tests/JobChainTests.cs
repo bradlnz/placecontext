@@ -1604,19 +1604,24 @@ public class JobChainTests
     public async Task Repeat_persists_attempts_and_rechecks_gates_after_resume(bool passOnSecondAttempt)
     {
         var job = MakeJob("quality");
+        var protectedJob = MakeJob("protected delivery");
         var jobs = new InMemoryJobRepository();
         await jobs.AddAsync(job);
+        await jobs.AddAsync(protectedJob);
         var chains = new InMemoryJobChainRepository();
         var chain = JobChain.Create(ProjectId, "repeat", null,
             [new ChainStage([job.Id], new ConditionGate("eq:run:true")),
-             ChainStage.ForAction(new RepeatFlowChainAction("eq:ready:true", 2))], T0);
+             ChainStage.ForAction(new RepeatFlowChainAction("eq:ready:true", 2)),
+             ChainStage.Of(protectedJob.Id)], T0);
         await chains.AddAsync(chain);
         var runs = new InMemoryChainRunRepository();
         var dispatcher = new FakeRunDispatcher();
         dispatcher.Results[job.Id] = Run(job.Id, "Succeeded", ["{\"ready\":false,\"run\":false}"]);
+        dispatcher.Results[protectedJob.Id] = Run(protectedJob.Id, "Succeeded", ["{}"]);
         var handler = new RunJobChainHandler(chains, jobs, runs, new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(dispatcher));
         var first = await handler.HandleAsync(new RunJobChainCommand(chain.Id, "{\"run\":true}"));
         Assert.Equal("Waiting", first.Status);
+        Assert.DoesNotContain(protectedJob.Id, dispatcher.DispatchedJobIds);
         var stored = (await runs.GetByIdAsync(first.Id))!;
         Assert.Equal(1, stored.Steps[1].RetryCount);
         Assert.Equal(1, stored.ResumeStageIndex);
@@ -1624,7 +1629,8 @@ public class JobChainTests
         dispatcher.Results[job.Id] = Run(job.Id, "Succeeded", ["{\"ready\":true}"]);
         var second = await handler.HandleAsync(new RunJobChainCommand(chain.Id, ChainRunId: first.Id, ResumeFromStageIndex: 1));
         Assert.Equal(passOnSecondAttempt ? "Succeeded" : "Failed", second.Status);
-        Assert.Equal(passOnSecondAttempt ? 2 : 1, dispatcher.DispatchedJobIds.Count);
+        Assert.Equal(passOnSecondAttempt ? 3 : 1, dispatcher.DispatchedJobIds.Count);
+        Assert.Equal(passOnSecondAttempt, dispatcher.DispatchedJobIds.Contains(protectedJob.Id));
         Assert.Equal(1, stored.Steps[1].RetryCount);
         Assert.Null(stored.ResumeAt);
     }
