@@ -90,6 +90,31 @@ public sealed class WorkflowMarkupTests
         Assert.Contains("newer revision", vm.EditorError); Assert.Equal(1, store.Saves);
     }
 
+    [Fact]
+    public async Task Assistant_keeps_canvas_mounted_and_refreshes_revision_for_the_next_save()
+    {
+        var store = new Store(); var vm = Editor(store);
+        await vm.OpenChainEditorAsync(store.Workflow);
+        var stage = vm.EdStages[0];
+        var canvasClosed = false;
+        vm.Attach(() => { canvasClosed |= !vm.ShowEditor; return Task.CompletedTask; });
+        vm.EdName = "Saved before chat";
+        await vm.OpenWorkflowAssistantAsync();
+        Assert.Null(vm.EditorError); Assert.True(vm.ShowWorkflowAssistant);
+        Assert.Equal("Saved before chat", vm.AssistantWorkflow!.Name);
+        Assert.Same(stage, vm.EdStages[0]);
+        vm.CloseWorkflowAssistant();
+        await vm.OpenWorkflowAssistantAsync();
+        Assert.Null(vm.EditorError); Assert.Equal(2, store.Saves);
+        Assert.Same(stage, vm.EdStages[0]);
+        vm.CloseWorkflowAssistant();
+        vm.EdName = "";
+        await vm.OpenWorkflowAssistantAsync();
+        Assert.NotNull(vm.EditorError); Assert.False(vm.ShowWorkflowAssistant);
+        Assert.Equal(2, store.Saves);
+        Assert.False(canvasClosed);
+    }
+
     private static JobChainsViewModel Editor(Store store) => new(new PlaceContextService(store, null!, null!, null!), null!, null!, new Navigation());
     private sealed class Navigation : NavigationManager
     {

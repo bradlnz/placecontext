@@ -16,5 +16,5 @@
     [Parameter, EditorRequired] public BuildChatViewModel Vm { get; set; } = null!;
     [Parameter] public string Placeholder { get; set; } = "Ask a question…";
     private ElementReference _composer;
-    public ValueTask FocusAsync() => _composer.FocusAsync();
+    public ValueTask FocusAsync() => _composer.FocusAsync(preventScroll: true);
 }

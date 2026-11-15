@@ -1153,7 +1153,7 @@ public sealed partial class JobChainsViewModel
 
     // ── Save ──────────────────────────────────────────────────────────────────────────────────
 
-    public async Task SaveChainAsync()
+    public async Task SaveChainAsync(bool closeEditor = true)
     {
         EditorError = null;
         if (string.IsNullOrWhiteSpace(EdName))
@@ -1237,7 +1237,8 @@ public sealed partial class JobChainsViewModel
             }
             await SaveChainAsync();
             Chains = await _svc.ListJobChainsAsync(ProjectId);
-            ShowEditor = false;
+            _openedWorkflowUpdatedAt = Chains.FirstOrDefault(chain => chain.Id == EditChainId)?.UpdatedAt;
+            if (closeEditor) ShowEditor = false;
             Message = EditChainId.HasValue
                 ? $"Workflow '{EdName.Trim()}' updated."
                 : $"Workflow '{EdName.Trim()}' created.";

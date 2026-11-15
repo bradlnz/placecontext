@@ -9,10 +9,9 @@ public sealed partial class JobChainsViewModel
 
     public async Task OpenWorkflowAssistantAsync()
     {
-        if (EditChainId is not { } id) return;
-        await SaveChainAsync();
-        if (EditorError is not null || Chains?.FirstOrDefault(chain => chain.Id == id) is not { } saved) return;
-        await OpenChainEditorAsync(saved, view: "canvas");
+        if (EditChainId is null) return;
+        await SaveChainAsync(closeEditor: false);
+        if (EditorError is not null || AssistantWorkflow is null) return;
         ShowWorkflowAssistant = true;
         NotifyStateChanged();
     }
