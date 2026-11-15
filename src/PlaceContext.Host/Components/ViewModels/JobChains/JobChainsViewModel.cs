@@ -124,6 +124,7 @@ public sealed partial class JobChainsViewModel : PageViewModel
         if (!openEditor)
         {
             EditorView = NormalizeEditorView(view ?? (runId.HasValue ? "runs" : "canvas"));
+            if (IsMarkupView) PrepareMarkup();
             if (EditorView is "runs" or "details")
             {
                 EditorTab = EditorView;

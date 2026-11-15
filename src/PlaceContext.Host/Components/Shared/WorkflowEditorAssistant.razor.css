@@ -1,0 +1,16 @@
+.workflow-assistant { --chat-surface:color-mix(in srgb, var(--panel) 96%, var(--text)); position:absolute; inset:0 0 0 auto; z-index:5; width:min(460px, 100%); display:flex; flex-direction:column; background:var(--card); border-left:1px solid var(--border); box-shadow:-12px 0 28px #0002; animation:assistant-enter .18s ease-out; }
+.workflow-assistant[hidden] { display:none; }
+.workflow-assistant header { display:flex; align-items:flex-start; justify-content:space-between; padding:18px; border-bottom:1px solid var(--border); }
+.workflow-assistant h3 { margin:0; font-size:16px; }
+.workflow-assistant header p { margin:5px 0 0; font-size:12px; color:var(--text-2); }
+.assistant-hint, .assistant-model, .assistant-error { margin:12px 18px; font-size:12px; }
+.assistant-hint { color:var(--text-2); line-height:1.5; }
+.assistant-model label { display:block; margin:8px 0 5px; font-size:12px; }
+.assistant-model select { width:100%; box-sizing:border-box; }
+.assistant-messages { flex:1; min-height:0; overflow:auto; padding:0 18px; font-size:13px; overflow-wrap:anywhere; }
+.chat-message { margin:18px 0; }
+.assistant-error { color:var(--bad); }
+.workflow-assistant footer { padding:12px 18px 18px; border-top:1px solid var(--border); }
+.composer-note { margin:10px 4px 0; font-size:10px; color:var(--text-3); line-height:1.5; }
+@keyframes assistant-enter { from { transform:translateX(100%); } to { transform:translateX(0); } }
+@media (prefers-reduced-motion:reduce) { .workflow-assistant { animation:none; } }

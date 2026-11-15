@@ -1,7 +1,7 @@
 .build-chat { --chat-bg: var(--panel); --chat-surface: color-mix(in srgb, var(--panel) 96%, var(--text)); display: flex; height: 100%; min-height: 0; position: relative; background: var(--chat-bg); color: var(--text); }
 .chat-main { container-type: inline-size; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .chat-header { flex: none; min-height: 64px; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; box-sizing: border-box; }
-.chat-header-start,.chat-header-actions,.composer-actions,.send-actions { display: flex; align-items: center; gap: 8px; }
+.chat-header-start,.chat-header-actions { display: flex; align-items: center; gap: 8px; }
 .chat-toolbar-button,.chat-icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; background: transparent; border: 1px solid transparent; border-radius: 7px; color: var(--text-3); font: inherit; font-size: 12px; cursor: pointer; transition: background .15s, color .15s; }
 .chat-toolbar-button { padding: 8px 10px; white-space: nowrap; }
 .chat-icon-button { width: 34px; height: 34px; padding: 0; flex: none; }
@@ -120,20 +120,9 @@ h1 { font-size: clamp(24px, 2.4vw, 30px); line-height: 1.3; letter-spacing: -.02
 .empty-chat .chat-bottom { max-width: 880px; padding-top: 0; padding-bottom: 0; }
 .chat-entry-title { margin:0 0 8px; text-align:center; font-size:24px; font-weight:600; line-height:1.3; }
 .chat-entry-description { margin:0 0 24px; text-align:center; color:var(--text-2); font-size:14px; line-height:1.6; }
-.chat-composer { background: var(--chat-surface); border: 1px solid transparent; border-radius: 24px; padding: 18px 14px 10px; box-shadow: 0 2px 8px #0000000d; transition: border-color .15s, box-shadow .15s; }
-.chat-composer:focus-within { border-color: var(--border-2); }
-.chat-input { resize: vertical; display: block; width: 100%; box-sizing: border-box; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 64px; max-height: 200px; border: 0; background: transparent; color: var(--text); padding: 0 4px 12px; font: inherit; font-size: 15px; line-height: 1.65; outline: none; }
-.composer-actions { justify-content: flex-end; gap: 12px; }
 .model-picker { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .model-picker select { width: auto; max-width: 200px; min-width: 0; border: 0; border-radius: 6px; padding: 7px 5px; background: var(--chat-bg); color: var(--text-2); font: inherit; font-size: 14px; cursor: pointer; text-overflow: ellipsis; }
 .model-picker select:first-of-type { max-width: 150px; color: var(--text-3); }
-.send-actions { flex: none; }
-.send-button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: var(--text); color: var(--panel); cursor: pointer; transition: opacity .15s, transform .15s; }
-.send-button:not(:disabled):hover { transform: translateY(-1px); }
-.send-button:disabled { background: var(--text-3); color: var(--chat-surface); opacity: .5; }
-.send-button ::deep svg { width: 20px; height: 20px; }
-.stop-button span { width: 11px; height: 11px; background: currentColor; border-radius: 2px; }
-.mic-button.listening { color: var(--brand); background: var(--brand-bg); }
 .composer-note,.model-setup { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 12px 4px 0; color: var(--text-3); font-size: 10px; line-height: 1.6; }
 .model-setup { font-size: 11px; }
 .model-setup>span,.model-setup a { display: inline-flex; align-items: center; gap: 7px; }
@@ -198,7 +187,6 @@ pre { overflow: auto; max-height: 320px; white-space: pre-wrap; overflow-wrap: a
     .chat-bottom { width: calc(100% - 32px); }
     .chat-messages { padding: 24px 16px; }
     .model-setup { flex-wrap: wrap; justify-content: center; }
-    .chat-input { resize: none; }
     .message-actions button { min-height: 44px; }
 }
 @media (max-height: 600px) {

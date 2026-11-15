@@ -144,6 +144,35 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
         _ => "event",
     };
 
+    public static string StageTitle(JobChainStageView stage) => stage.Action switch
+    {
+        SubWorkflowChainActionView child => child.WorkflowName,
+        ParallelWorkflowsChainActionView => "Run matching workflows in parallel",
+        VirtualMachineChainActionView => "Browser automation",
+        LoopChainActionView { AgentProvider: "jev" } => "AI verification",
+        null => stage.IsParallel ? "Run jobs in parallel" : stage.Jobs.FirstOrDefault()?.JobName ?? "Run job",
+        _ => stage.Action.DisplayName
+    };
+
+    public string StageDescription(JobChainStageView stage) => stage.Action switch
+    {
+        LoopChainActionView agent => agent.Instructions,
+        VirtualMachineChainActionView browser => browser.Command,
+        SubWorkflowChainActionView child => $"Pass the current context to {child.WorkflowName} and continue with its result.",
+        ParallelWorkflowsChainActionView parallel => $"Check {parallel.Branches.Count} IF branches, run every matching workflow, then join their results.",
+        RepeatFlowChainActionView repeat => $"Retry the preceding process until the condition passes. Fail after {repeat.MaxAttempts} total attempts.",
+        QueryDataChainActionView query => $"Read project data into {query.OutputField} for the following steps.",
+        ScoringGateChainActionView score => $"Evaluate {score.Criteria.Count} criteria against {score.InputField}; require a score of {score.PassScore}.",
+        SendEmailChainActionView email => $"Send “{email.Subject}” to {email.Recipient}.",
+        SendSmsChainActionView sms => $"Send a text message to {sms.Recipient}.",
+        ContainerBuildChainActionView build => $"Build an image from {build.ContextField} and save it in {build.OutputField}.",
+        ContainerRunChainActionView container => $"Run the container task and save its result in {container.OutputField}.",
+        null when stage.IsParallel => $"Run {string.Join(", ", stage.Jobs.Select(job => job.JobName))} together and wait for all results.",
+        null => Jobs.FirstOrDefault(job => job.Id == stage.Jobs.FirstOrDefault()?.JobId)?.Description is { Length: > 0 } description
+            ? description : "Run this job with the current workflow context and pass its result to the next step.",
+        _ => "Run this action with the current workflow context."
+    };
+
     public string GateLabel(ChainGateView gate) =>
         gate switch
         {

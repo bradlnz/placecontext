@@ -184,6 +184,7 @@ public sealed partial class JobChainsViewModel
 
     public async Task OpenChainEditorAsync(JobChainView chain, Guid? runId = null, string? view = null)
     {
+        if (EditChainId != chain.Id) ShowWorkflowAssistant = false;
         _pageVersion++;
         StopPolling();
         ChainRuns = null;
@@ -211,6 +212,7 @@ public sealed partial class JobChainsViewModel
         StepRunDetail = null;
         ShowEditor = true;
         EditorView = NormalizeEditorView(view ?? (runId.HasValue ? "runs" : "canvas"));
+        if (IsMarkupView) PrepareMarkup();
         if (EditorView == "runs")
         {
             EditorTab = "runs";
@@ -244,6 +246,7 @@ public sealed partial class JobChainsViewModel
     public void SetEditorView(string view)
     {
         EditorView = NormalizeEditorView(view);
+        if (IsMarkupView) PrepareMarkup();
         if (EditorView == "runs")
         {
             EditorTab = "runs";
@@ -260,6 +263,7 @@ public sealed partial class JobChainsViewModel
 
     public void CloseEditor()
     {
+        ShowWorkflowAssistant = false;
         _pageVersion++;
         ShowEditor = false;
         ShowGateEditor = false;
@@ -309,6 +313,7 @@ public sealed partial class JobChainsViewModel
         "list" => "list",
         "runs" => "runs",
         "schedules" => "schedules",
+        "markup" => "markup",
         _ => "canvas"
     };
 

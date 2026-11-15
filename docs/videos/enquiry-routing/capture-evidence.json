@@ -1,0 +1,50 @@
+{
+  "capturedAt": "2026-11-15T06:58:00.403Z",
+  "project": "e8ca3d36-30de-44b4-bbe3-f65d210c0f95",
+  "workflow": "e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+  "trackingId": "fedc15a2-b396-4a51-907c-14618548da4f",
+  "projectId": "e8ca3d36-30de-44b4-bbe3-f65d210c0f95",
+  "chainId": "e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+  "chainRunId": "b703ff4c-5e30-4c88-a18e-62e9a792895b",
+  "status": "Succeeded",
+  "error": null,
+  "submittedAt": "2026-11-15T06:51:46.741351+00:00",
+  "startedAt": "2026-11-15T06:51:49.421653+00:00",
+  "finishedAt": "2026-11-15T06:55:11.537496+00:00",
+  "runUrl": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/b703ff4c-5e30-4c88-a18e-62e9a792895b/submission/fedc15a2-b396-4a51-907c-14618548da4f",
+  "succeeded": true,
+  "request": {
+    "request_id": "0e3f2b7e-6824-4365-a2c8-327766d9b8c5",
+    "demo": true,
+    "name": "Jordan Lee",
+    "email": "jordan@example.test",
+    "question": "My November invoice was charged twice. Could someone check the duplicate payment and help me get it corrected?"
+  },
+  "browserReplayFrames": 7,
+  "capture": "Actual application footage and recorded QEMU replay; fictional data; idle waits omitted; separate UI pickups",
+  "noul": 0.99,
+  "receipt": {
+    "request_id": "0e3f2b7e-6824-4365-a2c8-327766d9b8c5",
+    "status": "Assigned",
+    "assigned_to": "Maya Chen",
+    "department": "Billing",
+    "question": "My November invoice was charged twice. Could someone check the duplicate payment and help me get it corrected?",
+    "reason": "The question concerns a duplicate invoice payment, which matches Maya's expertise in invoices, duplicate charges, payments and refunds.",
+    "browser_assignment_verified": true,
+    "external_messages_sent": false
+  },
+  "parallelRuns": [
+    {
+      "Id": "12554faa-bc22-4f3d-b5e5-bc46ce1d7408",
+      "Status": "Succeeded",
+      "StartedAt": "2026-11-15T06:54:54.034997+00:00",
+      "FinishedAt": "2026-11-15T06:55:10.853483+00:00"
+    },
+    {
+      "Id": "29de54f9-ebd8-40b7-87ec-31dc5bba71ff",
+      "Status": "Succeeded",
+      "StartedAt": "2026-11-15T06:54:54.036409+00:00",
+      "FinishedAt": "2026-11-15T06:55:11.491385+00:00"
+    }
+  ]
+}

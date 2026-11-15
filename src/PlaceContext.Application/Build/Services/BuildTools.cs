@@ -14,12 +14,17 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Application.Build;
 
-public sealed partial class BuildTools(Guid projectId, PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IOutcomeReviewer? reviewer = null, Action<Guid, Guid>? jobStarted = null, IMcpClientService? mcp = null, IJobChainSubmissionQueue? submissions = null, IReadOnlySet<Guid>? mcpConnectionIds = null, DashboardAgentProfile? profile = null)
+public sealed partial class BuildTools(Guid projectId, PlaceContextService service, IPermissionService permissions, IBuildChatStore store, IOutcomeReviewer? reviewer = null, Action<Guid, Guid>? jobStarted = null, IMcpClientService? mcp = null, IJobChainSubmissionQueue? submissions = null, IReadOnlySet<Guid>? mcpConnectionIds = null, DashboardAgentProfile? profile = null, Guid? workflowEditorId = null, DateTimeOffset? workflowEditorVersion = null)
 {
+    public DateTimeOffset? WorkflowEditorVersion => _workflowEditorVersion;
+    private DateTimeOffset? _workflowEditorVersion = workflowEditorVersion;
+    private bool EditorAllowsTool(string name) => workflowEditorId is null || name is
+        nameof(ask_user) or nameof(project_context) or nameof(list_workflows) or nameof(get_workflow)
+        or nameof(list_jobs) or nameof(get_job) or nameof(save_workflow) or nameof(check_workflow_readiness);
     private readonly IMcpClientService? _mcp = mcpConnectionIds is { Count: 0 } ? null : mcp;
     public IReadOnlyList<AIFunction> Functions() => GetType().GetMethods()
         .Where(m => m.GetCustomAttribute<DescriptionAttribute>() is not null)
-        .Where(m => profile is null || profile.AllowsTool(m.Name))
+        .Where(m => EditorAllowsTool(m.Name) && (profile is null || profile.AllowsTool(m.Name)))
         .Where(m => _mcp is not null || m.Name is not (nameof(list_mcp_tools) or nameof(call_mcp_tool)))
         .Select(m => AIFunctionFactory.Create(m, this, m.Name, m.GetCustomAttribute<DescriptionAttribute>()!.Description)).ToArray();
 
@@ -49,6 +54,8 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
 
     private async Task RequireAsync(string permission, CancellationToken ct, [System.Runtime.CompilerServices.CallerMemberName] string tool = "")
     {
+        if (!EditorAllowsTool(tool))
+            throw new UnauthorizedAccessException("The workflow editor can inspect definitions and edit its selected workflow only.");
         if (profile is not null && !profile.AllowsTool(tool))
             throw new UnauthorizedAccessException("This tool is disabled for the selected agent.");
         if (!await permissions.HasAsync(Permission.ProjectsView, ct) || !await permissions.HasAsync(permission, ct))
@@ -347,6 +354,8 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
     public async Task<object> save_workflow(string name, string? description, WorkflowStage[] stages, Guid? workflowId, CancellationToken ct)
     {
         await RequireAsync(Permission.ChainsManage, ct);
+        if (workflowEditorId is { } selected && (workflowId != selected || _workflowEditorVersion is null))
+            throw new UnauthorizedAccessException("This editor can only update the selected workflow from its saved version.");
         if (stages.Length is < 1 or > 100)
         {
             throw new ArgumentException("Use 1–100 workflow stages.");
@@ -362,8 +371,10 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         if (workflowId is { } idToUpdate)
         {
             var existing = await WorkflowAsync(idToUpdate, ct);
-            return await service.UpdateJobChainAsync(idToUpdate, name, description, [], jobs, gates, actions, ct,
-                expectedUpdatedAt: existing.UpdatedAt);
+            var updated = await service.UpdateJobChainAsync(idToUpdate, name, description, [], jobs, gates, actions, ct,
+                expectedUpdatedAt: workflowEditorId.HasValue ? _workflowEditorVersion : existing.UpdatedAt);
+            _workflowEditorVersion = updated.UpdatedAt;
+            return updated;
         }
         return await service.CreateJobChainAsync(projectId, name, description, [], jobs, gates, actions, ct);
     }

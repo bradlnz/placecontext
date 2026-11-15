@@ -355,7 +355,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         try
         {
             var pending = await PrepareSendConversationAsync();
-            pending.AgentId ??= DashboardSettings.DefaultAgentId;
+            if (pending.WorkflowEditorId is null) pending.AgentId ??= DashboardSettings.DefaultAgentId;
             await agent.QueueAsync(pending, text);
             if (BranchPending)
             {
@@ -457,7 +457,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
                 return;
             }
             Conversation = latest;
-            await AutoPreviewAsync();
+            if (Conversation.WorkflowEditorId is null) await AutoPreviewAsync();
             if (_disposed || version != _updateVersion)
             {
                 return;

@@ -225,17 +225,7 @@
                     <h2 class="chat-entry-title">How can I help?</h2>
                     <p class="chat-entry-description">Explore your project, create a chart, or get help with a workflow.</p>
                 }
-                <span id="@(Vm.ViewId + "-composer-keys")" class="visually-hidden">Enter to send. Shift and Enter for a new line.</span>
-                <form class="chat-composer" @onsubmit="Vm.SendAsync" @onsubmit:preventDefault>
-                    <textarea @ref="_composer" class="chat-input" rows="3" aria-label="Message assistant" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Ask a question…" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
-                    <div class="composer-actions">
-                        <div class="send-actions">
-                            <button type="button" class="chat-icon-button mic-button @(Vm.Listening ? "listening" : "")" disabled="@(Vm.Locked || !Vm.SpeechSupported)" aria-label="@(Vm.Listening ? "Stop dictation" : "Dictate")" aria-pressed="@Vm.Listening" title="@(Vm.SpeechSupported ? "Dictate a message" : "Dictation requires a supported browser and HTTPS")" @onclick="Vm.ToggleSpeechAsync"><AppIcon Kind="mic" /></button>
-                            @if (Vm.Busy) { <button type="button" class="send-button stop-button" aria-label="Stop response" title="Stop response" @onclick="Vm.StopAsync"><span></span></button> }
-                            else { <button type="submit" class="send-button" aria-label="@(Vm.BranchPending ? "Send in new session" : "Send message")" title="@(Vm.BranchPending ? "Send in new session" : "Send message")" disabled="@(!Vm.CanSend)"><AppIcon Kind="arrow-up" /></button> }
-                        </div>
-                    </div>
-                </form>
+                <ChatComposer @ref="_composer" Vm="Vm" />
                 @if (Vm.ModelSetupHint is not null)
                 { <div class="composer-note" role="status">@Vm.ModelSetupHint</div> }
                 else if (!Vm.Loading && !Vm.Models.Contains(Vm.Conversation.Model))
@@ -493,7 +483,7 @@
     [Parameter, SupplyParameterFromQuery(Name = "task")] public string? TaskHint { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "source")] public Guid? SourceHint { get; set; }
     private (Guid, string?, Guid?)? _appliedSourceHint;
-    private ElementReference _composer;
+    private ChatComposer _composer = null!;
     private bool _focusComposer;
     private WorkflowQueryEditor? _chartQueryEditor;
     private async Task SaveChartQueryAsync() => await Vm.SaveChartQueryAsync(_chartQueryEditor is null ? Vm.ChartSqlDraft : await _chartQueryEditor.ReadAsync());

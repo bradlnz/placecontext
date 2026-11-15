@@ -76,6 +76,10 @@
                     {
                         <div class="route-label">True</div>
                     }
+                    <div class="stage-caption">
+                        <strong>@ChainCanvasViewModel.StageTitle(stage)</strong>
+                        <p title="@Vm.StageDescription(stage)">@Vm.StageDescription(stage)</p>
+                    </div>
                     <div class="canvas-stage @(Vm.DragOverStage == stageIndex ? "drag-over" : "")"
                          @ondragover="@(e => DragOver(stageIndex))"
                          @ondragover:preventDefault="true"
@@ -144,13 +148,13 @@
                             }
                             else if (stage.Action is ParallelWorkflowsChainActionView parallel)
                             {
-                                <button disabled="@ReadOnly" class="job-path" title="Edit parallel if gates" @onclick="@(() => OnEditParallelWorkflowAction.InvokeAsync(stageIndex))">
-                                    <span class="job-icon"><AppIcon Kind="parallel" /></span><span class="node-copy"><strong>Parallel if gates</strong><small>Every matching branch runs · join when all finish</small></span>
+                                <button disabled="@ReadOnly" class="job-path parallel-workflow-heading" title="Edit parallel if gates" @onclick="@(() => OnEditParallelWorkflowAction.InvokeAsync(stageIndex))">
+                                    <span class="job-icon"><AppIcon Kind="parallel" /></span><span class="node-copy"><strong>Parallel if gates</strong><small>@parallel.Branches.Count branches · join all</small></span>
                                 </button>
                                 <div class="parallel-workflow-branches">
                                     @foreach (var branch in parallel.Branches)
                                     {
-                                        <div class="parallel-workflow-branch"><span class="route-label">IF</span><code>@branch.Condition</code><strong>@branch.WorkflowName</strong></div>
+                                        <button type="button" disabled="@ReadOnly" class="parallel-workflow-branch" title="@($"{branch.WorkflowName}: {branch.Condition}")" @onclick="@(() => OnEditParallelWorkflowAction.InvokeAsync(stageIndex))"><span class="route-label">IF</span><code>@branch.Condition</code><strong>@branch.WorkflowName</strong></button>
                                     }
                                 </div>
                                 <div class="node-output"><span>Join results</span><code>@parallel.OutputField</code></div>

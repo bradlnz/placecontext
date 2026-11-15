@@ -1,0 +1,81 @@
+@using PlaceContext.Host.Components.ViewModels
+@implements IAsyncDisposable
+@inject BuildChatViewModel Vm
+
+<aside id="@Vm.ViewId" class="workflow-assistant build-chat" role="region" aria-labelledby="workflow-assistant-title" hidden="@(!Visible)">
+    <header>
+        <div><h3 id="workflow-assistant-title">Workflow editor</h3><p>@Workflow.Name</p></div>
+        <button class="dcslide-x" aria-label="Close workflow assistant" disabled="@Vm.Locked" @onclick="OnClose"><AppIcon Kind="close" /></button>
+    </header>
+    <p class="assistant-hint">Describe the change you want. Edits are saved to this workflow and appear on the canvas.</p>
+    <details class="assistant-model">
+        <summary>Model · @Vm.Conversation.Model</summary>
+        <label for="workflow-editor-connection">Connection</label>
+        <select id="workflow-editor-connection" class="dcinput" value="@Vm.Conversation.ConnectionId" disabled="@Vm.Locked" @onchange="e => Vm.SelectEditorConnection(e.Value?.ToString())">
+            @foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }
+        </select>
+        <label for="workflow-editor-model">Model</label>
+        <select id="workflow-editor-model" class="dcinput" @bind="Vm.Conversation.Model" disabled="@Vm.Locked">
+            @foreach (var model in Vm.Models) { <option>@model</option> }
+        </select>
+    </details>
+    <div class="assistant-messages chat-messages" role="log" aria-label="Workflow editor conversation" aria-live="polite" aria-busy="@Vm.Locked">
+        @if (Vm.Conversation.Messages.Count == 0)
+        {
+            <p>Try “Add an AI review before the browser step” or “Retry the review up to three times.”</p>
+        }
+        @foreach (var message in Vm.Conversation.Messages.Where(message => message is not null && BuildChatViewModel.Role(message) is "user" or "assistant" && !string.IsNullOrWhiteSpace(BuildChatViewModel.Text(message))))
+        {
+            var role = BuildChatViewModel.Role(message!);
+            <article class="chat-message @role">
+                <div class="message-author"><span>@if (role == "user") { <AppIcon Kind="human" /> } else { <AssistantAvatar /> }</span><strong>@(role == "user" ? "You" : "Workflow editor")</strong></div>
+                @if (role == "assistant")
+                { <div class="message-text message-markdown">@((MarkupString)BuildChatViewModel.FormatReply(BuildChatViewModel.Text(message!)))</div> }
+                else
+                { <div class="message-text">@BuildChatViewModel.Text(message!)</div> }
+                @foreach (var answer in BuildChatViewModel.SuggestedAnswers(message!))
+                { <button class="dcbtn" disabled="@(!Vm.CanAnswer(message!))" @onclick="() => Vm.AnswerAsync(message!, answer)">@answer</button> }
+            </article>
+        }
+        @if (Vm.Locked) { <p role="status">@(Vm.Loading ? "Loading editor…" : "Editing workflow…")</p> }
+    </div>
+    @if (Vm.Error is not null) { <p class="assistant-error" role="alert">@Vm.Error</p> }
+    <footer>
+        <ChatComposer @ref="_composer" Vm="Vm" Placeholder="Describe a change or ask about this workflow…" />
+        <p class="composer-note" role="status">@(Vm.ModelSetupHint ?? (Vm.Listening ? "Listening… Stop dictation to review and send." : "Enter to send · Shift + Enter for a new line"))</p>
+    </footer>
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public PlaceContext.Application.Dtos.JobChainView Workflow { get; set; } = null!;
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private bool _working;
+    private bool _visible;
+    private bool _focusComposer;
+    private ChatComposer _composer = null!;
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(async () =>
+    {
+        var completed = _working && !Vm.Locked;
+        _working = Vm.Locked;
+        if (completed && Vm.Conversation.Messages.Count > 0) await OnChanged.InvokeAsync();
+        StateHasChanged();
+    }));
+    protected override async Task OnParametersSetAsync()
+    {
+        _focusComposer |= Visible && !_visible;
+        _visible = Visible;
+        if (Visible) await Vm.LoadWorkflowEditorAsync(Workflow.ProjectId, Workflow.Id, Workflow.UpdatedAt);
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Vm.InitializeBrowserAsync();
+        if (_focusComposer && !Vm.Locked)
+        {
+            _focusComposer = false;
+            await _composer.FocusAsync();
+        }
+    }
+    public async ValueTask DisposeAsync() { Vm.Detach(); await Vm.DisposePageAsync(); }
+}

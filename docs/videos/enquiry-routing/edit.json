@@ -1,0 +1,158 @@
+{
+  "scenes": [
+    {
+      "id": "agents",
+      "start": 2.436,
+      "end": 9.436,
+      "speed": 1,
+      "title": "A team of specialist agents.",
+      "subtitle": "Triage, routing review, handoff writing, and follow-up planning.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "instructions",
+      "start": 12.643,
+      "end": 17.643,
+      "speed": 1,
+      "title": "Each agent has a clear role.",
+      "subtitle": "Reusable instructions and a selected model connection.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "workflow",
+      "start": 20.865,
+      "end": 26.865,
+      "speed": 1,
+      "title": "One workflow coordinates the process.",
+      "subtitle": "Validation \u2192 specialist sub-workflows \u2192 browser action \u2192 verified handoff.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "review",
+      "start": 37.107,
+      "end": 42.107,
+      "speed": 1,
+      "title": "Review the routing before taking action.",
+      "subtitle": "An independent agent review followed by AI verification.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "conditions",
+      "start": 45.353,
+      "end": 51.353,
+      "speed": 1,
+      "title": "Require multiple conditions to pass.",
+      "subtitle": "The review must pass AND the AI noul score must be at least 0.9.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "vertical",
+      "start": 6.199,
+      "end": 15.199,
+      "speed": 1,
+      "title": "Parallel IF gates, arranged vertically.",
+      "subtitle": "Every matching specialist workflow runs; their results join when both finish.",
+      "raw": "vertical-gates.webm"
+    },
+    {
+      "id": "parallel-settings",
+      "start": 53.897,
+      "end": 59.897,
+      "speed": 1,
+      "title": "Give every branch its own conditions.",
+      "subtitle": "Combine conditions and choose the specialist sub-workflow for each branch.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "schedules",
+      "start": 64.14,
+      "end": 70.14,
+      "speed": 1,
+      "title": "Schedule execution inside the workflow.",
+      "subtitle": "The Schedules tab is already linked to this workflow.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "question",
+      "start": 71.34,
+      "end": 84.34,
+      "speed": 1,
+      "title": "A customer asks a question.",
+      "subtitle": "A fictional duplicate-payment enquiry enters through the website.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "accepted",
+      "start": 84.751,
+      "end": 88.251,
+      "speed": 1,
+      "title": "The enquiry enters the workflow queue.",
+      "subtitle": "The website receives a tracking ID for this execution.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "queue",
+      "start": 89.391,
+      "end": 93.891,
+      "speed": 1,
+      "title": "Follow execution from the queue.",
+      "subtitle": "The submission links directly to its workflow run.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "triage",
+      "start": 102.298,
+      "end": 106.298,
+      "speed": 1,
+      "title": "Triage selects the right specialist.",
+      "subtitle": "The agent reads the project\u2019s team roster and returns its routing decision.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "ai-review",
+      "start": 113.141,
+      "end": 118.141,
+      "speed": 1,
+      "title": "AI verification checks the decision.",
+      "subtitle": "This run returned a noul score of 0.99; the threshold is 0.9. Idle waits omitted.",
+      "raw": "enquiry-routing.webm"
+    },
+    {
+      "id": "browser",
+      "start": 8.783,
+      "end": 23.783,
+      "speed": 1,
+      "title": "The browser completes the assignment.",
+      "subtitle": "Recorded QEMU replay: open the enquiry, select Maya Chen, save, and reload.",
+      "raw": "finish.webm"
+    },
+    {
+      "id": "saved",
+      "start": 25.133,
+      "end": 32.132999999999996,
+      "speed": 1,
+      "title": "Verify the result in the service desk.",
+      "subtitle": "Assigned to Maya Chen in Billing. The saved result matches the enquiry.",
+      "raw": "finish.webm"
+    },
+    {
+      "id": "handoffs",
+      "start": 40.602,
+      "end": 48.602,
+      "speed": 1,
+      "title": "Both matching agent workflows succeed.",
+      "subtitle": "Handoff Writer and Follow-up Planner return separate, traceable results.",
+      "raw": "finish.webm"
+    },
+    {
+      "id": "complete",
+      "start": 52.06,
+      "end": 59.06,
+      "speed": 1,
+      "title": "Inspect the complete workflow run.",
+      "subtitle": "Every executed step succeeded. Fictional data; no external messages sent.",
+      "raw": "finish.webm"
+    }
+  ],
+  "notes": "Actual UI footage. Separate recorded pickups for vertical gates and saved run replay; idle waits omitted. No generated application states."
+}

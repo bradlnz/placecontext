@@ -1,0 +1,16 @@
+{
+  "duration": 126,
+  "width": 1920,
+  "height": 1080,
+  "seekChecks": [
+    6,
+    43,
+    84,
+    106,
+    118
+  ],
+  "playbackAdvanced": true,
+  "checkedAt": "2026-11-15T07:06:06.764Z",
+  "browser": "Chromium",
+  "result": "passed"
+}

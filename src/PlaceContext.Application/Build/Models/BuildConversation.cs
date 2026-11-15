@@ -9,6 +9,8 @@ public sealed class BuildConversation
     {
         get; set;
     }
+    public Guid? WorkflowEditorId { get; set; }
+    public DateTimeOffset? WorkflowEditorVersion { get; set; }
     public string Title { get; set; } = "New chat";
     public Guid? ParentConversationId { get; set; }
     public int? ParentMessageCount { get; set; }

@@ -622,3 +622,6 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 }
 
 .condition-row { padding: 12px 0; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+
+.workflow-canvas-dialog.assistant-open { position:relative; }
+.workflow-canvas-dialog.assistant-open > .dcmodal-body { padding-right:min(480px, 40vw); }

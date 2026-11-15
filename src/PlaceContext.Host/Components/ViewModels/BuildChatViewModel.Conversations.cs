@@ -94,6 +94,8 @@ public sealed partial class BuildChatViewModel
         return new()
         {
             ProjectId = source.ProjectId,
+            WorkflowEditorId = source.WorkflowEditorId,
+            WorkflowEditorVersion = source.WorkflowEditorVersion,
             AgentId = Conversation.AgentId,
             ConnectionId = Conversation.ConnectionId,
             Model = Conversation.Model,

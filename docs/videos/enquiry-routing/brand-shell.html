@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>PlaceContext · Website enquiry routing</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:#080e0c;color:#f1f7f3;font-family:Arial,Helvetica,sans-serif}
+body{background:radial-gradient(ellipse at 12% 5%,#143b28 0,transparent 36%),radial-gradient(ellipse at 96% 110%,#112c26 0,transparent 40%),#080e0c}
+body:before{content:"";position:absolute;inset:0;opacity:.12;background-image:linear-gradient(#4b705d 1px,transparent 1px),linear-gradient(90deg,#4b705d 1px,transparent 1px);background-size:80px 80px;mask-image:linear-gradient(180deg,#000,transparent 35%,transparent 80%,#000)}
+.top{position:absolute;left:160px;right:160px;top:22px;height:40px;display:flex;align-items:center;gap:13px}.top img{width:40px;height:40px;border-radius:10px}.wordmark{font-size:25px;font-weight:700;letter-spacing:-.7px}.divider{width:1px;height:24px;background:#304338;margin:0 12px}.eyebrow{font-size:11px;letter-spacing:2.2px;color:#a7b9ae;font-weight:600}.badge{margin-left:auto;border:1px solid #30483a;border-radius:20px;padding:9px 15px;font-size:11px;letter-spacing:1.3px;color:#b2c6ba;display:flex;align-items:center;gap:9px}.badge i{width:6px;height:6px;background:#63e68d;border-radius:50%}
+.screen{position:absolute;left:159px;top:79px;width:1602px;height:902px;background:#0d1114;border:1px solid #3c5647;border-radius:4px;box-shadow:0 20px 55px #0008}
+.bottom{position:absolute;left:160px;right:160px;top:1000px;display:flex;align-items:center;gap:21px}.index{font-size:12px;letter-spacing:2px;color:#63e68d;width:35px}.caption-title{font-size:21px;font-weight:600;letter-spacing:-.3px}.caption-subtitle{margin-top:7px;font-size:13px;color:#a1b5a9;letter-spacing:.1px}.domain{margin-left:auto;font-size:13px;letter-spacing:.5px;color:#849c8d}.progress{position:absolute;left:160px;right:160px;bottom:17px;height:2px;background:#1c3025}.progress div{height:100%;background:#63e68d;width:20%}
+.hero{display:none;position:absolute;left:160px;top:262px}.hero .kicker{color:#63e68d;letter-spacing:3px;font-size:14px;font-weight:600;margin-bottom:28px}.hero h1{font-size:96px;line-height:1.03;letter-spacing:-5px;font-weight:600;margin:0 0 34px;max-width:1300px}.hero h1 em{font-style:normal;color:#63e68d}.hero p{font-size:23px;color:#a5b9ac;line-height:1.6;max-width:950px}.journey{display:flex;align-items:center;gap:18px;margin-top:52px}.journey span{font-size:15px;border:1px solid #35503e;border-radius:25px;padding:13px 23px;color:#cfdfd3}.journey b{color:#4c705a;font-weight:400}.hero-note{position:absolute;left:160px;bottom:84px;color:#7e9788;font-size:13px;letter-spacing:.4px}.hero-logo{position:absolute;right:170px;top:300px;width:220px;height:220px;opacity:.35;display:none}
+body.hero-mode .screen,body.hero-mode .bottom,body.hero-mode .progress{display:none}body.hero-mode .hero,body.hero-mode .hero-logo{display:block}
+</style>
+<div class="top"><img src="../../../website/assets/logo.svg" alt="PlaceContext corgi"><span class="wordmark">placecontext</span><span class="divider"></span><span class="eyebrow">AGENTIC WORKFLOWS + DATA</span><span class="badge"><i></i>RECORDED LOCALLY · FICTIONAL DATA</span></div>
+<div class="screen"></div>
+<div class="bottom"><span class="index">01</span><div><div class="caption-title">Start with a conversation.</div><div class="caption-subtitle">A new project. Five fictional accounts. One clear outcome.</div></div><span class="domain">placecontext.io</span></div><div class="progress"><div></div></div>
+<div class="hero"><div class="kicker">A LIVE PLATFORM WALKTHROUGH</div><h1>One question.<br><em>The right person.</em></h1><p>A website question. A team of specialist agents.<br>Browser automation that completes the handoff.</p><div class="journey"><span>Website</span><b>→</b><span>Triage</span><b>→</b><span>Review</span><b>→</b><span>Browser</span><b>→</b><span>Verified handoff</span></div></div>
+<img class="hero-logo" src="../../../website/assets/logo.svg" alt=""><div class="hero-note" hidden>Northstar enquiry routing · Actual application footage · Idle waits removed</div>
+<script>
+window.setFrame = ({title,subtitle,index=1,total=7,hero=false,closing=false}) => {
+ document.body.classList.toggle('hero-mode',hero);
+ document.querySelector('.hero-note').hidden=!hero;
+ document.querySelector('.caption-title').textContent=title||'';
+ document.querySelector('.caption-subtitle').textContent=subtitle||'';
+ document.querySelector('.index').textContent=String(index).padStart(2,'0');
+ document.querySelector('.progress div').style.width=(100*index/total)+'%';
+ if(closing){document.querySelector('.hero .kicker').textContent='PLACECONTEXT';document.querySelector('.hero h1').innerHTML='Assigned. Verified.<br><em>Ready to help.</em>';document.querySelector('.hero p').textContent='Explore the platform at placecontext.io';document.querySelector('.journey').style.display='none';}
+};
+</script></html>

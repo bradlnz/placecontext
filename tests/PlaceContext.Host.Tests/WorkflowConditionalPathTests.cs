@@ -183,6 +183,8 @@ public sealed class WorkflowConditionalPathTests
             }));
             return result.ToHtmlString();
         });
+        Assert.Contains("stage-caption", html);
+        Assert.Contains("Run this job with the current workflow context", html);
         Assert.Contains("True", html);
         Assert.Contains("False", html);
         Assert.Contains("Approved", html);

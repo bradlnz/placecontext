@@ -1,0 +1,27 @@
+[
+  {
+    "label": "10-browser-replay",
+    "seconds": 8.783,
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/b703ff4c-5e30-4c88-a18e-62e9a792895b/submission/fedc15a2-b396-4a51-907c-14618548da4f"
+  },
+  {
+    "label": "11-browser-verified",
+    "seconds": 19.574,
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/b703ff4c-5e30-4c88-a18e-62e9a792895b/submission/fedc15a2-b396-4a51-907c-14618548da4f"
+  },
+  {
+    "label": "12-saved-assignment",
+    "seconds": 25.133,
+    "url": "http://localhost:7788/desk/0e3f2b7e-6824-4365-a2c8-327766d9b8c5"
+  },
+  {
+    "label": "13-parallel-handoff",
+    "seconds": 40.602,
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/b703ff4c-5e30-4c88-a18e-62e9a792895b/submission/fedc15a2-b396-4a51-907c-14618548da4f"
+  },
+  {
+    "label": "14-completed-flow",
+    "seconds": 52.06,
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6/runs/b703ff4c-5e30-4c88-a18e-62e9a792895b"
+  }
+]

@@ -6,12 +6,14 @@
 @code {
     [Parameter] public string Value { get; set; } = "";
     [Parameter] public string Label { get; set; } = "Agent task instructions in Markdown";
+    [Parameter] public string Language { get; set; } = "markdown";
+    [Parameter] public string FileName { get; set; } = "instructions.md";
     private readonly string _id = "workflow-instructions-" + Guid.NewGuid().ToString("N");
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
-            await JS.InvokeVoidAsync("pcmonaco.init", _id, Value, "markdown", null, "instructions.md", false, Label);
+            await JS.InvokeVoidAsync("pcmonaco.init", _id, Value, Language, null, FileName, false, Label);
     }
 
     public async Task<string> ReadAsync() => await JS.InvokeAsync<string?>("pcmonaco.getValue", _id) ?? Value;

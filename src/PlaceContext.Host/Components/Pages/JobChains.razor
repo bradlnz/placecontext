@@ -279,21 +279,27 @@ else
         </div>
         }
 
-        @if (Vm.IsCanvasView || Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView)
+        @if (Vm.IsCanvasView || Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView || Vm.IsMarkupView)
         {
             <div class="dcmodal-overlay workflow-canvas-overlay">
-                <div class="dcmodal workflow-canvas-dialog" role="dialog" aria-modal="true" aria-label="Workflow canvas" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head">
+                <div class="dcmodal workflow-canvas-dialog @(Vm.ShowWorkflowAssistant ? "assistant-open" : null)" role="dialog" aria-modal="true" aria-label="Workflow canvas" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head" inert="@Vm.ShowWorkflowAssistant">
                         <div class="flex-min">
                             <div class="title-14">@(string.IsNullOrWhiteSpace(Vm.EdName) ? "New workflow" : Vm.EdName) <span class="workflow-step-count">@Vm.EdStages.Count steps</span></div>
-                            <div class="sub-115">@(Vm.IsCanvasView ? "Drag stages to reorder. Select a step to configure it." : Vm.IsSchedulesView ? "Choose when this workflow runs." : Vm.IsRunsView ? "Execution history, inputs, and job logs." : "Steps run in order. Jobs within a parallel stage run together.")</div>
+                            <div class="sub-115">@(Vm.IsMarkupView ? "Edit and deploy this workflow as YAML." : Vm.IsCanvasView ? "Drag stages to reorder. Select a step to configure it." : Vm.IsSchedulesView ? "Choose when this workflow runs." : Vm.IsRunsView ? "Execution history, inputs, and job logs." : "Steps run in order. Jobs within a parallel stage run together.")</div>
                         </div>
                         <div class="workflow-canvas-actions">
                             @if (Vm.EditChainId.HasValue && Vm.Chains?.FirstOrDefault(chain => chain.Id == Vm.EditChainId) is { } canvasWorkflow)
                             {
                                 <button type="button" class="dcbtn primary workflow-run" title="Run the saved workflow" disabled="@Vm.IsRunningChain(canvasWorkflow.Id)" @onclick="() => Vm.RunChainAsync(canvasWorkflow)"><AppIcon Kind="play" /> @(Vm.IsRunningChain(canvasWorkflow.Id) ? "Running…" : "Run")</button>
                             }
+                            @if (!Vm.IsMarkupView)
+                            {
                             <button type="button" class="dcbtn" @onclick="() => Vm.OpenStageNodePicker(Vm.EdStages.Count)"><AppIcon Kind="plus" /> Add step</button>
+                            @if (Vm.EditChainId.HasValue)
+                            {
+                                <button type="button" class="dcbtn" title="Save the current canvas and open the workflow editor agent" disabled="@Vm.Saving" @onclick="Vm.OpenWorkflowAssistantAsync"><AppIcon Kind="agent" /> Edit with AI</button>
+                            }
                             <details class="workflow-menu">
                                 <summary>Workflow actions</summary>
                                 <div class="workflow-menu-items">
@@ -306,25 +312,31 @@ else
 
                                 </div>
                             </details>
-                            <button class="dcslide-x" aria-label="Close canvas" @onclick="CloseWorkflowAsync"><AppIcon Kind="close" /></button>
+                            }
+                            <button class="dcslide-x" aria-label="Close canvas" disabled="@Vm.Saving" @onclick="CloseWorkflowAsync"><AppIcon Kind="close" /></button>
                         </div>
                     </div>
-                    <nav class="dctabs workflow-view-tabs" aria-label="Workflow view">
-                        <button type="button" class="dctab @(Vm.IsCanvasView ? "active" : null)" aria-pressed="@Vm.IsCanvasView" @onclick='() => Vm.SetEditorView("canvas")'>Canvas</button>
-                        <button type="button" class="dctab @(Vm.IsListView ? "active" : null)" aria-pressed="@Vm.IsListView" @onclick='() => Vm.SetEditorView("list")'>List</button>
+                    <nav class="dctabs workflow-view-tabs" aria-label="Workflow view" inert="@(Vm.ShowWorkflowAssistant || Vm.Saving)">
+                        <button type="button" class="dctab @(Vm.IsCanvasView ? "active" : null)" aria-pressed="@Vm.IsCanvasView" @onclick='() => SetWorkflowViewAsync("canvas")'>Canvas</button>
+                        <button type="button" class="dctab @(Vm.IsListView ? "active" : null)" aria-pressed="@Vm.IsListView" @onclick='() => SetWorkflowViewAsync("list")'>List</button>
                         @if (Vm.EditChainId.HasValue)
                         {
+                            <button type="button" class="dctab @(Vm.IsMarkupView ? "active" : null)" aria-pressed="@Vm.IsMarkupView" @onclick='() => SetWorkflowViewAsync("markup")'>Markup</button>
                             <button type="button" class="dctab @(Vm.IsRunsView ? "active" : null)" aria-pressed="@Vm.IsRunsView" @onclick="Vm.ShowWorkflowRunsAsync">Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
                             <AuthorizeView Policy="@Permission.TriggersManage">
                                 <button type="button" class="dctab @(Vm.IsSchedulesView ? "active" : null)" aria-pressed="@Vm.IsSchedulesView" @onclick='() => Vm.SetEditorView("schedules")'>Schedules</button>
                             </AuthorizeView>
                         }
                     </nav>
+                    @if (Vm.AssistantWorkflow is { } assistantWorkflow)
+                    {
+                        <WorkflowEditorAssistant @key="assistantWorkflow.Id" Workflow="assistantWorkflow" Visible="Vm.ShowWorkflowAssistant" OnClose="Vm.CloseWorkflowAssistant" OnChanged="Vm.RefreshAssistantWorkflowAsync" />
+                    }
                     @if (Vm.EditorError is { } canvasError)
                     {
                         <p class="workflow-canvas-error" role="alert">@canvasError</p>
                     }
-                    <div class="dcmodal-body @(Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView ? "workflow-list-body" : null)">
+                    <div class="dcmodal-body @(Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView ? "workflow-list-body" : null)" inert="@Vm.ShowWorkflowAssistant">
                         @if (Vm.IsSchedulesView && Vm.EditChainId is { } scheduledWorkflowId)
                         {
                             <AuthorizeView Policy="@Permission.TriggersManage">

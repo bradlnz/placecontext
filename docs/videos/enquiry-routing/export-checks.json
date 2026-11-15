@@ -1,0 +1,22 @@
+{
+  "placecontext-demo-clean": {
+    "file": "placecontext-demo-clean.mp4",
+    "seconds": 117.0,
+    "width": 1600,
+    "height": 900,
+    "frames": 3510,
+    "fps": 30,
+    "bytes": 2100113,
+    "decode_check": "passed"
+  },
+  "placecontext-demo-branded": {
+    "file": "placecontext-demo-branded.mp4",
+    "seconds": 126.0,
+    "width": 1920,
+    "height": 1080,
+    "frames": 3780,
+    "fps": 30,
+    "bytes": 3278805,
+    "decode_check": "passed"
+  }
+}
