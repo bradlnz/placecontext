@@ -13,7 +13,7 @@ event name.
 
 ## Use the Events screen
 
-Open **Events** to see a summary, the available event types, and the latest activity.
+Open **Settings → Project → Events** to see a summary, the available event types, and the latest activity.
 
 - **Built-in** event types come from PlaceContext and cannot be redefined.
 - **Custom** event types describe activities used by your workspace.
@@ -38,7 +38,7 @@ also reports how many triggers fired.
 
 ## Create and manage triggers
 
-Open **Schedules** to manage every trigger in the current project. Select:
+Open **Workflows → Schedules** to manage every trigger in the current project. Select:
 
 - **Schedule** to run a Job hourly, daily, on weekdays, weekly, monthly, or with an advanced cron
   expression;
@@ -63,3 +63,5 @@ Check these items in order:
 
 Creating, editing, pausing, or emitting events and triggers requires the matching workspace
 permission. Ask an administrator if the controls are missing.
+
+Open a workflow and select **Schedules** to create, pause, edit, or delete its execution schedules. The workflow is already selected, and this tab only shows schedules for that workflow. The project Schedules page shows schedules across workflows.

@@ -69,7 +69,7 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
 
             triggerManifests.AddRange((await _triggers.ListForProjectAsync(projectId, ct))
                 .Select(t => new TriggerManifest(t.Id, t.ProjectId, t.JobId, t.Name, t.Kind.ToString(), t.Enabled,
-                    t.CronExpression, t.EventName)));
+                    t.CronExpression, t.EventName, t.WorkflowId)));
 
             mappingManifests.AddRange((await _mappings.ListForProjectAsync(projectId, ct))
                 .Select(m => new DataMappingManifest(
@@ -115,7 +115,9 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
         chain.Name,
         chain.Description,
         chain.StepJobIds.ToList(),
-        chain.Stages.Select(stage => new JobChainStageManifest(
+        chain.Stages.Select(ToStageManifest).ToList());
+
+    private static JobChainStageManifest ToStageManifest(ChainStage stage) => new(
             stage.JobIds.ToList(),
             stage.Gate switch
             {
@@ -125,6 +127,10 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             },
             stage.Action switch
             {
+                ParallelWorkflowsChainAction parallel => new ChainActionManifest(parallel.Type, OutputField: parallel.OutputField, Branches: parallel.Branches),
+                SubWorkflowChainAction child => new ChainActionManifest(child.Type, WorkflowId: child.WorkflowId, WorkflowName: child.WorkflowName),
+                ContainerBuildChainAction build => new ChainActionManifest(build.Type, Dockerfile: build.Dockerfile, ContextField: build.ContextField, OutputField: build.OutputField, TimeoutSeconds: build.TimeoutSeconds, AllowNetwork: build.AllowNetwork),
+                ContainerRunChainAction container => new ChainActionManifest(container.Type, Image: container.Image, ImageField: container.ImageField, OutputField: container.OutputField, ContainerCommand: container.Command, Port: container.Port, MemoryMb: container.MemoryMb, Cpus: container.Cpus, TimeoutSeconds: container.TimeoutSeconds, AllowNetwork: container.AllowNetwork),
                 VirtualMachineChainAction vm => new ChainActionManifest(vm.Type, ImageProfile: vm.ImageProfile, Command: vm.Command,
                     OutputField: vm.OutputField, MemoryMb: vm.MemoryMb, Cpus: vm.Cpus, TimeoutSeconds: vm.TimeoutSeconds, AllowNetwork: vm.AllowNetwork, PauseForLogin: vm.PauseForLogin || vm.LoginProfileId is not null),
                 QueryDataChainAction query => new ChainActionManifest(query.Type, Sql: query.Sql, OutputField: query.OutputField),
@@ -144,5 +150,6 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
                     sms.Recipient,
                     Body: sms.Body),
                 _ => null,
-            })).ToList());
+            },
+            (stage.ElseBranch ?? (stage.Gate as ConditionGate)?.ElseBranch)?.Select(ToStageManifest).ToList());
 }

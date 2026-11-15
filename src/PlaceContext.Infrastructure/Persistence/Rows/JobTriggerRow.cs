@@ -20,6 +20,8 @@ public sealed class JobTriggerRow : ITenantOwned
     {
         get; set;
     }
+    public Guid? WorkflowId { get; set; }
+    public Guid? ScheduledBy { get; set; }
     public string Name { get; set; } = "";
 
     /// <summary>"Schedule" | "Event".</summary>

@@ -227,7 +227,7 @@ public sealed class McpOAuthController : ControllerBase
 window.opener && window.opener.postMessage('mcp-oauth-{(success ? "complete" : "error")}', '*');
 window.close();
 </script>
-<div style='font-family:system-ui;padding:40px;text-align:center;color:{(success ? "#43d675" : "#e5534b")}'>
+<div style='font-family:system-ui;padding:40px;text-align:center;color:{(success ? "#404040" : "#e5534b")}'>
 <p>{System.Net.WebUtility.HtmlEncode(message)}</p>
 <p>This window should close automatically.</p>
 </div>

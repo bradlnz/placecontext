@@ -8,6 +8,33 @@ namespace PlaceContext.Infrastructure.Tests;
 public sealed class VirtualMachineEnvironmentRunnerTests
 {
     [Theory]
+    [InlineData(1024)]
+    [InlineData(2048)]
+    [InlineData(4096)]
+    [InlineData(4102)]
+    public async Task Complete_guest_reply_does_not_wait_for_more_data_on_an_open_connection(int size)
+    {
+        var pipe = new System.IO.Pipelines.Pipe();
+        using var stream = pipe.Reader.AsStream();
+        using var output = new MemoryStream();
+        using var writer = new StreamWriter(output) { AutoFlush = true };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        const string prefix = "{\"return\":{\"value\":\"";
+        const string suffix = "\"}}\n";
+        var value = new string('x', size - prefix.Length - suffix.Length - 4) + "🙂";
+        await pipe.Writer.WriteAsync(System.Text.Encoding.UTF8.GetBytes(prefix + value + suffix));
+        try
+        {
+            var result = await VirtualMachineEnvironmentRunner.CallAsync(stream, writer, "guest-ping", new { }, timeout.Token);
+            Assert.Equal(value, result.GetProperty("value").GetString());
+        }
+        finally
+        {
+            await pipe.Writer.CompleteAsync();
+        }
+    }
+
+    [Theory]
     [InlineData(null, true)]
     [InlineData("true", true)]
     [InlineData("false", false)]

@@ -292,6 +292,51 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
+    public async Task Dashboard_settings_tabs_separate_controls_and_preserve_unsaved_edits()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections,
+            fixture.Provider.GetRequiredService<BuildChatAgent>(), new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await using var provider = new ServiceCollection().AddLogging().AddSingleton(vm)
+            .AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>().BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
+        async Task<string> RenderAsync(string section) => await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.DashboardAgentSettings>(
+                ParameterView.FromDictionary(new Dictionary<string, object?> { ["ProjectId"] = fixture.ProjectId, ["Section"] = section }))).ToHtmlString());
+        var html = await RenderAsync("agent");
+        Assert.Contains("id=\"agent-model\"", html);
+        Assert.DoesNotContain("id=\"agent-profile-instructions\"", html);
+        foreach (var section in new[] { "agent", "instructions", "tools", "context", "agents", "dashboard" })
+            Assert.Contains($"/dashboard/settings/{section}", html);
+        vm.EditedAgent!.Instructions = "Unsaved instructions survive tab changes";
+        vm.AgentMemory = "Unsaved memory";
+        var selected = vm.AgentEditId;
+        html = await RenderAsync("instructions");
+        Assert.Contains("Unsaved instructions survive tab changes", html);
+        Assert.DoesNotContain("id=\"agent-model\"", html);
+        Assert.DoesNotContain("Connected tools (MCP)", html);
+        html = await RenderAsync("tools");
+        Assert.Contains("Connected tools (MCP)", html);
+        Assert.DoesNotContain("id=\"agent-profile-instructions\"", html);
+        html = await RenderAsync("context");
+        Assert.Contains("Unsaved memory", html);
+        Assert.Contains("Save memory", html);
+        Assert.DoesNotContain("Save changes", html);
+        await RenderAsync("agents");
+        html = await RenderAsync("dashboard");
+        Assert.Contains("dashboard-action-title", html);
+        Assert.Contains("Customize dashboard", html);
+        Assert.DoesNotContain("settings-tabs", html);
+        Assert.DoesNotContain("id=\"agent-model\"", html);
+        await RenderAsync("instructions");
+        Assert.Equal(selected, vm.AgentEditId);
+        Assert.Equal("Unsaved instructions survive tab changes", vm.EditedAgent!.Instructions);
+        Assert.Equal("Unsaved memory", vm.AgentMemory);
+        Assert.NotEqual(vm.EditedAgent.Instructions, (await fixture.Store.GetSettingsAsync(fixture.ProjectId)).Agents.Single(a => a.Id == selected).Instructions);
+    }
+
+    [Fact]
     public async Task Agent_settings_add_profiles_and_require_model_setup_before_chat()
     {
         await using var fixture = new Fixture();
@@ -439,6 +484,93 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
+    public async Task Each_private_and_shared_agent_has_its_own_persisted_dashboard()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var settings = new DashboardSettings();
+        var privateAgent = new DashboardAgentProfile { Name = "Private analyst" };
+        settings.Agents.Add(privateAgent);
+        settings.TileSizes["chat"] = "wide";
+        await f.Store.SaveSettingsAsync(f.ProjectId, settings);
+        var shared = new DbProjectAgentStore(f.Provider.GetRequiredService<IServiceScopeFactory>(),
+            f.User, f.Tenant, f.Permissions, f.Provider.GetRequiredService<IDataEncryptor>(), f.Connections);
+        var sharedAgent = new DashboardAgentProfile { Name = "Shared analyst" };
+        await shared.SaveAsync(f.ProjectId, new() { Agents = [sharedAgent] });
+        var vm = new BuildChatViewModel(f.Store, f.Connections,
+            f.Provider.GetRequiredService<BuildChatAgent>(), new(), new NoJs(), f.Service, f.Permissions, projectAgents: shared);
+        await vm.LoadAsync(f.ProjectId);
+        Assert.Equal(3, vm.DashboardAgents.Count());
+        Assert.Equal("wide", vm.Tiles.TileSize("chat"));
+        vm.SelectAgent(privateAgent.Id.ToString());
+        Assert.Equal("square", vm.Tiles.TileSize("chat"));
+        Assert.True(await vm.MoveDashboardTileAsync("chat", 0, false, 2, 2));
+        Assert.True(await vm.ResizeDashboardTileAsync("chat", "large"));
+        await vm.RemoveDashboardTileAsync("workflow");
+        vm.SelectAgent(sharedAgent.Id.ToString());
+        Assert.Contains("workflow", vm.Tiles.OrderedTiles());
+        Assert.Equal("square", vm.Tiles.TileSize("chat"));
+        var chart = new BuildChatViewModel.ChartPreview(ChartSpec.TryParse("""{"type":"bar","title":"Runs","labels":["Succeeded"],"series":[{"name":"Runs","values":[12]}]}""")!, "Recent runs", Live: true);
+        await vm.PinDashboardChartAsync(chart);
+        Assert.Single(vm.Tiles.Charts);
+        vm.SelectAgent(privateAgent.Id.ToString());
+        Assert.Empty(vm.Tiles.Charts);
+        Assert.Equal("chat", vm.Tiles.OrderedTiles()[0]);
+        Assert.Equal(new DashboardTilePosition(2, 2), vm.Tiles.TilePositions["chat"]);
+        Assert.Equal("large", vm.Tiles.TileSize("chat"));
+        Assert.DoesNotContain("workflow", vm.Tiles.OrderedTiles());
+        vm.SelectAgent(DashboardSettings.DefaultAgentId.ToString());
+        Assert.Equal("wide", vm.Tiles.TileSize("chat"));
+        Assert.Contains("workflow", vm.Tiles.OrderedTiles());
+        Assert.Empty(vm.Tiles.Charts);
+        var reloaded = await f.Store.GetSettingsAsync(f.ProjectId);
+        Assert.Equal("large", reloaded.ForAgent(privateAgent.Id).TileSize("chat"));
+        Assert.Single(reloaded.ForAgent(sharedAgent.Id).Charts);
+        Assert.Equal("wide", reloaded.TileSize("chat"));
+        reloaded.ForAgent(privateAgent.Id).TileSizes["chat"] = "invalid";
+        await Assert.ThrowsAsync<ArgumentException>(() => f.Store.SaveSettingsAsync(f.ProjectId, reloaded));
+        await vm.DisposePageAsync();
+    }
+
+    [Theory]
+    [InlineData("chat")]
+    [InlineData("chart")]
+    [InlineData("workflow")]
+    [InlineData("custom")]
+    public async Task Dashboard_tile_editor_cancels_validates_and_saves_without_sending_a_message(string key)
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections,
+            fixture.Provider.GetRequiredService<BuildChatAgent>(), new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        if (key == "custom") key = vm.Tiles.Actions[0].Id.ToString();
+        var original = vm.Tiles.TileAction(key)!;
+        var order = vm.Tiles.OrderedTiles().ToArray();
+        vm.EditDashboardTile(key);
+        vm.TileTitleDraft = "Cancelled edit";
+        vm.CloseTileEditor();
+        Assert.Equal(original, vm.Tiles.TileAction(key));
+        vm.EditDashboardTile(key);
+        vm.TileTitleDraft = "";
+        await vm.SaveDashboardTileAsync();
+        Assert.NotNull(vm.TileEditError);
+        Assert.Equal(key, vm.EditingTileKey);
+        Assert.Equal(original, vm.Tiles.TileAction(key));
+        vm.TileTitleDraft = "My tile";
+        vm.TileDescriptionDraft = "A short description";
+        if (key != "workflow") vm.TilePromptDraft = "Show project activity without making changes.";
+        await vm.SaveDashboardTileAsync();
+        Assert.Null(vm.EditingTileKey);
+        var saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        Assert.Equal("My tile", saved.TileAction(key)!.Title);
+        Assert.Equal("A short description", saved.TileAction(key)!.Description);
+        Assert.Equal(key == "workflow" ? original.Prompt : vm.TilePromptDraft, saved.TileAction(key)!.Prompt);
+        Assert.Equal(order, saved.OrderedTiles());
+        Assert.Empty(vm.Conversation.Messages);
+    }
+
+    [Fact]
     public async Task Dashboard_edits_order_and_pinned_charts_survive_reload_without_losing_settings()
     {
         await using var fixture = new Fixture();
@@ -452,7 +584,7 @@ public sealed partial class BuildChatTests
         Assert.Equal("square", vm.Dashboard.TileSize(actionId.ToString()));
         await vm.ResizeDashboardTileAsync(actionId.ToString(), "wide");
         Assert.Equal("wide", (await fixture.Store.GetSettingsAsync(fixture.ProjectId)).TileSize(actionId.ToString()));
-        await vm.MoveDashboardTileAsync(actionId.ToString(), 0);
+        Assert.True(await vm.MoveDashboardTileAsync(actionId.ToString(), 0));
         Assert.Equal(actionId.ToString(), (await fixture.Store.GetSettingsAsync(fixture.ProjectId)).OrderedTiles()[0]);
         var chart = new BuildChatViewModel.ChartPreview(ChartSpec.TryParse("""{"type":"bar","title":"Runs","labels":["Succeeded"],"series":[{"name":"Runs","values":[12]}]}""")!, "Project runs in the last 24 hours", Live: true);
         await vm.PinDashboardChartAsync(chart);
@@ -473,7 +605,7 @@ public sealed partial class BuildChatTests
         Assert.Equal("Report recent run results without making changes.", saved.Actions[0].Prompt);
         Assert.Equal(pinned, Assert.Single(saved.Charts));
         Assert.Equal("wide", saved.TileSize(actionId.ToString()));
-        Assert.Equal(new[] { actionId.ToString(), pinned.Id.ToString(), "workflow", "chat", saved.Actions[1].Id.ToString() }, saved.OrderedTiles());
+        Assert.Equal(new[] { actionId.ToString(), pinned.Id.ToString(), "workflow", "chat", "chart", saved.Actions[1].Id.ToString() }, saved.OrderedTiles());
         vm.RemoveDashboardAction(vm.AgentDraft.Actions[0]);
         vm.RemoveDashboardChart(Assert.Single(vm.AgentDraft.Charts));
         await vm.SaveAgentAsync();
@@ -483,6 +615,30 @@ public sealed partial class BuildChatTests
         Assert.DoesNotContain(actionId.ToString(), saved.TileOrder);
         Assert.DoesNotContain(pinned.Id.ToString(), saved.TileOrder);
         Assert.Empty(saved.TileSizes);
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
+    public async Task Dashboard_tiles_can_be_removed_and_restored_without_losing_configuration()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections,
+            fixture.Provider.GetRequiredService<BuildChatAgent>(), new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        var keys = vm.Dashboard.OrderedTiles().ToArray();
+        foreach (var key in keys) await vm.RemoveDashboardTileAsync(key);
+        Assert.Empty(vm.Dashboard.OrderedTiles());
+        var saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        Assert.Equal(keys.Length, saved.HiddenTiles.Count);
+        Assert.Equal(2, saved.Actions.Count);
+        await vm.OpenAgentAsync();
+        foreach (var key in keys) vm.RestoreDashboardTile(key);
+        await vm.SaveAgentAsync();
+        Assert.Null(vm.AgentError);
+        saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        Assert.Empty(saved.HiddenTiles);
+        Assert.Equal(keys, saved.OrderedTiles());
         await vm.DisposePageAsync();
     }
 
@@ -497,7 +653,7 @@ public sealed partial class BuildChatTests
         var saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
         Assert.Equal("workflow", saved.OrderedTiles().Last());
         Assert.Contains("workflow", saved.TileRowStarts);
-        await vm.ResizeDashboardTileAsync("workflow", "large");
+        Assert.True(await vm.ResizeDashboardTileAsync("workflow", "large"));
         Assert.Contains("workflow", vm.Dashboard.TileRowStarts);
         await vm.MoveDashboardTileAsync("workflow", 0);
         saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
@@ -515,11 +671,14 @@ public sealed partial class BuildChatTests
         await vm.LoadAsync(fixture.ProjectId);
         var order = vm.Dashboard.OrderedTiles().ToArray();
         fixture.Permissions.Allowed = false;
-        await vm.MoveDashboardTileAsync("chat", 0);
+        Assert.False(await vm.MoveDashboardTileAsync("chat", 0));
         Assert.NotNull(vm.Error);
         Assert.Equal(order, vm.Dashboard.OrderedTiles());
-        await vm.ResizeDashboardTileAsync("chat", "large");
+        Assert.False(await vm.ResizeDashboardTileAsync("chat", "large"));
         Assert.Equal("square", vm.Dashboard.TileSize("chat"));
+        await vm.RemoveDashboardTileAsync("chat");
+        Assert.NotNull(vm.Error);
+        Assert.Equal(order, vm.Dashboard.OrderedTiles());
         await vm.DisposePageAsync();
     }
 
@@ -528,6 +687,9 @@ public sealed partial class BuildChatTests
     [InlineData("{\"TileOrder\":[\"chat\",\"chat\"]}")]
     [InlineData("{\"Charts\":[{\"ChartJson\":\"{}\",\"Source\":\"Invalid chart\"}]}")]
     [InlineData("{\"Charts\":null}")]
+    [InlineData("{\"HiddenTiles\":null}")]
+    [InlineData("{\"HiddenTiles\":[\"unknown\"]}")]
+    [InlineData("{\"HiddenTiles\":[\"chat\",\"chat\"]}")]
     [InlineData("{\"TileRowStarts\":null}")]
     [InlineData("{\"TileRowStarts\":[\"unknown\"]}")]
     [InlineData("{\"TileRowStarts\":[\"chat\",\"chat\"]}")]
@@ -1290,6 +1452,8 @@ public sealed partial class BuildChatTests
     [InlineData("""{"workspace":[{"id":"build.chat","label":"Build","order":10,"visible":true}]}""", "Dashboard", null)]
     [InlineData("""{"workspace":[{"id":"build.chat","label":"Chat","order":10,"visible":true,"section":"Build"}]}""", "Dashboard", null)]
     [InlineData("""{"workspace":[{"id":"build.chat","label":"Assistant","order":10,"visible":true,"section":"Custom"}]}""", "Assistant", "Custom")]
+    [InlineData("""{"workspace":[{"id":"chains","order":0,"visible":true,"section":"Automation"},{"id":"jobs","order":10,"visible":true,"section":"Automation"}]}""", "Dashboard", null)]
+    [InlineData("""{"workspace":[{"id":"chains","order":0,"visible":true,"section":"Platform"},{"id":"jobs","order":10,"visible":true,"section":"Platform"}]}""", "Dashboard", null)]
     public async Task Dashboard_menu_is_a_single_link_and_preserves_custom_labels(string? menuJson, string label, string? section)
     {
         await using var fixture = new Fixture();
@@ -1318,6 +1482,8 @@ public sealed partial class BuildChatTests
             Assert.Null(build.Parent);
         }
         Assert.DoesNotContain(items, x => x.Kind == "group" && x.Label == "Build");
+        Assert.DoesNotContain(items, x => x.Label is "Automation" or "Platform" || x.Section is "Automation" or "Platform");
+        Assert.Equal("section:Infrastructure", Assert.Single(items, x => x.Id == "jobs").Parent);
     }
 
     [Fact]
@@ -1357,10 +1523,22 @@ public sealed partial class BuildChatTests
         });
         var html = await RenderAsync();
         Assert.False(vm.ChatOpen);
+        Assert.DoesNotContain("class=\"chat-entry-title\"", html);
         Assert.DoesNotContain("Choose a task", html);
         Assert.Contains("Run a workflow", html);
+        Assert.DoesNotContain("dashboard-row-drop", html);
+        Assert.DoesNotContain("draggable=", html);
+        Assert.Contains("dashboard-drag-handle", html);
+        Assert.Contains("dashboard-resize", html);
+        Assert.Contains("Remove Run a workflow from dashboard", html);
+        Assert.DoesNotContain("Arrange tiles", html);
+        Assert.DoesNotContain("aria-label=\"Agent settings\"", html);
         Assert.Contains("Job statistics", html);
-        Assert.Contains("Start a chat", html);
+        Assert.Contains("Ask a question", html);
+        Assert.DoesNotContain("Customize dashboard", html);
+        Assert.Contains("Add chart", html);
+        Assert.DoesNotContain("thinking-dots", html);
+        Assert.DoesNotContain("dashboard-arrange-hint", html);
         Assert.Contains("class=\"chat-entry\" hidden", html);
         Assert.DoesNotContain("Quick picks", html);
         Assert.DoesNotContain("aria-label=\"Runs\"", html);
@@ -1368,8 +1546,18 @@ public sealed partial class BuildChatTests
         Assert.DoesNotContain("aria-label=\"Data\"", html);
         Assert.DoesNotContain("aria-label=\"Project memory\"", html);
         Assert.DoesNotContain("MCP tools", html);
-        vm.OpenChat();
+        vm.ShowHistory = true;
         html = await RenderAsync();
+        Assert.Contains("aria-label=\"Sessions\"", html);
+        Assert.Contains("New session", html);
+        vm.ShowHistory = false;
+        vm.OpenChat();
+        Assert.Empty(vm.Conversation.Messages);
+        Assert.Empty(vm.Draft);
+        html = await RenderAsync();
+        Assert.Contains("<h2 class=\"chat-entry-title\"", html);
+        Assert.Contains("How can I help?", html);
+        Assert.Contains("Explore your project, create a chart, or get help with a workflow.", html);
         Assert.DoesNotContain("What do you need to do?", html);
         Assert.DoesNotContain("class=\"dashboard-actions\"", html);
         Assert.DoesNotContain("class=\"chat-entry\" hidden", html);
@@ -1382,8 +1570,18 @@ public sealed partial class BuildChatTests
         Assert.True(vm.ChatOpen);
         Assert.Equal(BuildRunStatus.Queued, vm.Conversation.Status);
         Assert.Equal(prompt, BuildChatViewModel.Text(Assert.Single(vm.Conversation.Messages)!));
+        Assert.DoesNotContain("class=\"chat-entry-title\"", html);
         Assert.DoesNotContain("class=\"dashboard-actions\"", html);
         Assert.DoesNotContain("class=\"chat-entry\" hidden", html);
+        Assert.Contains("Waiting for the assistant", html);
+        Assert.Contains("class=\"thinking-dots\" aria-hidden=\"true\"", html);
+        vm.Conversation.Status = BuildRunStatus.Running;
+        Assert.Contains("Assistant is working", await RenderAsync());
+        foreach (var status in new[] { BuildRunStatus.Completed, BuildRunStatus.Failed, BuildRunStatus.Stopped, BuildRunStatus.Interrupted })
+        {
+            vm.Conversation.Status = status;
+            Assert.DoesNotContain("thinking-dots", await RenderAsync());
+        }
         await vm.DisposePageAsync();
     }
 
@@ -1867,6 +2065,39 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
+    public async Task Dashboard_session_is_ready_while_live_chart_data_is_still_loading()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var settings = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        settings.Charts.Add(new(new ChartSpec("bar", "Orders", ["Ready"], [new("Total", [2])]).ToJson(), "Orders")
+        {
+            Live = true, Sql = "SELECT status, total FROM orders"
+        });
+        await fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings);
+        var dispatcher = new ToolDispatcher(fixture.ProjectId) { PendingData = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(),
+            new PlaceContextService(dispatcher, null!, null!, null!), fixture.Permissions);
+        var states = new List<bool>();
+        vm.Attach(() => { states.Add(vm.Loading); return Task.CompletedTask; });
+        try
+        {
+            await vm.LoadAsync(fixture.ProjectId).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(vm.Loading);
+            Assert.False(vm.NavigationLocked);
+            Assert.True(vm.ChartsRefreshing);
+            Assert.Equal(1, dispatcher.DataQueries);
+            Assert.Contains(true, states);
+            Assert.False(states.Last());
+        }
+        finally
+        {
+            await vm.DisposePageAsync();
+            dispatcher.PendingData.SetResult(dispatcher.Data);
+        }
+    }
+
+    [Fact]
     public async Task Dashboard_loads_history_without_fetching_memory_for_a_removed_editor()
     {
         await using var fixture = new Fixture();
@@ -2236,7 +2467,7 @@ public sealed partial class BuildChatTests
             Assert.True(vm.Loading);
             Assert.True(vm.NavigationLocked);
             Assert.False(vm.ShowHistory);
-            Assert.Contains("Loading conversation", rendered.ToHtmlString());
+            Assert.Contains("Loading session", rendered.ToHtmlString());
             Assert.Contains("aria-busy=\"true\"", rendered.ToHtmlString());
             await vm.OpenAsync(Guid.NewGuid());
             await vm.NewAsync();
@@ -2259,7 +2490,7 @@ public sealed partial class BuildChatTests
             await opening;
             Assert.False(vm.Loading);
             Assert.False(vm.NavigationLocked);
-            Assert.DoesNotContain("Loading conversation", rendered.ToHtmlString());
+            Assert.DoesNotContain("Loading session", rendered.ToHtmlString());
             void AssertCompletionCore()
             {
                 if (fail)

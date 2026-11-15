@@ -9,19 +9,19 @@
 @using PlaceContext.Application.Build
 
 <PageTitle>PlaceContext — Dashboard</PageTitle>
-<div id="@Vm.ViewId" class="build-chat @(Vm.ShowHistory ? "history-open" : "") @(Vm.WorkspaceVisible ? "conversation-active" : "") @(Vm.WorkspaceOpen ? "workspace-preview-open" : "") @(Vm.HumanInputRequest is not null ? "human-input-pending" : "")">
+<div id="@Vm.ViewId" class="build-chat @(Vm.ShowHistory ? "history-open" : "") @(Vm.WorkspaceVisible ? "conversation-active" : "") @(Vm.WorkspaceOpen ? "workspace-preview-open" : "") @(Vm.ExpandedDashboardChartId is not null ? "dashboard-chart-expanded" : "") @(Vm.HumanInputRequest is not null ? "human-input-pending" : "")">
     @if (Vm.ShowHistory)
     {
-        <aside id="@(Vm.ViewId + "-build-history")" class="chat-history" aria-label="Conversations">
-            <header><h2>Conversations</h2><button class="chat-icon-button" aria-label="Close conversations" @onclick="() => Vm.ShowHistory = false"><AppIcon Kind="close" /></button></header>
-            <button class="dcbtn history-new" disabled="@Vm.NavigationLocked" @onclick="Vm.NewAsync"><AppIcon Kind="plus" /> New conversation</button>
-            <label class="visually-hidden" for="@(Vm.ViewId + "-history-search")">Search recent conversations by title</label>
-            <input id="@(Vm.ViewId + "-history-search")" class="history-search" type="search" placeholder="Search recent conversations" maxlength="200" @bind="Vm.HistoryQuery" @bind:event="oninput" />
+        <aside id="@(Vm.ViewId + "-build-history")" class="chat-history" aria-label="Sessions">
+            <header><h2>Sessions</h2><button class="chat-icon-button" aria-label="Close sessions" @onclick="() => Vm.ShowHistory = false"><AppIcon Kind="close" /></button></header>
+            <button class="dcbtn history-new" disabled="@Vm.NavigationLocked" @onclick="Vm.NewAsync"><AppIcon Kind="plus" /> New session</button>
+            <label class="visually-hidden" for="@(Vm.ViewId + "-history-search")">Search recent sessions by title</label>
+            <input id="@(Vm.ViewId + "-history-search")" class="history-search" type="search" placeholder="Search recent sessions" maxlength="200" @bind="Vm.HistoryQuery" @bind:event="oninput" />
             <p class="history-label">RECENT</p>
             @if (Vm.Conversations.Count == 0)
-            { <div class="history-empty"><AppIcon Kind="message" /><p>A fresh start.</p><span>Your conversations will appear here.</span></div> }
+            { <div class="history-empty"><AppIcon Kind="message" /><p>A fresh start.</p><span>Your sessions will appear here.</span></div> }
             @if (Vm.Conversations.Count > 0 && !Vm.FilteredConversations.Any())
-            { <p class="history-empty" role="status">No matching conversations. Try a different title.</p> }
+            { <p class="history-empty" role="status">No matching sessions. Try a different title.</p> }
             @foreach (var chat in Vm.FilteredConversations)
             {
                 <button class="history-item @(chat.Id == Vm.Conversation.Id ? "active" : "")" title="@chat.Title" disabled="@Vm.NavigationLocked" @onclick="() => Vm.OpenAsync(chat.Id)"><AppIcon Kind="message" /><span>@chat.Title</span>@if (chat.Status is PlaceContext.Application.Build.BuildRunStatus.Queued or PlaceContext.Application.Build.BuildRunStatus.Running) { <small>@chat.Status</small> }</button>
@@ -32,64 +32,55 @@
     <section class="chat-main" aria-label="Dashboard workspace">
         <header class="chat-header">
             <div class="chat-header-start">
-                <button class="chat-icon-button" aria-label="History" title="Conversation history" aria-expanded="@Vm.ShowHistory" aria-controls="@(Vm.ViewId + "-build-history")" @onclick="Vm.ToggleHistoryAsync"><AppIcon Kind="history" /></button>
+                <button class="chat-icon-button" aria-label="History" title="Session history" aria-expanded="@Vm.ShowHistory" aria-controls="@(Vm.ViewId + "-build-history")" @onclick="Vm.ToggleHistoryAsync"><AppIcon Kind="history" /></button>
                 <button class="chat-icon-button" aria-label="New chat" title="New chat" disabled="@Vm.NavigationLocked" @onclick="Vm.NewAsync"><AppIcon Kind="edit" /></button>
                             <div class="model-picker">
-                                <label for="@(Vm.ViewId + "-chat-agent")" class="visually-hidden">Agent</label><select id="@(Vm.ViewId + "-chat-agent")" value="@(Vm.Conversation.AgentId ?? DashboardSettings.DefaultAgentId)" @onchange="e => Vm.SelectAgent(e.Value?.ToString())" disabled="@Vm.Locked">@foreach (var profile in Vm.DashboardAgents) { <option value="@profile.Id">@profile.DisplayName</option> }</select>
+                                <label for="@(Vm.ViewId + "-chat-agent")" class="visually-hidden">Agent</label><select id="@(Vm.ViewId + "-chat-agent")" value="@(Vm.Conversation.AgentId ?? DashboardSettings.DefaultAgentId)" @onchange="e => Vm.SelectAgent(e.Value?.ToString())" disabled="@(Vm.Locked || Vm.AgentLoading || Vm.ChartQuerySaving)">@foreach (var profile in Vm.DashboardAgents) { <option value="@profile.Id">@profile.DisplayName</option> }</select>
                             </div>
             </div>
             <div class="chat-header-actions">
                 @if (Vm.Conversation.ParentConversationId is { } parentId)
-                { <button type="button" class="chat-toolbar-button" aria-label="Open original conversation" title="Open original conversation" disabled="@Vm.NavigationLocked" @onclick="() => Vm.OpenAsync(parentId)"><AppIcon Kind="history" /><span>Original conversation</span></button> }
-                <a class="chat-toolbar-button" aria-label="Agent settings" href="@AgentSettingsHref("instructions")"><span class="toolbar-avatar"><AssistantAvatar /></span><span>Agent</span></a>
+                { <button type="button" class="chat-toolbar-button" aria-label="Open original session" title="Open original session" disabled="@Vm.NavigationLocked" @onclick="() => Vm.OpenAsync(parentId)"><AppIcon Kind="history" /><span>Original session</span></button> }
                 @if (Vm.Conversation.Messages.Count > 0 && !Vm.WorkspaceVisible)
                 { <button type="button" class="chat-toolbar-button" aria-label="Open workspace" @onclick="Vm.OpenWorkspace"><AppIcon Kind="chain" /><span>Workspace</span></button> }
                 <a class="chat-toolbar-button" href="@($"/project/{ProjectId}/workflows")"><AppIcon Kind="chain" /><span>Workflows</span></a>
                 @if (Vm.Conversation.Messages.Count > 0)
                 {
-                    @if (Vm.CanShareDemo) { <button type="button" class="chat-icon-button" aria-label="Share conversation" title="Share conversation" disabled="@Vm.NavigationLocked" @onclick="Vm.OpenDemoShareAsync"><AppIcon Kind="share" /></button> }
-                    <button class="chat-icon-button delete-chat" aria-label="Delete conversation" title="Delete conversation" disabled="@Vm.Locked" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button>
+                    @if (Vm.CanShareDemo) { <button type="button" class="chat-icon-button" aria-label="Share session" title="Share session" disabled="@Vm.NavigationLocked" @onclick="Vm.OpenDemoShareAsync"><AppIcon Kind="share" /></button> }
+                    <button class="chat-icon-button delete-chat" aria-label="Delete session" title="Delete session" disabled="@Vm.Locked" @onclick="() => Vm.ConfirmDelete = true"><AppIcon Kind="trash" /></button>
                 }
             </div>
         </header>
         <div class="build-body" aria-busy="@(Vm.Loading ? "true" : "false")">
         @if (Vm.Loading)
         {
-            <div class="conversation-loading" role="status"><div><p>Loading conversation…</p><Skeleton Kind="list" Rows="3" /></div></div>
+            <div class="conversation-loading" role="status" aria-live="polite" aria-atomic="true"><div><p>Loading session <span class="thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span></p><div aria-hidden="true"><Skeleton Kind="list" Rows="3" /></div></div></div>
         }
         <div id="@(Vm.ViewId + "-thread")" inert="@Vm.Loading" class="chat-content @(Vm.Conversation.Messages.Count == 0 ? "empty-chat" : "") @(!Vm.ChatOpen ? "dashboard-landing" : "")">
-            <div class="chat-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-busy="@(Vm.Busy ? "true" : "false")">
+            <div class="chat-messages" role="log" aria-label="Chat messages" aria-live="polite" aria-busy="@(Vm.Busy || Vm.Submitting ? "true" : "false")">
                 @if (!Vm.Loading && Vm.Conversation.Messages.Count == 0)
                 {
                     <div class="chat-welcome">
                         @if (!Vm.ChatOpen)
                         {
-                            <div class="dashboard-toolbar">
-                                <a class="dcbtn" href="@AgentSettingsHref("dashboard")"><AppIcon Kind="edit" /> Customize dashboard</a>
-                                <button type="button" class="dcbtn" aria-pressed="@(_arrangingTiles ? "true" : "false")" @onclick="() => _arrangingTiles = !_arrangingTiles">@(_arrangingTiles ? "Done arranging" : "Arrange tiles")</button>
-                                <button type="button" class="dcbtn" disabled="@(!Vm.CanStartChat)" @onclick="StartChartChatAsync"><AppIcon Kind="plus" /> Add chart</button>
-                            </div>
-                            @if (_arrangingTiles) { <p class="dashboard-arrange-hint" role="status">Drag tiles to move them, or drop below the tiles to start a new row. Drag a bottom-right corner to resize, or focus it and use the arrow keys. Your layout is saved automatically.</p> }
-                            <div class="dashboard-actions" aria-label="Dashboard tiles">
-                            @foreach (var (key, position) in Vm.Dashboard.OrderedTiles().Select((key, position) => (key, position)))
+                            <p class="dashboard-layout-status" role="status" aria-live="polite"></p>
+                            <div class="dashboard-actions" @key="(Vm.Conversation.AgentId ?? DashboardSettings.DefaultAgentId)" aria-label="Dashboard tiles">
+                            @foreach (var key in Vm.Tiles.OrderedTiles())
                             {
-                                var action = Vm.Dashboard.Actions.FirstOrDefault(a => a.Id.ToString() == key);
-                                var chart = Vm.Dashboard.Charts.FirstOrDefault(c => c.Id.ToString() == key);
+                                var action = Vm.Tiles.TileAction(key);
+                                var chart = Vm.Tiles.Charts.FirstOrDefault(c => c.Id.ToString() == key);
                                 var chartResult = chart is null ? null : Vm.DashboardChartResults.GetValueOrDefault(chart.Id);
-                                var title = action?.Title ?? (chart is null ? null : PlaceContext.Application.Features.ChartSpec.TryParse(chart.ChartJson)?.Title) ?? (key == "workflow" ? "Run a workflow" : key == "chat" ? "Start a chat" : "Chart");
-                                var arrangingDisabled = Vm.Locked || Vm.AgentLoading || Vm.AgentOpen;
-                                <article class="dashboard-tile @(Vm.Dashboard.TileRowStarts.Contains(key) ? "tile-row-start" : "") tile-@Vm.Dashboard.TileSize(key) @(chart is not null ? "dashboard-chart" : "")" @key="key" data-tile="@key" data-tile-size="@Vm.Dashboard.TileSize(key)"
-                                         draggable="@(_arrangingTiles && !arrangingDisabled ? "true" : "false")" @ondragstart="() => _draggedTile = key" @ondragend="() => _draggedTile = null"
-                                         @ondragover:preventDefault @ondrop:preventDefault @ondrop="() => DropDashboardTileAsync(position)">
-                                    @if (_arrangingTiles)
-                                    {
+                                var title = action?.Title ?? (chart is null ? null : PlaceContext.Application.Features.ChartSpec.TryParse(chart.ChartJson)?.Title) ?? (key == "workflow" ? "Run a workflow" : key == "chat" ? "Ask a question" : key == "chart" ? "Add chart" : "Chart");
+                                var layoutDisabled = Vm.Locked || Vm.AgentLoading || Vm.AgentOpen;
+                                <article class="dashboard-tile tile-@Vm.Tiles.TileSize(key) @(Vm.Tiles.TileRowStarts.Contains(key) ? "tile-row-start" : "") @(chart is not null ? "dashboard-chart" : "")" @key="key" data-tile="@key" data-tile-size="@Vm.Tiles.TileSize(key)" data-tile-column="@Vm.Tiles.TilePositions.GetValueOrDefault(key)?.Column" data-tile-row="@Vm.Tiles.TilePositions.GetValueOrDefault(key)?.Row"
+                                         data-move-enabled="@(!layoutDisabled ? "true" : "false")">
                                         <div class="dashboard-move" aria-label="@($"Move {title}")">
-                                            <span>Drag to move</span>
-                                            <button class="chat-icon-button" aria-label="@($"Move {title} earlier")" disabled="@(arrangingDisabled || position == 0)" @onclick="() => Vm.MoveDashboardTileAsync(key, position - 1)"><AppIcon Kind="arrow-left" /></button>
-                                            <button class="chat-icon-button" aria-label="@($"Move {title} later")" disabled="@(arrangingDisabled || position == Vm.Dashboard.OrderedTiles().Count - 1)" @onclick="() => Vm.MoveDashboardTileAsync(key, position + 1)"><AppIcon Kind="arrow-right" /></button>
+                                            <button type="button" class="dashboard-drag-handle" disabled="@layoutDisabled" aria-label="@($"Move {title}")" title="Drag to rearrange · arrow keys also work">⠿ Move</button>
+                                            @if (action is not null)
+                                            { <button type="button" class="chat-icon-button" disabled="@layoutDisabled" aria-label="@($"Edit {title}")" title="Edit tile" @onclick="() => Vm.EditDashboardTile(key)"><AppIcon Kind="edit" /></button> }
+                                            <button type="button" class="chat-icon-button" disabled="@layoutDisabled" aria-label="@($"Remove {title} from dashboard")" title="Remove tile" @onclick="() => Vm.RemoveDashboardTileAsync(key)"><AppIcon Kind="trash" /></button>
                                         </div>
-                                        <button type="button" class="dashboard-resize" aria-label="@($"Resize {title}")" aria-description="@($"Current size: {Vm.Dashboard.TileSize(key)}. Drag to resize or use the arrow keys.")" title="Drag to resize · arrow keys also work" disabled="@arrangingDisabled"><span aria-hidden="true">↘</span></button>
-                                    }
+                                    <button type="button" class="dashboard-resize" aria-label="@($"Resize {title}")" aria-description="@($"Current size: {Vm.Tiles.TileSize(key)}. Drag to resize or use the arrow keys.")" title="Drag to resize · arrow keys also work" disabled="@layoutDisabled"><span aria-hidden="true">↘</span></button>
                                     @if (chart is not null)
                                     {
                                         <div class="dashboard-chart-heading"><h2>@title</h2><button class="chat-icon-button" aria-label="@(chart.Sql is null ? $"Use SQL for {title}" : $"Edit query for {title}")" title="@(chart.Sql is null ? "This chart uses built-in counts. Switch to a SQL query." : "Edit the saved SQL query")" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="() => Vm.EditChartQueryAsync(chart)"><AppIcon Kind="edit" /></button><button class="chat-icon-button" aria-label="@($"Expand {title}")" disabled="@(chartResult?.Spec is null)" @onclick="() => Vm.OpenDashboardChart(chart)"><AppIcon Kind="external-link" /></button></div>
@@ -102,16 +93,12 @@
                                     }
                                     else
                                     {
-                                        <button type="button" class="dashboard-action" disabled="@(_arrangingTiles || Vm.NavigationLocked || (key != "workflow" && !Vm.CanStartChat))" @onclick="() => LaunchDashboardTileAsync(key, action)">
-                                            <span class="dashboard-action-icon"><AppIcon Kind="@(key == "workflow" ? "play" : "message")" /></span>
-                                            <span><strong>@title</strong><small>@(action?.Prompt ?? (key == "workflow" ? "Choose a saved workflow and run it with the assistant." : "Ask a question or describe what you want to build."))</small></span>
+                                        <button type="button" class="dashboard-action" disabled="@(Vm.NavigationLocked || (key != "workflow" && key != "chat" && key != "chart" && !Vm.CanStartChat))" @onclick="() => LaunchDashboardTileAsync(key, action)">
+                                            <span class="dashboard-action-icon"><AppIcon Kind="@(key == "workflow" ? "play" : key == "chart" ? "data.graph" : "message")" /></span>
+                                            <span><strong>@title</strong><small>@(action?.Description ?? action?.Prompt)</small></span>
                                         </button>
                                     }
                                 </article>
-                            }
-                            @if (_arrangingTiles)
-                            {
-                                <div class="dashboard-row-drop" @ondragover:preventDefault @ondrop:preventDefault @ondrop="DropDashboardTileToRowAsync">Drop a tile here to start a new row</div>
                             }
                             </div>
                         }
@@ -164,11 +151,11 @@
                                 <div class="message-actions" role="group" aria-label="@(role == "user" ? "Your message actions" : "Assistant message actions")">
                                     <button type="button" @onclick="() => Vm.CopyMessageAsync(message)">Copy</button>
                                     @if (role == "user" && !BuildChatViewModel.ImageUrls(message).Any())
-                                    { <button type="button" disabled="@(!Vm.CanEditMessage(message))" title="Edit the message in a new conversation" @onclick="() => PrepareBranch(() => Vm.EditMessage(message))">Edit</button> }
+                                    { <button type="button" disabled="@(!Vm.CanEditMessage(message))" title="Edit the message in a new session" @onclick="() => PrepareBranch(() => Vm.EditMessage(message))">Edit</button> }
                                     @if (role == "assistant" && !BuildChatViewModel.Calls(message).Any())
                                     {
-                                        <button type="button" disabled="@(!Vm.CanRetryMessage(message))" title="Review the prompt before retrying in a new conversation" @onclick="() => PrepareBranch(() => Vm.RetryMessage(message))">Retry</button>
-                                        <button type="button" disabled="@(!Vm.CanBranchMessage(message))" title="Continue from this reply in a new conversation" @onclick="() => PrepareBranch(() => Vm.BranchFromMessage(message))">Branch from here</button>
+                                        <button type="button" disabled="@(!Vm.CanRetryMessage(message))" title="Review the prompt before retrying in a new session" @onclick="() => PrepareBranch(() => Vm.RetryMessage(message))">Retry</button>
+                                        <button type="button" disabled="@(!Vm.CanBranchMessage(message))" title="Continue from this reply in a new session" @onclick="() => PrepareBranch(() => Vm.BranchFromMessage(message))">Branch from here</button>
                                     }
                                 </div>
                             }
@@ -212,7 +199,14 @@
                     </section>
                 }
                 @if (Vm.HumanInputNotice is { } inputNotice) { <p class="chat-notice" role="status">@inputNotice</p> }
-                @if (Vm.Busy) { <div class="thinking" role="status"><span class="toolbar-avatar"><AssistantAvatar /></span> @(Vm.Conversation.Status == PlaceContext.Application.Build.BuildRunStatus.Queued ? "Queued for background work" : "The assistant is working in the background")</div> }
+                @if (Vm.Busy || Vm.Submitting)
+                {
+                    <div class="thinking" role="status" aria-live="polite" aria-atomic="true">
+                        <span class="toolbar-avatar" aria-hidden="true"><AssistantAvatar /></span>
+                        <span>@(Vm.Submitting ? "Sending your message" : Vm.Conversation.Status == BuildRunStatus.Queued ? "Waiting for the assistant" : "Assistant is working")</span>
+                        <span class="thinking-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                    </div>
+                }
             </div>
             <div class="chat-bottom">
                 @if (Vm.Error is not null && Vm.Error != Vm.Conversation.Messages.LastOrDefault()?["content"]?.ToString())
@@ -226,6 +220,11 @@
                     </div>
                 }
                 <div class="chat-entry" hidden="@(!Vm.ChatOpen)">
+                @if (Vm.ChatOpen && Vm.Conversation.Messages.Count == 0)
+                {
+                    <h2 class="chat-entry-title">How can I help?</h2>
+                    <p class="chat-entry-description">Explore your project, create a chart, or get help with a workflow.</p>
+                }
                 <span id="@(Vm.ViewId + "-composer-keys")" class="visually-hidden">Enter to send. Shift and Enter for a new line.</span>
                 <form class="chat-composer" @onsubmit="Vm.SendAsync" @onsubmit:preventDefault>
                     <textarea @ref="_composer" class="chat-input" rows="3" aria-label="Message assistant" aria-describedby="@(Vm.ViewId + "-composer-keys")" placeholder="Ask a question…" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Locked"></textarea>
@@ -233,14 +232,14 @@
                         <div class="send-actions">
                             <button type="button" class="chat-icon-button mic-button @(Vm.Listening ? "listening" : "")" disabled="@(Vm.Locked || !Vm.SpeechSupported)" aria-label="@(Vm.Listening ? "Stop dictation" : "Dictate")" aria-pressed="@Vm.Listening" title="@(Vm.SpeechSupported ? "Dictate a message" : "Dictation requires a supported browser and HTTPS")" @onclick="Vm.ToggleSpeechAsync"><AppIcon Kind="mic" /></button>
                             @if (Vm.Busy) { <button type="button" class="send-button stop-button" aria-label="Stop response" title="Stop response" @onclick="Vm.StopAsync"><span></span></button> }
-                            else { <button type="submit" class="send-button" aria-label="@(Vm.BranchPending ? "Send in new conversation" : "Send message")" title="@(Vm.BranchPending ? "Send in new conversation" : "Send message")" disabled="@(!Vm.CanSend)"><AppIcon Kind="arrow-up" /></button> }
+                            else { <button type="submit" class="send-button" aria-label="@(Vm.BranchPending ? "Send in new session" : "Send message")" title="@(Vm.BranchPending ? "Send in new session" : "Send message")" disabled="@(!Vm.CanSend)"><AppIcon Kind="arrow-up" /></button> }
                         </div>
                     </div>
                 </form>
                 @if (Vm.ModelSetupHint is not null)
                 { <div class="composer-note" role="status">@Vm.ModelSetupHint</div> }
                 else if (!Vm.Loading && !Vm.Models.Contains(Vm.Conversation.Model))
-                { <div class="model-setup" role="status"><span>This agent needs a model. Choose its connection and model in Agent settings.</span><a class="dcbtn" href="@AgentSettingsHref("instructions")">Agent settings</a></div> }
+                { <div class="model-setup" role="status"><span>This agent needs a model. Choose its connection and model in Agents.</span><a class="dcbtn" href="@($"/project/{ProjectId}/agents")">Open Agents</a></div> }
                 else { <div class="composer-note">@(Vm.Listening ? "Listening… Stop dictation to review and send." : "The assistant can make changes to this project. Review action results.")</div> }
                 </div>
             </div>
@@ -294,10 +293,10 @@
                 }
                 else if (Vm.PreviewChart is { } previewChart)
                 {
-                    <div class="preview-content">
-                        <button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading || !previewChart.Live || Vm.IsChartPinned(previewChart) || Vm.Dashboard.Charts.Count >= 8)" @onclick="() => Vm.PinDashboardChartAsync(previewChart)">@(Vm.IsChartPinned(previewChart) ? "Pinned to dashboard" : "Pin to dashboard")</button>
+                    <div class="preview-content preview-chart">
+                        <button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading || !previewChart.Live || Vm.IsChartPinned(previewChart) || Vm.Tiles.Charts.Count >= 8)" @onclick="() => Vm.PinDashboardChartAsync(previewChart)">@(Vm.IsChartPinned(previewChart) ? "Pinned to dashboard" : "Pin to dashboard")</button>
                         @if (!previewChart.Live) { <p class="hint">Ask for a live chart to pin current data to your dashboard.</p> }
-                        @if (Vm.Dashboard.Charts.Count >= 8 && !Vm.IsChartPinned(previewChart)) { <p>Remove a pinned chart in Customize dashboard to add another.</p> }
+                        @if (Vm.Tiles.Charts.Count >= 8 && !Vm.IsChartPinned(previewChart)) { <p>The dashboard supports up to 8 pinned charts.</p> }
                         @if (Vm.ExpandedDashboardChartId is { } expanded && Vm.DashboardChartResults.GetValueOrDefault(expanded) is { } liveResult)
                         {
                             @if (liveResult.Error is { } liveError) { <p role="status">@liveError</p> }
@@ -346,6 +345,7 @@
                                 @if (Vm.PreviewStep is { } selected)
                                 {
                                     <section class="preview-step-output" aria-label="Step output" @key="(run.Id, selected.Index)">
+                                        <SubWorkflowRunLink ProjectId="ProjectId" Step="selected" />
                                         <h3>Step @(selected.Index + 1) · @selected.JobName</h3>
                                         @if (selected.ActionType == "qemu")
                                         { <VirtualMachineReplay Run="run" Step="selected.Index" /> }
@@ -414,7 +414,7 @@
                         <div class="workspace-empty">
                             <AppIcon Kind="chain" />
                             <h3>Your build will take shape here</h3>
-                            <p>Keep the conversation going on the left. Action results will appear here as the assistant works.</p>
+                            <p>Keep the session going on the left. Action results will appear here as the assistant works.</p>
                         </div>
                     }
                     else
@@ -436,11 +436,31 @@
         </div>
     </section>
 </div>
+@if (Vm.EditingTileKey is { } editingTileKey)
+{
+    <div class="dcmodal-overlay" @onclick="Vm.CloseTileEditor" @onkeydown='e => { if (e.Key == "Escape") Vm.CloseTileEditor(); }'>
+        <section class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="tile-editor-title" @onclick:stopPropagation="true">
+            <header class="dcmodal-head"><h3 id="tile-editor-title">Edit tile</h3><button type="button" class="dcslide-x" aria-label="Close tile editor" disabled="@Vm.AgentLoading" @onclick="Vm.CloseTileEditor"><AppIcon Kind="close" /></button></header>
+            <div class="dcmodal-body">
+                <div class="dcfield"><label for="tile-edit-title">Title</label><input id="tile-edit-title" class="dcinput" maxlength="60" @bind="Vm.TileTitleDraft" @bind:event="oninput" disabled="@Vm.AgentLoading" /></div>
+                <div class="dcfield"><label for="tile-edit-description">Description</label><textarea id="tile-edit-description" class="dcinput" rows="3" maxlength="300" placeholder="A short explanation of what this tile does." @bind="Vm.TileDescriptionDraft" @bind:event="oninput" disabled="@Vm.AgentLoading"></textarea></div>
+                @if (editingTileKey != "workflow")
+                {
+                    <div class="dcfield"><label for="tile-edit-prompt">Prompt</label><textarea id="tile-edit-prompt" class="dcinput" rows="8" maxlength="2000" @bind="Vm.TilePromptDraft" @bind:event="oninput" disabled="@Vm.AgentLoading"></textarea></div>
+                    <p>@(editingTileKey is "chat" or "chart" ? "This fills the chat input so you can review it before sending." : "This request is sent to the assistant when you open the tile.")</p>
+                }
+                else { <p>This tile opens the workflow picker.</p> }
+                @if (Vm.TileEditError is { } tileError) { <p role="alert">@tileError</p> }
+            </div>
+            <footer class="dcmodal-foot"><button type="button" class="dcbtn" disabled="@Vm.AgentLoading" @onclick="Vm.CloseTileEditor">Cancel</button><button type="button" class="dcbtn primary" disabled="@Vm.AgentLoading" @onclick="Vm.SaveDashboardTileAsync">@(Vm.AgentLoading ? "Saving…" : "Save changes")</button></footer>
+        </section>
+    </div>
+}
 @if (Vm.ShowDemoShare)
 {
     <div class="dcmodal-overlay" @onclick="Vm.CloseDemoShare" @onkeydown='e => { if (e.Key == "Escape") Vm.CloseDemoShare(); }'>
         <section class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="conversation-share-title" @onclick:stopPropagation="true">
-            <header class="dcmodal-head"><h3 id="conversation-share-title">Share conversation</h3><button class="dcbtn" aria-label="Close sharing" disabled="@Vm.SharingDemo" @onclick="Vm.CloseDemoShare">Close</button></header>
+            <header class="dcmodal-head"><h3 id="conversation-share-title">Share session</h3><button class="dcbtn" aria-label="Close sharing" disabled="@Vm.SharingDemo" @onclick="Vm.CloseDemoShare">Close</button></header>
             <div class="dcmodal-body"><WorkflowDemoSharePanel Vm="Vm" /></div>
         </section>
     </div>
@@ -462,7 +482,7 @@
 }
 @if (Vm.ConfirmDelete)
 {
-    <div class="dcmodal-overlay"><section class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="@(Vm.ViewId + "-delete-chat-title")"><div class="dcmodal-head"><h3 id="@(Vm.ViewId + "-delete-chat-title")">Delete conversation?</h3></div><div class="dcmodal-body">This removes the conversation and its images. Project memory and completed actions are kept.</div><div class="dcmodal-foot"><button class="dcbtn" @onclick="() => Vm.ConfirmDelete = false">Cancel</button><button class="dcbtn" @onclick="Vm.DeleteAsync">Delete</button></div></section></div>
+    <div class="dcmodal-overlay"><section class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="@(Vm.ViewId + "-delete-chat-title")"><div class="dcmodal-head"><h3 id="@(Vm.ViewId + "-delete-chat-title")">Delete session?</h3></div><div class="dcmodal-body">This removes the session and its images. Project memory and completed actions are kept.</div><div class="dcmodal-foot"><button class="dcbtn" @onclick="() => Vm.ConfirmDelete = false">Cancel</button><button class="dcbtn" @onclick="Vm.DeleteAsync">Delete</button></div></section></div>
 }
 @code {
     [Parameter] public Guid ProjectId { get; set; }
@@ -473,33 +493,16 @@
     [Parameter, SupplyParameterFromQuery(Name = "task")] public string? TaskHint { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "source")] public Guid? SourceHint { get; set; }
     private (Guid, string?, Guid?)? _appliedSourceHint;
-    private string AgentSettingsHref(string section) => $"/project/{ProjectId}/dashboard/settings/{section}"
-        + (Vm.Conversations.Any(c => c.Id == Vm.Conversation.Id) ? $"?conversation={Vm.Conversation.Id}" : "");
     private ElementReference _composer;
     private bool _focusComposer;
-    private bool _arrangingTiles;
-    private string? _draggedTile;
     private WorkflowQueryEditor? _chartQueryEditor;
     private async Task SaveChartQueryAsync() => await Vm.SaveChartQueryAsync(_chartQueryEditor is null ? Vm.ChartSqlDraft : await _chartQueryEditor.ReadAsync());
-    private async Task DropDashboardTileToRowAsync()
-    {
-        var key = _draggedTile;
-        _draggedTile = null;
-        if (_arrangingTiles && key is not null) await Vm.MoveDashboardTileAsync(key, Vm.Dashboard.OrderedTiles().Count - 1, newRow: true);
-    }
-    private async Task DropDashboardTileAsync(int position)
-    {
-        var key = _draggedTile;
-        _draggedTile = null;
-        if (_arrangingTiles && key is not null) await Vm.MoveDashboardTileAsync(key, position);
-    }
     private async Task LaunchDashboardTileAsync(string key, DashboardAction? action)
     {
         if (key == "workflow") await Vm.StartWorkflowChatAsync();
+        else if (key is "chat" or "chart") { Vm.OpenChat(); if (!string.IsNullOrWhiteSpace(action?.Prompt)) Vm.ApplyTaskHint(action.Prompt); _focusComposer = true; }
         else if (action is not null) await Vm.StartDashboardActionAsync(action.Prompt);
-        else await Vm.StartDashboardActionAsync("Help me work on this project. Ask me what I want to accomplish and offer a few useful starting points.");
     }
-    private Task StartChartChatAsync() => Vm.StartDashboardActionAsync("Help me create a chart for my dashboard. Ask what I want to measure and the time range, then use show_live_chart so it always pulls current project data.");
     private void PrepareBranch(Action action)
     {
         action();

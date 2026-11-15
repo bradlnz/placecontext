@@ -24,7 +24,7 @@
       link: cssVar('--border-2', '#2a323c'),
       amb: cssVar('--warn', '#e0a458'),
       card: cssVar('--card', '#111418'),
-      good: cssVar('--good', '#43d675'),
+      good: cssVar('--good', '#b5b5b5'),
       human: cssVar('--human', '#58a6ff'),
     };
   }

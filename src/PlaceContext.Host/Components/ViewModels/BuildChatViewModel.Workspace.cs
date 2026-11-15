@@ -441,6 +441,7 @@ public sealed partial class BuildChatViewModel
     }
     private void ResetWorkspace()
     {
+        CloseTileEditor();
         _handledWorkflowPicker = 0;
         AgentOpen = false;
         ClosePreview();

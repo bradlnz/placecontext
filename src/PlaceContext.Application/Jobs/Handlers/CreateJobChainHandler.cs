@@ -29,6 +29,7 @@ public sealed class CreateJobChainHandler : ICommandHandler<CreateJobChainComman
                 ToStages(stages, command.StageGates, command.StageActions), _clock.UtcNow)
             : JobChain.Create(command.ProjectId, command.Name, command.Description, command.StepJobIds, _clock.UtcNow);
         await ValidateStepsAsync(_jobs, chain, ct);
+        await SubWorkflowValidation.ValidateAsync(chain, _chains, ct);
         await _chains.AddAsync(chain, ct);
         await _uow.SaveChangesAsync(ct);
         return await JobChainMapper.ToViewAsync(chain, _jobs, ct);

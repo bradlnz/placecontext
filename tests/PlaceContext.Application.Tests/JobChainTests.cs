@@ -1,10 +1,12 @@
 using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Build;
+using PlaceContext.Application.Billing;
 using PlaceContext.Application.Communications;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Workload.VirtualMachines;
+using PlaceContext.Application.Workload;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
@@ -14,6 +16,204 @@ namespace PlaceContext.Application.Tests;
 
 public class JobChainTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Parallel_conditions_start_matching_children_together_and_join_in_branch_order(bool fail)
+    {
+        var chains = new InMemoryJobChainRepository();
+        var children = Enumerable.Range(0, 3).Select(i => JobChain.Create(ProjectId, $"Child {i}", null, [ChainStage.Of(Guid.NewGuid())], T0)).ToArray();
+        foreach (var child in children) await chains.AddAsync(child);
+        var action = new ParallelWorkflowsChainAction(children.Select((child, i) => new ConditionalWorkflowBranch(child.Id, child.Name,
+            i == 2 ? "eq:approved:false" : "all:[\"eq:approved:true\",\"gte:score:0.9\"]")).ToArray());
+        var next = MakeJob("join"); var jobs = new InMemoryJobRepository(); await jobs.AddAsync(next);
+        var parent = JobChain.Create(ProjectId, "Parent", null, [ChainStage.ForAction(action), ChainStage.Of(next.Id)], T0);
+        await chains.AddAsync(parent);
+        var jobDispatcher = new FakeRunDispatcher(); jobDispatcher.Results[next.Id] = Run(next.Id, "Succeeded");
+        var dispatcher = new ParallelChildDispatcher(children[0].Id, fail);
+        var handler = new RunJobChainHandler(chains, jobs, new InMemoryChainRunRepository(), new RecordingUnitOfWork(), new FakeClock(T0),
+            new FakeJobRunner(jobDispatcher), permissions: new FakePermissionService(true), dispatcher: dispatcher);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var running = handler.HandleAsync(new(parent.Id, "{\"approved\":true,\"score\":0.95}"), timeout.Token);
+        await dispatcher.BothStarted.Task.WaitAsync(timeout.Token);
+        Assert.False(running.IsCompleted); Assert.Equal(2, dispatcher.Started);
+        dispatcher.Release.TrySetResult();
+        var result = await running;
+        Assert.Equal(fail ? "Failed" : "Succeeded", result.Status);
+        Assert.Equal(fail ? "Skipped" : "Succeeded", result.Steps[1].Status);
+        using var output = System.Text.Json.JsonDocument.Parse(result.Steps[0].Output!);
+        Assert.Equal(children[0].Id, output.RootElement[0].GetProperty("workflowId").GetGuid());
+        Assert.Equal(children[1].Id, output.RootElement[1].GetProperty("workflowId").GetGuid());
+        Assert.Equal("Skipped", output.RootElement[2].GetProperty("status").GetString());
+        Assert.Contains("parallel_results", result.FinalOutput);
+    }
+
+    private sealed class ParallelChildDispatcher(Guid first, bool fail) : IDispatcher
+    {
+        public int Started;
+        public TaskCompletionSource BothStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task<T> Send<T>(ICommand<T> command, CancellationToken ct = default)
+        {
+            var run = Assert.IsType<RunJobChainCommand>(command);
+            Assert.Contains("approved", run.InputPayload);
+            if (Interlocked.Increment(ref Started) == 2) BothStarted.TrySetResult();
+            await Release.Task.WaitAsync(ct);
+            return (T)(object)new ChainRunView(Guid.NewGuid(), run.ChainId, "Child", fail && run.ChainId == first ? "Failed" : "Succeeded", [],
+                System.Text.Json.JsonSerializer.Serialize(new { child = run.ChainId }), T0, T0.AddSeconds(1));
+        }
+        public Task<T> Query<T>(IQuery<T> query, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
+    [Theory]
+    [InlineData("Succeeded", false)]
+    [InlineData("Failed", false)]
+    [InlineData("Partial", false)]
+    [InlineData("Succeeded", true)]
+    public async Task Sub_workflows_pass_payloads_return_results_and_propagate_failure(string outcome, bool inElse)
+    {
+        var jobs = new InMemoryJobRepository(); var job = MakeJob("specialist"); var next = MakeJob("next");
+        await jobs.AddAsync(job); await jobs.AddAsync(next);
+        var chains = new InMemoryJobChainRepository();
+        var child = JobChain.Create(ProjectId, "Specialist", null, [ChainStage.Of(job.Id)], T0);
+        await chains.AddAsync(child);
+        var call = ChainStage.ForAction(new SubWorkflowChainAction(child.Id, child.Name));
+        var parent = JobChain.Create(ProjectId, "Parent", null,
+            [inElse ? new ChainStage([next.Id], new ConditionGate("false", [call])) : call, ChainStage.Of(next.Id)], T0);
+        await chains.AddAsync(parent);
+        var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[job.Id] = Run(job.Id, outcome, ["{\"reviewed\":true}"]);
+        dispatcher.Results[next.Id] = Run(next.Id, "Succeeded");
+        var runs = new InMemoryChainRunRepository();
+        var admission = new SingleWorkflowAdmission();
+        var handler = new RunJobChainHandler(chains, jobs, runs, new RecordingUnitOfWork(), new FakeClock(T0),
+            new FakeJobRunner(dispatcher), permissions: new FakePermissionService(true), allowance: admission, capacity: admission);
+        var result = await handler.HandleAsync(new(parent.Id, "{\"question\":\"Hello\"}"));
+        Assert.Equal(outcome, result.Status);
+        Assert.Equal(1, admission.Reservations);
+        Assert.Equal(1, admission.Leases);
+        Assert.True(admission.Disposed);
+        Assert.Equal(outcome == "Failed" ? "Skipped" : "Succeeded", result.Steps[1].Status);
+        var step = Assert.Single(result.Steps, step => step.ActionType == SubWorkflowChainAction.ActionType);
+        using var output = System.Text.Json.JsonDocument.Parse(step.Output!);
+        var childRun = (await runs.GetByIdAsync(output.RootElement.GetProperty("runId").GetGuid()))!;
+        Assert.Equal(child.Id, childRun.ChainId);
+        Assert.Contains("Hello", childRun.FinalOutput);
+        if (outcome != "Failed") Assert.Contains("reviewed", result.FinalOutput);
+    }
+
+    private sealed class SingleWorkflowAdmission : IRunAllowance, IExecutionCapacity, IExecutionLease
+    {
+        public int Reservations; public int Leases; public bool Disposed;
+        public CancellationToken LostToken => CancellationToken.None;
+        public Task<RunAllowanceSnapshot> GetAsync(CancellationToken ct = default) => throw new NotSupportedException();
+        public Task ReserveAsync(Guid projectId, Guid executionId, string kind, CancellationToken ct = default)
+        { Reservations++; return Task.CompletedTask; }
+        public Task<IExecutionLease> AcquireAsync(Guid executionId, string kind, CancellationToken ct = default)
+        { Assert.Equal(0, Leases++); return Task.FromResult<IExecutionLease>(this); }
+        public ValueTask DisposeAsync() { Disposed = true; return ValueTask.CompletedTask; }
+    }
+
+    [Fact]
+    public async Task Cancelling_parent_stops_the_active_specialist()
+    {
+        var chains = new InMemoryJobChainRepository();
+        var child = JobChain.Create(ProjectId, "Specialist", null,
+            [ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Work", "result", agentProvider: LoopChainAction.AutomaticAgent, connectionId: Guid.NewGuid(), model: "test"))], T0);
+        var parent = JobChain.Create(ProjectId, "Parent", null, [ChainStage.ForAction(new SubWorkflowChainAction(child.Id, child.Name))], T0);
+        await chains.AddAsync(child); await chains.AddAsync(parent);
+        var runs = new InMemoryChainRunRepository(); var agent = new ProgressWorkflowAgent();
+        var handler = new RunJobChainHandler(chains, new InMemoryJobRepository(), runs, new RecordingUnitOfWork(), new FakeClock(T0),
+            new FakeJobRunner(new FakeRunDispatcher()), agentRunner: agent, permissions: new FakePermissionService(true));
+        var id = Guid.NewGuid();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var task = handler.HandleAsync(new(parent.Id, ChainRunId: id), timeout.Token);
+        ChainRun? saved;
+        do { await Task.Delay(20, timeout.Token); saved = await runs.GetByIdAsync(id); }
+        while (saved?.Steps[0].Status != ChainStepStatus.Running);
+        saved.Complete(ChainRunStatus.Cancelled, saved.FinalOutput, T0);
+        agent.Release.TrySetResult();
+        Assert.Equal("Cancelled", (await task).Status);
+    }
+
+    [Theory]
+    [InlineData("cycle")]
+    [InlineData("foreign")]
+    [InlineData("missing")]
+    [InlineData("wait")]
+    public async Task Sub_workflows_reject_unsafe_references_before_execution(string kind)
+    {
+        var chains = new InMemoryJobChainRepository();
+        var child = JobChain.Create(kind == "foreign" ? Guid.NewGuid() : ProjectId, "Child", null,
+            [new ChainStage([Guid.NewGuid()], kind == "wait" ? new WaitGate(TimeSpan.FromSeconds(1)) : null)], T0);
+        await chains.AddAsync(child);
+        var parent = JobChain.Create(ProjectId, "Parent", null,
+            [ChainStage.ForAction(new SubWorkflowChainAction(kind == "missing" ? Guid.NewGuid() : child.Id, "Child"))], T0);
+        if (kind == "cycle") child.Update("Child", null, [ChainStage.ForAction(new SubWorkflowChainAction(parent.Id, "Parent"))], T0);
+        await chains.AddAsync(parent);
+        var handler = new RunJobChainHandler(chains, new InMemoryJobRepository(), new InMemoryChainRunRepository(),
+            new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(new FakeRunDispatcher()), permissions: new FakePermissionService(true));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(new(parent.Id)));
+    }
+
+    [Theory]
+    [InlineData(true, 0)]
+    [InlineData(false, 0)]
+    [InlineData(true, 9)]
+    public async Task Container_steps_pass_outputs_to_Qemu_and_always_release_the_sandbox(bool allowed, int exitCode)
+    {
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "build and test", null,
+            [ChainStage.ForAction(new ContainerBuildChainAction("FROM alpine:3.21")),
+             ChainStage.ForAction(new ContainerRunChainAction(port:8080)),
+             ChainStage.ForAction(new VirtualMachineChainAction("browser", "Test container_run.qemuUrl", allowNetwork:true))], T0);
+        await chains.AddAsync(chain);
+        var containers = new FakeContainers(exitCode);
+        var browser = new ContainerBrowser();
+        var handler = new RunJobChainHandler(chains, new InMemoryJobRepository(), new InMemoryChainRunRepository(),
+            new RecordingUnitOfWork(), new FakeClock(T0), new FakeJobRunner(new FakeRunDispatcher()),
+            permissions: new FakePermissionService(allowed), qemu: browser, containers: containers);
+        var result = await handler.HandleAsync(new RunJobChainCommand(chain.Id, "{\"original\":42}"));
+        Assert.True(containers.Disposed);
+        Assert.Equal(allowed && exitCode == 0 ? "Succeeded" : "Failed", result.Status);
+        Assert.Equal(allowed && exitCode == 0, browser.Called);
+        Assert.Equal(!allowed ? 0 : exitCode == 0 ? 2 : 1, containers.Calls);
+        if (allowed)
+        {
+            Assert.Contains("\"exitCode\":" + exitCode, result.Steps[0].Output);
+        }
+    }
+
+    private sealed class FakeContainers(int exitCode) : IContainerWorkflowRunner, IAsyncDisposable
+    {
+        public int Calls; public bool Disposed;
+        public IAsyncDisposable TrackRun(Guid runId) => this;
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            return ValueTask.CompletedTask;
+        }
+        public Task<ContainerStepResult> ExecuteAsync(ChainAction action, Guid projectId, Guid runId, int step, string? payload, CancellationToken ct)
+        {
+            Calls++;
+            if (action is ContainerRunChainAction)
+            {
+                Assert.Contains("\"image\":\"built-image\"", payload);
+            }
+            return Task.FromResult(new ContainerStepResult(exitCode, "container output", exitCode == 0 ? "" : "failed", "built-image", QemuUrl: "http://10.0.2.2:1234"));
+        }
+    }
+    private sealed class ContainerBrowser : IVirtualMachineEnvironmentRunner
+    {
+        public bool Called;
+        public Task<VirtualMachineEnvironmentResult> RunAsync(VirtualMachineChainAction action, string? input, CancellationToken ct,
+            Func<VirtualMachineReplayCapture, CancellationToken, Task>? recordFrame = null, VirtualMachineRunContext? context = null)
+        {
+            Called = true; Assert.Contains("http://10.0.2.2:1234", input); Assert.Contains("\"original\":42", input);
+            return Task.FromResult(new VirtualMachineEnvironmentResult(0, "Tested", ""));
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

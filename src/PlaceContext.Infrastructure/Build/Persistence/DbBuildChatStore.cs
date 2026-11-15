@@ -50,7 +50,7 @@ public sealed class DbBuildChatStore(IServiceScopeFactory scopes, ICurrentUser u
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await CheckAsync(db, projectId, ct);
         var row = await Owned(db, projectId).AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
-            ?? throw new InvalidOperationException("Conversation not found.");
+            ?? throw new InvalidOperationException("Session not found.");
         return Read(row);
     }
     public async Task QueueAsync(BuildConversation conversation, JsonObject message, CancellationToken ct = default)
@@ -80,7 +80,7 @@ public sealed class DbBuildChatStore(IServiceScopeFactory scopes, ICurrentUser u
             {
                 if (row.Status is BuildRunStatus.Queued or BuildRunStatus.Running || row.LeaseUntil > DateTimeOffset.UtcNow)
                 {
-                    throw new InvalidOperationException("This conversation already has a background run.");
+                    throw new InvalidOperationException("This session already has a background run.");
                 }
                 var saved = Read(row);
                 conversation.Messages = saved.Messages;
@@ -96,18 +96,18 @@ public sealed class DbBuildChatStore(IServiceScopeFactory scopes, ICurrentUser u
         }
         if (conversation.Messages.Count > 180)
         {
-            throw new InvalidOperationException("This conversation is full. Start a new chat.");
+            throw new InvalidOperationException("This session is full. Start a new chat.");
         }
         var messages = conversation.Messages.DeepClone().AsArray();
         messages.Add(message.DeepClone());
         if (messages.ToJsonString().Length > 14_000_000)
         {
-            throw new InvalidOperationException("This conversation is full. Start a new chat or use smaller images.");
+            throw new InvalidOperationException("This session is full. Start a new chat or use smaller images.");
         }
         conversation.Messages = messages;
         if (messages.Count == 1)
         {
-            var text = (message["content"] as JsonArray)?.FirstOrDefault(x => x?["type"]?.GetValue<string>() == "text")?["text"]?.GetValue<string>() ?? "Image conversation";
+            var text = (message["content"] as JsonArray)?.FirstOrDefault(x => x?["type"]?.GetValue<string>() == "text")?["text"]?.GetValue<string>() ?? "Image session";
             conversation.Title = text[..Math.Min(80, text.Length)];
         }
         conversation.Status = row.Status = BuildRunStatus.Queued;
@@ -125,7 +125,7 @@ public sealed class DbBuildChatStore(IServiceScopeFactory scopes, ICurrentUser u
         }
         catch (DbUpdateException)
         {
-            throw new InvalidOperationException("This conversation changed. Open it again before sending.");
+            throw new InvalidOperationException("This session changed. Open it again before sending.");
         }
     }
 
@@ -138,7 +138,7 @@ public sealed class DbBuildChatStore(IServiceScopeFactory scopes, ICurrentUser u
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await CheckAsync(db, projectId, ct);
             var row = await Owned(db, projectId).SingleOrDefaultAsync(x => x.Id == id, ct)
-                ?? throw new InvalidOperationException("Conversation not found.");
+                ?? throw new InvalidOperationException("Session not found.");
             if (row.Status is not (BuildRunStatus.Queued or BuildRunStatus.Running))
             {
                 return;
@@ -241,12 +241,12 @@ public sealed class DbBuildChatStore(IServiceScopeFactory scopes, ICurrentUser u
         // The existing owned lease permits recording a terminal outcome even after permissions change.
         if (!user.IsAuthenticated || !tenant.IsResolved)
         {
-            throw new UnauthorizedAccessException("Sign in to save a conversation.");
+            throw new UnauthorizedAccessException("Sign in to save a session.");
         }
         var row = await Owned(db, conversation.ProjectId).SingleAsync(x => x.Id == conversation.Id, ct);
         if (row.Lease != lease || row.LeaseUntil <= DateTimeOffset.UtcNow)
         {
-            throw new InvalidOperationException("The chat session expired. Open the conversation again before continuing.");
+            throw new InvalidOperationException("The chat session expired. Open the session again before continuing.");
         }
         if (release && conversation.Status == BuildRunStatus.Running)
         {
@@ -255,7 +255,7 @@ public sealed class DbBuildChatStore(IServiceScopeFactory scopes, ICurrentUser u
         var json = JsonSerializer.Serialize(conversation);
         if (json.Length > 16_000_000)
         {
-            throw new InvalidOperationException("This conversation is full. Start a new chat.");
+            throw new InvalidOperationException("This session is full. Start a new chat.");
         }
         row.Content = encryption.Protect(json, Purpose);
         row.Title = encryption.Protect(conversation.Title, Purpose);

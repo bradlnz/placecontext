@@ -59,7 +59,7 @@ public sealed class LoopChainAction : ChainAction
     {
         get;
     }
-    public override string DisplayName => Type == TaskType ? "Agent task" : Type == HumanType ? "Human in the loop" : "Agent in the loop";
+    public override string DisplayName => Type == TaskType ? "Agent task" : Type == HumanType ? "Human in the loop" : "Agent review";
     public string Instructions
     {
         get;

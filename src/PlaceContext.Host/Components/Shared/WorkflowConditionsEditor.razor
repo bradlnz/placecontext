@@ -1,0 +1,66 @@
+@using System.Text.Json
+@using static PlaceContext.Host.Components.ViewModels.JobChainsViewModel
+                            <div class="dcfield mb-8">
+                                <label for="@_matchId">Match</label>
+                                <select id="@_matchId" class="dcinput" value="@Match" @onchange="@(e => MatchChanged.InvokeAsync(e.Value?.ToString() ?? "all"))">
+                                    <option value="all">All conditions (AND)</option>
+                                    <option value="any">Any condition (OR)</option>
+                                </select>
+                            </div>
+                            @foreach (var row in Rows)
+                            {
+                                <div class="condition-row" @key="row">
+                            <div class="condition-builder">
+                                <div class="dcfield">
+                                    <label>Payload path</label>
+                                    <input aria-label="Payload path" class="dcinput mono" @bind="row.Path"
+                                           placeholder="data.status" />
+                                </div>
+                                <div class="dcfield">
+                                    <label>Condition</label>
+                                    <select aria-label="Condition" class="dcinput" @bind="row.Operator">
+                                        <option value="true">always true</option>
+                                        <option value="false">always false</option>
+                                        <option value="custom">expression</option>
+                                        <option value="exists">exists</option>
+                                        <option value="notexists">does not exist</option>
+                                        <option value="eq">equals</option>
+                                        <option value="neq">does not equal</option>
+                                        <option value="contains">contains</option>
+                                        <option value="starts">starts with</option>
+                                        <option value="ends">ends with</option>
+                                        <option value="in">is one of</option>
+                                        <option value="empty">is empty</option>
+                                        <option value="notempty">is not empty</option>
+                                        <option value="gt">is greater than</option>
+                                        <option value="gte">is greater than or equal</option>
+                                        <option value="lt">is less than</option>
+                                        <option value="lte">is less than or equal</option>
+                                    </select>
+                                </div>
+                                @if (row.NeedsValue)
+                                {
+                                    <div class="dcfield">
+                                        <label>Value @(row.Operator == "in" ? "(comma separated)" : "")</label>
+                                        <input aria-label="Condition value" class="dcinput" @bind="row.Value" placeholder="approved" />
+                                    </div>
+                                }
+                            </div>
+                                    <button class="dcbtn btn-xs" disabled="@(Rows.Count == 1)" @onclick="() => Remove(row)">Remove condition</button>
+                                </div>
+                            }
+                            <button class="dcbtn btn-xs" @onclick="Add">Add condition</button>
+                            <div class="condition-preview">
+                                <span>Expression</span>
+                                <code>@Expression</code>
+                            </div>
+
+@code {
+    [Parameter, EditorRequired] public List<ConditionRow> Rows { get; set; } = [];
+    [Parameter] public string Match { get; set; } = "all";
+    [Parameter] public EventCallback<string> MatchChanged { get; set; }
+    private readonly string _matchId = "condition-match-" + Guid.NewGuid().ToString("N");
+    private string Expression => Rows.Count == 1 ? Rows[0].Expression : $"{Match}:{JsonSerializer.Serialize(Rows.Select(row => row.Expression))}";
+    private void Add() { if (Rows.Count < 32) Rows.Add(new()); }
+    private void Remove(ConditionRow row) { if (Rows.Count > 1) Rows.Remove(row); }
+}

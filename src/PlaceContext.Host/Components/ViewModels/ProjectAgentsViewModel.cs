@@ -141,6 +141,14 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
         if (selected && Mcps.Any(m => m.Id == id && m.Enabled)) Agent.McpConnectionIds.Add(id);
     }
 
+    public void ToggleSourceCapability(string capability, bool selected)
+    {
+        if (!CanEdit || Busy || Agent is null || capability is not ("metadata" or "search" or "connect" or "pipeline")) return;
+        Agent.SourceCapabilities ??= Agent.EffectiveSourceCapabilities.ToList();
+        Agent.SourceCapabilities.Remove(capability);
+        if (selected) Agent.SourceCapabilities.Add(capability);
+    }
+
     public void ToggleWorkflow(Guid id, bool selected)
     {
         if (!CanEdit || !CanViewWorkflows || Busy || Agent is null) return;
@@ -213,6 +221,7 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
                 var index = settings.Agents.FindIndex(a => a.Id == id);
                 if (index < 0) throw new InvalidOperationException("This private agent is unavailable. Refresh and try again.");
                 settings.Agents.RemoveAt(index);
+                settings.AgentLayouts.Remove(id);
                 settings.Validate();
                 await dashboardStore.SaveSettingsAsync(ProjectId, settings);
                 Dashboard = settings;

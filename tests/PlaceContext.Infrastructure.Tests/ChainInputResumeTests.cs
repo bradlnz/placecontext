@@ -108,7 +108,7 @@ public sealed class ChainInputResumeTests
             {
                 var queue = new DbJobChainSubmissionQueue(db, tenant, new CurrentUser(), encryptor, new Permissions());
                 Assert.Equal("Waiting", await queue.ResumeAsync(run.Id, request.Id, values));
-                var next = new ChainInputRequest(Guid.NewGuid(), new[] { new ChainInputStep(0, "Agent in the loop",
+                var next = new ChainInputRequest(Guid.NewGuid(), new[] { new ChainInputStep(0, "Agent review",
                     new[] { new JobParameterDto("agent_response") }) }, Kind: LoopChainAction.AgentType);
                 await using (var workerDb = new AppDbContext(options, tenant))
                 {

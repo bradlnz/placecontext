@@ -18,6 +18,15 @@ public sealed class DashboardAgentProfile
     public string DataAccess { get; set; } = "manage"; // Preserve access for profiles saved before separate data permissions.
     public string? TableAccess { get; set; }
     public string? SourceAccess { get; set; }
+    // Null preserves legacy access; an empty list explicitly disables every source capability.
+    public List<string>? SourceCapabilities { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public IReadOnlyList<string> EffectiveSourceCapabilities => SourceCapabilities ?? (EffectiveSourceAccess switch
+    {
+        "manage" => ["metadata", "search", "connect", "pipeline"],
+        "read" => ["metadata", "search"],
+        _ => []
+    });
     public string? ArtifactAccess { get; set; }
     [System.Text.Json.Serialization.JsonIgnore]
     public string EffectiveTableAccess => TableAccess ?? (DataAccess == "none" ? "none" : "read");
@@ -36,11 +45,13 @@ public sealed class DashboardAgentProfile
         "run_job" or "run_workflow" => WorkflowAccess is "run" or "manage",
         "save_job" or "delete_job" or "save_workflow" or "delete_workflow"
             or "create_schedule" or "update_schedule" or "delete_schedule" => WorkflowAccess == "manage",
-        "source_connectors" or "list_data_sources" or "search_data_sources" => EffectiveSourceAccess is "read" or "manage",
+        "source_connectors" => EffectiveSourceCapabilities.Contains("metadata") || EffectiveSourceCapabilities.Contains("connect"),
+        "list_data_sources" => EffectiveSourceCapabilities.Contains("metadata"),
+        "search_data_sources" => EffectiveSourceCapabilities.Contains("search"),
         "list_project_tables" => EffectiveTableAccess == "read",
         "list_artifacts" => EffectiveArtifactAccess == "read",
-        "prepare_data_source" => EffectiveSourceAccess == "manage",
-        "create_data_pipeline" => EffectiveSourceAccess == "manage" && WorkflowAccess == "manage",
+        "prepare_data_source" => EffectiveSourceCapabilities.Contains("connect"),
+        "create_data_pipeline" => EffectiveSourceCapabilities.Contains("pipeline") && WorkflowAccess == "manage",
         "show_live_chart" => EffectiveTableAccess == "read" || WorkflowAccess != "none",
         _ => false
     };
@@ -75,6 +86,9 @@ public sealed class DashboardAgentProfile
             || DataAccess is not ("none" or "read" or "manage")
             || TableAccess is not (null or "none" or "read")
             || SourceAccess is not (null or "none" or "read" or "manage")
+            || SourceCapabilities is not null && (SourceCapabilities.Count > 4
+                || SourceCapabilities.Any(c => c is not ("metadata" or "search" or "connect" or "pipeline"))
+                || SourceCapabilities.Distinct().Count() != SourceCapabilities.Count)
             || ArtifactAccess is not (null or "none" or "read"))
             throw new ArgumentException("Use a name up to 60 characters, instructions up to 8,000, valid access levels, up to 200 distinct workflows, and up to 32 distinct MCP connections.");
     }

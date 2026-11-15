@@ -12,6 +12,8 @@ namespace PlaceContext.Application.Features;
 public sealed class CreateTriggerHandler : ICommandHandler<CreateTriggerCommand, TriggerView>
 {
     private readonly IJobRepository _jobs;
+    private readonly IJobChainRepository? _chains;
+    private readonly ICurrentUser? _user;
     private readonly IJobTriggerRepository _triggers;
     private readonly ICronSchedule _cron;
     private readonly ICurrentTenant _tenant;
@@ -20,8 +22,10 @@ public sealed class CreateTriggerHandler : ICommandHandler<CreateTriggerCommand,
 
     public CreateTriggerHandler(
         IJobRepository jobs, IJobTriggerRepository triggers, ICronSchedule cron,
-        ICurrentTenant tenant, IUnitOfWork uow, IClock clock)
+        ICurrentTenant tenant, IUnitOfWork uow, IClock clock, IJobChainRepository? chains = null, ICurrentUser? user = null)
     {
+        _chains = chains;
+        _user = user;
         _jobs = jobs;
         _triggers = triggers;
         _cron = cron;
@@ -40,6 +44,20 @@ public sealed class CreateTriggerHandler : ICommandHandler<CreateTriggerCommand,
         var now = _clock.UtcNow;
         JobTrigger trigger;
 
+        if (command.WorkflowId is { } workflowId)
+        {
+            if (kind != TriggerKind.Schedule || command.JobId is not null) throw new ArgumentException("Choose one workflow target for a schedule.");
+            if (_user?.IsAuthenticated != true) throw new UnauthorizedAccessException("A schedule owner is required.");
+            var workflow = _chains is null ? null : await _chains.GetByIdAsync(workflowId, ct);
+            if (workflow is null) throw new ArgumentException("Workflow not found.");
+            var cron = command.CronExpression?.Trim();
+            if (string.IsNullOrWhiteSpace(cron) || !_cron.IsValid(cron)) throw new ArgumentException("A valid cron expression is required.");
+            trigger = JobTrigger.CreateWorkflowSchedule(workflow.ProjectId, workflow.Id, _user.UserId, command.Name, cron,
+                _cron.Next(cron, now, _tenant.TimeZoneId), now);
+            await _triggers.AddAsync(trigger, ct);
+            await _uow.SaveChangesAsync(ct);
+            return TriggerViewMapper.ToView(trigger);
+        }
         if (command.JobId is not { } jobId || jobId == Guid.Empty)
         {
             throw new ArgumentException($"A {kind} trigger requires a job.");

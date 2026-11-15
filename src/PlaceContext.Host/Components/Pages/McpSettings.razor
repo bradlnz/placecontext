@@ -74,7 +74,13 @@
     {
         <section class="dccard add-card">
             <div class="form-title">New MCP server</div>
-            <McpConnectionForm ProjectId="Vm.ProjectId.Value" OnSaved="Vm.AddedAsync" OnCancel="Vm.CancelAdd" />
+            @* Keep asynchronous authorization outside the form's per-keystroke renders. *@
+            <AuthorizeView Policy="@Policies.DefaultAdmin">
+                <Authorized>
+                    <McpConnectionForm ProjectId="Vm.ProjectId.Value" OnSaved="Vm.AddedAsync" OnCancel="Vm.CancelAdd" />
+                </Authorized>
+                <NotAuthorized><p>Only workspace administrators can add MCP servers.</p><button type="button" class="dcbtn" @onclick="Vm.CancelAdd">Close</button></NotAuthorized>
+            </AuthorizeView>
         </section>
     }
 </div>

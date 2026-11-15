@@ -9,6 +9,7 @@ public sealed partial class JobChainsViewModel
     public bool IsRunsTab => EditorTab.Equals("runs", StringComparison.OrdinalIgnoreCase);
     public bool IsListView => EditorView.Equals("list", StringComparison.OrdinalIgnoreCase);
     public bool IsRunsView => EditorView.Equals("runs", StringComparison.OrdinalIgnoreCase);
+    public bool IsSchedulesView => EditorView.Equals("schedules", StringComparison.OrdinalIgnoreCase);
     public bool IsCanvasView => EditorView.Equals("canvas", StringComparison.OrdinalIgnoreCase);
 
     public bool HasStageAction(int stageIndex) => EdStageActions.ContainsKey(stageIndex);
@@ -17,8 +18,6 @@ public sealed partial class JobChainsViewModel
         GateEditorType.Equals("wait", StringComparison.OrdinalIgnoreCase);
     public bool IsConditionGateEditor =>
         GateEditorType.Equals("condition", StringComparison.OrdinalIgnoreCase);
-    public bool IsInGateOperator =>
-        GateEditorOperator.Equals("in", StringComparison.OrdinalIgnoreCase);
 
     public bool IsChainRunActive(string? status) =>
         status is "AwaitingInput" or "Waiting" || ScopedPresentationCatalog.IsQueuedOrRunning(status);

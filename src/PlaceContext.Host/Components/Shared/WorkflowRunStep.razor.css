@@ -5,7 +5,9 @@
 .run-step-title { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; overflow-wrap:anywhere }
 .run-step-status, .run-step-detail { color:var(--text-3); font-size:11px; overflow-wrap:anywhere }
 .run-step-detail { margin-top:5px }
-.run-step[data-status="Running"] { box-shadow:0 0 0 2px var(--brand-bg) }
+.run-step[data-status="Running"] { box-shadow:0 0 0 2px var(--running-bg) }
+.run-step[data-status="Running"] .run-step-status { color:var(--running) }
+.run-step[data-status="Succeeded"] .run-step-status { color:var(--success) }
 .run-step[data-status="Skipped"], .run-step[data-status="Not run"] { border-style:dashed }
 
 .run-step:has(.run-step-link:not(:disabled)):hover { outline:2px solid var(--brand-2); outline-offset:2px }

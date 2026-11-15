@@ -42,6 +42,7 @@ public sealed class UpdateJobChainHandler : ICommandHandler<UpdateJobChainComman
         }
         UpdateStages();
         await CreateJobChainHandler.ValidateStepsAsync(_jobs, chain, ct);
+        await SubWorkflowValidation.ValidateAsync(chain, _chains, ct);
         await _chains.UpdateAsync(chain, ct);
         await _uow.SaveChangesAsync(ct);
         return await JobChainMapper.ToViewAsync(chain, _jobs, ct);

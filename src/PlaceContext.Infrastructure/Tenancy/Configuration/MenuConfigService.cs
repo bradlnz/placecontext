@@ -40,16 +40,16 @@ public sealed class MenuConfigService : IMenuConfigService
     internal static readonly CatalogItem[] WorkspaceCatalog =
     {
         new("build.chat", "Dashboard", "link", "/project/{projectId}/dashboard", Permission.ProjectsView, "dashboard", null, null),
-        new("project.agents", "Agents", "link", "/project/{projectId}/agents", Permission.ProjectsView, "agent", null, null),
         new("chains", "Workflows", "link", "/project/{projectId}/workflows", Permission.ChainsManage, "chain", null, null),
-        new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", "Automation", null),
-        new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", "Automation", null),
+        new("jobs", "Jobs", "link", "/project/{projectId}/jobs", Permission.JobsView, "box", "Infrastructure", null),
+        new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.TriggersManage, "clock", null, "chains"),
+        new("project.agents", "Agents", "link", "/project/{projectId}/agents", Permission.ProjectsView, "agent", null, "chains"),
+        new("tests", "Tests", "link", "/project/{projectId}/tests", Permission.JobsView, "test", null, "jobs"),
         new("queues", "Queues", "link", "/project/{projectId}/queues", Permission.ChainsManage, "queue", "Infrastructure", null),
         new("networking", "Networking", "link", "/project/{projectId}/networking", Permission.SettingsManage, "box", "Infrastructure", null),
-        new("schedules", "Schedules", "link", "/project/{projectId}/schedules", Permission.TriggersManage, "clock", "Automation", null),
         new("data", "Data", "link", "/project/{projectId}/data", Permission.DataRead, "data", null, null),
         new("vault", "Vault", "link", "/project/{projectId}/secrets", Permission.SecretsManage, "key", "Infrastructure", null),
-        new("project.events", "Events", "link", "/project/{projectId}/events", Permission.EventsManage, "pulse", "Automation", null),
+        new("project.events", "Events", "link", "/project/{projectId}/events", Permission.EventsManage, "pulse", null, "settings"),
         new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", null, null),
         new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null, null),
         new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", "Infrastructure", null),
@@ -173,8 +173,7 @@ public sealed class MenuConfigService : IMenuConfigService
                 .Replace("{projectId}", projectId?.ToString() ?? "", StringComparison.Ordinal);
             items.Add(new ResolvedMenuItem(
                 cat.Id, o.Label ?? cat.DefaultLabel, cat.Kind, href, cat.Icon,
-                (cat.Id == "chains" && o.Section == "Automation")
-                    || (cat.Id is "data" or "artifacts" && o.Section == "Data & storage")
+                (cat.Id is "data" or "artifacts" && o.Section == "Data & storage")
                     ? null : NormalizeSection(o.Section) ?? NormalizeSection(cat.DefaultSection), o.Order, cat.Parent));
         }
         return GroupSections(items);
@@ -182,9 +181,19 @@ public sealed class MenuConfigService : IMenuConfigService
 
     internal static IReadOnlyList<ResolvedMenuItem> GroupSections(IEnumerable<ResolvedMenuItem> items)
     {
+        var visible = items.ToList();
+        // Keep permitted tabs reachable when the workflow catalogue itself is unavailable.
+        if (!visible.Any(item => item.Id == "chains") && visible.FirstOrDefault(item => item.Parent == "chains") is { } tab)
+        {
+            visible.Insert(visible.IndexOf(tab), new("chains", "Workflows", "link", tab.Href, "chain", tab.Section, tab.Order));
+        }
+        if (!visible.Any(item => item.Id == "settings") && visible.FirstOrDefault(item => item.Parent == "settings") is { } setting)
+        {
+            visible.Insert(visible.IndexOf(setting), new("settings", "Settings", "link", setting.Href, "key", null, setting.Order));
+        }
         var result = new List<ResolvedMenuItem>();
         var groups = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var item in items)
+        foreach (var item in visible)
         {
             if (item.Parent is not null || item.Kind != "link" || string.IsNullOrWhiteSpace(item.Section))
             {
@@ -196,7 +205,6 @@ public sealed class MenuConfigService : IMenuConfigService
             {
                 var icon = item.Section switch
                 {
-                    "Automation" => "chain",
                     "Infrastructure" => "box",
                     "Data & storage" => "data",
                     "Help" => "ledger",
@@ -213,9 +221,7 @@ public sealed class MenuConfigService : IMenuConfigService
     }
 
     private static string? NormalizeSection(string? section) =>
-        string.Equals(section?.Trim(), "Workspace", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : section;
+        section?.Trim().ToLowerInvariant() is "workspace" or "automation" or "platform" ? null : section;
 
     private async Task<HashSet<string>> SafePermsAsync(CancellationToken ct)
     {
@@ -268,7 +274,7 @@ public sealed class MenuConfigService : IMenuConfigService
             .DistinctBy(x => x.Id, StringComparer.Ordinal)
             .Select(x => new MenuItemOverride(x.Id,
                 x.Id == "build.chat" && x.Label is "Chat" or "Build" ? null : x.Label,
-                x.Order, x.Visible, x.Id == "build.chat" && x.Section == "Build" ? null : x.Section))
+                x.Order, x.Visible, x.Id == "build.chat" && x.Section == "Build" ? null : NormalizeSection(x.Section)))
             .ToList();
 
         // Preserve customized order, but place newly shipped entries beside their nearest

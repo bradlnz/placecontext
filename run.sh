@@ -13,6 +13,8 @@ if [[ -f dist/demo-source/ca-bundle.crt ]]; then
   export PGSSLROOTCERT="${PGSSLROOTCERT:-$PWD/dist/demo-source/server.crt}"
 fi
 
+export PlaceContext__ContainerWorkflows__Enabled="${PlaceContext__ContainerWorkflows__Enabled:-true}"
+
 dotnet --version >/dev/null
 if ! docker info >/dev/null 2>&1; then
   echo "Docker is unavailable. Start Docker and check your access to its daemon." >&2

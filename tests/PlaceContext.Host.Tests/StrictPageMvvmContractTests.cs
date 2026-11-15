@@ -76,7 +76,7 @@ public sealed class StrictPageMvvmContractTests
         Assert.Equal("2031-02-03", presentation.Date(timestamp));
         Assert.Equal("Feb 3 · 04:05", presentation.ShortDateTime(timestamp));
         Assert.Equal("1,234", presentation.Number(1234));
-        Assert.Equal("var(--good)", presentation.StatusColor("Succeeded"));
+        Assert.Equal("var(--success)", presentation.StatusColor("Succeeded"));
         Assert.Equal("var(--bad-bg)", presentation.StatusBackground("Failed"));
         Assert.Equal("—", presentation.StatusLabel(null));
     }

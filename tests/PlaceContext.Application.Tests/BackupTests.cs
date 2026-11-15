@@ -1,4 +1,5 @@
 using PlaceContext.Application.Dtos;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Networking;
 using PlaceContext.Application.Organization;
@@ -45,6 +46,59 @@ public class BackupTests
 
         public ImportManifestHandler Importer() =>
             new(Projects, Jobs, Chains, Triggers, Events, Mappings, TenantSettings, Cron, Tenant, Uow, Clock, Networks, new FakePermissionService(true));
+    }
+
+    [Fact]
+    public async Task Backup_restores_workflow_schedule_for_the_importing_user()
+    {
+        var (source, project, job) = await SeedAsync();
+        var workflow = JobChain.Create(project.Id.Value, "Scheduled workflow", null, [ChainStage.Of(job.Id)], T0);
+        await source.Chains.AddAsync(workflow);
+        var schedule = JobTrigger.CreateWorkflowSchedule(project.Id.Value, workflow.Id, Guid.NewGuid(), "Daily", "0 9 * * *", T0.AddDays(1), T0);
+        schedule.Disable(T0); await source.Triggers.AddAsync(schedule);
+        var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
+        var actor = new UserIdentity(Guid.NewGuid(), "Owner"); CurrentUser.Set(actor);
+        try
+        {
+            var target = new Ctx();
+            await target.Importer().HandleAsync(new ImportManifestCommand(manifest));
+            var importedProject = Assert.Single(await target.Projects.ListAsync());
+            var importedWorkflow = (await target.Chains.ListForProjectAsync(importedProject.Id.Value)).Single(chain => chain.Name == workflow.Name);
+            var importedSchedule = (await target.Triggers.ListForProjectAsync(importedProject.Id.Value)).Single(trigger => trigger.Name == "Daily");
+            Assert.Equal(importedWorkflow.Id, importedSchedule.WorkflowId);
+            Assert.Equal(actor.Id, importedSchedule.ScheduledBy); Assert.False(importedSchedule.Enabled);
+            await target.Importer().HandleAsync(new ImportManifestCommand(manifest));
+            Assert.Single((await target.Triggers.ListForProjectAsync(importedProject.Id.Value)).Where(trigger => trigger.WorkflowId == importedWorkflow.Id));
+        }
+        finally { CurrentUser.Clear(); }
+    }
+
+    [Fact]
+    public async Task Backup_rewires_sub_workflows_in_both_routes_even_when_parent_appears_first()
+    {
+        var (source, project, job) = await SeedAsync();
+        var child = JobChain.Create(project.Id.Value, "Specialist child", null, [ChainStage.Of(job.Id)], T0);
+        await source.Chains.AddAsync(child);
+        var parent = JobChain.Create(project.Id.Value, "Routing parent", null,
+            [new ChainStage([], new ConditionGate("all:[\"true\",\"false\"]", [ChainStage.ForAction(new SubWorkflowChainAction(child.Id, child.Name))]),
+                action: new SubWorkflowChainAction(child.Id, child.Name)),
+             ChainStage.ForAction(new ParallelWorkflowsChainAction([new(child.Id, child.Name, "true"), new(child.Id, child.Name, "false")]))], T0);
+        await source.Chains.AddAsync(parent);
+        var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
+        manifest = manifest with { JobChains = manifest.JobChains.OrderByDescending(chain => chain.ChainId == parent.Id).ToArray() };
+        var target = new Ctx();
+        await target.Importer().HandleAsync(new ImportManifestCommand(manifest));
+        var importedProject = Assert.Single(await target.Projects.ListAsync());
+        var workflows = await target.Chains.ListForProjectAsync(importedProject.Id.Value);
+        var restoredChild = workflows.Single(chain => chain.Name == child.Name);
+        var restored = workflows.Single(chain => chain.Name == parent.Name).Stages[0];
+        Assert.NotEqual(child.Id, restoredChild.Id);
+        Assert.Equal(restoredChild.Id, Assert.IsType<SubWorkflowChainAction>(restored.Action).WorkflowId);
+        var gate = Assert.IsType<ConditionGate>(restored.Gate);
+        Assert.Equal(restoredChild.Id, Assert.IsType<SubWorkflowChainAction>(Assert.Single(gate.ElseBranch!).Action).WorkflowId);
+        Assert.False(gate.Evaluate("{}").Proceed);
+        var parallel = Assert.IsType<ParallelWorkflowsChainAction>(workflows.Single(chain => chain.Name == parent.Name).Stages[1].Action);
+        Assert.All(parallel.Branches, branch => Assert.Equal(restoredChild.Id, branch.WorkflowId));
     }
 
     [Theory]
@@ -223,12 +277,14 @@ public class BackupTests
             ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Define requirements", "requirements")),
             ChainStage.ForAction(new QueryDataChainAction("SELECT id FROM listings LIMIT 10", "listings")),
             ChainStage.ForAction(new ScoringGateChainAction("review", "quality", [new ScoreCriterion("security", "Safe?", ["Fail", "Pass"], 2, 85)], 95, .9, false)),
+            ChainStage.ForAction(new ContainerBuildChainAction("FROM alpine:3.21", "source.files", "built", 120, true)),
+            ChainStage.ForAction(new ContainerRunChainAction(imageField: "built.image", command: ["serve"], port: 8080, memoryMb: 256)),
             ChainStage.ForAction(new RepeatFlowChainAction("eq:ready:true", 3)),
         }, T0.AddMinutes(1));
 
         var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
         var exported = Assert.Single(manifest.JobChains);
-        Assert.Equal(9, exported.Stages!.Count);
+        Assert.Equal(11, exported.Stages!.Count);
         Assert.Equal(SendEmailChainAction.ActionType, exported.Stages[1].Action!.Type);
 
         manifest = System.Text.Json.JsonSerializer.Deserialize<BackupManifest>(System.Text.Json.JsonSerializer.Serialize(manifest))!;
@@ -237,7 +293,7 @@ public class BackupTests
 
         var importedProject = Assert.Single(await target.Projects.ListAsync());
         var imported = Assert.Single(await target.Chains.ListForProjectAsync(importedProject.Id.Value));
-        Assert.Equal(9, imported.Stages.Count);
+        Assert.Equal(11, imported.Stages.Count);
         var email = Assert.IsType<SendEmailChainAction>(imported.Stages[1].Action);
         Assert.Equal("{{client.email}}", email.Recipient);
         Assert.IsType<ConditionGate>(imported.Stages[1].Gate);
@@ -267,9 +323,14 @@ public class BackupTests
         var scoring = Assert.IsType<ScoringGateChainAction>(imported.Stages[7].Action);
         Assert.Equal(95, scoring.PassScore); Assert.Equal(.9, scoring.MinimumConfidence); Assert.False(scoring.StopOnFailure);
         Assert.Equal(85, scoring.Criteria[0].MinimumScore);
-        var repeat = Assert.IsType<RepeatFlowChainAction>(imported.Stages[8].Action);
+        var repeat = Assert.IsType<RepeatFlowChainAction>(imported.Stages[10].Action);
         Assert.Equal("eq:ready:true", repeat.UntilCondition);
         Assert.Equal(3, repeat.MaxAttempts);
+        var build = Assert.IsType<ContainerBuildChainAction>(imported.Stages[8].Action);
+        Assert.Equal("source.files", build.ContextField); Assert.True(build.AllowNetwork);
+        var container = Assert.IsType<ContainerRunChainAction>(imported.Stages[9].Action);
+        Assert.Equal("built.image", container.ImageField); Assert.Equal(8080, container.Port); Assert.Equal(256, container.MemoryMb);
+        Assert.Equal("serve", Assert.Single(container.Command));
     }
 
     [Fact]

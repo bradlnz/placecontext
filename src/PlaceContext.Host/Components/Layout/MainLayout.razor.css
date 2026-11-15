@@ -537,10 +537,10 @@
     align-items: center;
     gap: 7px;
     padding: 0 9px;
-    background: var(--good-bg);
-    border: 1px solid color-mix(in srgb, var(--good) 34%, var(--border));
+    background: var(--running-bg);
+    border: 1px solid color-mix(in srgb, var(--running) 34%, var(--border));
     border-radius: 3px;
-    color: var(--good);
+    color: var(--running);
     font-size: 11.5px;
     font-weight: 500;
     font-family: var(--font-sans);
@@ -550,7 +550,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--good);
+    background: var(--running);
     animation: dcpulse 1.6s ease-in-out infinite;
 }
 

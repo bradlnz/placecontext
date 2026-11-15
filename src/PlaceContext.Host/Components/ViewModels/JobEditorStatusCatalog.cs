@@ -10,20 +10,20 @@ public static class JobEditorStatusCatalog
     public static string Color(string status) =>
         status switch
         {
-            Succeeded => "var(--good)",
+            Succeeded => "var(--success)",
             Partial => "var(--warn)",
             Failed => "var(--bad)",
-            Running => "var(--brand-2)",
+            Running => "var(--running)",
             _ => "var(--text-3)",
         };
 
     public static string Background(string status) =>
         status switch
         {
-            Succeeded => "var(--good-bg)",
+            Succeeded => "var(--success-bg)",
             Partial => "var(--warn-bg)",
             Failed => "var(--bad-bg)",
-            Running => "var(--brand-bg)",
+            Running => "var(--running-bg)",
             _ => "var(--card-2)",
         };
 }

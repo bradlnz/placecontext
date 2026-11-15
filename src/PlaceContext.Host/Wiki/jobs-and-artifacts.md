@@ -28,7 +28,7 @@ automatically. Use the row actions to run, edit, open source code, or delete the
 
 ## Tests
 
-Open **Tests** from the project menu or select **View tests** on the Jobs screen. A test block runs
+Open **Infrastructure → Jobs**, then select **View tests**. A test block runs
 job code in an isolated sandbox with example input. It does not use the network, secrets,
 post-job actions, or production data writes.
 
@@ -280,17 +280,24 @@ Each reconciliation sweep logs how many records it repaired and queues it retrie
 
 ### Agent tasks and repeat flow
 
-**Agent task** assigns requirements or work. **Agent in the loop** adds reasoning or review.
-Both default to **Automatic** when created in the editor: choose an enabled model connection and model
-from **Settings → Models**. The runner can inspect, author, run, and check project jobs, subject to
+**Agent task** asks an AI agent to complete work. **Agent review** checks previous results before continuing.
+Both default to **Automatic**. An automatic review asks the selected agent's parent for approval, or the
+master agent if no agent is selected. Rejection stops the workflow. The reviewer uses its saved model;
+the step's fallback model is used when the reviewer has no model connection.
+
+For an automatic task, choose a saved agent or an enabled model connection and model from
+**Settings → Models**. The runner can inspect, author, run, and check project jobs, subject to
 permissions. It uses sandboxed jobs for code execution, stores a complete JSON object in the configured
 response field, and continues. Its limits are 20 model turns and 30 minutes; recorded activity links to
 the jobs it runs. The allowed tools do not expose the host filesystem or workflow, schedule, permission,
-or credential management. A returned result is not proof of correctness; inspect actual job evidence.
+or credential management. If the final result is not a complete JSON object, the runner asks for a compact,
+corrected result up to twice in the same session, with tools disabled. It preserves reported blockers
+and does not repeat completed job actions. If repair fails, the step explains how to recover.
+A returned result is not proof of correctness; inspect actual job evidence.
 
 Choose **External agent** to wait for a connected agent's written response instead. External **Agent task**
-instructions are preserved exactly, while an external **Agent in the loop** step adds a generated review
-question. **AI verification** is available on Agent in the loop and records a probability rather than
+instructions are preserved exactly, while an external **Agent review** step adds a generated review
+question. **AI evidence check** is available on Agent review and records a probability rather than
 running a general-purpose agent. Human approval remains a separate step.
 
 **Scoring gate** evaluates an evidence field against weighted criteria and minimum confidence. It stores
@@ -303,3 +310,32 @@ its completion condition passes. It allows 1–10 total attempts (default 3), pe
 across restarts and input handoffs, and fails when the last attempt does not meet the condition.
 Use conditions and evidence-producing jobs to distinguish failed quality assertions from execution errors,
 which stop the workflow. Repeated stages run again, including any external side effects.
+
+
+## Build and run containers in workflows
+
+Add **Build container**, then **Run container**, then **Browser workspace** to build and test an app.
+
+The build step takes a Dockerfile and a workflow field containing text files, such as `{"files":{"index.html":"Hello"}}`. Files use relative paths. The result includes an image reference in `container_build.image`. Each build uses a separate BuildKit builder; build commands have no network access unless enabled. Base images are pulled anonymously.
+
+The run step can use that image field or pull a public image directly. Leave command arguments blank to use the image's default command, or enter one argument per line. A command run saves its exit code, output, and errors. Enable **Keep web app running for later steps** for an app that listens on `0.0.0.0` and an unprivileged port. The step waits for HTTP readiness and saves `container_run.qemuUrl`. Enable network access in the following Browser workspace and ask its agent to test that URL from the workflow context.
+
+Containers run as UID/GID 65534, with no capabilities, a read-only root, writable `/tmp`, and CPU, memory, process and time limits. Container logs rotate at 1 MiB and retain at most two files. Network access is off by default; web mode uses a private Docker network and does not publish a public port. A web container stops when the workflow completes, fails, pauses or is cancelled, or when its lifetime expires. Place web startup after any human review or wait that must occur before testing.
+
+Execution requires Docker with Buildx on the same host as QEMU and `PlaceContext:ContainerWorkflows:Enabled=true` (`run.sh` enables it locally). Built images stay on that host for up to 24 hours; they are not pushed to a registry. Use public base images; private registry credentials are not inherited from the host. Workflow definitions, including both steps, survive export and import.
+
+### Reusable agent workflows
+
+Add a **Sub-workflow** step and choose another workflow in the same project. The child receives the current payload; its final output is merged into the parent before the next step. Each child has its own run history. A failed child stops its parent, and cancellation of the parent stops active child work. Child workflows share the parent's execution slot. Circular references and more than eight nested levels are rejected.
+
+Sub-workflows run automatic steps. Put waits, repeat loops and requests for human input in the parent. If an AI verification service is throttled inside a child, the child fails rather than scheduling a detached continuation.
+
+In a condition gate, use **Add condition**, then select **All conditions (AND)** or **Any condition (OR)**. For example, require `review.passed` to equal `true` AND `route_check.noul` to be at least `0.9` before browser automation. The stored expression is `all:["eq:review.passed:true","gte:route_check.noul:0.9"]`. `any:[...]` provides OR. Existing single-clause conditions still work. False paths rejoin at the next stage, so gate later actions too when they depend on approval.
+
+### Parallel if gates
+
+Add **Parallel if gates** to choose two to eight sub-workflows, each with its own AND/OR conditions. All branches evaluate the same incoming payload. Every matching workflow runs, with up to four executing at once. A nonmatching branch is recorded as skipped. The next stage waits for the matching workflows to finish; failure stops the parent. The join output is an ordered array under `parallel_results` (or your chosen field), with each branch's status, run ID and output kept separate.
+
+### Schedule a workflow
+
+In **Schedules**, select a workflow and choose its frequency and time or a cron expression. Times use the workspace time zone. The schedule starts the complete workflow with its stored inputs, including its agents, gates and sub-workflows. Scheduled executions use the schedule creator's current permissions and the normal durable workflow queue. Revoked execution permission or a deleted workflow pauses the schedule. Existing job schedules and event triggers remain manageable for compatibility.

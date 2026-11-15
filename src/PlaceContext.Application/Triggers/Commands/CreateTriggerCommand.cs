@@ -13,4 +13,4 @@ public sealed record CreateTriggerCommand(
     string Name,
     string Kind,
     string? CronExpression,
-    string? EventName) : ICommand<TriggerView>;
+    string? EventName, Guid? WorkflowId = null) : ICommand<TriggerView>;

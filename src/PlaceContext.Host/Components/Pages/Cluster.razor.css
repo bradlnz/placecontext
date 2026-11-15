@@ -20,8 +20,8 @@
 }
 
 .summary-count strong { color:var(--text); font-size:18px; }
-.summary-count.running strong { color:var(--brand-2); }
-.summary-count.succeeded strong { color:var(--good); }
+.summary-count.running strong { color:var(--running); }
+.summary-count.succeeded strong { color:var(--success); }
 .summary-count.failed strong { color:var(--bad); }
 
 .summary-progress { height:5px; overflow:hidden; border-radius:99px; background:var(--card-2); }

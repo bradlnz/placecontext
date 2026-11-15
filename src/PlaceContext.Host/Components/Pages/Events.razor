@@ -1,7 +1,7 @@
 @using PlaceContext.Application.Access.Models
 @page "/project/{ProjectId:guid}/events"
 @attribute [Authorize(Policy = Permission.EventsManage)]
-@layout PlaceContext.Host.Components.Layout.ProjectLayout
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
 @implements IDisposable
 @inject EventsViewModel Vm
 @using PlaceContext.Host.Components.ViewModels

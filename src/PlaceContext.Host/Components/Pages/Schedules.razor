@@ -9,14 +9,21 @@
 @implements IDisposable
 @inject SchedulesViewModel Vm
 
-<PageTitle>placecontext — Schedules</PageTitle>
+@if (!Embedded)
+{
+    <PageTitle>placecontext — Schedules</PageTitle>
+}
 
 <div class="page">
+    @if (!Embedded)
+    {
+        <WorkflowTabs ProjectId="ProjectId" Active="schedules" />
+    }
     <div class="page-head">
         <div>
             <h2 class="page-title">Schedules</h2>
             <div class="page-sub">
-                Every trigger across this project's jobs — cron schedules and event hooks.
+                @(WorkflowId.HasValue ? $"Choose when {Vm.WorkflowName ?? "this workflow"} runs." : "Choose when this project's workflows run.")
                 Cron fires in <span class="tz">@Vm.TimeZoneId</span>.
             </div>
         </div>
@@ -29,22 +36,15 @@
 
     @* ── Add trigger ──────────────────────────────────────────────────────────────────── *@
     <div class="dccard add-bar">
-        <div class="dcfield field-sm">
-            <label>Kind</label>
-            <select class="dcinput" @bind="Vm.NewKind">
-                <option value="@TriggerKind.Schedule">Schedule</option>
-                <option value="@TriggerKind.Event">Event</option>
-            </select>
-        </div>
         <div class="dcfield field-name">
             <label>Name</label>
             <input class="dcinput" @bind="Vm.NewName" placeholder="nightly refresh" />
         </div>
         <div class="dcfield field-job">
-            <label>Job</label>
-            <select class="dcinput" @bind="Vm.NewJobId">
-                <option value="@Guid.Empty">— pick a job —</option>
-                @foreach (var j in Vm.Jobs ?? Array.Empty<JobView>())
+            <label for="schedule-workflow">Workflow</label>
+            <select id="schedule-workflow" class="dcinput" @bind="Vm.NewWorkflowId" disabled="@WorkflowId.HasValue">
+                <option value="@Guid.Empty">— pick a workflow —</option>
+                @foreach (var j in Vm.Workflows ?? Array.Empty<JobChainView>())
                 {
                     <option value="@j.Id">@j.Name</option>
                 }
@@ -115,7 +115,7 @@
                 </select>
             </div>
         }
-        <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="@(() => Vm.AddTriggerAsync(ProjectId))">＋ Add trigger</button>
+        <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="@(() => Vm.AddTriggerAsync(ProjectId))">＋ Add schedule</button>
         @if (Vm.Error is not null)
         {
             <span class="err-text">@Vm.Error</span>
@@ -135,7 +135,7 @@
             else if (Vm.Triggers.Count == 0)
             {
                 <div class="empty-note">
-                    No triggers yet — add a cron schedule or event hook above.
+                    No schedules yet — choose when this workflow should run above.
                 </div>
             }
             else
@@ -213,11 +213,13 @@
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public Guid? WorkflowId { get; set; }
+    [Parameter] public bool Embedded { get; set; }
 
     protected override void OnInitialized() =>
         Vm.Attach(() => InvokeAsync(StateHasChanged));
 
-    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId);
+    protected override Task OnParametersSetAsync() => Vm.LoadAsync(ProjectId, WorkflowId);
 
     public void Dispose() => Vm.Detach();
 }

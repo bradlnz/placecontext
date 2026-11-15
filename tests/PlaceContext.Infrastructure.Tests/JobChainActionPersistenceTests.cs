@@ -12,6 +12,67 @@ namespace PlaceContext.Infrastructure.Tests;
 public sealed class JobChainActionPersistenceTests
 {
     [Fact]
+    public async Task Workflow_schedule_target_and_owner_survive_reload()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var repository = new EfJobTriggerRepository(db);
+        var workflow = Guid.NewGuid(); var owner = Guid.NewGuid();
+        var schedule = JobTrigger.CreateWorkflowSchedule(Guid.NewGuid(), workflow, owner, "Daily", "0 9 * * *", T0.AddDays(1), T0);
+        await repository.AddAsync(schedule); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        var loaded = (await repository.GetByIdAsync(schedule.Id))!;
+        Assert.Null(loaded.JobId); Assert.Equal(workflow, loaded.WorkflowId); Assert.Equal(owner, loaded.ScheduledBy);
+        Assert.Equal(T0.AddDays(1), loaded.NextRunAt);
+    }
+
+    [Fact]
+    public async Task Parallel_workflow_conditions_round_trip()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var repository = new EfJobChainRepository(db);
+        var branches = new[] { new ConditionalWorkflowBranch(Guid.NewGuid(), "Writer", "eq:ready:true"), new ConditionalWorkflowBranch(Guid.NewGuid(), "Planner", "gte:score:0.9") };
+        var chain = JobChain.Create(Guid.NewGuid(), "Parent", null, [ChainStage.ForAction(new ParallelWorkflowsChainAction(branches, "joined"))], T0);
+        await repository.AddAsync(chain); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        var loaded = Assert.IsType<ParallelWorkflowsChainAction>((await repository.GetByIdAsync(chain.Id))!.Stages[0].Action);
+        Assert.Equal(branches, loaded.Branches); Assert.Equal("joined", loaded.OutputField);
+    }
+
+    [Fact]
+    public async Task Sub_workflow_and_compound_gate_round_trip()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var repository = new EfJobChainRepository(db);
+        var childId = Guid.NewGuid();
+        const string expression = "all:[\"gte:score:0.9\",\"eq:approved:true\"]";
+        var chain = JobChain.Create(Guid.NewGuid(), "Parent", null,
+            [new ChainStage([], new ConditionGate(expression), action: new SubWorkflowChainAction(childId, "Review"))], T0);
+        await repository.AddAsync(chain); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        var loaded = (await repository.GetByIdAsync(chain.Id))!.Stages[0];
+        Assert.Equal(childId, Assert.IsType<SubWorkflowChainAction>(loaded.Action).WorkflowId);
+        Assert.Equal(expression, Assert.IsType<ConditionGate>(loaded.Gate).Expression);
+    }
+
+    [Fact]
+    public async Task Container_steps_preserve_build_context_and_run_limits()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var repository = new EfJobChainRepository(db);
+        var chain = JobChain.Create(Guid.NewGuid(), "containers", null,
+            [ChainStage.ForAction(new ContainerBuildChainAction("FROM alpine:3.21", "source.files", "built", 120, true)),
+             ChainStage.ForAction(new ContainerRunChainAction(imageField: "built.image", command: ["sleep", "60"], port: 8080, memoryMb: 256, cpus: 2))], T0);
+        await repository.AddAsync(chain); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        var stages = (await repository.GetByIdAsync(chain.Id))!.Stages;
+        var build = Assert.IsType<ContainerBuildChainAction>(stages[0].Action);
+        var run = Assert.IsType<ContainerRunChainAction>(stages[1].Action);
+        Assert.Equal("source.files", build.ContextField); Assert.True(build.AllowNetwork); Assert.Equal(120, build.TimeoutSeconds);
+        Assert.Equal("built.image", run.ImageField); Assert.Equal(["sleep", "60"], run.Command); Assert.Equal(8080, run.Port);
+        Assert.Equal(256, run.MemoryMb); Assert.Equal(2, run.Cpus); Assert.False(run.AllowNetwork);
+    }
+
+    [Fact]
     public async Task Step_output_is_encrypted_round_trips_and_old_runs_without_output_still_load()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;

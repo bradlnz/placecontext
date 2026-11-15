@@ -36,7 +36,7 @@ public sealed partial class BuildChatViewModel
         {
             return;
         }
-        PrepareBranch(Conversation.Messages.IndexOf(message), "Editing in a new conversation", Text(message));
+        PrepareBranch(Conversation.Messages.IndexOf(message), "Editing in a new session", Text(message));
     }
 
     public void RetryMessage(JsonNode message)
@@ -45,7 +45,7 @@ public sealed partial class BuildChatViewModel
         {
             return;
         }
-        PrepareBranch(Conversation.Messages.IndexOf(prompt), "Retrying in a new conversation", Text(prompt));
+        PrepareBranch(Conversation.Messages.IndexOf(prompt), "Retrying in a new session", Text(prompt));
     }
 
     public void BranchFromMessage(JsonNode message)
@@ -54,7 +54,7 @@ public sealed partial class BuildChatViewModel
         {
             return;
         }
-        PrepareBranch(Conversation.Messages.IndexOf(message) + 1, "Continuing in a new conversation", "");
+        PrepareBranch(Conversation.Messages.IndexOf(message) + 1, "Continuing in a new session", "");
     }
 
     private void PrepareBranch(int messageCount, string label, string draft)
@@ -88,7 +88,7 @@ public sealed partial class BuildChatViewModel
         if (source.Status is BuildRunStatus.Queued or BuildRunStatus.Running
             || source.Messages.Count < branch.MessageCount || !JsonNode.DeepEquals(prefix, branch.Prefix))
         {
-            throw new InvalidOperationException("The original conversation changed. Cancel this draft and open it again before branching.");
+            throw new InvalidOperationException("The original session changed. Cancel this draft and open it again before branching.");
         }
         var title = "Branch: " + source.Title;
         return new()

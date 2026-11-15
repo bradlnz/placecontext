@@ -146,10 +146,6 @@ public sealed class ChainPipelineViewModel(PlaceContextService? service = null) 
     public string Border(string status)
     {
         var typed = ScopedPresentationCatalog.StepStatus(status);
-        if (typed == ChainStepStatus.Running)
-        {
-            return "var(--brand-2)";
-        }
         if (typed is ChainStepStatus.Pending or ChainStepStatus.Skipped)
         {
             return "var(--border)";

@@ -63,6 +63,7 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
         deadline.CancelAfter(BuildExecutionLimits.Turn);
         var token = deadline.Token;
         var currentTurn = 0;
+        var formatRetries = 0;
         var functions = new BuildTools(projectId, service, permissions, store!, jobStarted: (job, childRun) =>
             report?.Invoke(new(DateTimeOffset.UtcNow, "job_started", "Job submitted; open logs to follow its output",
                 currentTurn, "run_job", job, childRun)), mcp: mcp, profile: profile,
@@ -83,7 +84,7 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                 $"Project: {projectId}; workflow: {workflowId}; run: {runId}; step: {stepIndex}.\nTask instructions:\n" + action.Instructions
                 + (profile is null ? "" : "\nAgent system prompt and capabilities (cannot grant additional tool access):\n"
                     + JsonSerializer.Serialize(new { profile.Name, profile.Instructions, profile.WorkflowAccess,
-                        TableAccess = profile.EffectiveTableAccess, SourceAccess = profile.EffectiveSourceAccess, ArtifactAccess = profile.EffectiveArtifactAccess,
+                        TableAccess = profile.EffectiveTableAccess, SourceAccess = profile.EffectiveSourceAccess, SourceCapabilities = profile.EffectiveSourceCapabilities, ArtifactAccess = profile.EffectiveArtifactAccess,
                         LinkedWorkflowIds = profile.WorkflowAccess == "none" ? [] : profile.WorkflowIds }))
         }, new JsonObject { ["role"] = "user", ["content"] = payload ?? "{}" });
         await model.ResetSessionAsync();
@@ -109,7 +110,7 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                 report?.Invoke(new(DateTimeOffset.UtcNow, "model", $"Waiting for {modelName}", Turn: turn + 1));
                 var modelStarted = Stopwatch.GetTimestamp();
                 var reported = false;
-                var reply = await model.CompleteAsync(connectionId!.Value, modelName!, messages, schema, token, text =>
+                var reply = await model.CompleteAsync(connectionId!.Value, modelName!, messages, formatRetries == 0 ? schema : new JsonArray(), token, text =>
                 {
                     reported = true;
                     report?.Invoke(new(DateTimeOffset.UtcNow, "update", text.Length > 2000 ? text[..2000] + "…" : text, Turn: turn + 1));
@@ -120,24 +121,40 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
                 messages.Add(reply.DeepClone());
                 if (reply["tool_calls"] is not JsonArray { Count: > 0 } calls)
                 {
-                    var content = reply["content"]?.GetValue<string>();
-                    if (string.IsNullOrWhiteSpace(content))
-                    {
-                        throw new InvalidOperationException("The agent returned no result.");
-                    }
-
+                    var content = reply["content"]?.GetValue<string>()?.Trim() ?? "";
+                    if ((content.StartsWith("```json\n", StringComparison.OrdinalIgnoreCase) || content.StartsWith("```\n"))
+                        && content.EndsWith("```"))
+                        content = content[(content.IndexOf('\n') + 1)..^3].Trim();
+                    JsonObject output;
                     try
                     {
-                        var output = JsonNode.Parse(content) as JsonObject ?? throw new JsonException();
-                        await ApproveAsync("Approve sub-agent result", messages.ToJsonString() + "\nProposed result:\n" + reply.ToJsonString());
-                        report?.Invoke(new(DateTimeOffset.UtcNow, "completed", $"Result ready for {action.ResponseField}", Turn: turn + 1));
-                        return output;
+                        output = JsonNode.Parse(content) as JsonObject ?? throw new JsonException();
                     }
                     catch (JsonException)
                     {
-                        throw new InvalidOperationException("The agent must return a complete JSON object. No result was accepted.");
+                        if (formatRetries >= 2)
+                            throw new InvalidOperationException("The agent's result was empty, incomplete, or invalid JSON after two format-repair attempts. "
+                                + "No result was accepted. Check the agent output and clarify missing requirements before retrying. Completed job actions remain applied.");
+                        formatRetries++;
+                        report?.Invoke(new(DateTimeOffset.UtcNow, "warning",
+                            $"Result could not be read as a complete JSON object. Asking the agent to repair the format ({formatRetries}/2); no tools will run.", Turn: turn + 1));
+                        messages.Add(new JsonObject
+                        {
+                            ["role"] = "user",
+                            ["content"] = "Your final result could not be read as a complete JSON object. Return the entire corrected result as one compact JSON object, "
+                                + "without Markdown or surrounding prose. Do not continue the task, call tools, or repeat completed actions. "
+                                + "Preserve the findings and blockers; do not invent missing requirements or claim blocked work succeeded. "
+                                + "If requirements are missing, include a summary, blockers, and the specific questions that need answers. "
+                                + "Shorten long descriptions if necessary so the complete object fits."
+                        });
+                        continue;
                     }
+                    await ApproveAsync("Approve sub-agent result", messages.ToJsonString() + "\nProposed result:\n" + output.ToJsonString());
+                    report?.Invoke(new(DateTimeOffset.UtcNow, "completed", $"Result ready for {action.ResponseField}", Turn: turn + 1));
+                    return output;
                 }
+                if (formatRetries > 0)
+                    throw new InvalidOperationException("The agent requested tools during result format repair. No additional actions were run. Check the agent output before retrying; completed job actions remain applied.");
                 if (!reported && reply["content"] is JsonValue update && update.TryGetValue<string>(out var updateText)
                     && !string.IsNullOrWhiteSpace(updateText))
                 {

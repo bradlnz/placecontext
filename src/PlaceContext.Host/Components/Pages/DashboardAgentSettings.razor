@@ -7,18 +7,24 @@
 @inject BuildChatViewModel Vm
 @implements IAsyncDisposable
 
-<PageTitle>PlaceContext — Agent settings</PageTitle>
+<PageTitle>PlaceContext — @(ActiveSection == "dashboard" ? "Dashboard settings" : "Agent settings")</PageTitle>
 <div class="settings-page">
     <header>
-        <div><h2>Agent settings</h2><p>Configure your dashboard agent, project context and dashboard.</p></div>
+        <div><h2>@(ActiveSection == "dashboard" ? "Customize dashboard" : "Agent settings")</h2>
+            @if (ActiveSection == "dashboard") { <p>Manage your tiles. Agent settings are managed in the Agents section.</p> }
+            else { <p>Choose a tab to edit your agent. You can switch tabs without losing edits.</p> }
+        </div>
         <a class="dcbtn" href="@DashboardHref">Back to dashboard</a>
     </header>
+    @if (ActiveSection != "dashboard")
+    {
     <nav class="settings-tabs" aria-label="Agent settings sections">
         @foreach (var (path, label) in Sections)
         {
             <a class="dctab @(ActiveSection == path ? "active" : "")" aria-current="@(ActiveSection == path ? "page" : null)" href="@($"/project/{ProjectId}/dashboard/settings/{path}{ConversationQuery}")">@label</a>
         }
     </nav>
+    }
     <main class="settings-body">
         @if (Vm.Loading) { <Skeleton Kind="list" Rows="5" /> }
         else { <DashboardAgentPanel Vm="Vm" ShowNavigation="false" /> }
@@ -29,8 +35,8 @@
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public string? Section { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "conversation")] public Guid? ConversationId { get; set; }
-    private static readonly (string Path, string Label)[] Sections = [("instructions", "Instructions"), ("context", "Context & tools"), ("agents", "Sub-agents"), ("dashboard", "Dashboard")];
-    private string ActiveSection => Sections.Any(s => s.Path == Section) ? Section! : "instructions";
+    private static readonly (string Path, string Label)[] Sections = [("agent", "Agent"), ("instructions", "Instructions"), ("tools", "Tools"), ("context", "Memory"), ("agents", "Workflow agents"), ("dashboard", "Dashboard")];
+    private string ActiveSection => Sections.Any(s => s.Path == Section) ? Section! : "dashboard";
     private string ConversationQuery => ConversationId is { } id ? $"?conversation={id}" : "";
     private string DashboardHref => $"/project/{ProjectId}/dashboard{ConversationQuery}";
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));

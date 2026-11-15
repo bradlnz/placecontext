@@ -87,6 +87,8 @@ public sealed class EfJobTriggerRepository : IJobTriggerRepository
         Id = t.Id,
         ProjectId = t.ProjectId,
         JobId = t.JobId,
+        WorkflowId = t.WorkflowId,
+        ScheduledBy = t.ScheduledBy,
         Name = t.Name,
         Kind = t.Kind.ToString(),
         Enabled = t.Enabled,
@@ -101,5 +103,5 @@ public sealed class EfJobTriggerRepository : IJobTriggerRepository
     private static JobTrigger ToDomain(JobTriggerRow r) => JobTrigger.Rehydrate(
         r.Id, r.ProjectId, r.JobId, r.Name,
         Enum.Parse<TriggerKind>(r.Kind), r.Enabled,
-        r.CronExpression, r.EventName, r.NextRunAt, r.LastFiredAt, r.CreatedAt, r.UpdatedAt);
+        r.CronExpression, r.EventName, r.NextRunAt, r.LastFiredAt, r.CreatedAt, r.UpdatedAt, r.WorkflowId, r.ScheduledBy);
 }

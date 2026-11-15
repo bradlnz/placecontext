@@ -418,3 +418,5 @@ characters; `limit` is 1–100.
 The provider's `base_url` is the workspace origin and `api_key` is
 `PlaceContext:Api:Key`. See [`terraform/README.md`](../terraform/README.md) for
 resource arguments and lifecycle notes.
+
+Workflow schedules accept `workflowId` with `jobId: null` at `POST /api/v1/projects/{projectId}/schedules`, for example `{"workflowId":"<workflow UUID>","jobId":null,"name":"Daily check","kind":"Schedule","cronExpression":"0 9 * * *","eventName":null}`. The workflow must belong to the route's project. The schedule runs as its creator using current permissions. Responses include `workflowId`; legacy job targets retain `jobId`.

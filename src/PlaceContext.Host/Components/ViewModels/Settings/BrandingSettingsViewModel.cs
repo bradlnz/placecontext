@@ -22,7 +22,7 @@ public sealed class BrandingSettingsViewModel(
     public string Background { get; set; } = "#0a0c0e";
     public string Panel { get; set; } = "#0d1013";
     public string Text { get; set; } = "#e6edf3";
-    public string Accent { get; set; } = "#43d675";
+    public string Accent { get; set; } = "#808080";
     public bool Busy
     {
         get; private set;

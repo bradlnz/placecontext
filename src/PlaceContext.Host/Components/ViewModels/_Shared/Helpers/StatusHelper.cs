@@ -10,20 +10,20 @@ public static class StatusHelper
     public static string Color(string? status) =>
         status?.ToLowerInvariant() switch
         {
-            "succeeded" => "var(--good)",
+            "succeeded" => "var(--success)",
             "partial" => "var(--warn)",
             "failed" => "var(--bad)",
-            "running" => "var(--brand-2)",
+            "running" => "var(--running)",
             _ => "var(--text-3)",
         };
 
     public static string Background(string? status) =>
         status?.ToLowerInvariant() switch
         {
-            "succeeded" => "var(--good-bg)",
+            "succeeded" => "var(--success-bg)",
             "partial" => "var(--warn-bg)",
             "failed" => "var(--bad-bg)",
-            "running" => "var(--brand-bg)",
+            "running" => "var(--running-bg)",
             _ => "var(--card-2)",
         };
 }

@@ -2,32 +2,27 @@
 @inject McpConnectionFormViewModel Vm
 @implements IDisposable
 
-<AuthorizeView Policy="@Policies.DefaultAdmin">
-    <Authorized>
-        <form class="mcp-form" @onsubmit="SaveAsync" @onsubmit:preventDefault @onkeydown="HandleKey">
-            @if (Vm.Error is not null) { <p class="form-error" role="alert">@Vm.Error</p> }
-            <fieldset disabled="@Vm.Saving">
-                <label>Name<input class="dcinput" @bind="Vm.Name" placeholder="Property tools" required maxlength="200" autofocus /></label>
-                <label>Transport<select class="dcinput" @bind="Vm.Transport"><option value="@McpTransport.Http">HTTP</option><option value="@McpTransport.Sse">SSE</option><option value="@McpTransport.Stdio">Stdio</option></select></label>
-                @if (Vm.IsStdio)
-                {
-                    <label>Command<input class="dcinput" @bind="Vm.Command" placeholder="npx" required /></label>
-                    <label>Arguments<input class="dcinput" @bind="Vm.Args" placeholder='["-y", "server"]' /></label>
-                }
-                else
-                {
-                    <label>Server URL<input class="dcinput" type="url" @bind="Vm.Endpoint" placeholder="https://mcp.example.com/mcp" required /></label>
-                }
-                <label>Authentication<select class="dcinput" @bind="Vm.AuthType"><option value="@McpAuthType.None">None</option><option value="@McpAuthType.Bearer">Bearer token</option><option value="@McpAuthType.ApiKey">API key</option><option value="@McpAuthType.Header">Custom header</option><option value="@McpAuthType.OAuth">OAuth 2.1</option></select></label>
-                @if (Vm.IsHeaderAuth) { <label>Header name<input class="dcinput" @bind="Vm.AuthHeader" placeholder="X-API-Key" required /></label> }
-                @if (Vm.HasTokenAuth || Vm.IsHeaderAuth) { <label>Token<input class="dcinput" type="password" @bind="Vm.AuthToken" autocomplete="off" required /></label> }
-                @if (Vm.IsOAuth) { <label>OAuth scopes<input class="dcinput" @bind="Vm.OAuthScopes" placeholder="openid profile" /></label><p class="form-note">After adding the server, connect your account from MCP settings.</p> }
-            </fieldset>
-            <div class="form-actions"><button type="button" class="dcbtn" disabled="@Vm.Saving" @onclick="OnCancel">Cancel</button><button type="submit" class="dcbtn primary" disabled="@Vm.Saving">@(Vm.Saving ? "Adding…" : "Add MCP")</button></div>
-        </form>
-    </Authorized>
-    <NotAuthorized><p>Only workspace administrators can add MCP servers.</p><button type="button" class="dcbtn" @onclick="OnCancel">Close</button></NotAuthorized>
-</AuthorizeView>
+<form class="mcp-form" @onsubmit="SaveAsync" @onsubmit:preventDefault @onkeydown="HandleKey">
+    @if (Vm.Error is not null) { <p class="form-error" role="alert">@Vm.Error</p> }
+    <fieldset disabled="@Vm.Saving">
+        <label>Name<input class="dcinput" @bind="Vm.Name" placeholder="Property tools" required maxlength="200" autofocus /></label>
+        <label>Transport<select class="dcinput" @bind="Vm.Transport"><option value="@McpTransport.Http">HTTP</option><option value="@McpTransport.Sse">SSE</option><option value="@McpTransport.Stdio">Stdio</option></select></label>
+        @if (Vm.IsStdio)
+        {
+            <label>Command<input class="dcinput" @bind="Vm.Command" placeholder="npx" required /></label>
+            <label>Arguments<input class="dcinput" @bind="Vm.Args" placeholder='["-y", "server"]' /></label>
+        }
+        else
+        {
+            <label>Server URL<input class="dcinput" type="url" @bind="Vm.Endpoint" placeholder="https://mcp.example.com/mcp" required /></label>
+        }
+        <label>Authentication<select class="dcinput" @bind="Vm.AuthType"><option value="@McpAuthType.None">None</option><option value="@McpAuthType.Bearer">Bearer token</option><option value="@McpAuthType.ApiKey">API key</option><option value="@McpAuthType.Header">Custom header</option><option value="@McpAuthType.OAuth">OAuth 2.1</option></select></label>
+        @if (Vm.IsHeaderAuth) { <label>Header name<input class="dcinput" @bind="Vm.AuthHeader" placeholder="X-API-Key" required /></label> }
+        @if (Vm.HasTokenAuth || Vm.IsHeaderAuth) { <label>Token<input class="dcinput" type="password" @bind="Vm.AuthToken" autocomplete="off" required /></label> }
+        @if (Vm.IsOAuth) { <label>OAuth scopes<input class="dcinput" @bind="Vm.OAuthScopes" placeholder="openid profile" /></label><p class="form-note">After adding the server, connect your account from MCP settings.</p> }
+    </fieldset>
+    <div class="form-actions"><button type="button" class="dcbtn" disabled="@Vm.Saving" @onclick="OnCancel">Cancel</button><button type="submit" class="dcbtn primary" disabled="@Vm.Saving">@(Vm.Saving ? "Adding…" : "Add MCP")</button></div>
+</form>
 
 @code {
     [Parameter, EditorRequired] public Guid ProjectId { get; set; }

@@ -6,9 +6,11 @@
     --bg-tilt:#000000;
     --border:#202830; --border-2:#34414c;
     --text:var(--tenant-text,#f4f7f5); --text-2:#c5cec9; --text-3:#8b9991; --text-4:#68756e;
-    --brand:var(--tenant-accent,#43d675); --brand-2:var(--tenant-accent,#55e98a); --brand-bg:rgba(67,214,117,0.12); --brand-fg:#071009;
+    --brand:var(--tenant-accent,#c4c4c4); --brand-2:var(--tenant-accent,#e0e0e0); --brand-bg:rgba(255,255,255,0.08); --brand-fg:#171717;
     --button-bg:#151a1f; --button-hover:#1b232b; --button-border:#34414c; --button-text:#f4f7f5;
-    --good:#43d675; --good-bg:rgba(67,214,117,0.13);
+    --good:#b5b5b5; --good-bg:rgba(255,255,255,0.08);
+    --running:#4caf78; --running-bg:rgba(76,175,120,0.12);
+    --success:#63d991; --success-bg:rgba(99,217,145,0.12);
     --warn:#d9822b; --warn-bg:rgba(217,130,43,0.16);
     --bad:#db3737; --bad-bg:rgba(219,55,55,0.15);
     --human:#a8a8a8; --human-bg:rgba(255,255,255,0.08);
@@ -20,9 +22,11 @@
     --bg-tilt:#ffffff;
     --border:#e5e7eb; --border-2:#cdd2da;
     --text:#202532; --text-2:#4d5666; --text-3:#626c7c; --text-4:#737d8c;
-    --brand:var(--tenant-accent,#202532); --brand-2:var(--tenant-accent,#353d4d); --brand-bg:#eef1f6; --brand-fg:#ffffff;
+    --brand:var(--tenant-accent,#404040); --brand-2:var(--tenant-accent,#262626); --brand-bg:#f0f0f0; --brand-fg:#ffffff;
     --button-bg:#ffffff; --button-hover:#f3f4f6; --button-border:#d5d9e0; --button-text:#202532;
-    --good:#0d8050; --good-bg:rgba(15,153,96,0.11);
+    --good:#525252; --good-bg:rgba(0,0,0,0.06);
+    --running:#187746; --running-bg:rgba(24,119,70,0.10);
+    --success:#208247; --success-bg:rgba(32,130,71,0.10);
     --warn:#bf7326; --warn-bg:rgba(217,130,43,0.12);
     --bad:#c23030; --bad-bg:rgba(219,55,55,0.10);
     --human:#137cbd; --human-bg:rgba(19,124,189,0.11);
@@ -216,7 +220,7 @@ textarea.dcinput { line-height:1.55; }
     .dcbtn.sm { min-height:40px; }
 }
 
-/* Flat, high-contrast console palette using the PlaceContext green accent. */
+/* Console colours follow the shared accent palette. */
 #dcshell {
     --ch-bg:#000000;
     --ch-panel:#0d1013;
@@ -226,8 +230,8 @@ textarea.dcinput { line-height:1.55; }
     --ch-text:#f4f7f5;
     --ch-text-2:#c5cec9;
     --ch-text-3:#8b9991;
-    --ch-yellow:#43d675;
-    --ch-yellow-hover:#55e98a;
+    --ch-yellow:var(--brand);
+    --ch-yellow-hover:var(--brand-2);
     --ch-run-shadow:0 1px 0 rgba(0,0,0,.35);
     --bg-tilt:#000000;
 }
@@ -241,8 +245,6 @@ textarea.dcinput { line-height:1.55; }
     --ch-text:var(--text);
     --ch-text-2:var(--text-2);
     --ch-text-3:var(--text-3);
-    --ch-yellow:#f59e0b;
-    --ch-yellow-hover:#d97706;
     --ch-run-shadow:none;
 }
 body {

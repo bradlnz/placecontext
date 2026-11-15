@@ -1,4 +1,6 @@
 using PlaceContext.Application.Features;
+using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Jobs;
 using PlaceContext.Domain.Entities;
 using PlaceContext.Domain.ValueObjects;
 using PlaceContext.TestSupport;
@@ -36,6 +38,54 @@ public class TriggerAndEventFeatureTests
 
         public EventDispatchService Dispatch() =>
             new(Events, Triggers, Queue, Tenant, Uow, Clock);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Workflow_schedule_queues_as_creator_and_pauses_if_permission_is_revoked(bool revoked)
+    {
+        var c = new Ctx(); var chains = new InMemoryJobChainRepository();
+        var workflow = JobChain.Create(Guid.NewGuid(), "Nightly workflow", null, [ChainStage.Of(Guid.NewGuid())], T0);
+        await chains.AddAsync(workflow);
+        var actor = new UserIdentity(Guid.NewGuid(), "Member"); CurrentUser.Set(actor);
+        try
+        {
+            var handler = new CreateTriggerHandler(c.Jobs, c.Triggers, c.Cron, c.Tenant, c.Uow, c.Clock, chains, new CurrentUser());
+            var schedule = await handler.HandleAsync(new(null, "Nightly", "Schedule", "0 9 * * *", null, workflow.Id));
+            Assert.Null(schedule.JobId); Assert.Equal(workflow.Id, schedule.WorkflowId);
+            var stored = (await c.Triggers.GetByIdAsync(schedule.Id))!;
+            Assert.Equal(actor.Id, stored.ScheduledBy);
+            stored.Reschedule("0 9 * * *", T0.AddMinutes(-1), T0);
+            var queue = new ScheduledWorkflowQueue(revoked);
+            var scanner = new ScheduleScanService(c.Triggers, c.Queue, c.Cron, c.Tenant, c.Uow, c.Clock, queue);
+            await scanner.FireDueAsync();
+            Assert.Equal(actor.Id, queue.Actor);
+            Assert.Equal(workflow.Id, queue.Workflow);
+            Assert.StartsWith($"schedule:{schedule.Id:N}:", queue.Key);
+            Assert.Equal(!revoked, stored.Enabled);
+            Assert.Same(actor, CurrentUser.Current);
+            var count = queue.Calls;
+            await scanner.FireDueAsync(); Assert.Equal(count, queue.Calls);
+        }
+        finally { CurrentUser.Clear(); }
+    }
+
+    private sealed class ScheduledWorkflowQueue(bool revoked) : IJobChainSubmissionQueue
+    {
+        public Guid Actor, Workflow; public string? Key; public int Calls;
+        public Task<JobChainSubmission> EnqueueAsync(Guid projectId, Guid chainId, string? inputPayload, string? idempotencyKey = null,
+            CancellationToken ct = default, Guid? queueId = null, int? messageTtlSeconds = null, int receiptRetentionDays = 30,
+            int maxAttempts = 3, int retryDelaySeconds = 3, DateTimeOffset? availableAt = null,
+            IReadOnlyDictionary<int, string>? stepPayloadOverrides = null, Guid? replayOriginalRunId = null, int? replayFromStepIndex = null)
+        {
+            Calls++; Actor = CurrentUser.Current!.Id; Workflow = chainId; Key = idempotencyKey;
+            Assert.Equal(1, maxAttempts);
+            if (revoked) throw new UnauthorizedAccessException();
+            return Task.FromResult(new JobChainSubmission(Guid.NewGuid(), projectId, chainId, Guid.NewGuid(), "Queued", 0, null, T0, null, null));
+        }
+        public Task<string> ResumeAsync(Guid chainRunId, Guid inputRequestId, string valuesJson, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<JobChainSubmission?> GetAsync(Guid trackingId, CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     // ── CreateTrigger ──────────────────────────────────────────────────────────────────────────────

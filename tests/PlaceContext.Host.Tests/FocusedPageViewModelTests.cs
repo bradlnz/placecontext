@@ -67,7 +67,7 @@ public sealed class FocusedPageViewModelTests
     }
 
     [Theory]
-    [InlineData("Ok", "var(--good)", "var(--good-bg)")]
+    [InlineData("Ok", "var(--success)", "var(--success-bg)")]
     [InlineData("Warn", "var(--warn)", "var(--warn-bg)")]
     [InlineData("Failed", "var(--bad)", "var(--bad-bg)")]
     public void Inspector_status_presentation_is_centralized(

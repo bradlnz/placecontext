@@ -164,6 +164,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             ProjectId = projectId,
             AgentId = DashboardSettings.DefaultAgentId
         };
+        NotifyStateChanged();
         try
         {
             ui.Set("Dashboard", "");
@@ -174,7 +175,6 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
             Conversations = await history;
             Dashboard = await store.GetSettingsAsync(projectId);
             ProjectAgents = projectAgents is null ? [] : (await projectAgents.GetAsync(projectId)).Agents;
-            await RefreshDashboardChartsAsync();
             CanShareDemo = await permissions.HasAsync(PlaceContext.Application.Access.Models.Permission.ArtifactsShare);
             SelectDefaultModel();
             var active = Conversations.FirstOrDefault(x => x.Status is BuildRunStatus.Queued or BuildRunStatus.Running);
@@ -211,7 +211,10 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         finally
         {
             Loading = false;
+            NotifyStateChanged();
         }
+        // Live chart queries must not hold the session behind the loading screen.
+        _ = RefreshDashboardChartsAsync();
         SubscribeToConversation();
         if (Busy)
         {
@@ -267,6 +270,7 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
         {
             await StopSpeechAsync();
             Conversation = await store.LoadAsync(Conversation.ProjectId, id);
+            ResetDashboardCharts();
             if (!Busy)
             {
                 ApplyAgentModel();

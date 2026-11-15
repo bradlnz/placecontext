@@ -212,7 +212,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         _menu.Where(item => item.Parent == parentId).OrderBy(item => item.Order);
 
     public bool IsGroup(ResolvedMenuItem item) =>
-        item.Kind == MenuKinds.Entities || ChildrenOf(item.Id).Any();
+        item.Kind is MenuKinds.Entities or "group";
 
     public string? AbsoluteHref(string? href) =>
         string.IsNullOrEmpty(href) ? null
@@ -223,6 +223,9 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         href == "/" ? NavLinkMatch.All : NavLinkMatch.Prefix;
 
     public bool PathMatches(string? href) => PathMatches(GetCurrentPath(), href);
+
+    public bool IsNavigationActive(ResolvedMenuItem item) =>
+        PathMatches(item.Href) || ChildrenOf(item.Id).Any(IsNavigationActive);
 
     public bool IsEntityActive(string entityName)
     {
@@ -249,7 +252,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         {
             return true;
         }
-        if (children.Any(child => PathMatches(child.Href)))
+        if (children.Any(IsNavigationActive))
         {
             return true;
         }
@@ -574,6 +577,11 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
             target = "/";
         }
         if (path.Equals(target, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (target.EndsWith("/workflows", StringComparison.OrdinalIgnoreCase)
+            && path.Equals(target[..^"workflows".Length] + "chains", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

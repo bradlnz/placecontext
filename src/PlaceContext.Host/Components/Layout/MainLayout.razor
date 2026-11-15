@@ -49,7 +49,7 @@
                 var href = Vm.AbsoluteHref(item.Href);
                 if (!isGroup)
                 {
-                <NavLink class="dcnav" href="@(href ?? "/")" Match="@Vm.MatchFor(href)" title="@item.Label">
+                <NavLink class="@(Vm.IsNavigationActive(item) ? "dcnav active" : "dcnav")" href="@(href ?? "/")" Match="@Vm.MatchFor(href)" title="@item.Label">
                     <span class="bar"></span>@((MarkupString)Vm.IconMarkup(string.IsNullOrWhiteSpace(item.Icon) ? item.Id : item.Icon))<span class="nav-label">@item.Label</span>
                         @if (Vm.IsMcp(item))
                         {
@@ -71,7 +71,7 @@
                             @foreach (var child in children)
                             {
                                 var childHref = Vm.AbsoluteHref(child.Href) ?? "/";
-                                    <NavLink class="dcnav nav-child" href="@childHref" Match="@Vm.MatchFor(childHref)" title="@child.Label">
+                                    <NavLink class="@(Vm.IsNavigationActive(child) ? "dcnav nav-child active" : "dcnav nav-child")" href="@childHref" Match="@Vm.MatchFor(childHref)" title="@child.Label">
                                     <span class="bar"></span><span class="nav-label">@child.Label</span>
                                 </NavLink>
                             }

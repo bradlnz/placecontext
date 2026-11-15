@@ -12,4 +12,4 @@ public sealed record TriggerView(
     string? EventName,
     DateTimeOffset? NextRunAt,
     DateTimeOffset? LastFiredAt,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt, Guid? WorkflowId = null);

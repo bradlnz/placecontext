@@ -13,3 +13,11 @@
 .agent-panel summary { cursor:pointer; padding:10px 0; font-weight:600; }
 .agent-card { display:flex; flex-direction:column; gap:10px; padding:16px; border:1px solid var(--border); border-radius:10px; }
 .agent-card .dcbtn { align-self:flex-start; }
+
+.agent-panel > label, .agent-card > label { font-weight:600; }
+.agent-panel input:focus-visible, .agent-panel textarea:focus-visible, .agent-panel select:focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+@media (max-width:767px) { .agent-panel { padding:0; } .agent-card { padding:12px; } }
+
+.agent-selector { background:var(--card); }
+.agent-save-bar { position:sticky; bottom:0; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:16px; border:1px solid var(--border); border-radius:10px; background:var(--card); z-index:2; }
+.agent-save-bar .dcbtn { flex:none; }

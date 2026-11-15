@@ -76,3 +76,10 @@
     .editor-err { width:100%; }
     .dcslide-foot .dcbtn { flex:1; min-height:40px; }
 }
+
+.editor-body .source-permission { align-items:flex-start; }
+.source-permission input { flex:none; margin-top:3px; }
+.source-permission span { min-width:0; }
+.source-permission small { display:block; margin-top:4px; color:var(--text-3); font-size:12px; line-height:1.5; }
+.editor-tabs { overflow-x:auto; flex-shrink:0; }
+.editor-tabs .dctab { white-space:nowrap; }

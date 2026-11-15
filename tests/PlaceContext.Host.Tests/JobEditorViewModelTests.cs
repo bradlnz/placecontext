@@ -98,9 +98,10 @@ public sealed class JobEditorViewModelTests
     }
 
     [Theory]
-    [InlineData("Succeeded", "var(--good)", "var(--good-bg)")]
+    [InlineData("Succeeded", "var(--success)", "var(--success-bg)")]
     [InlineData("Partial", "var(--warn)", "var(--warn-bg)")]
     [InlineData("Failed", "var(--bad)", "var(--bad-bg)")]
+    [InlineData("Running", "var(--running)", "var(--running-bg)")]
     public void Job_run_status_presentation_is_centralized(
         string status,
         string color,
@@ -109,6 +110,12 @@ public sealed class JobEditorViewModelTests
     {
         Assert.Equal(color, JobEditorViewModel.StatusColor(status));
         Assert.Equal(background, JobEditorViewModel.StatusBackground(status));
+        using var pipeline = new ChainPipelineViewModel();
+        Assert.Equal(color, pipeline.Color(status));
+        Assert.Equal(color, pipeline.Border(status));
+        Assert.Equal(background, pipeline.Background(status));
+        Assert.Equal(color, ObservabilityViewModel.StatusColor(status));
+        Assert.Equal(background, ObservabilityViewModel.StatusBackground(status));
     }
 
     private static string ReadHostSource(string relativePath)

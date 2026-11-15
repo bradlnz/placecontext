@@ -14,6 +14,33 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class WorkflowConditionalPathTests
 {
+    [Theory]
+    [InlineData("all", false)]
+    [InlineData("any", true)]
+    public async Task Multiple_conditions_round_trip_and_cancel_preserves_saved_values(string mode, bool expected)
+    {
+        var vm = new JobChainsViewModel(new PlaceContextService(new RecordingDispatcher(), null!, null!, null!), null!, null!, new Navigation());
+        vm.NewChain(); vm.AddStage(Guid.NewGuid()); vm.OpenGateEditor(0);
+        vm.GateEditorType = "condition";
+        vm.GateEditorMatch = mode;
+        vm.GateEditorConditions[0].Operator = "gte";
+        vm.GateEditorConditions[0].Path = "score";
+        vm.GateEditorConditions[0].Value = "0.9";
+        vm.AddCondition();
+        vm.GateEditorConditions[1].Operator = "eq";
+        vm.GateEditorConditions[1].Path = "approved";
+        vm.GateEditorConditions[1].Value = "true";
+        vm.SaveGate();
+        var views = vm.BuildCanvasStageViews();
+        await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Gate", null, views, DateTimeOffset.UtcNow));
+        vm.OpenGateEditor(0);
+        Assert.Equal(mode, vm.GateEditorMatch); Assert.Equal(2, vm.GateEditorConditions.Count);
+        vm.GateEditorConditions[0].Value = "0"; vm.RemoveCondition(vm.GateEditorConditions[1]); vm.CancelGateEditor();
+        vm.OpenGateEditor(0);
+        Assert.Equal("0.9", vm.GateEditorConditions[0].Value); Assert.Equal(2, vm.GateEditorConditions.Count);
+        Assert.Equal(expected, Assert.IsType<ConditionGate>(vm.EdStageGates[0]).Evaluate("""{"score":0.8,"approved":true}""").Proceed);
+    }
+
     [Fact]
     public async Task Qemu_dialog_saves_updated_task_through_the_workflow_service()
     {
@@ -78,7 +105,7 @@ public sealed class WorkflowConditionalPathTests
         var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, new Navigation());
         await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Review", null, [stage], DateTimeOffset.UtcNow));
         vm.OpenGateEditor(0);
-        vm.GateEditorValue = "0.9";
+        vm.GateEditorConditions[0].Value = "0.9";
         vm.SaveGate();
         var preview = Assert.Single(vm.BuildCanvasStageViews());
         Assert.Equal("gte:review.noul:0.9", Assert.IsType<ConditionGateView>(preview.Gate).Expression);

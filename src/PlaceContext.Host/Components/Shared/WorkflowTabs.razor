@@ -1,0 +1,18 @@
+@using PlaceContext.Application.Access.Models
+
+<nav class="dctabs" aria-label="Workflow sections">
+    <AuthorizeView Policy="@Permission.ChainsManage">
+        <a class="dctab @(Active == "workflows" ? "active" : null)" aria-current="@(Active == "workflows" ? "page" : null)" href="/project/@ProjectId/workflows">Workflows</a>
+    </AuthorizeView>
+    <AuthorizeView Policy="@Permission.TriggersManage">
+        <a class="dctab @(Active == "schedules" ? "active" : null)" aria-current="@(Active == "schedules" ? "page" : null)" href="/project/@ProjectId/schedules">Schedules</a>
+    </AuthorizeView>
+    <AuthorizeView Policy="@Permission.ProjectsView">
+        <a class="dctab @(Active == "agents" ? "active" : null)" aria-current="@(Active == "agents" ? "page" : null)" href="/project/@ProjectId/agents">Agents</a>
+    </AuthorizeView>
+</nav>
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public string Active { get; set; } = "workflows";
+}

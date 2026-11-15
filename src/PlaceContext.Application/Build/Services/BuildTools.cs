@@ -160,7 +160,7 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
             Schedules = schedules.Take(200).ToArray(),
             RecentJobs = recentJobs,
             RecentWorkflows = recentWorkflows,
-            Semantics = "Stages execute sequentially; jobs within a stage execute in parallel. Conditions select branches. Outputs feed subsequent stages. Shared JobIds connect workflows; triggers refer to jobs. Inspect code, input/output contracts and run results before optimizing."
+            Semantics = "Stages execute sequentially; jobs within a stage execute in parallel. Conditions select branches. Outputs feed subsequent stages. Shared JobIds connect workflows; schedules target workflows; legacy triggers may target jobs. Inspect code, input/output contracts and run results before optimizing."
         };
     }
 
@@ -343,7 +343,7 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         return (await service.ListJobChainsAsync(projectId, ct)).Select(x => new { x.Id, x.Name, x.Description, Stages = x.Stages.Select(WorkflowStage.FromView).ToArray() }).ToArray();
     }
 
-    [Description("Create or replace a complete workflow. Omit workflowId to create. Read existing definitions first. Each stage runs its jobIds in parallel, or one action (qemu, review, email, sms, repeat). A review with type=agentTask assigns instructions. For agentTask or agentInput, agentProvider=automatic runs the selected saved connectionId and model with sandbox job tools and saves a JSON object in responseField; external waits for a submitted response. A repeat action must be last and repeats all preceding stages until untilCondition passes, up to maxAttempts total attempts (1-10). For an agentInput review, agentProvider=jev is the internal AI verification mode and calls the configured provider with a generated yes/no question and preceding output; external waits for an agent response. Verification saves {noul, model, question, type} in responseField. Use an explicit condition on responseField.noul to decide subsequent actions; a completed AI verification call is not approval. Stages run sequentially. A stage may have waitSeconds or condition and an elseBranch. Preserve all existing stages and settings unless asked to change them.")]
+    [Description("Create or replace a complete workflow. Omit workflowId to create. Read existing definitions first. Each stage runs its jobIds in parallel, or one action (qemu, review, email, sms, repeat, query, score, containerBuild, containerRun, subWorkflow, parallelWorkflows). parallelWorkflows takes branches [{workflowId, workflowName, condition}] and an outputField; every matching branch runs concurrently (up to four at once), then joins. Results are kept in branch order under outputField; a failed branch stops later stages. subWorkflow takes workflowId and workflowName for an automatic workflow in this project; its final payload merges into the caller. Cycles, waits and human input in children are rejected. Conditions can combine clauses with all:[\"gte:review.noul:0.9\",\"eq:approved:true\"] (AND) or any:[...] (OR). containerBuild uses a Dockerfile and a contextField of relative text-file paths to contents, and saves outputField.image. containerRun accepts either image or imageField, optional command arguments, and an optional web port. A web run saves outputField.qemuUrl for a following qemu step with allowNetwork=true; it lasts until workflow exit/pause or timeout. Both container actions default to no outbound network access. A review with type=agentTask assigns instructions. For agentTask or agentInput, agentProvider=automatic runs the selected saved connectionId and model with sandbox job tools and saves a JSON object in responseField; external waits for a submitted response. A repeat action must be last and repeats all preceding stages until untilCondition passes, up to maxAttempts total attempts (1-10). For an agentInput review, agentProvider=jev is the internal AI verification mode and calls the configured provider with a generated yes/no question and preceding output; external waits for an agent response. Verification saves {noul, model, question, type} in responseField. Use an explicit condition on responseField.noul to decide subsequent actions; a completed AI verification call is not approval. Stages run sequentially. A stage may have waitSeconds or condition and an elseBranch. Preserve all existing stages and settings unless asked to change them.")]
     public async Task<object> save_workflow(string name, string? description, WorkflowStage[] stages, Guid? workflowId, CancellationToken ct)
     {
         await RequireAsync(Permission.ChainsManage, ct);
@@ -431,12 +431,17 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         return await service.ListTriggersAsync(projectId, ct);
     }
 
-    [Description("Create a job schedule or event trigger. Kind is Schedule (cronExpression required) or Event (eventName required). Schedules become active when created.")]
-    public async Task<object> create_schedule(Guid jobId, string name, string kind, string? cronExpression, string? eventName, CancellationToken ct)
+    [Description("Create a workflow schedule: supply workflowId, jobId=null, kind=Schedule and cronExpression. The schedule runs as its creator and becomes active when created. Legacy job event triggers can still supply jobId and kind=Event.")]
+    public async Task<object> create_schedule(Guid? jobId, string name, string kind, string? cronExpression, string? eventName, CancellationToken ct, Guid? workflowId = null)
     {
         await RequireAsync(Permission.TriggersManage, ct);
-        await JobAsync(jobId, ct);
-        return await service.CreateTriggerAsync(new(jobId, name, kind, cronExpression, eventName), ct);
+        if (workflowId is { } id)
+        {
+            var workflow = await service.GetJobChainAsync(id, ct);
+            if (workflow?.ProjectId != projectId) throw new ArgumentException("Choose a workflow in this project.");
+        }
+        else if (jobId is { } job) await JobAsync(job, ct);
+        return await service.CreateTriggerAsync(new(jobId, name, kind, cronExpression, eventName, workflowId), ct);
     }
 
     [Description("Change a schedule's name, cron, event, or enabled status. Null fields are unchanged. Set enabled false to pause.")]

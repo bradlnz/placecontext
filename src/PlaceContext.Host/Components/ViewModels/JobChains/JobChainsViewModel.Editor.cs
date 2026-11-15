@@ -118,9 +118,29 @@ public sealed partial class JobChainsViewModel
     public string GateEditorType { get; set; } = "wait"; // "wait" or "condition"
     public double GateEditorDuration { get; set; } = 30;
     public string GateEditorExpression { get; set; } = "exists:data";
-    public string GateEditorOperator { get; set; } = "exists";
-    public string GateEditorPath { get; set; } = "data";
-    public string GateEditorValue { get; set; } = "";
+    public string GateEditorMatch { get; set; } = "all";
+    public List<ConditionRow> GateEditorConditions { get; } = [new()];
+    public sealed class ConditionRow
+    {
+        public string Operator { get; set; } = "exists";
+        public string Path { get; set; } = "data";
+        public string Value { get; set; } = "";
+        public bool NeedsValue => Operator is not ("exists" or "notexists" or "empty" or "notempty" or "true" or "false");
+        public string Expression => Operator == "custom" ? Value
+            : Operator is "true" or "false" ? Operator
+            : NeedsValue ? $"{Operator}:{Path.Trim().TrimStart('$', '.')}:{Value.Trim()}"
+            : $"{Operator}:{Path.Trim().TrimStart('$', '.')}";
+        public static ConditionRow Parse(string expression)
+        {
+            var parts = expression.Split(':', 3);
+            if (expression is "true" or "false") return new() { Operator = expression };
+            if (parts.Length < 2 || parts[0] is not ("exists" or "notexists" or "empty" or "notempty" or "eq" or "neq" or "contains" or "starts" or "ends" or "in" or "gt" or "gte" or "lt" or "lte"))
+                return new() { Operator = "custom", Value = expression };
+            return new() { Operator = parts[0], Path = parts[1], Value = parts.Length > 2 ? parts[2] : "" };
+        }
+    }
+    public void AddCondition() { GateEditorConditions.Add(new()); NotifyStateChanged(); }
+    public void RemoveCondition(ConditionRow row) { if (GateEditorConditions.Count > 1) GateEditorConditions.Remove(row); NotifyStateChanged(); }
     public List<ChainStage> GateEditorElseStages { get; } = new();
     public string GateEditorElseJobId { get; set; } = "";
 
@@ -247,8 +267,11 @@ public sealed partial class JobChainsViewModel
         ShowSmsActionEditor = false;
         ShowLoopEditor = false;
         ShowScoringEditor = false;
+        ShowParallelWorkflowEditor = false;
+        ShowSubWorkflowEditor = false;
         ShowQueryDataEditor = false;
         ShowQemuEditor = false;
+        ShowContainerEditor = false;
         ShowStageNodePicker = false;
         EditorError = null;
         OpenRun = null;
@@ -285,6 +308,7 @@ public sealed partial class JobChainsViewModel
         "details" => "details",
         "list" => "list",
         "runs" => "runs",
+        "schedules" => "schedules",
         _ => "canvas"
     };
 
@@ -936,6 +960,12 @@ public sealed partial class JobChainsViewModel
         ShowStageNodePicker = false;
         switch (type)
         {
+            case ContainerBuildChainAction.ActionType:
+                OpenContainerAction(StageNodePickerIndex, true);
+                break;
+            case ContainerRunChainAction.ActionType:
+                OpenContainerAction(StageNodePickerIndex, false);
+                break;
             case VirtualMachineChainAction.ActionType:
                 OpenQemuActionAt(StageNodePickerIndex);
                 break;
@@ -943,6 +973,12 @@ public sealed partial class JobChainsViewModel
             case LoopChainAction.TaskType:
             case LoopChainAction.AgentType:
                 await OpenLoopActionAt(type, StageNodePickerIndex);
+                break;
+            case ParallelWorkflowsChainAction.ActionType:
+                OpenParallelWorkflowAction(StageNodePickerIndex);
+                break;
+            case SubWorkflowChainAction.ActionType:
+                OpenSubWorkflowAction(StageNodePickerIndex);
                 break;
             case QueryDataChainAction.ActionType:
                 OpenQueryDataAction(StageNodePickerIndex);
@@ -987,9 +1023,7 @@ public sealed partial class JobChainsViewModel
                 GateEditorType = "wait";
                 GateEditorDuration = w.Duration.TotalSeconds;
                 GateEditorExpression = "exists:data";
-                GateEditorOperator = "exists";
-                GateEditorPath = "data";
-                GateEditorValue = "";
+                ParseCondition("exists:data");
                 break;
             case ConditionGate c:
                 GateEditorType = "condition";
@@ -1001,9 +1035,7 @@ public sealed partial class JobChainsViewModel
                 GateEditorType = "wait";
                 GateEditorDuration = 30;
                 GateEditorExpression = "exists:data";
-                GateEditorOperator = "exists";
-                GateEditorPath = "data";
-                GateEditorValue = "";
+                ParseCondition("exists:data");
                 break;
         }
         ShowGateEditor = true;
@@ -1028,25 +1060,29 @@ public sealed partial class JobChainsViewModel
 
     public string ConditionPreview() => BuildConditionExpression();
 
-    public bool ConditionNeedsValue =>
-        GateEditorOperator is not ("exists" or "notexists" or "empty" or "notempty");
-
-    private string BuildConditionExpression()
-    {
-        var path = string.IsNullOrWhiteSpace(GateEditorPath)
-            ? "data"
-            : GateEditorPath.Trim().TrimStart('$', '.');
-        return ConditionNeedsValue
-            ? $"{GateEditorOperator}:{path}:{GateEditorValue.Trim()}"
-            : $"{GateEditorOperator}:{path}";
-    }
+    private string BuildConditionExpression() => GateEditorConditions.Count == 1
+        ? GateEditorConditions[0].Expression
+        : $"{GateEditorMatch}:{System.Text.Json.JsonSerializer.Serialize(GateEditorConditions.Select(row => row.Expression))}";
 
     private void ParseCondition(string expression)
     {
-        var parts = expression.Split(':', 3);
-        GateEditorOperator = parts.Length > 0 && parts[0].Length > 0 ? parts[0] : "exists";
-        GateEditorPath = parts.Length > 1 && parts[1].Length > 0 ? parts[1] : "data";
-        GateEditorValue = parts.Length > 2 ? parts[2] : "";
+        GateEditorConditions.Clear();
+        GateEditorMatch = "all";
+        if (expression.StartsWith("all:") || expression.StartsWith("any:"))
+        {
+            try
+            {
+                var values = System.Text.Json.JsonSerializer.Deserialize<string[]>(expression[4..]);
+                if (values is { Length: > 0 } && values.All(value => value is not null))
+                {
+                    GateEditorMatch = expression[..3];
+                    GateEditorConditions.AddRange(values.Select(ConditionRow.Parse));
+                    return;
+                }
+            }
+            catch (System.Text.Json.JsonException) { }
+        }
+        GateEditorConditions.Add(ConditionRow.Parse(expression));
     }
 
     public void RemoveGate(int stageIndex)
@@ -1095,6 +1131,10 @@ public sealed partial class JobChainsViewModel
         (elseBranch ?? (gate as ConditionGate)?.ElseBranch)?.Select(BuildStageView).ToList(),
         action switch
         {
+            ParallelWorkflowsChainAction parallel => new ParallelWorkflowsChainActionView(parallel.Branches, parallel.OutputField),
+        SubWorkflowChainAction child => new SubWorkflowChainActionView(child.WorkflowId, child.WorkflowName),
+        ContainerBuildChainAction build => new ContainerBuildChainActionView(build.Dockerfile, build.ContextField, build.OutputField, build.TimeoutSeconds, build.AllowNetwork),
+            ContainerRunChainAction container => new ContainerRunChainActionView(container.Image, container.ImageField, container.OutputField, container.Command, container.Port, container.MemoryMb, container.Cpus, container.TimeoutSeconds, container.AllowNetwork),
             VirtualMachineChainAction vm => new VirtualMachineChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork, vm.PauseForLogin, vm.LoginProfileId),
             QueryDataChainAction query => new QueryDataChainActionView(query.Sql, query.OutputField),
         ScoringGateChainAction score => new ScoringGateChainActionView(score.InputField, score.OutputField, score.Criteria, score.PassScore, score.MinimumConfidence, score.StopOnFailure),

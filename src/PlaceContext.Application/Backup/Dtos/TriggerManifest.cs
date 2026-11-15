@@ -6,4 +6,4 @@ public sealed record TriggerManifest(
     Guid? JobId, string Name,
     /// <summary>"Schedule" | "Event".</summary>
     string Kind,
-    bool Enabled, string? CronExpression, string? EventName);
+    bool Enabled, string? CronExpression, string? EventName, Guid? WorkflowId = null);

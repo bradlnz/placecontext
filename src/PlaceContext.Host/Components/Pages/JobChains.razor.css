@@ -26,9 +26,9 @@
 .chain-row { display:grid; grid-template-columns:28px minmax(0, 1fr) auto; gap:10px; align-items:start; padding:13px 14px; border-bottom:1px solid var(--border); cursor:pointer }
 .chain-row:last-child { border-bottom:0 }
 .chain-row:hover { background:color-mix(in srgb, var(--card-2) 45%, transparent) }
-.chain-row.running { background:color-mix(in srgb, var(--brand-2) 4%, transparent) }
+.chain-row.running { background:color-mix(in srgb, var(--running) 4%, transparent) }
 .status-icon { width:22px; height:22px; display:grid; place-items:center; border:1px solid var(--border-2); border-radius:50%; color:var(--brand-2); font-size:13px; font-weight:700 }
-.status-icon.is-running { border-color:color-mix(in srgb, var(--brand-2) 60%, var(--border)); background:color-mix(in srgb, var(--brand-2) 9%, transparent) }
+.status-icon.is-running { color:var(--running); border-color:color-mix(in srgb, var(--running) 60%, var(--border)); background:color-mix(in srgb, var(--running) 9%, transparent) }
 .chain-title { min-height:22px; display:flex; align-items:center; flex-wrap:wrap; gap:7px }
 .chain-title strong { font-size:13px; font-weight:580 }
 .chain-chip { padding:2px 7px; border:1px solid var(--border); border-radius:99px; color:var(--text-3); font-size:9.5px; text-transform:lowercase }
@@ -49,6 +49,7 @@
 .run-action:hover:not(:disabled) { color:var(--good) }
 .danger { color:var(--bad) }
 .spinner { width:11px; height:11px; border:2px solid var(--border-2); border-top-color:var(--brand-2); border-radius:50%; animation:spin .7s linear infinite }
+.status-icon.is-running .spinner { border-top-color:var(--running) }
 @keyframes spin { to { transform:rotate(360deg) } }
 .slide-640 { width:min(1480px, 97vw) }
 .flex-min { flex:1; min-width:0 }
@@ -65,7 +66,7 @@
 .run-time { font-family:var(--font-sans); font-size:11.5px; color:var(--text-2); flex:1 }
 .meta-11 { font-size:11px; color:var(--text-3) }
 .dur-meta { font-size:11px; color:var(--text-3); font-family:var(--font-sans) }
-.running-note { font-size:11px; color:var(--brand-2) }
+.running-note { font-size:11px; color:var(--running) }
 .btn-start { align-self:flex-start }
 .status-row { display:flex; align-items:center; gap:8px }
 .status-chip-lg { font-size:12px; font-weight:600; padding:3px 9px; border-radius:5px }
@@ -619,3 +620,5 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
     .dcmodal-overlay:not(.workflow-canvas-overlay) > .query-studio-modal { width:100vw; height:100dvh; max-width:100vw; max-height:100dvh; border-radius:0 }
     .query-studio-toolbar, .query-studio-output, .query-studio-tabs, .query-studio-pane { padding-left:10px; padding-right:10px }
 }
+
+.condition-row { padding: 12px 0; border-bottom: 1px solid var(--border); margin-bottom: 8px; }

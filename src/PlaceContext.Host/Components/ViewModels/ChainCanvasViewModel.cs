@@ -136,6 +136,7 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
         SendEmailChainActionView => "mail",
         SendSmsChainActionView => "message",
         VirtualMachineChainActionView => "vm",
+        ContainerBuildChainActionView or ContainerRunChainActionView => "code",
         QueryDataChainActionView => "database",
         ScoringGateChainActionView => "check",
         LoopChainActionView loop => loop.Kind == "humanInput" ? "human" : "agent",

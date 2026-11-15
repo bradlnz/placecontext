@@ -38,6 +38,10 @@ internal static class JobChainMapper
     private static ChainActionView? ToActionView(ChainAction? action) => action switch
     {
         null => null,
+        ParallelWorkflowsChainAction parallel => new ParallelWorkflowsChainActionView(parallel.Branches, parallel.OutputField),
+        SubWorkflowChainAction child => new SubWorkflowChainActionView(child.WorkflowId, child.WorkflowName),
+        ContainerBuildChainAction build => new ContainerBuildChainActionView(build.Dockerfile, build.ContextField, build.OutputField, build.TimeoutSeconds, build.AllowNetwork),
+        ContainerRunChainAction container => new ContainerRunChainActionView(container.Image, container.ImageField, container.OutputField, container.Command, container.Port, container.MemoryMb, container.Cpus, container.TimeoutSeconds, container.AllowNetwork),
         VirtualMachineChainAction vm => new VirtualMachineChainActionView(vm.ImageProfile, vm.Command, vm.OutputField, vm.MemoryMb, vm.Cpus, vm.TimeoutSeconds, vm.AllowNetwork, vm.PauseForLogin, vm.LoginProfileId),
         QueryDataChainAction query => new QueryDataChainActionView(query.Sql, query.OutputField),
         ScoringGateChainAction score => new ScoringGateChainActionView(score.InputField, score.OutputField, score.Criteria, score.PassScore, score.MinimumConfidence, score.StopOnFailure),

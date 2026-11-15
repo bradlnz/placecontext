@@ -11,10 +11,11 @@
 <div class="tests-page">
     <header class="tests-head">
         <div>
-            <h2>Tests</h2>
+            <h2>Job tests</h2>
             <p>Verify Job logic against declared mock scenarios with no live Job execution or production side effects.</p>
         </div>
         <div class="head-actions">
+            <button class="dcbtn" @onclick="Vm.OpenJobs">Back to jobs</button>
             <button class="dcbtn" disabled="@(Vm.Running.Count > 0 || Vm.EnabledTests.Count == 0)"
                     @onclick="Vm.RunAllAsync">
                 @(Vm.Running.Count > 0 ? "Running…" : "Run all")

@@ -21,7 +21,7 @@ public sealed partial class BuildChatViewModel
 
     public async Task EditChartQueryAsync(DashboardChart chart)
     {
-        if (Locked || AgentLoading || !Dashboard.Charts.Contains(chart)) return;
+        if (Locked || AgentLoading || !Tiles.Charts.Contains(chart)) return;
         EditingChart = chart;
         ChartSqlDraft = chart.Sql ?? "";
         ChartQueryError = null;
@@ -62,15 +62,15 @@ public sealed partial class BuildChatViewModel
                 definition.Title ?? "Chart", definition.Type, sql);
             if (version != _chartVersion) return;
             var saved = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(Dashboard))!;
-            var index = saved.Charts.FindIndex(c => c.Id == chart.Id);
+            var index = saved.ForAgent(Conversation.AgentId).Charts.FindIndex(c => c.Id == chart.Id);
             if (index < 0) throw new InvalidOperationException("This chart was removed. Close the editor and reload the dashboard.");
             var updated = chart with { Sql = sql, Live = true,
                 Source = "Project data query · up to 24 labels and 3 numeric series (one for pie).",
                 ChartJson = spec?.ToJson() ?? chart.ChartJson };
-            saved.Charts[index] = updated;
+            saved.ForAgent(Conversation.AgentId).Charts[index] = updated;
             await SaveDashboardAsync(saved);
             if (version != _chartVersion) return;
-            if (!Dashboard.Charts.Contains(updated)) throw new InvalidOperationException(Error ?? "Could not save the chart query.");
+            if (!Tiles.Charts.Contains(updated)) throw new InvalidOperationException(Error ?? "Could not save the chart query.");
             DashboardChartResults[chart.Id] = new(spec, DateTimeOffset.UtcNow);
             if (ExpandedDashboardChartId == chart.Id && spec is not null) PreviewChart = new(spec, updated.Source, true, sql);
             EditingChart = null;
@@ -107,13 +107,13 @@ public sealed partial class BuildChatViewModel
 
     public async Task RefreshDashboardChartsAsync(CancellationToken ct = default)
     {
-        if (ChartsRefreshing || ChartQuerySaving || Dashboard.Charts.Count == 0) return;
+        if (ChartsRefreshing || ChartQuerySaving || Tiles.Charts.Count == 0) return;
         ChartsRefreshing = true;
         var version = _chartVersion;
         var projectId = Conversation.ProjectId;
         try
         {
-            foreach (var chart in Dashboard.Charts.ToArray())
+            foreach (var chart in Tiles.Charts.Where(c => !Tiles.HiddenTiles.Contains(c.Id.ToString())).ToArray())
             {
                 ct.ThrowIfCancellationRequested();
                 DashboardChartResult result;
@@ -133,7 +133,7 @@ public sealed partial class BuildChatViewModel
                         : "Recreate this chart with a live data source to see current values.");
                 }
                 if (version != _chartVersion || ct.IsCancellationRequested) return;
-                if (!Dashboard.Charts.Contains(chart)) continue;
+                if (!Tiles.Charts.Contains(chart)) continue;
                 DashboardChartResults[chart.Id] = result;
                 if (ExpandedDashboardChartId == chart.Id && result.Spec is { } current)
                     PreviewChart = new(current, chart.Source, chart.Live, chart.Sql);

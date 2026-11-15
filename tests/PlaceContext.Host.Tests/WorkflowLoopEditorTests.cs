@@ -8,6 +8,27 @@ namespace PlaceContext.Host.Tests;
 public class WorkflowLoopEditorTests
 {
     [Fact]
+    public async Task Build_and_run_are_separate_steps_with_editable_sandbox_settings()
+    {
+        var vm = new JobChainsViewModel(null!, null!, null!, new Navigation()); vm.NewChain();
+        await vm.ChooseStageNode(ContainerBuildChainAction.ActionType);
+        vm.ContainerDockerfile = ""; vm.SaveContainerAction(); Assert.NotNull(vm.ContainerError); Assert.Empty(vm.EdStages);
+        vm.ContainerDockerfile = "FROM alpine:3.21"; vm.SaveContainerAction(); Assert.Null(vm.ContainerError);
+        vm.OpenContainerAction(1, false); vm.ContainerWeb = true; vm.ContainerCommand = "python\n-m\nhttp.server\n8080"; vm.SaveContainerAction();
+        var stages = vm.BuildCanvasStageViews();
+        var build = Assert.IsType<ContainerBuildChainAction>(PlaceContext.Application.Build.WorkflowStage.FromView(stages[0]).ToStage().Action);
+        var run = Assert.IsType<ContainerRunChainAction>(PlaceContext.Application.Build.WorkflowStage.FromView(stages[1]).ToStage().Action);
+        Assert.Equal("container_build", build.OutputField); Assert.Equal("container_build.image", run.ImageField);
+        Assert.Equal(8080, run.Port); Assert.False(run.AllowNetwork); Assert.Equal(4, run.Command.Count);
+        var reopened = new JobChainsViewModel(null!, null!, null!, new Navigation());
+        await reopened.OpenChainEditorAsync(new JobChainView(Guid.NewGuid(), Guid.NewGuid(), "Containers", null, stages, DateTimeOffset.UtcNow));
+        reopened.EditContainerAction(1); Assert.True(reopened.ContainerWeb); Assert.Equal(vm.ContainerCommand, reopened.ContainerCommand);
+        reopened.ContainerImage = "alpine:3.21"; reopened.ContainerWeb = false; reopened.SaveContainerAction();
+        var pulled = Assert.IsType<ContainerRunChainAction>(reopened.EdStageActions[1]);
+        Assert.Equal("alpine:3.21", pulled.Image); Assert.Empty(pulled.ImageField); Assert.Null(pulled.Port);
+    }
+
+    [Fact]
     public async Task Query_data_editor_round_trips_into_following_scoring_input()
     {
         var vm = new JobChainsViewModel(null!, null!, null!, new Navigation()); vm.NewChain();

@@ -14,7 +14,7 @@ public sealed class WorkflowAgentRunnerTests
     public async Task Selected_project_agent_applies_access_and_configured_model()
     {
         var agent = new DashboardAgentProfile { Name = "Reviewer", Instructions = "Be precise.", WorkflowAccess = "read", DataAccess = "manage",
-            TableAccess = "none", SourceAccess = "none", ArtifactAccess = "none",
+            TableAccess = "none", SourceAccess = "none", SourceCapabilities = ["metadata"], ArtifactAccess = "none",
             ConnectionId = Connection, Model = "test-model", WorkflowIds = [Guid.NewGuid()] };
         var store = new Agents(new() { Agents = [agent] });
         var model = new Gateway(Call("run_job", "{}"), new JsonObject { ["content"] = "{\"verified\":true}" });
@@ -25,6 +25,9 @@ public sealed class WorkflowAgentRunnerTests
         Assert.Contains("Be precise.", model.Messages![0]!["content"]!.ToString());
         Assert.Contains(agent.WorkflowIds[0].ToString(), model.Messages[0]!["content"]!.ToString());
         Assert.Contains(model.Tools!, t => t!["function"]!["name"]!.ToString() == "get_job");
+        Assert.Contains(model.Tools!, t => t!["function"]!["name"]!.ToString() == "list_data_sources");
+        Assert.DoesNotContain(model.Tools!, t => t!["function"]!["name"]!.ToString() == "search_data_sources");
+        Assert.Contains("\"SourceCapabilities\":[\"metadata\"]", model.Messages[0]!["content"]!.ToString());
         Assert.DoesNotContain(model.Tools!, t => t!["function"]!["name"]!.ToString() is "run_job" or "list_project_tables" or "call_mcp_tool");
         Assert.Contains(model.Messages, m => m!["role"]!.ToString() == "tool" && m["content"]!.ToString().Contains("not available"));
         store.Catalog.Agents.Clear();
@@ -151,8 +154,56 @@ public sealed class WorkflowAgentRunnerTests
     [InlineData("[]")]
     public async Task Invalid_final_output_fails_instead_of_claiming_success(string content)
     {
-        var model = new Gateway(new JsonObject { ["content"] = content });
+        var model = new Gateway(Enumerable.Range(0, 3).Select(_ => new JsonObject { ["content"] = content }).ToArray());
         await Assert.ThrowsAsync<InvalidOperationException>(() => Runner(model).RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, Action(), null, default));
+        Assert.Equal(2, model.Resets);
+    }
+
+    [Fact]
+    public async Task Invalid_output_is_repaired_without_repeating_tools_or_losing_blockers()
+    {
+        var model = new Gateway(Call("job_authoring_guide", "{}"),
+            new JsonObject { ["content"] = "{\"summary\":\"Scope missing\"," },
+            new JsonObject { ["content"] = "{\"summary\":\"Scope missing\",\"blockers\":[\"Define budgeting workflows\"],\"questions\":[\"Who will use it?\"]}" });
+        var events = new List<AgentActivity>();
+        var result = await Runner(model).RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, Action(), null, default, events.Add);
+        Assert.Equal("Define budgeting workflows", result["blockers"]![0]!.ToString());
+        Assert.Empty(model.Tools!);
+        Assert.Single(events, e => e.Kind == "tool_started");
+        Assert.Single(events, e => e.Kind == "warning");
+        Assert.Equal("completed", events.Last().Kind);
+        Assert.Contains(model.Messages!, m => m!["role"]!.ToString() == "tool");
+        Assert.Contains("Do not continue the task", model.Messages!.Last()!["content"]!.ToString());
+    }
+
+    [Fact]
+    public async Task Format_repair_is_bounded_and_reports_how_to_recover()
+    {
+        var model = new Gateway(Enumerable.Range(0, 3).Select(_ => new JsonObject { ["content"] = "incomplete" }).ToArray());
+        var events = new List<AgentActivity>();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Runner(model).RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, Action(), null, default, events.Add));
+        Assert.Contains("two format-repair attempts", error.Message);
+        Assert.Contains("Completed job actions remain applied", error.Message);
+        Assert.Equal(3, events.Count(e => e.Kind == "model"));
+        Assert.DoesNotContain(events, e => e.Kind == "completed");
+    }
+
+    [Fact]
+    public async Task Tool_requests_during_format_repair_are_never_executed()
+    {
+        var model = new Gateway(new JsonObject { ["content"] = "incomplete" }, Call("job_authoring_guide", "{}"));
+        var events = new List<AgentActivity>();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Runner(model).RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, Action(), null, default, events.Add));
+        Assert.Contains("No additional actions were run", error.Message);
+        Assert.DoesNotContain(events, e => e.Kind is "tool_started" or "completed");
+    }
+
+    [Fact]
+    public async Task Complete_json_in_a_markdown_fence_is_accepted()
+    {
+        var model = new Gateway(new JsonObject { ["content"] = "```json\n{\"summary\":\"Scope missing\",\"blockers\":[\"Define scope\"]}\n```" });
+        var result = await Runner(model).RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, Action(), null, default);
+        Assert.Equal("Scope missing", result["summary"]!.ToString());
         Assert.Equal(2, model.Resets);
     }
 
@@ -214,7 +265,7 @@ public sealed class WorkflowAgentRunnerTests
     [Fact]
     public async Task Tool_errors_and_invalid_final_results_are_visible_in_activity()
     {
-        var model = new Gateway(Call("delete_job", "{}"), new JsonObject { ["content"] = "not JSON" });
+        var model = new Gateway(Call("delete_job", "{}"), new JsonObject { ["content"] = "not JSON" }, new JsonObject { ["content"] = "not JSON" }, new JsonObject { ["content"] = "not JSON" });
         var events = new List<AgentActivity>();
         await Assert.ThrowsAsync<InvalidOperationException>(() => Runner(model).RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, Action(), null, default, events.Add));
         Assert.Contains(events, e => e.Kind == "tool_failed");

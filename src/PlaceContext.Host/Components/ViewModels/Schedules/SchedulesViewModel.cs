@@ -11,9 +11,9 @@ public sealed class SchedulesViewModel : PageViewModel
     private static class Copy
     {
         public const string PageTitle = "Schedules";
-        public const string PageSubtitle = "cron schedules and event triggers across this project's jobs";
+        public const string PageSubtitle = "scheduled workflow execution";
         public const string NameRequired = "Name is required.";
-        public const string JobRequired = "Pick a job.";
+        public const string WorkflowRequired = "Pick a workflow.";
         public const string DeletedJob = "(deleted job)";
     }
 
@@ -49,6 +49,7 @@ public sealed class SchedulesViewModel : PageViewModel
     {
         get; private set;
     }
+    public IReadOnlyList<JobChainView>? Workflows { get; private set; }
     public IReadOnlyList<EventTypeView>? EventTypes
     {
         get; private set;
@@ -68,7 +69,7 @@ public sealed class SchedulesViewModel : PageViewModel
     }
     public string TimeZoneId => _tenant.TimeZoneId;
 
-    public Guid NewJobId
+    public Guid NewWorkflowId
     {
         get; set;
     }
@@ -111,12 +112,27 @@ public sealed class SchedulesViewModel : PageViewModel
         get; private set;
     }
 
-    public async Task LoadAsync(Guid projectId)
+    public Guid? WorkflowId { get; private set; }
+    public string? WorkflowName => Workflows?.FirstOrDefault(workflow => workflow.Id == WorkflowId)?.Name;
+
+    private async Task RefreshTriggersAsync(Guid projectId)
     {
+        var triggers = await _service.ListTriggersAsync(projectId);
+        Triggers = WorkflowId is { } workflowId
+            ? triggers.Where(trigger => trigger.WorkflowId == workflowId).ToArray()
+            : triggers;
+    }
+
+    public async Task LoadAsync(Guid projectId, Guid? workflowId = null)
+    {
+        WorkflowId = workflowId;
+        if (workflowId is { } selected) NewWorkflowId = selected;
+        Message = null;
         try
         {
+            Workflows = await _service.ListJobChainsAsync(projectId);
             Jobs = await _service.ListJobsAsync(projectId);
-            Triggers = await _service.ListTriggersAsync(projectId);
+            await RefreshTriggersAsync(projectId);
             EventTypes = await _service.ListEventTypesAsync();
             NewEvent = EventTypes.FirstOrDefault()?.Name ?? string.Empty;
             _ui.Set(Copy.PageTitle, Copy.PageSubtitle);
@@ -164,7 +180,7 @@ public sealed class SchedulesViewModel : PageViewModel
             : "never";
 
     public string TargetLabel(TriggerView trigger) =>
-        JobName(trigger.JobId ?? Guid.Empty);
+        trigger.WorkflowId is { } workflowId ? Workflows?.FirstOrDefault(workflow => workflow.Id == workflowId)?.Name ?? "(deleted workflow)" : JobName(trigger.JobId ?? Guid.Empty);
 
     public async Task AddTriggerAsync(Guid projectId)
     {
@@ -179,23 +195,24 @@ public sealed class SchedulesViewModel : PageViewModel
         Busy = true;
         try
         {
-            if (NewJobId == Guid.Empty)
+            var workflowId = WorkflowId ?? NewWorkflowId;
+            if (workflowId == Guid.Empty || Workflows?.Any(workflow => workflow.Id == workflowId) != true)
             {
-                Error = Copy.JobRequired;
+                Error = Copy.WorkflowRequired;
                 return;
             }
 
             await _service.CreateTriggerAsync(
                 new CreateTriggerCommand(
-                    NewJobId,
+                    null,
                     NewName.Trim(),
-                    NewKind.ToString(),
-                    NewKind == TriggerKind.Schedule ? SelectedCron() : null,
-                    NewKind == TriggerKind.Event ? NewEvent : null
+                    "Schedule",
+                    SelectedCron(),
+                    null, workflowId
                 )
             );
 
-            Triggers = await _service.ListTriggersAsync(projectId);
+            await RefreshTriggersAsync(projectId);
             NewName = string.Empty;
         }
         catch (Exception ex)
@@ -214,7 +231,7 @@ public sealed class SchedulesViewModel : PageViewModel
         try
         {
             await _service.SetTriggerEnabledAsync(trigger.Id, !trigger.Enabled);
-            Triggers = await _service.ListTriggersAsync(projectId);
+            await RefreshTriggersAsync(projectId);
         }
         catch (Exception ex)
         {
@@ -231,7 +248,7 @@ public sealed class SchedulesViewModel : PageViewModel
         try
         {
             await _service.DeleteTriggerAsync(triggerId);
-            Triggers = await _service.ListTriggersAsync(projectId);
+            await RefreshTriggersAsync(projectId);
         }
         catch (Exception ex)
         {
@@ -285,7 +302,7 @@ public sealed class SchedulesViewModel : PageViewModel
                     Enabled: null
                 )
             );
-            Triggers = await _service.ListTriggersAsync(projectId);
+            await RefreshTriggersAsync(projectId);
             CancelEdit();
         }
         catch (Exception ex)

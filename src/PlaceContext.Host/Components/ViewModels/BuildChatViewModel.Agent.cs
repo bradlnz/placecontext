@@ -10,12 +10,14 @@ public sealed partial class BuildChatViewModel
 {
     public bool AgentOpen { get; private set; }
     public bool AgentLoading { get; private set; }
-    public string AgentTab { get; set; } = "Instructions";
+    public string AgentTab { get; set; } = "Agent";
     public string? AgentError { get; private set; }
     public string? AgentNotice { get; private set; }
     public DashboardSettings Dashboard { get; private set; } = new();
     public IReadOnlyList<DashboardAgentProfile> ProjectAgents { get; private set; } = [];
-    public IEnumerable<DashboardAgentProfile> DashboardAgents => Dashboard.Agents;
+    public IEnumerable<DashboardAgentProfile> DashboardAgents => AvailableAgents;
+    public DashboardLayout Tiles => Dashboard.ForAgent(Conversation.AgentId);
+    public DashboardLayout DraftTiles => AgentDraft.ForAgent(Conversation.AgentId);
     public IEnumerable<DashboardAgentProfile> AvailableAgents => Dashboard.Agents.Concat(ProjectAgents);
     public DashboardSettings AgentDraft { get; private set; } = new();
     public Guid AgentEditId { get; set; }
@@ -27,6 +29,43 @@ public sealed partial class BuildChatViewModel
     public string AgentTools { get; private set; } = "";
     public string NewActionTitle { get; set; } = "";
     public string NewActionPrompt { get; set; } = "";
+    public string? EditingTileKey { get; private set; }
+    public string TileTitleDraft { get; set; } = "";
+    public string TileDescriptionDraft { get; set; } = "";
+    public string TilePromptDraft { get; set; } = "";
+    public string? TileEditError { get; private set; }
+
+    public void EditDashboardTile(string key)
+    {
+        if (Locked || AgentLoading || AgentOpen || Tiles.TileAction(key) is not { } action) return;
+        EditingTileKey = key;
+        TileTitleDraft = action.Title;
+        TileDescriptionDraft = action.Description ?? "";
+        TilePromptDraft = action.Prompt;
+        TileEditError = null;
+    }
+
+    public void CloseTileEditor()
+    {
+        if (AgentLoading) return;
+        EditingTileKey = null;
+        TileEditError = null;
+    }
+
+    public async Task SaveDashboardTileAsync()
+    {
+        if (Locked || AgentLoading || EditingTileKey is not { } key || Tiles.TileAction(key) is not { } action) return;
+        var saved = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(Dashboard))!;
+        var tiles = saved.ForAgent(Conversation.AgentId);
+        var edited = action with { Title = TileTitleDraft.Trim(), Description = string.IsNullOrWhiteSpace(TileDescriptionDraft) ? null : TileDescriptionDraft.Trim(), Prompt = TilePromptDraft.Trim() };
+        if (tiles.BuiltInTiles.ContainsKey(key)) tiles.BuiltInTiles[key] = edited;
+        else tiles.Actions[tiles.Actions.FindIndex(a => a.Id == action.Id)] = edited;
+        try { saved.Validate(); }
+        catch (ArgumentException ex) { TileEditError = ex.Message; return; }
+        await SaveDashboardAsync(saved);
+        if (ReferenceEquals(Dashboard, saved)) CloseTileEditor();
+        else TileEditError = Error ?? "The tile could not be saved. Please try again.";
+    }
     public IReadOnlyList<JobChainView> AgentWorkflows { get; private set; } = [];
     public static IEnumerable<LoopChainActionView> SubAgents(IEnumerable<JobChainStageView> stages)
     {
@@ -99,11 +138,15 @@ public sealed partial class BuildChatViewModel
 
     public void SelectAgent(string? value)
     {
-        if (Locked || !Guid.TryParse(value, out var id) || !DashboardAgents.Any(a => a.Id == id))
+        if (Locked || AgentLoading || ChartQuerySaving || !Guid.TryParse(value, out var id) || !DashboardAgents.Any(a => a.Id == id))
         {
             return;
         }
+        if (Conversation.AgentId == id) return;
+        CloseTileEditor();
         Conversation.AgentId = id;
+        ResetDashboardCharts();
+        _ = RefreshDashboardChartsAsync();
         if (id == DashboardSettings.DefaultAgentId && DashboardAgents.First(a => a.Id == id).ConnectionId == Guid.Empty)
         {
             SelectDefaultModel();
@@ -175,7 +218,7 @@ public sealed partial class BuildChatViewModel
         if (Locked || AgentLoading) return;
         var action = new DashboardAction(NewActionTitle.Trim(), NewActionPrompt.Trim());
         var proposed = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(AgentDraft))!;
-        proposed.Actions.Add(action);
+        proposed.ForAgent(Conversation.AgentId).Actions.Add(action);
         try
         {
             proposed.Validate();
@@ -192,42 +235,66 @@ public sealed partial class BuildChatViewModel
     public void EditDashboardAction(Guid id, string title, string prompt)
     {
         if (Locked || AgentLoading) return;
-        var index = AgentDraft.Actions.FindIndex(a => a.Id == id);
-        if (index >= 0) AgentDraft.Actions[index] = AgentDraft.Actions[index] with { Title = title, Prompt = prompt };
+        var index = DraftTiles.Actions.FindIndex(a => a.Id == id);
+        if (index >= 0) DraftTiles.Actions[index] = DraftTiles.Actions[index] with { Title = title, Prompt = prompt };
     }
 
     public void RemoveDashboardAction(DashboardAction action)
     {
         if (Locked || AgentLoading) return;
-        AgentDraft.Actions.Remove(action);
-        AgentDraft.TileOrder.Remove(action.Id.ToString());
-        AgentDraft.TileRowStarts.Remove(action.Id.ToString());
-        AgentDraft.TileSizes.Remove(action.Id.ToString());
+        DraftTiles.Actions.Remove(action);
+        DraftTiles.HiddenTiles.Remove(action.Id.ToString());
+        DraftTiles.TileOrder.Remove(action.Id.ToString());
+        DraftTiles.TileRowStarts.Remove(action.Id.ToString());
+        DraftTiles.TileSizes.Remove(action.Id.ToString());
+        DraftTiles.TilePositions.Remove(action.Id.ToString());
     }
 
-    public async Task MoveDashboardTileAsync(string key, int position, bool newRow = false)
+    public async Task RemoveDashboardTileAsync(string key)
     {
-        if (Locked || AgentLoading || AgentOpen) return;
-        var order = Dashboard.OrderedTiles().ToList();
-        var index = order.IndexOf(key);
-        if (index < 0 || position < 0 || position >= order.Count || index == position && !newRow && !Dashboard.TileRowStarts.Contains(key)) return;
-        order.RemoveAt(index);
-        order.Insert(position, key);
+        if (Locked || AgentLoading || AgentOpen || !Tiles.OrderedTiles().Contains(key)) return;
         var saved = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(Dashboard))!;
-        saved.TileOrder = order;
-        saved.TileRowStarts.Remove(key);
-        if (newRow) saved.TileRowStarts.Add(key);
+        saved.ForAgent(Conversation.AgentId).HiddenTiles.Add(key);
         await SaveDashboardAsync(saved);
+    }
+
+    public void RestoreDashboardTile(string key)
+    {
+        if (Locked || AgentLoading) return;
+        DraftTiles.HiddenTiles.Remove(key);
     }
 
     [Microsoft.JSInterop.JSInvokable]
-    public async Task ResizeDashboardTileAsync(string key, string size)
+    public async Task<bool> MoveDashboardTileAsync(string key, int position, bool newRow = false, int? column = null, int? row = null, Dictionary<string, DashboardTilePosition>? positions = null)
     {
-        if (Locked || AgentLoading || AgentOpen || !Dashboard.TileKeys().Contains(key)
-            || size is not ("square" or "wide" or "tall" or "large") || Dashboard.TileSize(key) == size) return;
+        if (Locked || AgentLoading || AgentOpen || (column is null) != (row is null)
+            || column is < 1 or > 32 || row is < 1 or > 100) return false;
+        var order = Tiles.OrderedTiles().ToList();
+        if (positions is not null && (positions.Count != order.Count || positions.Keys.Except(order).Any())) return false;
+        var index = order.IndexOf(key);
+        if (index < 0 || position < 0 || position >= order.Count || index == position && column is null && !newRow && !Tiles.TileRowStarts.Contains(key)) return false;
+        order.RemoveAt(index);
+        order.Insert(position, key);
         var saved = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(Dashboard))!;
-        saved.TileSizes[key] = size;
+        saved.ForAgent(Conversation.AgentId).TileOrder = order;
+        if (positions is not null) foreach (var (tile, cell) in positions) saved.ForAgent(Conversation.AgentId).TilePositions[tile] = cell;
+        if (column is { } x && row is { } y) saved.ForAgent(Conversation.AgentId).TilePositions[key] = new(x, y);
+        else saved.ForAgent(Conversation.AgentId).TilePositions.Remove(key);
+        saved.ForAgent(Conversation.AgentId).TileRowStarts.Remove(key);
+        if (newRow) saved.ForAgent(Conversation.AgentId).TileRowStarts.Add(key);
         await SaveDashboardAsync(saved);
+        return ReferenceEquals(Dashboard, saved);
+    }
+
+    [Microsoft.JSInterop.JSInvokable]
+    public async Task<bool> ResizeDashboardTileAsync(string key, string size)
+    {
+        if (Locked || AgentLoading || AgentOpen || !Tiles.TileKeys().Contains(key)
+            || size is not ("square" or "wide" or "tall" or "large") || Tiles.TileSize(key) == size) return false;
+        var saved = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(Dashboard))!;
+        saved.ForAgent(Conversation.AgentId).TileSizes[key] = size;
+        await SaveDashboardAsync(saved);
+        return ReferenceEquals(Dashboard, saved);
     }
 
     private async Task SaveDashboardAsync(DashboardSettings settings)
@@ -235,6 +302,7 @@ public sealed partial class BuildChatViewModel
         AgentLoading = true;
         Error = null;
         var projectId = Conversation.ProjectId;
+        foreach (var id in settings.AgentLayouts.Keys.Except(AvailableAgents.Select(a => a.Id)).ToArray()) settings.AgentLayouts.Remove(id);
         try
         {
             await store.SaveSettingsAsync(projectId, settings);
@@ -251,14 +319,14 @@ public sealed partial class BuildChatViewModel
         }
     }
 
-    public bool IsChartPinned(ChartPreview chart) => Dashboard.Charts.Any(c => c.Live == chart.Live && c.Sql == chart.Sql
+    public bool IsChartPinned(ChartPreview chart) => Tiles.Charts.Any(c => c.Live == chart.Live && c.Sql == chart.Sql
         && ChartSpec.TryParse(c.ChartJson) is { } spec && spec.Title == chart.Spec.Title && spec.Type == chart.Spec.Type);
 
     public async Task PinDashboardChartAsync(ChartPreview chart)
     {
         if (Locked || AgentLoading || !chart.Live || IsChartPinned(chart)) return;
         var saved = JsonSerializer.Deserialize<DashboardSettings>(JsonSerializer.Serialize(Dashboard))!;
-        saved.Charts.Add(new(chart.Spec.ToJson(), chart.Source) { Live = true, Sql = chart.Sql });
+        saved.ForAgent(Conversation.AgentId).Charts.Add(new(chart.Spec.ToJson(), chart.Source) { Live = true, Sql = chart.Sql });
         await SaveDashboardAsync(saved);
         await RefreshDashboardChartsAsync();
     }
@@ -266,10 +334,12 @@ public sealed partial class BuildChatViewModel
     public void RemoveDashboardChart(DashboardChart chart)
     {
         if (Locked || AgentLoading) return;
-        AgentDraft.Charts.Remove(chart);
-        AgentDraft.TileOrder.Remove(chart.Id.ToString());
-        AgentDraft.TileRowStarts.Remove(chart.Id.ToString());
-        AgentDraft.TileSizes.Remove(chart.Id.ToString());
+        DraftTiles.Charts.Remove(chart);
+        DraftTiles.HiddenTiles.Remove(chart.Id.ToString());
+        DraftTiles.TileOrder.Remove(chart.Id.ToString());
+        DraftTiles.TileRowStarts.Remove(chart.Id.ToString());
+        DraftTiles.TileSizes.Remove(chart.Id.ToString());
+        DraftTiles.TilePositions.Remove(chart.Id.ToString());
     }
 
     public async Task SaveAgentAsync()

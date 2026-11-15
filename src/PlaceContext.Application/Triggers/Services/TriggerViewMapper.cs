@@ -17,5 +17,5 @@ internal static class TriggerViewMapper
         EventName: t.EventName,
         NextRunAt: t.NextRunAt,
         LastFiredAt: t.LastFiredAt,
-        CreatedAt: t.CreatedAt);
+        CreatedAt: t.CreatedAt, WorkflowId: t.WorkflowId);
 }

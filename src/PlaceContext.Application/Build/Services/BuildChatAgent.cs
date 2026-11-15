@@ -66,14 +66,14 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
         + JsonSerializer.Serialize(settings.Instructions)
         + "\nAgent system prompt and capabilities (same permission and safety limits apply):\n"
         + JsonSerializer.Serialize(new { profile.Name, profile.Instructions, profile.WorkflowAccess,
-            TableAccess = profile.EffectiveTableAccess, SourceAccess = profile.EffectiveSourceAccess, ArtifactAccess = profile.EffectiveArtifactAccess })
+            TableAccess = profile.EffectiveTableAccess, SourceAccess = profile.EffectiveSourceAccess, SourceCapabilities = profile.EffectiveSourceCapabilities, ArtifactAccess = profile.EffectiveArtifactAccess })
         + "\nLinkedWorkflows in the project context are workflows associated with this agent. Prefer them when relevant to the user's task; links do not grant permissions or request execution.\n"
         + (profile.Id != DashboardSettings.DefaultAgentId ? "" : "\nYou are the dashboard master agent. Coordinate the user's task across project workflows and their assigned agents. "
             + "Prefer existing linked workflows when suitable. When creating or editing an automatic agent step, select a suitable saved agent using Review.AgentId. "
             + "Agents execute inside workflow steps; do not claim to have delegated work before the workflow actually runs. "
             + "Respect each agent's capabilities and all user permissions. This role grants no additional tool access.\nAvailable project agents:\n"
             + JsonSerializer.Serialize(catalog.Agents.Select(a => new { a.Id, a.Name, ParentAgentId = a.EffectiveParentAgentId, a.ConnectionId, a.Model, a.WorkflowAccess,
-                TableAccess = a.EffectiveTableAccess, SourceAccess = a.EffectiveSourceAccess, ArtifactAccess = a.EffectiveArtifactAccess,
+                TableAccess = a.EffectiveTableAccess, SourceAccess = a.EffectiveSourceAccess, SourceCapabilities = a.EffectiveSourceCapabilities, ArtifactAccess = a.EffectiveArtifactAccess,
                 a.WorkflowIds })));
 
     private async Task<(DashboardAgentProfile Profile, bool Shared, ProjectAgentCatalog Catalog)> ResolveAgentAsync(
@@ -151,7 +151,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                 if (parent is null) return;
                 await AgentApproval.RequireAsync(model, parent, conversation.ConnectionId, conversation.Model, purpose, evidence, deadline.Token);
             }
-            await ApproveAsync("Authorize sub-agent conversation task", conversation.Messages.ToJsonString());
+            await ApproveAsync("Authorize sub-agent session task", conversation.Messages.ToJsonString());
             var tools = new BuildTools(conversation.ProjectId, service, permissions, store, reviewer, submissions: submissions, mcp: mcp,
                 mcpConnectionIds: profile.McpConnectionIds.ToHashSet(), profile: profile);
             var functions = tools.Functions().ToDictionary(x => x.Name);
@@ -201,7 +201,7 @@ public sealed class BuildChatAgent(IBuildChatStore store, IBuildModelGateway mod
                 reply.Remove("dashboard_action");
                 if (conversation.Messages.ToJsonString().Length + reply.ToJsonString().Length > 14_000_000)
                 {
-                    throw new InvalidOperationException("The conversation is full. Start a new chat to continue.");
+                    throw new InvalidOperationException("The session is full. Start a new chat to continue.");
                 }
                 if (reply["tool_calls"] is not JsonArray { Count: > 0 } calls)
                 {

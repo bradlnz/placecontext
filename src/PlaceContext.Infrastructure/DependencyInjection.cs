@@ -230,6 +230,10 @@ public static class DependencyInjection
         services.AddSingleton<IVirtualMachineEnvironmentRunner>(sp => sp.GetRequiredService<VirtualMachineEnvironmentRunner>());
         services.AddSingleton<IVirtualMachineEnvironmentCatalog>(sp => sp.GetRequiredService<VirtualMachineEnvironmentRunner>());
         services.AddSingleton<IWorkloadOutputBuffer, InMemoryWorkloadOutputBuffer>();
+        services.Configure<ContainerWorkflowOptions>(configuration.GetSection("PlaceContext:ContainerWorkflows"));
+        services.AddSingleton<ContainerWorkflowBackgroundService>();
+        services.AddSingleton<IContainerWorkflowRunner>(sp => sp.GetRequiredService<ContainerWorkflowBackgroundService>());
+        services.AddHostedService(sp => sp.GetRequiredService<ContainerWorkflowBackgroundService>());
         services.AddSingleton<ClusterWorkloadRunner>();
         services.AddSingleton<k8s.IKubernetes>(sp => new k8s.Kubernetes(ClusterRuntime.Configuration(
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WorkloadRunnerOptions>>().Value)));

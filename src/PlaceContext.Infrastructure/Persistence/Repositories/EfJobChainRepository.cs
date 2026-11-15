@@ -94,6 +94,10 @@ public sealed class EfJobChainRepository : IJobChainRepository
     private static object? SerializeAction(ChainAction? action) => action switch
     {
         null => null,
+        ParallelWorkflowsChainAction parallel => new { type = parallel.Type, branches = parallel.Branches, outputField = parallel.OutputField },
+        SubWorkflowChainAction child => new { type = child.Type, workflowId = child.WorkflowId, workflowName = child.WorkflowName },
+        ContainerBuildChainAction build => new { type = build.Type, build.Dockerfile, build.ContextField, build.OutputField, build.TimeoutSeconds, build.AllowNetwork },
+        ContainerRunChainAction container => new { type = container.Type, container.Image, container.ImageField, container.OutputField, container.Command, container.Port, container.MemoryMb, container.Cpus, container.TimeoutSeconds, container.AllowNetwork },
         VirtualMachineChainAction vm => new
         {
             type = vm.Type,
@@ -210,6 +214,10 @@ public sealed class EfJobChainRepository : IJobChainRepository
         }
         return type.GetString() switch
         {
+            ParallelWorkflowsChainAction.ActionType => new ParallelWorkflowsChainAction(JsonSerializer.Deserialize<ConditionalWorkflowBranch[]>(element.GetProperty("branches"))!, element.GetProperty("outputField").GetString()!),
+            SubWorkflowChainAction.ActionType => new SubWorkflowChainAction(element.GetProperty("workflowId").GetGuid(), element.GetProperty("workflowName").GetString()!),
+            ContainerBuildChainAction.ActionType => JsonSerializer.Deserialize<ContainerBuildChainAction>(element),
+            ContainerRunChainAction.ActionType => JsonSerializer.Deserialize<ContainerRunChainAction>(element),
             VirtualMachineChainAction.ActionType => new VirtualMachineChainAction(
                 element.GetProperty("imageProfile").GetString()!, element.GetProperty("command").GetString()!,
                 element.GetProperty("outputField").GetString()!, element.GetProperty("memoryMb").GetInt32(),

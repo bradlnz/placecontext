@@ -28,7 +28,7 @@ public sealed class ConversationShares(IServiceScopeFactory scopes, ICurrentTena
             || !await permissions.HasAsync(Permission.ArtifactsShare, ct))
             throw new UnauthorizedAccessException("Project viewing and public sharing permissions are required.");
         return await db.BuildConversations.SingleOrDefaultAsync(x => x.Id == id && x.ProjectId == projectId && x.UserId == user.UserId, ct)
-            ?? throw new InvalidOperationException("Conversation not found.");
+            ?? throw new InvalidOperationException("Session not found.");
     }
 
     public async Task<WorkflowDemoLink> CreateAsync(Guid projectId, Guid conversationId, Guid? runId, IReadOnlyList<Guid> artifactIds, int lifetimeDays, CancellationToken ct = default)
@@ -46,7 +46,7 @@ public sealed class ConversationShares(IServiceScopeFactory scopes, ICurrentTena
             if (role is not ("user" or "assistant" or "tool")) continue;
             messages.Add(new JsonObject { ["role"] = role, ["content"] = message["content"]?.DeepClone() });
         }
-        if (messages.Count == 0) throw new InvalidOperationException("Start a conversation before sharing it.");
+        if (messages.Count == 0) throw new InvalidOperationException("Start a session before sharing it.");
         PlaceContext.Application.Dtos.ChainRunView? run = null;
         if (runId is { } selectedRun)
         {

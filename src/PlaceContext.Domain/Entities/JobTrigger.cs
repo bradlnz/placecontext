@@ -25,11 +25,13 @@ public sealed class JobTrigger
         DateTimeOffset? nextRunAt,
         DateTimeOffset? lastFiredAt,
         DateTimeOffset createdAt,
-        DateTimeOffset updatedAt)
+        DateTimeOffset updatedAt, Guid? workflowId = null, Guid? scheduledBy = null)
     {
         Id = id;
         ProjectId = projectId;
         JobId = jobId;
+        WorkflowId = workflowId;
+        ScheduledBy = scheduledBy;
         Name = name;
         Kind = kind;
         Enabled = enabled;
@@ -55,6 +57,9 @@ public sealed class JobTrigger
     {
         get;
     }
+
+    public Guid? WorkflowId { get; }
+    public Guid? ScheduledBy { get; }
 
     /// <summary>Human-readable label for this trigger.</summary>
     public string Name
@@ -134,6 +139,16 @@ public sealed class JobTrigger
             nextRunAt: nextRunAt, lastFiredAt: null, createdAt: now, updatedAt: now);
     }
 
+    public static JobTrigger CreateWorkflowSchedule(Guid projectId, Guid workflowId, Guid scheduledBy, string name,
+        string cronExpression, DateTimeOffset? nextRunAt, DateTimeOffset now)
+    {
+        ValidateIds(projectId, workflowId); ValidateName(name);
+        if (scheduledBy == Guid.Empty) throw new ArgumentException("A schedule owner is required.");
+        if (string.IsNullOrWhiteSpace(cronExpression)) throw new ArgumentException("A cron expression is required.");
+        return new JobTrigger(Guid.NewGuid(), projectId, null, name.Trim(), TriggerKind.Schedule, true,
+            cronExpression.Trim(), null, nextRunAt, null, now, now, workflowId, scheduledBy);
+    }
+
     /// <summary>Creates an event-subscription trigger.</summary>
     public static JobTrigger CreateEvent(
         Guid projectId, Guid jobId, string name, string eventName, DateTimeOffset now)
@@ -155,9 +170,9 @@ public sealed class JobTrigger
         Guid id, Guid projectId, Guid? jobId, string name, TriggerKind kind, bool enabled,
         string? cronExpression, string? eventName,
         DateTimeOffset? nextRunAt, DateTimeOffset? lastFiredAt,
-        DateTimeOffset createdAt, DateTimeOffset updatedAt)
+        DateTimeOffset createdAt, DateTimeOffset updatedAt, Guid? workflowId = null, Guid? scheduledBy = null)
         => new(id, projectId, jobId, name, kind, enabled, cronExpression, eventName,
-               nextRunAt, lastFiredAt, createdAt, updatedAt);
+               nextRunAt, lastFiredAt, createdAt, updatedAt, workflowId, scheduledBy);
 
     // ── Behaviour ─────────────────────────────────────────────────────────────────────────────────
 

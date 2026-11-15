@@ -62,10 +62,10 @@
 .job-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 13px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .job-row:last-child { border-bottom: 0; }
 .job-row:hover { background: color-mix(in srgb, var(--card-2) 45%, transparent); }
-.job-row.running { background: color-mix(in srgb, var(--brand-2) 4%, transparent); }
+.job-row.running { background: color-mix(in srgb, var(--running) 4%, transparent); }
 
 .status-icon { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--border-2); border-radius: 50%; color: var(--brand-2); font-size: 13px; font-weight: 700; }
-.status-icon.is-running { border-color: color-mix(in srgb, var(--brand-2) 60%, var(--border)); background: color-mix(in srgb, var(--brand-2) 9%, transparent); }
+.status-icon.is-running { color:var(--running); border-color: color-mix(in srgb, var(--running) 60%, var(--border)); background: color-mix(in srgb, var(--running) 9%, transparent); }
 
 .job-title { min-height: 22px; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .job-title strong { font-size: 13px; font-weight: 580; }
@@ -85,6 +85,7 @@
 .code-action { width: 34px; font: 9px var(--font-mono); }
 
 .spinner { width: 11px; height: 11px; border: 2px solid var(--border-2); border-top-color: var(--brand-2); border-radius: 50%; animation: spin .7s linear infinite; }
+.status-icon.is-running .spinner { border-top-color:var(--running) }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Slide-out shell ─────────────────────────────────────────── */

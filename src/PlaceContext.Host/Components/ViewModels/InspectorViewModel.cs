@@ -48,7 +48,7 @@ public sealed class InspectorViewModel : PageViewModel, IDisposable
     public static string StatusColor(string status) =>
         status switch
         {
-            Statuses.Ok => "var(--good)",
+            Statuses.Ok => "var(--success)",
             Statuses.Warn => "var(--warn)",
             _ => "var(--bad)",
         };
@@ -56,7 +56,7 @@ public sealed class InspectorViewModel : PageViewModel, IDisposable
     public static string StatusBackground(string status) =>
         status switch
         {
-            Statuses.Ok => "var(--good-bg)",
+            Statuses.Ok => "var(--success-bg)",
             Statuses.Warn => "var(--warn-bg)",
             _ => "var(--bad-bg)",
         };

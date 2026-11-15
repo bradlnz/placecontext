@@ -16,7 +16,7 @@
         {
             var active = group.Any(item => Vm.IsActive(item.Path));
             <a href="@(Vm.Href(group.First().Path))" class="dctab @(active ? "active" : null)"
-               role="tab" aria-selected="@active">
+               role="tab" aria-selected="@(active ? "true" : "false")">
                 @group.Key
             </a>
         }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Globalization;
 
 namespace PlaceContext.Domain.ValueObjects;
 
@@ -29,13 +30,33 @@ public sealed record ConditionGate(string Expression, IReadOnlyList<ChainStage>?
     ///   - <c>lte:field.path:number</c> — less than or equal
     ///   - <c>true</c> / <c>false</c> — literal
     /// </summary>
-    internal static bool EvaluateExpression(string expression, string? payload)
+    internal static bool EvaluateExpression(string expression, string? payload) => EvaluateExpression(expression, payload, 0);
+
+    private static bool EvaluateExpression(string expression, string? payload, int depth)
     {
+        if (depth > 8) return false;
         if (string.IsNullOrWhiteSpace(expression))
         {
             return true;
         }
         var trimmed = expression.Trim();
+
+        if (trimmed.StartsWith("all:", StringComparison.Ordinal) || trimmed.StartsWith("any:", StringComparison.Ordinal))
+        {
+            try
+            {
+                using var group = JsonDocument.Parse(trimmed[4..]);
+                if (group.RootElement.ValueKind != JsonValueKind.Array || group.RootElement.GetArrayLength() is 0 or > 32)
+                    return false;
+                var conditions = group.RootElement.EnumerateArray().ToArray();
+                if (conditions.Any(item => item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString())))
+                    return false;
+                return trimmed.StartsWith("all:", StringComparison.Ordinal)
+                    ? conditions.All(item => EvaluateExpression(item.GetString()!, payload, depth + 1))
+                    : conditions.Any(item => EvaluateExpression(item.GetString()!, payload, depth + 1));
+            }
+            catch (JsonException) { return false; }
+        }
 
         // Literal booleans
         if (string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
@@ -128,7 +149,7 @@ public sealed record ConditionGate(string Expression, IReadOnlyList<ChainStage>?
             return false;
         }
         var path = rest[..lastColon].Trim();
-        if (!double.TryParse(rest[(lastColon + 1)..].Trim(), out var target))
+        if (!double.TryParse(rest[(lastColon + 1)..].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var target))
         {
             return false;
         }

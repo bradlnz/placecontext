@@ -1,4 +1,4 @@
-<section class="demo-share" aria-label="Share conversation">
+<section class="demo-share" aria-label="Share session">
     <p>Anyone with this link can read a snapshot of these messages, action results, the selected workflow run and its artifacts. Future messages stay private. The link expires and can be revoked here.</p>
     <label for="demo-expiry">Expires in</label><select id="demo-expiry" @bind="Vm.DemoLifetimeDays" disabled="@Vm.SharingDemo"><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option></select>
     <div class="demo-actions"><button class="dcbtn primary" disabled="@Vm.SharingDemo" @onclick="Vm.CreateDemoAsync">@(Vm.SharingDemo ? "Working…" : Vm.DemoExpiry is null ? "Create share link" : "Replace share link")</button>
@@ -7,7 +7,7 @@
     @if (Vm.DemoUrl is { } url)
     {
         <label for="demo-link">Share link</label><input id="demo-link" readonly value="@url" />
-        <div class="demo-actions"><button class="dcbtn" @onclick="Vm.CopyDemoAsync">Copy link</button><a class="dcbtn" href="@url" target="_blank" rel="noopener noreferrer">Open conversation</a></div>
+        <div class="demo-actions"><button class="dcbtn" @onclick="Vm.CopyDemoAsync">Copy link</button><a class="dcbtn" href="@url" target="_blank" rel="noopener noreferrer">Open session</a></div>
     }
     @if (Vm.DemoError is { } error) { <p role="alert">@error</p> }
 </section>

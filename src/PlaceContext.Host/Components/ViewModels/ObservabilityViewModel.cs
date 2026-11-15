@@ -687,20 +687,20 @@ public sealed partial class ObservabilityViewModel(
     public static string StatusColor(string status) =>
         status switch
         {
-            "Succeeded" => "var(--good)",
+            "Succeeded" => "var(--success)",
             "Failed" => "var(--bad)",
             "Partial" => "var(--warn)",
-            "Running" => "var(--brand-2)",
+            "Running" => "var(--running)",
             _ => "var(--text-3)",
         };
 
     public static string StatusBackground(string status) =>
         status switch
         {
-            "Succeeded" => "var(--good-bg)",
+            "Succeeded" => "var(--success-bg)",
             "Failed" => "var(--bad-bg)",
             "Partial" => "var(--warn-bg)",
-            "Running" => "var(--brand-bg)",
+            "Running" => "var(--running-bg)",
             _ => "var(--card-2)",
         };
 

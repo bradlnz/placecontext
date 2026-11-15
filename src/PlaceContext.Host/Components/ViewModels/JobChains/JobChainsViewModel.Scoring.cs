@@ -17,6 +17,8 @@ public sealed partial class JobChainsViewModel
     public IEnumerable<string> ScoreEvidenceFields => EdStageActions.Where(p => p.Key < _scoreStageIndex).Select(p => p.Value switch
     {
         LoopChainAction loop => loop.ResponseField,
+        ContainerBuildChainAction build => build.OutputField,
+        ContainerRunChainAction container => container.OutputField,
         VirtualMachineChainAction vm => vm.OutputField,
         QueryDataChainAction query => query.OutputField,
         ScoringGateChainAction score => score.OutputField,

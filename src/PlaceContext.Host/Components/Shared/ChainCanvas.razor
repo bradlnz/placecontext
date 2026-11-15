@@ -126,6 +126,14 @@
                                     <span class="node-copy"><strong>Send SMS</strong><small>@sms.Recipient</small></span>
                                 </button>
                             }
+                            else if (stage.Action is ContainerBuildChainActionView or ContainerRunChainActionView)
+                            {
+                                <button class="job-path" disabled="@ReadOnly" title="Edit container settings" @onclick="@(() => OnEditContainerAction.InvokeAsync(stageIndex))">
+                                    <span class="job-icon" aria-hidden="true"><AppIcon Kind="code" /></span>
+                                    <span class="node-copy"><strong>@stage.Action.DisplayName</strong><small>@(stage.Action is ContainerBuildChainActionView ? "Create an image" : "Run in a sandbox")</small></span>
+                                </button>
+                                <div class="node-output"><span>Result</span><code>@(stage.Action is ContainerBuildChainActionView build ? build.OutputField : ((ContainerRunChainActionView)stage.Action).OutputField)</code></div>
+                            }
                             else if (stage.Action is VirtualMachineChainActionView vm)
                             {
                                 <button class="job-path" disabled="@ReadOnly" title="Edit browser workspace" @onclick="@(() => OnEditQemuAction.InvokeAsync(stageIndex))">
@@ -133,6 +141,26 @@
                                     <span class="node-copy"><strong>Browser workspace</strong><small>@vm.ImageProfile · @vm.MemoryMb MiB · @vm.Cpus CPU(s)</small></span>
                                 </button>
                                 <div class="node-output"><span>Result</span><code>@vm.OutputField</code></div>
+                            }
+                            else if (stage.Action is ParallelWorkflowsChainActionView parallel)
+                            {
+                                <button disabled="@ReadOnly" class="job-path" title="Edit parallel if gates" @onclick="@(() => OnEditParallelWorkflowAction.InvokeAsync(stageIndex))">
+                                    <span class="job-icon"><AppIcon Kind="parallel" /></span><span class="node-copy"><strong>Parallel if gates</strong><small>Every matching branch runs · join when all finish</small></span>
+                                </button>
+                                <div class="parallel-workflow-branches">
+                                    @foreach (var branch in parallel.Branches)
+                                    {
+                                        <div class="parallel-workflow-branch"><span class="route-label">IF</span><code>@branch.Condition</code><strong>@branch.WorkflowName</strong></div>
+                                    }
+                                </div>
+                                <div class="node-output"><span>Join results</span><code>@parallel.OutputField</code></div>
+                            }
+                            else if (stage.Action is SubWorkflowChainActionView child)
+                            {
+                                <button disabled="@ReadOnly" class="job-path" title="Edit sub-workflow" @onclick="@(() => OnEditSubWorkflowAction.InvokeAsync(stageIndex))">
+                                    <span class="job-icon"><AppIcon Kind="workflow" /></span>
+                                    <span class="node-copy"><strong>@child.WorkflowName</strong><small>Run sub-workflow · pass input and return output</small></span>
+                                </button>
                             }
                             else if (stage.Action is QueryDataChainActionView query)
                             {
@@ -281,10 +309,13 @@
     [Parameter] public EventCallback<(int StageIndex, ChainGateView Gate)> OnEditGate { get; set; }
     [Parameter] public EventCallback<int> OnEditEmailAction { get; set; }
     [Parameter] public EventCallback<int> OnEditSmsAction { get; set; }
+    [Parameter] public EventCallback<int> OnEditParallelWorkflowAction { get; set; }
+    [Parameter] public EventCallback<int> OnEditSubWorkflowAction { get; set; }
     [Parameter] public EventCallback<int> OnEditQueryDataAction { get; set; }
     [Parameter] public EventCallback<int> OnEditScoringAction { get; set; }
     [Parameter] public EventCallback<int> OnEditRepeatAction { get; set; }
     [Parameter] public EventCallback<int> OnEditLoopAction { get; set; }
+    [Parameter] public EventCallback<int> OnEditContainerAction { get; set; }
     [Parameter] public EventCallback<int> OnEditQemuAction { get; set; }
     [Parameter] public EventCallback<(int StageIndex, Guid JobId)> OnAddPath { get; set; }
     [Parameter] public EventCallback<(int SourceIndex, int TargetIndex)> OnMoveStage { get; set; }

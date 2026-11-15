@@ -32,8 +32,8 @@
 }
 
 .test-message {
-    border: 1px solid color-mix(in srgb, var(--good) 40%, var(--border));
-    background: color-mix(in srgb, var(--good) 7%, var(--card));
+    border: 1px solid color-mix(in srgb, var(--success) 40%, var(--border));
+    background: color-mix(in srgb, var(--success) 7%, var(--card));
     color: var(--text-2);
     border-radius: 8px;
     padding: 10px 13px;
@@ -68,7 +68,7 @@
     font-size: 18px;
 }
 
-.summary-count.passed strong { color: var(--good); }
+.summary-count.passed strong { color: var(--success); }
 .summary-count.failed strong { color: var(--bad); }
 
 .summary-progress {
@@ -81,7 +81,7 @@
 .summary-progress span {
     display: block;
     height: 100%;
-    background: var(--good);
+    background: var(--success);
     transition: width .2s ease;
 }
 
@@ -144,7 +144,7 @@
 
 .test-row:last-child { border-bottom: 0; }
 .test-row.failed { background: color-mix(in srgb, var(--bad) 3%, transparent); }
-.test-row.running { background: color-mix(in srgb, var(--brand-2) 4%, transparent); }
+.test-row.running { background: color-mix(in srgb, var(--running) 4%, transparent); }
 
 .status-icon {
     width: 22px;
@@ -159,9 +159,9 @@
 }
 
 .passed .status-icon {
-    color: var(--good);
-    border-color: color-mix(in srgb, var(--good) 65%, var(--border));
-    background: color-mix(in srgb, var(--good) 10%, transparent);
+    color: var(--success);
+    border-color: color-mix(in srgb, var(--success) 65%, var(--border));
+    background: color-mix(in srgb, var(--success) 10%, transparent);
 }
 
 .failed .status-icon {

@@ -3,32 +3,72 @@
     @if (ShowNavigation)
     {
     <nav aria-label="Agent settings" class="agent-tabs">
-        @foreach (var tab in new[] { "Instructions", "Context & tools", "Sub-agents", "Dashboard" })
+        @foreach (var tab in new[] { "Agent", "Instructions", "Tools", "Memory", "Workflow agents", "Dashboard" })
         {
             <button type="button" class="dcbtn" aria-pressed="@(Vm.AgentTab == tab ? "true" : "false")" @onclick="() => Vm.AgentTab = tab">@tab</button>
         }
     </nav>
     }
     <p class="hint">Private to you in this project. The agent uses your permissions; these settings cannot grant access or expose vault credentials.</p>
-    <a class="dcbtn" href="/project/@Vm.Conversation.ProjectId/agents">Manage project agents</a>
+    @if (!Vm.AgentLoading && Vm.AgentTab is "Agent" or "Instructions" or "Tools")
+    {
+        <div class="agent-card agent-selector">
+            <label for="agent-profile">Editing agent</label>
+            <select id="agent-profile" @bind="Vm.AgentEditId" disabled="@Vm.Locked">@foreach (var profile in Vm.AgentDraft.Agents) { <option value="@profile.Id">@profile.DisplayName</option> }</select>
+        </div>
+    }
     @if (Vm.AgentLoading)
     {
         <Skeleton Kind="list" Rows="3" />
     }
-    else if (Vm.AgentTab == "Instructions")
+    else if (Vm.AgentTab == "Agent")
     {
-        <label for="agent-profile">Configure agent</label>
-        <select id="agent-profile" @bind="Vm.AgentEditId" disabled="@Vm.Locked">@foreach (var profile in Vm.AgentDraft.Agents) { <option value="@profile.Id">@profile.DisplayName</option> }</select>
+        <h3>Agent &amp; model</h3>
+        <p class="hint">Choose the name and model for this agent. Set how it works in Instructions and its connections in Tools.</p>
         <button type="button" class="dcbtn" disabled="@(Vm.Locked || Vm.AgentDraft.Agents.Count >= 8)" @onclick="Vm.AddAgent">Add agent</button>
         @if (Vm.EditedAgent is { } edited)
         {
+            <section class="agent-card">
             <label for="agent-name">Agent name</label><input id="agent-name" maxlength="60" @bind="edited.Name" disabled="@Vm.Locked" />
-            <label for="agent-connection">Model connection</label>
-            <select id="agent-connection" value="@edited.ConnectionId" @onchange="e => Vm.SelectAgentConnection(e.Value?.ToString())" disabled="@Vm.Locked"><option value="@Guid.Empty">Select connection</option>@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select>
-            <label for="agent-model">Model</label><select id="agent-model" @bind="edited.Model" disabled="@Vm.Locked"><option value="">Select model</option>@foreach (var model in Vm.AgentModels) { <option>@model</option> }</select>
+            <label for="agent-connection">Model provider connection</label>
+            <select id="agent-connection" value="@edited.ConnectionId" @onchange="e => Vm.SelectAgentConnection(e.Value?.ToString())" disabled="@Vm.Locked"><option value="@Guid.Empty">Choose a model connection</option>@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select>
+            <p class="hint">Choose a connection first, then a model from that provider.</p>
+            <label for="agent-model">Model</label><select id="agent-model" @bind="edited.Model" disabled="@(Vm.Locked || !Vm.AgentModels.Any())"><option value="">Choose a model</option>@foreach (var model in Vm.AgentModels) { <option>@model</option> }</select>
             <a href="/settings/models">Manage model connections</a>
-            <label for="agent-profile-instructions">Agent instructions</label><textarea id="agent-profile-instructions" rows="5" maxlength="8000" @bind="edited.Instructions" disabled="@Vm.Locked"></textarea>
-            <fieldset class="agent-mcp"><legend>MCP connections</legend>
+            </section>
+        }
+        <a href="/project/@Vm.Conversation.ProjectId/agents">Manage shared project agents <AppIcon Kind="arrow-right" /></a>
+    }
+    else if (Vm.AgentTab == "Instructions")
+    {
+        <h3>How this agent should work</h3>
+        <p class="hint">Describe its role, response style, and the rules it should follow.</p>
+        @if (Vm.EditedAgent is { } edited)
+        {
+            <label for="agent-profile-instructions">Agent instructions</label><textarea id="agent-profile-instructions" rows="5" maxlength="8000" placeholder="Example: Summarize findings first, then suggest next steps." @bind="edited.Instructions" disabled="@Vm.Locked"></textarea>
+        }
+        <section class="agent-card">
+        <h3>Instructions for all your agents</h3>
+        <p class="hint">These preferences apply to all your dashboard agents in this project.</p>
+        <label for="agent-instructions">Shared instructions</label>
+        <textarea id="agent-instructions" rows="6" maxlength="8000" @bind="Vm.AgentDraft.Instructions" disabled="@Vm.Locked" placeholder="How should the agent work with you?"></textarea>
+        </section>
+        <details class="agent-card"><summary>Advanced: prompts &amp; routing</summary>
+        <details><summary>Current chat agent system prompt</summary><p class="hint">Rendered for the agent selected in the chat header, using the same template as execution, current project context and saved preferences. Unsaved edits are not included.</p><RunOutput Value="@Vm.AgentPrompt" Language="plaintext" Label="Current agent system prompt" /></details>
+        <details><summary>Jev dashboard routing</summary><p class="hint">The Run a workflow tile opens the picker directly, without AI. For a short first chat message, Jev can open the same picker at confidence ≥ 0.85. A two-second timeout, unavailable Jev, or an uncertain decision falls back to normal chat. Follow-ups use the chat model. Routing never starts a run.</p><RunOutput Value="@BuildChatAgent.WorkflowPickerQuestion" Language="plaintext" Label="Jev routing instructions" /></details>
+        @if (Vm.Conversation.SystemPrompt is { } lastPrompt)
+        {
+            <details><summary>Last recorded prompt used in this session</summary><RunOutput Value="@lastPrompt" Language="plaintext" Label="Recorded system prompt" /></details>
+        }
+        </details>
+    }
+    else if (Vm.AgentTab == "Tools")
+    {
+        <h3>Connected tools</h3>
+        <p class="hint">Choose the external connections this agent can use.</p>
+        @if (Vm.EditedAgent is { } edited)
+        {
+            <fieldset class="agent-mcp"><legend>Connected tools (MCP)</legend>
                 <p class="hint">Only assigned, enabled connections are available to this agent. MCP tools can read or change external systems; assign trusted connections only. Credentials stay in the vault.</p>
                 @foreach (var connection in Vm.AgentMcpConnections)
                 {
@@ -40,33 +80,24 @@
                 }
                 @if (Vm.AgentMcpConnections.Count == 0) { <p class="hint">No MCP connections are configured in this project.</p> }
                 <a href="/settings/mcp">Manage MCP connections</a>
-            </fieldset>
-        }
-        <label for="agent-instructions">Shared project instructions</label>
-        <textarea id="agent-instructions" rows="6" maxlength="8000" @bind="Vm.AgentDraft.Instructions" disabled="@Vm.Locked" placeholder="How should the agent work with you?"></textarea>
-        <button class="dcbtn primary" disabled="@Vm.Locked" @onclick="Vm.SaveAgentAsync">Save agents</button>
-        <details open><summary>Current chat agent system prompt</summary><p class="hint">Rendered for the agent selected in the chat header, using the same template as execution, current project context and saved preferences. Unsaved edits are not included.</p><RunOutput Value="@Vm.AgentPrompt" Language="plaintext" Label="Current agent system prompt" /></details>
-        <details><summary>Jev dashboard routing</summary><p class="hint">The Run a workflow tile opens the picker directly, without AI. For a short first chat message, Jev can open the same picker at confidence ≥ 0.85. A two-second timeout, unavailable Jev, or an uncertain decision falls back to normal chat. Follow-ups use the chat model. Routing never starts a run.</p><RunOutput Value="@BuildChatAgent.WorkflowPickerQuestion" Language="plaintext" Label="Jev routing instructions" /></details>
-        @if (Vm.Conversation.SystemPrompt is { } lastPrompt)
-        {
-            <details><summary>Last recorded prompt used in this conversation</summary><RunOutput Value="@lastPrompt" Language="plaintext" Label="Recorded system prompt" /></details>
-        }
-    }
-    else if (Vm.AgentTab == "Context & tools")
-    {
-        <h3>Project context</h3>
-        <p>The agent starts with jobs, workflows, schedules and recent run summaries that you can access. It retrieves approved source records, artifacts and detailed output through tools when needed—not every record is sent with every message.</p>
-        <p>Chat messages, tool calls and results are visible in the conversation. Credentials and private model reasoning are not shown.</p>
-        <label for="agent-memory">Saved project memory</label>
-        <textarea id="agent-memory" rows="6" maxlength="8000" @bind="Vm.AgentMemory" disabled="@Vm.Locked"></textarea>
-        <button class="dcbtn" disabled="@Vm.Locked" @onclick="Vm.SaveAgentMemoryAsync">Save memory</button>
-        <details><summary>Available tools and input schemas</summary><p class="hint">Each call is checked against your permissions and this project. A listed tool does not grant permission to use it.</p><RunOutput Value="@Vm.Presentation.Json(Vm.AgentTools)" Label="Agent tools" /></details>
+            </fieldset>        }
+        <details><summary>Built-in tools and permissions</summary><p class="hint">Each call is checked against your permissions and this project. A listed tool does not grant permission to use it.</p><RunOutput Value="@Vm.Presentation.Json(Vm.AgentTools)" Label="Agent tools" /></details>
         @if (Vm.Conversation.ToolSchema is { } lastTools)
         {
             <details><summary>Last recorded tool schemas</summary><RunOutput Value="@Vm.Presentation.Json(lastTools)" Label="Recorded tool schemas" /></details>
         }
     }
-    else if (Vm.AgentTab == "Sub-agents")
+    else if (Vm.AgentTab == "Memory")
+    {
+        <h3>Project memory</h3>
+        <p class="hint">Save facts and preferences the agent should remember across conversations. Memory is saved separately from agent settings.</p>
+        <p>The agent starts with jobs, workflows, schedules and recent run summaries that you can access. It retrieves approved source records, artifacts and detailed output through tools when needed—not every record is sent with every message.</p>
+        <p>Chat messages, tool calls and results are visible in the session. Credentials and private model reasoning are not shown.</p>
+        <label for="agent-memory">Saved project memory</label>
+        <textarea id="agent-memory" rows="6" maxlength="8000" @bind="Vm.AgentMemory" disabled="@Vm.Locked"></textarea>
+        <button class="dcbtn" disabled="@Vm.Locked" @onclick="Vm.SaveAgentMemoryAsync">Save memory</button>
+    }
+    else if (Vm.AgentTab == "Workflow agents")
     {
         <h3>Workflow agents</h3>
         <p>Delegate work using automatic agent steps in workflows. Each has its own task and model, runs with bounded project tools, and records activity and output on the run.</p>
@@ -91,10 +122,21 @@
     }
     else if (Vm.AgentTab == "Dashboard")
     {
-        <h3>Quick actions</h3>
+        <h3>Dashboard tiles</h3>
+        <p class="hint">Edit what your tiles say and do here, then save your dashboard. Move and resize tiles directly on the dashboard. Removed tiles can be restored here.</p>
         <p>Run a workflow opens the picker immediately, without waiting for AI. It only lists workflows the selected agent can run. Custom tiles send a visible request to chat. The agent can ask follow-up questions before acting.</p>
-        <div class="agent-card"><strong>Run a workflow</strong><span class="hint">System tile · always available · cannot be removed</span></div>
-        @foreach (var action in Vm.AgentDraft.Actions.ToArray())
+        @if (Vm.DraftTiles.HiddenTiles.Count > 0)
+        {
+            <h4>Removed tiles</h4>
+            @foreach (var key in Vm.DraftTiles.HiddenTiles.ToArray())
+            {
+                var title = Vm.DraftTiles.TileAction(key)?.Title
+                    ?? (Vm.DraftTiles.Charts.FirstOrDefault(c => c.Id.ToString() == key) is { } chart ? PlaceContext.Application.Features.ChartSpec.TryParse(chart.ChartJson)?.Title : null)
+                    ?? (key == "workflow" ? "Run a workflow" : key == "chat" ? "Ask a question" : key == "chart" ? "Add chart" : "Chart");
+                <button type="button" class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="() => Vm.RestoreDashboardTile(key)">Restore @title</button>
+            }
+        }
+        @foreach (var action in Vm.DraftTiles.Actions.ToArray())
         {
             <div class="agent-card" @key="action.Id">
                 <label for="@($"tile-title-{action.Id}")">Tile title</label>
@@ -104,23 +146,30 @@
                 <button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="() => Vm.RemoveDashboardAction(action)">Remove @action.Title</button>
             </div>
         }
+        <h3>Add a quick action</h3>
         <label for="dashboard-action-title">Tile title</label><input id="dashboard-action-title" maxlength="60" @bind="Vm.NewActionTitle" disabled="@Vm.Locked" />
         <label for="dashboard-action-prompt">Request sent to chat</label><textarea id="dashboard-action-prompt" rows="3" maxlength="2000" @bind="Vm.NewActionPrompt" disabled="@Vm.Locked"></textarea>
-        <button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading || Vm.AgentDraft.Actions.Count >= 8)" @onclick="Vm.AddDashboardAction">Add tile</button>
+        <button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading || Vm.DraftTiles.Actions.Count >= 8)" @onclick="Vm.AddDashboardAction">Add tile</button>
         <h3>Pinned charts</h3>
         <p>Ask the assistant for a live chart, then choose Pin to dashboard. Charts query current project data when opened and every 10 seconds.</p>
-        @foreach (var chart in Vm.AgentDraft.Charts.ToArray())
+        @foreach (var chart in Vm.DraftTiles.Charts.ToArray())
         {
             <div class="agent-card" @key="chart.Id">
                 <strong>@(PlaceContext.Application.Features.ChartSpec.TryParse(chart.ChartJson)?.Title ?? "Chart")</strong><p>@chart.Source</p>
                 <button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="() => Vm.RemoveDashboardChart(chart)">Remove chart</button>
             </div>
         }
-        <button class="dcbtn primary" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="Vm.SaveAgentAsync">Save dashboard</button>
+    }
+    @if (!Vm.AgentLoading && Vm.AgentTab is "Agent" or "Instructions" or "Tools" or "Dashboard")
+    {
+        <div class="agent-save-bar">
+            <p class="hint">@(Vm.AgentTab == "Dashboard" ? "Saves your dashboard tiles." : "Saves your edits across Agent, Instructions, Tools and Dashboard.")</p>
+            <button class="dcbtn primary" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="Vm.SaveAgentAsync">Save changes</button>
+        </div>
     }
     @if (Vm.AgentError is { } error) { <p role="alert">@error</p> }
     @if (Vm.AgentNotice is { } notice) { <p role="status">@notice</p> }
-    <button type="button" class="dcbtn" disabled="@Vm.AgentLoading" @onclick="Vm.OpenAgentAsync">Refresh configuration</button>
+    <details><summary>Reload saved settings</summary><p class="hint">This discards unsaved changes in this editor.</p><button type="button" class="dcbtn" disabled="@(Vm.AgentLoading || Vm.Locked)" @onclick="Vm.OpenAgentAsync">Discard edits and reload</button></details>
 </div>
 @code {
     [Parameter] public bool ShowNavigation { get; set; } = true;

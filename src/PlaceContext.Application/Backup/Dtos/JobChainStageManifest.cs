@@ -4,4 +4,5 @@ namespace PlaceContext.Application.Dtos;
 public sealed record JobChainStageManifest(
     IReadOnlyList<Guid> JobIds,
     ChainGateManifest? Gate = null,
-    ChainActionManifest? Action = null);
+    ChainActionManifest? Action = null,
+    IReadOnlyList<JobChainStageManifest>? ElseBranch = null);

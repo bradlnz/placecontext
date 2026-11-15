@@ -154,6 +154,49 @@ public sealed partial class BuildChatTests
     }
 
     [Theory]
+    [InlineData("metadata", "list_data_sources")]
+    [InlineData("search", "search_data_sources")]
+    [InlineData("connect", "prepare_data_source")]
+    [InlineData("pipeline", "create_data_pipeline")]
+    public void Source_capabilities_are_independent_and_preserved_in_json(string capability, string tool)
+    {
+        var profile = new DashboardAgentProfile { SourceAccess = "none", SourceCapabilities = [capability] };
+        profile = JsonSerializer.Deserialize<DashboardAgentProfile>(JsonSerializer.Serialize(profile))!;
+        profile.Validate();
+        foreach (var name in new[] { "list_data_sources", "search_data_sources", "prepare_data_source", "create_data_pipeline" })
+            Assert.Equal(name == tool, profile.AllowsTool(name));
+        profile.WorkflowAccess = "read";
+        Assert.False(profile.AllowsTool("create_data_pipeline"));
+        profile.SourceCapabilities = [];
+        profile.SourceAccess = "manage";
+        Assert.False(profile.AllowsTool(tool));
+    }
+
+    [Fact]
+    public void Invalid_source_capabilities_are_rejected()
+    {
+        foreach (var capabilities in new List<string>[] { ["unknown"], ["search", "search"], [null!] })
+            Assert.Throws<ArgumentException>(() => new DashboardAgentProfile { SourceCapabilities = capabilities }.Validate());
+    }
+
+    [Fact]
+    public async Task Metadata_only_agent_cannot_search_connect_or_create_pipelines_through_direct_calls()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var profile = new DashboardAgentProfile { SourceCapabilities = ["metadata"] };
+        var service = new PlaceContextService(new ToolDispatcher(f.ProjectId), null!, null!, null!);
+        var tools = new BuildTools(f.ProjectId, service, f.Permissions, f.Store, profile: profile);
+        Assert.Contains(tools.Functions(), t => t.Name == "list_data_sources");
+        Assert.DoesNotContain(tools.Functions(), t => t.Name is "search_data_sources" or "prepare_data_source" or "create_data_pipeline");
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.search_data_sources("private records", 10, default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.prepare_data_source("postgres", default));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.create_data_pipeline(Guid.NewGuid(), "https://example.test", default));
+        f.Permissions.Denied = Permission.DataRead;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => tools.list_data_sources(default));
+    }
+
+    [Theory]
     [InlineData("manage", "read", "read")]
     [InlineData("read", "invalid", "read")]
     [InlineData("read", "read", "manage")]
@@ -230,6 +273,10 @@ public sealed partial class BuildChatTests
         vm.Agent!.Name = "Reviewer";
         vm.Agent.TableAccess = "none";
         vm.Agent.SourceAccess = "read";
+        vm.ToggleSourceCapability("search", false);
+        vm.ToggleSourceCapability("pipeline", true);
+        vm.ToggleSourceCapability("pipeline", true);
+        vm.ToggleSourceCapability("invalid", true);
         vm.Agent.ArtifactAccess = "none";
         var id = vm.Agent.Id;
         vm.ToggleWorkflow(Guid.NewGuid(), true);
@@ -244,6 +291,7 @@ public sealed partial class BuildChatTests
         Assert.Equal(workflow.Id, Assert.Single(vm.Agent!.WorkflowIds));
         Assert.Equal("none", vm.Agent.EffectiveTableAccess);
         Assert.Equal("read", vm.Agent.EffectiveSourceAccess);
+        Assert.Equal(new[] { "metadata", "pipeline" }, vm.Agent.EffectiveSourceCapabilities);
         Assert.Equal("none", vm.Agent.EffectiveArtifactAccess);
         if (privateAgent) Assert.Empty((await store.GetAsync(f.ProjectId)).Agents);
 

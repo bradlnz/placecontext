@@ -147,7 +147,7 @@
     white-space: nowrap;
 }
 .method-row small { color: var(--text-4); font-size: 8.5px; }
-.method-row.passed .method-status { color: var(--good); }
+.method-row.passed .method-status { color: var(--success); }
 .method-row.failed .method-status { color: var(--bad); }
 .method-row.skipped .method-status { color: var(--warn); }
 .method-status { color: var(--text-4); text-align: center; }
@@ -246,7 +246,7 @@
     border-radius: 99px;
     font-size: 9px;
 }
-.passed { color: var(--good) !important; }
+.passed { color: var(--success) !important; }
 .failed { color: var(--bad) !important; }
 .result-bar small { color: var(--text-4); font-family: var(--font-mono); }
 

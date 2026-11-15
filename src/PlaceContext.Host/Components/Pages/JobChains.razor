@@ -24,6 +24,7 @@
 else
 {
     <div class="chains-page">
+        <WorkflowTabs ProjectId="ProjectId" Active="workflows" />
         <header class="chains-head">
             <div>
                 <h2>Workflows</h2>
@@ -31,7 +32,6 @@ else
             </div>
             <div class="head-actions">
                 <a class="dcbtn" href="/observability?tab=workflows"><AppIcon Kind="pulse" /> Execution details</a>
-                <button class="dcbtn" @onclick="Vm.NavigateToJobs">View jobs</button>
                 <button class="dcbtn primary" @onclick="() => Vm.NewChain()"><AppIcon Kind="plus" /> New workflow</button>
             </div>
         </header>
@@ -134,6 +134,10 @@ else
                                         else if (stage.Action is RepeatFlowChainActionView repeatAction)
                                         {
                                             <span class="step-chip">Repeat flow · @repeatAction.MaxAttempts attempts</span>
+                                        }
+                                        else if (stage.Action is ContainerBuildChainActionView or ContainerRunChainActionView)
+                                        {
+                                            <span class="step-chip">@stage.Action.DisplayName</span>
                                         }
                                         else if (stage.Action is VirtualMachineChainActionView vmAction)
                                         {
@@ -275,14 +279,14 @@ else
         </div>
         }
 
-        @if (Vm.IsCanvasView || Vm.IsListView || Vm.IsRunsView)
+        @if (Vm.IsCanvasView || Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView)
         {
             <div class="dcmodal-overlay workflow-canvas-overlay">
                 <div class="dcmodal workflow-canvas-dialog" role="dialog" aria-modal="true" aria-label="Workflow canvas" @onclick:stopPropagation="true">
                     <div class="dcmodal-head">
                         <div class="flex-min">
                             <div class="title-14">@(string.IsNullOrWhiteSpace(Vm.EdName) ? "New workflow" : Vm.EdName) <span class="workflow-step-count">@Vm.EdStages.Count steps</span></div>
-                            <div class="sub-115">@(Vm.IsCanvasView ? "Drag stages to reorder. Select a step to configure it." : Vm.IsRunsView ? "Execution history, inputs, and job logs." : "Steps run in order. Jobs within a parallel stage run together.")</div>
+                            <div class="sub-115">@(Vm.IsCanvasView ? "Drag stages to reorder. Select a step to configure it." : Vm.IsSchedulesView ? "Choose when this workflow runs." : Vm.IsRunsView ? "Execution history, inputs, and job logs." : "Steps run in order. Jobs within a parallel stage run together.")</div>
                         </div>
                         <div class="workflow-canvas-actions">
                             @if (Vm.EditChainId.HasValue && Vm.Chains?.FirstOrDefault(chain => chain.Id == Vm.EditChainId) is { } canvasWorkflow)
@@ -311,14 +315,23 @@ else
                         @if (Vm.EditChainId.HasValue)
                         {
                             <button type="button" class="dctab @(Vm.IsRunsView ? "active" : null)" aria-pressed="@Vm.IsRunsView" @onclick="Vm.ShowWorkflowRunsAsync">Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
+                            <AuthorizeView Policy="@Permission.TriggersManage">
+                                <button type="button" class="dctab @(Vm.IsSchedulesView ? "active" : null)" aria-pressed="@Vm.IsSchedulesView" @onclick='() => Vm.SetEditorView("schedules")'>Schedules</button>
+                            </AuthorizeView>
                         }
                     </nav>
                     @if (Vm.EditorError is { } canvasError)
                     {
                         <p class="workflow-canvas-error" role="alert">@canvasError</p>
                     }
-                    <div class="dcmodal-body @(Vm.IsListView || Vm.IsRunsView ? "workflow-list-body" : null)">
-                        @if (Vm.IsRunsView)
+                    <div class="dcmodal-body @(Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView ? "workflow-list-body" : null)">
+                        @if (Vm.IsSchedulesView && Vm.EditChainId is { } scheduledWorkflowId)
+                        {
+                            <AuthorizeView Policy="@Permission.TriggersManage">
+                                <Schedules ProjectId="ProjectId" WorkflowId="scheduledWorkflowId" Embedded="true" />
+                            </AuthorizeView>
+                        }
+                        else if (Vm.IsRunsView)
                         {
                             <div class="dcslide-body runs-body">
                                 @if (Vm.RunsAwaitingInput > 0 && Vm.ChainRuns?.FirstOrDefault(run => run.Status == "AwaitingInput") is { } blocked)
@@ -552,8 +565,8 @@ else
                                      OnEditGate="@(pair => Vm.OpenGateEditor(pair.StageIndex))"
                                      OnEditEmailAction="@(stageIndex => Vm.OpenEmailActionEditor(stageIndex))"
                                      OnEditSmsAction="@(stageIndex => Vm.OpenSmsActionEditor(stageIndex))"
-                                     OnEditLoopAction="@(stageIndex => Vm.EditLoopAction(stageIndex))" OnEditRepeatAction="@(index => Vm.OpenRepeatAction(index))" OnEditScoringAction="@(index => Vm.OpenScoringAction(index, true))" OnEditQueryDataAction="@(index => Vm.OpenQueryDataAction(index, true))"
-                                     OnEditQemuAction="Vm.EditQemuAction"
+                                     OnEditLoopAction="@(stageIndex => Vm.EditLoopAction(stageIndex))" OnEditRepeatAction="@(index => Vm.OpenRepeatAction(index))" OnEditScoringAction="@(index => Vm.OpenScoringAction(index, true))" OnEditQueryDataAction="@(index => Vm.OpenQueryDataAction(index, true))" OnEditSubWorkflowAction="@(index => Vm.OpenSubWorkflowAction(index, true))" OnEditParallelWorkflowAction="@(index => Vm.OpenParallelWorkflowAction(index, true))"
+                                     OnEditContainerAction="Vm.EditContainerAction" OnEditQemuAction="Vm.EditQemuAction"
                                      OnAddPath="@(item => Vm.AddPath(item.StageIndex, item.JobId))"
                                      OnMoveStage="@(move => Vm.MoveStageTo(move.SourceIndex, move.TargetIndex))"
                                      OnMovePath="@(move => Vm.MovePath(move.SourceStage, move.SourceBranch, move.TargetStage))"
@@ -608,9 +621,21 @@ else
                                                         {
                                                             <button class="stage-job-chip" @onclick="@(() => Vm.OpenSmsActionEditor(stageIndex))"><AppIcon Kind="message" /><span><strong>Send SMS</strong><small>@smsAction.Recipient</small></span><span class="list-configure">Edit</span></button>
                                                         }
+                                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is ContainerBuildChainAction or ContainerRunChainAction)
+                                                        {
+                                                            <button class="stage-job-chip" @onclick="@(() => Vm.EditContainerAction(stageIndex))"><span><strong>@Vm.EdStageActions[stageIndex]!.DisplayName</strong></span><span class="list-configure">Edit</span></button>
+                                                        }
                                                         else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is VirtualMachineChainAction vmAction)
                                                         {
                                                             <button class="stage-job-chip" @onclick="@(() => Vm.EditQemuAction(stageIndex))"><AppIcon Kind="vm" /><span><strong>@vmAction.ImageProfile</strong><small>@vmAction.MemoryMb MiB · @vmAction.Cpus CPU(s) · @vmAction.TimeoutSeconds s timeout</small></span><span class="list-configure">Configure</span></button>
+                                                        }
+                                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is ParallelWorkflowsChainAction parallel)
+                                                        {
+                                                            <button class="stage-job-chip" @onclick="@(() => Vm.OpenParallelWorkflowAction(stageIndex, true))"><span><strong>Parallel if gates</strong><small>@parallel.Branches.Count conditional workflows · join results</small></span><span class="list-configure">Edit</span></button>
+                                                        }
+                                                        else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is SubWorkflowChainAction child)
+                                                        {
+                                                            <button class="stage-job-chip" @onclick="@(() => Vm.OpenSubWorkflowAction(stageIndex, true))"><span><strong>@child.WorkflowName</strong><small>Run sub-workflow</small></span><span class="list-configure">Edit</span></button>
                                                         }
                                                         else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is QueryDataChainAction queryAction)
                                                         {
@@ -693,6 +718,7 @@ else
                         <button type="button" aria-pressed="@(_executionTab == "logs" ? "true" : "false")" @onclick='() => _executionTab = "logs"'>Job logs <span>@Vm.ExecutionLogSteps.Count</span></button>
                     </nav>
                     <div class="dcmodal-body execution-body">
+                        <SubWorkflowRunLink ProjectId="Vm.ProjectId" Step="executionStep" />
                         @if (_executionTab == "activity")
                         {
                         @if (executionStep.ActionType is LoopChainAction.TaskType or LoopChainAction.AgentType || executionStep.AgentActivity is { Count: > 0 })
@@ -770,12 +796,14 @@ else
                             </button>
                             <button class="node-picker-tile agent-step" @onclick="@(() => Vm.ChooseStageNode(LoopChainAction.AgentType))">
                                 <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="agent" /></span>
-                                <strong>Agent in the loop</strong><small>Use AI review or wait for an external agent</small>
+                                <strong>Agent review</strong><small>Review previous results before continuing</small>
                             </button>
                         <button class="node-picker-tile agent-step" @onclick="@(() => Vm.ChooseStageNode(LoopChainAction.TaskType))">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="agent" /></span>
-                            <strong>Agent task</strong><small>Give a connected agent a task to complete</small>
+                            <strong>Agent task</strong><small>Ask an AI agent to complete a task</small>
                         </button>
+                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(ContainerBuildChainAction.ActionType))"><span class="node-picker-icon"><AppIcon Kind="code" /></span><strong>Build container</strong><small>Build an image from a Dockerfile and workflow files</small></button>
+                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(ContainerRunChainAction.ActionType))"><span class="node-picker-icon"><AppIcon Kind="code" /></span><strong>Run container</strong><small>Run a built or pulled image in a sandbox</small></button>
                         <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(VirtualMachineChainAction.ActionType))">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="vm" /></span>
                             <strong>Browser workspace</strong><small>Work in a secure, disposable browser desktop</small>
@@ -785,6 +813,8 @@ else
                         <section class="step-picker-section" aria-labelledby="step-picker-control">
                         <h4 id="step-picker-control">Data &amp; flow control</h4>
                         <div class="node-picker-grid">
+                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(ParallelWorkflowsChainAction.ActionType))"><span class="node-picker-icon"><AppIcon Kind="parallel" /></span><strong>Parallel if gates</strong><small>Run every matching sub-workflow, then join</small></button>
+                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(SubWorkflowChainAction.ActionType))"><span class="node-picker-icon"><AppIcon Kind="workflow" /></span><strong>Sub-workflow</strong><small>Run a reusable agent workflow</small></button>
                         <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(QueryDataChainAction.ActionType))">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="data" /></span>
                             <strong>Query data</strong><small>Read project tables for the next step</small>
@@ -840,6 +870,57 @@ else
                         }
                         </section>
                     </div>
+                </div>
+            </div>
+        }
+
+        @if (Vm.ShowContainerEditor)
+        {
+            <div class="dcmodal-overlay" @onclick="Vm.CloseContainerEditor">
+                <div class="dcmodal qemu-modal" role="dialog" aria-modal="true" aria-labelledby="container-title" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                        <div><span class="workflow-eyebrow">Workflow step</span><h3 id="container-title">@(Vm.ContainerBuild ? "Build container" : "Run container")</h3><p class="sub-note">@(Vm.ContainerBuild ? "Build an image for later workflow steps." : "Run an image in a disposable sandbox.")</p></div>
+                        <button class="dcslide-x" aria-label="Close container settings" @onclick="Vm.CloseContainerEditor"><AppIcon Kind="close" /></button>
+                    </div>
+                    <div class="dcmodal-body">
+                        <section class="qemu-section" aria-labelledby="container-source-title">
+                        <h4 id="container-source-title">@(Vm.ContainerBuild ? "Build instructions" : "Image & command")</h4>
+                        @if (Vm.ContainerBuild)
+                        {
+                            <div class="dcfield"><label for="container-dockerfile">Dockerfile</label><textarea id="container-dockerfile" class="dcinput" rows="10" maxlength="65536" @bind="Vm.ContainerDockerfile"></textarea></div>
+                        }
+                        else
+                        {
+                            <div class="dcfield"><label for="container-image">Container image (optional)</label><input id="container-image" class="dcinput" placeholder="python:3.13-alpine" @bind="Vm.ContainerImage" /><small>Leave blank to use the workflow’s built image.</small></div>
+                            <div class="dcfield"><label for="container-command">Command arguments (optional)</label><textarea id="container-command" class="dcinput" rows="3" @bind="Vm.ContainerCommand"></textarea><small>One argument per line. Leave blank to use the image's default command.</small></div>
+                            <label class="qemu-network"><span><strong>Keep web app running for later steps</strong><small>Stops when the workflow exits, pauses, or reaches the time limit.</small></span><input type="checkbox" role="switch" @bind="Vm.ContainerWeb" /></label>
+                            @if (Vm.ContainerWeb)
+                            {
+                                <div class="dcfield"><label for="container-port">App port</label><input id="container-port" class="dcinput" type="number" min="1024" max="65535" @bind="Vm.ContainerPort" /><small>Listen on 0.0.0.0. In the next Browser workspace step, enable network access and ask the agent to test @(Vm.ContainerOutputField).qemuUrl from the workflow context.</small></div>
+                            }
+                            <p class="sub-note">Runs as a non-root user with a read-only filesystem and writable /tmp.</p>
+                        }
+                        </section>
+                        <section class="qemu-section" aria-labelledby="container-resources-title">
+                            <h4 id="container-resources-title">Resources &amp; limits</h4>
+                            <div class="qemu-resource-grid">
+                                @if (!Vm.ContainerBuild)
+                                {
+                                    <div class="dcfield"><label for="container-memory">Memory <span>MiB</span></label><input id="container-memory" class="dcinput" type="number" min="64" max="8192" @bind="Vm.ContainerMemory" /></div>
+                                    <div class="dcfield"><label for="container-cpus">CPUs</label><input id="container-cpus" class="dcinput" type="number" min="1" max="8" @bind="Vm.ContainerCpus" /></div>
+                                }
+                                <div class="dcfield"><label for="container-timeout">@(Vm.ContainerWeb && !Vm.ContainerBuild ? "Maximum lifetime" : "Timeout") <span>seconds</span></label><input id="container-timeout" class="dcinput" type="number" min="10" max="3600" @bind="Vm.ContainerTimeout" /></div>
+                            </div>
+                            <label class="qemu-network"><span><strong>Allow outbound network access</strong><small>@(Vm.ContainerBuild ? "Allow build commands to download dependencies. Base images can always be pulled." : "Allow the running container to reach external services. Image pulling is separate.")</small></span><input type="checkbox" role="switch" @bind="Vm.ContainerNetwork" /></label>
+                        </section>
+                        <section class="qemu-section" aria-labelledby="container-result-title">
+                        <h4 id="container-result-title">Result</h4>
+                        <div class="dcfield"><label for="container-output">Save result to</label><input id="container-output" class="dcinput" maxlength="80" @bind="Vm.ContainerOutputField" /><small>@(Vm.ContainerBuild ? "The next Run container step reads the image reference from this result." : "Contains the exit code, output, errors, and web URLs when applicable.")</small></div>
+                        </section>
+                        <p class="sub-note">Apply step keeps this edit in the draft. Save workflow saves all current workflow changes.</p>
+                        @if (Vm.ContainerError is not null) { <p class="qemu-error" role="alert">@Vm.ContainerError</p> }
+                    </div>
+                    <div class="dcmodal-foot"><button class="dcbtn" @onclick="Vm.CloseContainerEditor">Cancel</button><button class="dcbtn primary" @onclick="Vm.SaveContainerAction">Apply step</button></div>
                 </div>
             </div>
         }
@@ -955,6 +1036,51 @@ else
                             <VirtualMachineReplay @key="(runReplay.Id, Vm.QemuReplayStep, Vm.QemuRunTab)" Run="runReplay" Step="Vm.QemuReplayStep" />
                         }
                     </div>
+                </div>
+            </div>
+        }
+
+        @if (Vm.ShowParallelWorkflowEditor)
+        {
+            <div class="dcmodal-overlay" @onclick="Vm.CloseParallelWorkflowEditor">
+                <div class="dcmodal" style="width:760px" role="dialog" aria-modal="true" aria-label="Parallel if gates" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head"><WorkflowDialogHandle /><div class="title-14">Parallel if gates</div><button class="dcslide-x" aria-label="Close" @onclick="Vm.CloseParallelWorkflowEditor"><AppIcon Kind="close" /></button></div>
+                    <div class="dcmodal-body">
+                        <p class="sub-note">Each branch checks the same incoming payload. Every matching workflow runs, up to four at once. The next step waits for all matching branches. Results stay separate in branch order.</p>
+                        @foreach (var branch in Vm.ParallelBranches)
+                        {
+                            <section class="dcform-section" @key="branch">
+                                <h4>Branch @(Vm.ParallelBranches.IndexOf(branch) + 1)</h4>
+                                <label>Run workflow<select class="dcinput" @bind="branch.WorkflowId"><option value="">Choose a workflow</option>
+                                    @foreach (var workflow in (Vm.Chains ?? []).Where(chain => chain.Id != Vm.EditChainId)) { <option value="@workflow.Id">@workflow.Name</option> }
+                                </select></label>
+                                <WorkflowConditionsEditor Rows="branch.Conditions" @bind-Match="branch.Match" />
+                                <button class="dcbtn btn-xs" disabled="@(Vm.ParallelBranches.Count <= 2)" @onclick="() => Vm.RemoveParallelBranch(branch)">Remove branch</button>
+                            </section>
+                        }
+                        <button class="dcbtn" disabled="@(Vm.ParallelBranches.Count >= 8)" @onclick="Vm.AddParallelBranch">Add parallel branch</button>
+                        <div class="dcfield"><label for="parallel-output">Join output field</label><input id="parallel-output" class="dcinput" @bind="Vm.ParallelOutputField" /></div>
+                        @if (Vm.ParallelWorkflowError is { } error) { <div role="alert">@error</div> }
+                    </div>
+                    <div class="dcmodal-foot"><button class="dcbtn" @onclick="Vm.CloseParallelWorkflowEditor">Cancel</button><button class="dcbtn primary" @onclick="Vm.SaveParallelWorkflowAction">Save step</button></div>
+                </div>
+            </div>
+        }
+
+        @if (Vm.ShowSubWorkflowEditor)
+        {
+            <div class="dcmodal-overlay" @onclick="Vm.CloseSubWorkflowEditor">
+                <div class="dcmodal gate-modal" role="dialog" aria-modal="true" aria-label="Run sub-workflow" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head"><WorkflowDialogHandle /><div class="title-14">Run sub-workflow</div><button class="dcslide-x" aria-label="Close" @onclick="Vm.CloseSubWorkflowEditor"><AppIcon Kind="close" /></button></div>
+                    <div class="dcmodal-body">
+                        <div class="dcfield"><label for="sub-workflow">Workflow</label><select id="sub-workflow" class="dcinput" @bind="Vm.SubWorkflowId"><option value="">Choose a workflow</option>
+                            @foreach (var workflow in (Vm.Chains ?? []).Where(chain => chain.Id != Vm.EditChainId))
+                            { <option value="@workflow.Id">@workflow.Name</option> }
+                        </select></div>
+                        <p class="sub-note">Passes the current payload to an automatic workflow and merges its result into the next step. Put waits and requests for human input in the parent workflow.</p>
+                        @if (Vm.SubWorkflowError is { } error) { <div role="alert">@error</div> }
+                    </div>
+                    <div class="dcmodal-foot"><button class="dcbtn" @onclick="Vm.CloseSubWorkflowEditor">Cancel</button><button class="dcbtn primary" @onclick="Vm.SaveSubWorkflowAction">Save step</button></div>
                 </div>
             </div>
         }
@@ -1293,54 +1419,57 @@ else
                     <div class="dcmodal-head"><WorkflowDialogHandle />
                         <div>
                             <span class="workflow-eyebrow">Workflow step</span>
-                            <h3 id="loop-editor-title">@(Vm.LoopKind == LoopChainAction.TaskType ? "Agent task" : Vm.LoopKind == LoopChainAction.HumanType ? "Human in the loop" : "Agent in the loop")</h3>
+                            <h3 id="loop-editor-title">@(Vm.LoopKind == LoopChainAction.TaskType ? "Agent task" : Vm.LoopKind == LoopChainAction.HumanType ? "Human in the loop" : "Agent review")</h3>
                         </div>
                         <button class="dcslide-x" aria-label="Close step settings" @onclick="Vm.CloseLoopEditor"><AppIcon Kind="close" /></button>
                     </div>
                     <div class="dcmodal-body loop-editor-body">
                         <div class="loop-settings">
-                        <p class="sub-note">@(Vm.LoopKind == LoopChainAction.TaskType ? "Assign work and acceptance criteria, then choose automatic execution or an external handoff." : Vm.LoopKind == LoopChainAction.HumanType ? "The model uses the preceding output to ask the user a validation question. The workflow waits for their response." : "The model uses the preceding output to ask a verification question. Choose which agent answers it.")</p>
+                        <p class="sub-note">@(Vm.LoopKind == LoopChainAction.TaskType ? "Assign work and acceptance criteria, then choose automatic execution or an external handoff." : Vm.LoopKind == LoopChainAction.HumanType ? "The model uses the preceding output to ask the user a validation question. The workflow waits for their response." : "Review the previous step’s results. Choose automatic approval, a response from an external agent, or an AI evidence check.")</p>
                         @if (Vm.LoopKind != LoopChainAction.HumanType)
                         {
                             <div class="dcfield">
-                                <label for="loop-agent">Responding agent</label>
+                                <label for="loop-agent">@(Vm.LoopKind == LoopChainAction.AgentType ? "Review method" : "How to run this task")</label>
                                 <select id="loop-agent" class="dcinput" @bind="Vm.LoopAgentProvider" aria-describedby="loop-agent-help">
-                                    <option value="@LoopChainAction.AutomaticAgent">Automatic — run the selected model</option>
-                                    <option value="@LoopChainAction.ExternalAgent">External agent — wait for a response</option>
-                                    @if (Vm.LoopKind == LoopChainAction.AgentType) { <option value="@LoopChainAction.JevAgent">AI verification — assess evidence</option> }
+                                    <option value="@LoopChainAction.AutomaticAgent">@(Vm.LoopKind == LoopChainAction.AgentType ? "Automatic — ask the parent agent for approval" : "Automatic — have an AI agent do the task")</option>
+                                    <option value="@LoopChainAction.ExternalAgent">External — pause for a connected agent</option>
+                                    @if (Vm.LoopKind == LoopChainAction.AgentType) { <option value="@LoopChainAction.JevAgent">AI evidence check — return a confidence score</option> }
                                 </select>
                                 <span id="loop-agent-help" class="sub-note">@(Vm.LoopAgentProvider == LoopChainAction.AutomaticAgent
-                                    ? Vm.LoopKind == LoopChainAction.AgentType ? "Asks the selected agent’s parent (or the master agent) for approval. Rejection stops the run." : "Runs the agent with parent approval before actions and completion, then saves its JSON result."
+                                    ? Vm.LoopKind == LoopChainAction.AgentType ? "The parent of the agent selected below reviews the previous results against your instructions. If no agent is selected, the master agent reviews them. A rejection stops the workflow." : "Runs the agent with parent approval before actions and completion, then saves its JSON result."
                                     : Vm.LoopAgentProvider == LoopChainAction.JevAgent
-                                    ? "Sends the preceding output and a yes/no question to the configured AI verification service. An administrator must set up the provider."
+                                    ? "Checks the previous results against a yes/no question and returns a confidence score. Add a condition to decide whether the workflow continues. This does not approve the work automatically."
                                     : "Waits for a connected agent to submit a written response. No agent is launched automatically.")</span>
                             </div>
                         }
                         @if (Vm.LoopAgentProvider == LoopChainAction.AutomaticAgent)
                         {
-                            <div class="dcfield"><label for="loop-project-agent">Agent</label>
+                            <div class="dcfield"><label for="loop-project-agent">@(Vm.LoopKind == LoopChainAction.AgentType ? "Agent whose work is being reviewed" : "Agent to do the task")</label>
                                 <select id="loop-project-agent" class="dcinput" @bind="Vm.LoopAgentId" @bind:after="Vm.SelectLoopAgent">
-                                    <option value="">Custom step settings</option>
+                                    <option value="">@(Vm.LoopKind == LoopChainAction.AgentType ? "No specific agent — master agent reviews" : "Use the model and instructions below")</option>
                                     @foreach (var agent in Vm.LoopAgents) { <option value="@agent.Id">@agent.DisplayName</option> }
                                     @if (Vm.LoopAgentId is not null && Vm.SelectedLoopAgent is null) { <option value="@Vm.LoopAgentId">Unavailable agent</option> }
                                 </select>
                                 @if (Vm.SelectedLoopAgent is { } selectedAgent)
                                 {
-                                    <span class="sub-note">Workflows: @selectedAgent.WorkflowAccess · Data: @selectedAgent.DataAccess · @selectedAgent.McpConnectionIds.Count MCPs. Saved instructions and access settings apply when this step runs.</span>
+                                    <span class="sub-note">@(Vm.LoopKind == LoopChainAction.AgentType
+                                        ? $"Reviewer: {(selectedAgent.EffectiveParentAgentId is null ? "Master agent" : Vm.LoopAgents.FirstOrDefault(a => a.Id == selectedAgent.EffectiveParentAgentId)?.DisplayName ?? "Unavailable parent agent")}. The reviewer uses its own saved instructions and model when configured."
+                                        : "Uses this agent’s saved instructions, model and permissions when the task runs.")</span>
                                 }
                                 <a class="dcbtn btn-2-8 btn-start" href="/project/@Vm.ProjectId/agents">Manage agents</a>
                             </div>
-                            <div class="dcfield"><label for="loop-connection">Model connection</label>
+                            <div class="dcfield"><label for="loop-connection">@(Vm.LoopKind == LoopChainAction.AgentType ? "Fallback model connection" : "Model connection")</label>
                                 <select id="loop-connection" class="dcinput" @bind="Vm.LoopConnectionId" @bind:after="Vm.SelectLoopConnection" disabled="@(Vm.SelectedLoopAgent is { ConnectionId: var id } && id != Guid.Empty)">
                                     <option value="">Choose a connection</option>
                                     @foreach (var connection in Vm.LoopConnections) { <option value="@connection.Id">@connection.Name</option> }
                                 </select>
                             </div>
-                            <div class="dcfield"><label for="loop-model">Model</label>
+                            <div class="dcfield"><label for="loop-model">@(Vm.LoopKind == LoopChainAction.AgentType ? "Fallback model" : "Model")</label>
                                 <select id="loop-model" class="dcinput" @bind="Vm.LoopModel" disabled="@(Vm.SelectedLoopAgent is { ConnectionId: var modelConnection } && modelConnection != Guid.Empty)">
                                     <option value="">Choose a model</option>
                                     @foreach (var model in Vm.LoopModels) { <option value="@model">@model</option> }
                                 </select>
+                                @if (Vm.LoopKind == LoopChainAction.AgentType) { <span class="sub-note">Used only if the reviewing agent has no saved model connection.</span> }
                                 @if (Vm.LoopConnections.Count == 0) { <span class="sub-note">Add an enabled model connection in Settings → Models.</span> }
                             </div>
                         }
@@ -1426,43 +1555,7 @@ else
 
                         @if (Vm.IsConditionGateEditor)
                         {
-                            <div class="condition-builder">
-                                <div class="dcfield">
-                                    <label>Payload path</label>
-                                    <input class="dcinput mono" @bind="Vm.GateEditorPath"
-                                           placeholder="data.status" />
-                                </div>
-                                <div class="dcfield">
-                                    <label>Condition</label>
-                                    <select class="dcinput" @bind="Vm.GateEditorOperator">
-                                        <option value="exists">exists</option>
-                                        <option value="notexists">does not exist</option>
-                                        <option value="eq">equals</option>
-                                        <option value="neq">does not equal</option>
-                                        <option value="contains">contains</option>
-                                        <option value="starts">starts with</option>
-                                        <option value="ends">ends with</option>
-                                        <option value="in">is one of</option>
-                                        <option value="empty">is empty</option>
-                                        <option value="notempty">is not empty</option>
-                                        <option value="gt">is greater than</option>
-                                        <option value="gte">is greater than or equal</option>
-                                        <option value="lt">is less than</option>
-                                        <option value="lte">is less than or equal</option>
-                                    </select>
-                                </div>
-                                @if (Vm.ConditionNeedsValue)
-                                {
-                                    <div class="dcfield">
-                                        <label>Value @(Vm.IsInGateOperator ? "(comma separated)" : "")</label>
-                                        <input class="dcinput" @bind="Vm.GateEditorValue" placeholder="approved" />
-                                    </div>
-                                }
-                            </div>
-                            <div class="condition-preview">
-                                <span>Expression</span>
-                                <code>@Vm.ConditionPreview()</code>
-                            </div>
+                            <WorkflowConditionsEditor Rows="Vm.GateEditorConditions" @bind-Match="Vm.GateEditorMatch" />
                             <div class="sub-note">
                                 When true, run this stage's jobs. When false, run the steps below instead.
                                 Both paths rejoin at the next workflow stage.

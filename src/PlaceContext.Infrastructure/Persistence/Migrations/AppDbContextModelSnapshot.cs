@@ -1269,6 +1269,9 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("LastFiredAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("WorkflowId").HasColumnType("uuid");
+                    b.Property<Guid?>("ScheduledBy").HasColumnType("uuid");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");

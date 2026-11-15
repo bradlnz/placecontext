@@ -20,10 +20,10 @@ public sealed class MenuAuthorizationTests
     {
         var catalog = MenuConfigService.WorkspaceCatalog;
         var items = catalog.Select((item, index) => new ResolvedMenuItem(item.Id, item.DefaultLabel,
-            item.Kind, item.HrefTemplate, item.Icon, item.DefaultSection, index)).ToArray();
+            item.Kind, item.HrefTemplate, item.Icon, item.DefaultSection, index, item.Parent)).ToArray();
         var grouped = MenuConfigService.GroupSections(items);
         var infrastructure = Assert.Single(grouped, item => item.Label == "Infrastructure");
-        Assert.Equal(new[] { "queues", "networking", "vault", "cluster" },
+        Assert.Equal(new[] { "jobs", "queues", "networking", "vault", "cluster" },
             grouped.Where(item => item.Parent == infrastructure.Id).Select(item => item.Id));
         foreach (var item in items)
         {
@@ -32,6 +32,29 @@ public sealed class MenuAuthorizationTests
         Assert.Null(Assert.Single(grouped, item => item.Id == "build.chat").Parent);
         Assert.Null(Assert.Single(grouped, item => item.Id == "data").Parent);
         Assert.Null(Assert.Single(grouped, item => item.Id == "artifacts").Parent);
+        Assert.Null(Assert.Single(grouped, item => item.Id == "chains").Parent);
+        Assert.DoesNotContain(grouped, item => item.Label == "Platform");
+        Assert.Equal(new[] { "schedules", "project.agents" },
+            grouped.Where(item => item.Parent == "chains").Select(item => item.Id));
+        Assert.Equal("jobs", Assert.Single(grouped, item => item.Id == "tests").Parent);
+        Assert.Equal("settings", Assert.Single(grouped, item => item.Id == "project.events").Parent);
+        Assert.DoesNotContain(grouped, item => item.Label == "Automation");
+    }
+
+    [Theory]
+    [InlineData("schedules", "chains", "Workflows")]
+    [InlineData("project.agents", "chains", "Workflows")]
+    [InlineData("project.events", "settings", "Settings")]
+    public void A_permitted_child_remains_reachable_without_access_to_the_parent_page(string id, string parent, string label)
+    {
+        var item = Assert.Single(MenuConfigService.WorkspaceCatalog, item => item.Id == id);
+        var child = new ResolvedMenuItem(item.Id, item.DefaultLabel, item.Kind, item.HrefTemplate,
+            item.Icon, item.DefaultSection, 0, item.Parent);
+        var grouped = MenuConfigService.GroupSections([child]);
+        var entry = Assert.Single(grouped, item => item.Id == parent);
+        Assert.Equal(label, entry.Label);
+        Assert.Equal(child.Href, entry.Href);
+        Assert.Contains(child, grouped);
     }
 
     [Fact]

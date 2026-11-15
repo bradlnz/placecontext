@@ -102,7 +102,8 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
             await ImportChainsAsync(m.JobChains, projectMap, jobMap, now, warnings, ct);
 
         var (triggersCreated, triggersUpdated, triggersSkipped) =
-            await ImportTriggersAsync(m.Triggers, jobMap, now, warnings, ct);
+            await ImportTriggersAsync(m.Triggers, jobMap, chainMap,
+                m.JobChains.ToDictionary(chain => chain.ChainId, chain => chain.ProjectId), projectMap, now, warnings, ct);
 
         var (eventsCreated, eventsUpdated, eventsSkipped) =
             await ImportEventDefinitionsAsync(m.EventDefinitions, now, warnings, ct);
@@ -271,7 +272,22 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
         var chainMap = new Dictionary<Guid, Guid>();
         int created = 0, updated = 0, skipped = 0;
 
-        foreach (var cm in manifests)
+        var pending = manifests.ToList();
+        var ordered = new List<JobChainManifest>();
+        while (pending.Count > 0)
+        {
+            var ready = pending.Where(item => ManifestStages(item.Stages ?? []).SelectMany(stage => ReferencedWorkflows(stage.Action)).All(id =>
+                ordered.Any(done => done.ChainId == id && done.ProjectId == item.ProjectId))).ToArray();
+            if (ready.Length == 0)
+            {
+                warnings.Add("Skipped workflows with cyclic, missing or cross-project sub-workflow references.");
+                skipped += pending.Count;
+                break;
+            }
+            ordered.AddRange(ready);
+            pending.RemoveAll(ready.Contains);
+        }
+        foreach (var cm in ordered)
         {
             if (!projectMap.TryGetValue(cm.ProjectId, out var newProjectId))
             {
@@ -286,28 +302,23 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
             {
                 if (cm.Stages is { Count: > 0 })
                 {
-                    foreach (var stageManifest in cm.Stages)
+                    ChainStage RestoreStage(JobChainStageManifest stage)
                     {
-                        var jobs = new List<Guid>(stageManifest.JobIds.Count);
-                        foreach (var oldJobId in stageManifest.JobIds)
-                        {
-                            if (jobMap.TryGetValue(oldJobId, out var job))
-                            {
-                                jobs.Add(job.Id);
-                                continue;
-                            }
-                            dangling = true;
-                            break;
-                        }
-                        if (dangling)
-                        {
-                            break;
-                        }
-                        stages.Add(new ChainStage(
-                                                jobs,
-                                                ToGate(stageManifest.Gate),
-                                                action: ToAction(stageManifest.Action)));
+                        var jobs = stage.JobIds.Select(id => jobMap.TryGetValue(id, out var job) ? job.Id : throw new KeyNotFoundException()).ToArray();
+                        var branches = stage.ElseBranch?.Select(RestoreStage).ToArray();
+                        var gate = stage.Gate?.Type == "condition" ? new ConditionGate(stage.Gate.Expression ?? "", branches) : ToGate(stage.Gate);
+                        var action = stage.Action is { Type: SubWorkflowChainAction.ActionType } child
+                            ? chainMap.TryGetValue(child.WorkflowId ?? Guid.Empty, out var childId)
+                                ? new SubWorkflowChainAction(childId, child.WorkflowName ?? "Sub-workflow")
+                                : throw new KeyNotFoundException()
+                            : stage.Action is { Type: ParallelWorkflowsChainAction.ActionType } parallel
+                                ? new ParallelWorkflowsChainAction((parallel.Branches ?? []).Select(branch => branch with
+                                    { WorkflowId = chainMap.TryGetValue(branch.WorkflowId, out var id) ? id : throw new KeyNotFoundException() }).ToArray(), parallel.OutputField ?? "parallel_results")
+                                : ToAction(stage.Action);
+                        return new ChainStage(jobs, gate, action: action);
                     }
+                    try { stages.AddRange(cm.Stages.Select(RestoreStage)); }
+                    catch (KeyNotFoundException) { dangling = true; }
                     return;
                 }
                 foreach (var oldJobId in cm.StepJobIds)
@@ -324,7 +335,7 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
             RestoreChainStages();
             if (dangling)
             {
-                warnings.Add($"Chain '{cm.Name}': a step references a job that couldn't be imported — skipped.");
+                warnings.Add($"Chain '{cm.Name}': a step references a job or sub-workflow that couldn't be imported — skipped.");
                 skipped++;
                 continue;
             }
@@ -350,6 +361,16 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
         return (chainMap, created, updated, skipped);
     }
 
+    private static IEnumerable<Guid> ReferencedWorkflows(ChainActionManifest? action) => action?.Type switch
+    {
+        SubWorkflowChainAction.ActionType => [action.WorkflowId ?? Guid.Empty],
+        ParallelWorkflowsChainAction.ActionType => (action.Branches ?? []).Select(branch => branch.WorkflowId),
+        _ => []
+    };
+
+    private static IEnumerable<JobChainStageManifest> ManifestStages(IEnumerable<JobChainStageManifest> stages)
+        => stages.SelectMany(stage => new[] { stage }.Concat(ManifestStages(stage.ElseBranch ?? [])));
+
     private static ChainGate? ToGate(ChainGateManifest? gate) => gate?.Type switch
     {
         "wait" => new WaitGate(TimeSpan.FromSeconds(gate.DurationSeconds ?? 0)),
@@ -359,6 +380,8 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
 
     private static ChainAction? ToAction(ChainActionManifest? action) => action?.Type switch
     {
+        ContainerBuildChainAction.ActionType => new ContainerBuildChainAction(action.Dockerfile ?? "", action.ContextField ?? "files", action.OutputField ?? "container_build", action.TimeoutSeconds, action.AllowNetwork),
+        ContainerRunChainAction.ActionType => new ContainerRunChainAction(action.Image ?? "", action.ImageField ?? "", action.OutputField ?? "container_run", action.ContainerCommand, action.Port, action.MemoryMb, action.Cpus, action.TimeoutSeconds, action.AllowNetwork),
         VirtualMachineChainAction.ActionType => new VirtualMachineChainAction(action.ImageProfile ?? "", action.Command ?? "",
             action.OutputField ?? "qemu_result", action.MemoryMb, action.Cpus, action.TimeoutSeconds, action.AllowNetwork, action.PauseForLogin),
         QueryDataChainAction.ActionType => new QueryDataChainAction(action.Sql ?? "", action.OutputField ?? "query_data"),
@@ -384,13 +407,43 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
     // ── Triggers: natural key = (JobId, Name) ───────────────────────────────────────────────────
 
     private async Task<(int Created, int Updated, int Skipped)> ImportTriggersAsync(
-        IReadOnlyList<TriggerManifest> manifests, Dictionary<Guid, Job> jobMap, DateTimeOffset now,
+        IReadOnlyList<TriggerManifest> manifests, Dictionary<Guid, Job> jobMap, Dictionary<Guid, Guid> chainMap,
+        Dictionary<Guid, Guid> workflowProjects, Dictionary<Guid, Guid> projectMap, DateTimeOffset now,
         List<string> warnings, CancellationToken ct)
     {
         int created = 0, updated = 0, skipped = 0;
 
         foreach (var tm in manifests)
         {
+            if (tm.WorkflowId is { } oldWorkflowId)
+            {
+                if (!chainMap.TryGetValue(oldWorkflowId, out var workflowId)
+                    || !workflowProjects.TryGetValue(oldWorkflowId, out var oldProjectId) || oldProjectId != tm.ProjectId
+                    || !projectMap.TryGetValue(oldProjectId, out var projectId) || tm.Kind != "Schedule"
+                    || string.IsNullOrWhiteSpace(tm.CronExpression) || !_cron.IsValid(tm.CronExpression)
+                    || CurrentUser.Current is not { } owner)
+                {
+                    warnings.Add($"Schedule '{tm.Name}': workflow, cron expression or authenticated schedule owner is missing — skipped.");
+                    skipped++; continue;
+                }
+                var existing = (await _triggers.ListForProjectAsync(projectId, ct))
+                    .FirstOrDefault(trigger => trigger.WorkflowId == workflowId && string.Equals(trigger.Name, tm.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+                var next = _cron.Next(tm.CronExpression, now, _tenant.TimeZoneId);
+                if (existing is null)
+                {
+                    var schedule = JobTrigger.CreateWorkflowSchedule(projectId, workflowId, owner.Id, tm.Name, tm.CronExpression, next, now);
+                    if (!tm.Enabled) schedule.Disable(now);
+                    await _triggers.AddAsync(schedule, ct); created++;
+                }
+                else
+                {
+                    existing.Rename(tm.Name, now); existing.Reschedule(tm.CronExpression, next, now);
+                    if (tm.Enabled && !existing.Enabled) existing.Enable(next, now);
+                    else if (!tm.Enabled) existing.Disable(now);
+                    await _triggers.UpdateAsync(existing, ct); updated++;
+                }
+                continue;
+            }
             if (tm.JobId is not { } manifestJobId || !jobMap.TryGetValue(manifestJobId, out var job))
             {
                 warnings.Add($"Trigger '{tm.Name}': references a job that couldn't be imported — skipped.");

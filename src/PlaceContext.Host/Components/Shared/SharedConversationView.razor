@@ -3,9 +3,9 @@
 @using PlaceContext.Host.Components.ViewModels
 <div id="dcshell" data-theme="light">
     <main class="build-chat shared-conversation">
-        <header class="shared-header"><div><strong>PlaceContext</strong><span>Shared conversation</span></div><h1>@Conversation.Title</h1><p>Snapshot @Conversation.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC · Expires @Conversation.ExpiresAt.ToString("yyyy-MM-dd HH:mm") UTC</p></header>
+        <header class="shared-header"><div><strong>PlaceContext</strong><span>Shared session</span></div><h1>@Conversation.Title</h1><p>Snapshot @Conversation.CreatedAt.ToString("yyyy-MM-dd HH:mm") UTC · Expires @Conversation.ExpiresAt.ToString("yyyy-MM-dd HH:mm") UTC</p></header>
         <div class="shared-body">
-            <section class="chat-messages" aria-label="Conversation">
+            <section class="chat-messages" aria-label="Session">
                 @foreach (var message in Conversation.Messages.OfType<JsonNode>())
                 {
                     var role = BuildChatViewModel.Role(message);
@@ -18,7 +18,7 @@
                             @if (role == "assistant") { <div class="message-text message-markdown">@((MarkupString)BuildChatViewModel.FormatReply(BuildChatViewModel.Text(message)))</div> }
                             else { <div class="message-text">@BuildChatViewModel.Text(message)</div> }
                             @foreach (var url in BuildChatViewModel.ImageUrls(message).Where(url => url.StartsWith("data:image/png;base64,", StringComparison.Ordinal) || url.StartsWith("data:image/jpeg;base64,", StringComparison.Ordinal) || url.StartsWith("data:image/webp;base64,", StringComparison.Ordinal)))
-                            { <img class="message-image" src="@url" alt="Image attached to the conversation" /> }
+                            { <img class="message-image" src="@url" alt="Image attached to the session" /> }
                         </article>
                     }
                 }

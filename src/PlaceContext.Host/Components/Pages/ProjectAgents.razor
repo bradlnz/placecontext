@@ -17,6 +17,7 @@
 else
 {
     <div class="chains-page">
+        <WorkflowTabs ProjectId="ProjectId" Active="agents" />
         <header class="chains-head">
             <div>
                 <h2>Agents</h2>
@@ -77,7 +78,7 @@ else
         <div class="dcslide-head">
             <div class="flex-min">
                 <div class="title-14">@(agent.Id == DashboardSettings.DefaultAgentId ? "Master agent" : Vm.Existing ? agent.Name : "New agent")</div>
-                <div class="sub-115">@(Vm.EditingPrivateAgent ? "Private dashboard agent. Changes apply to your dashboard conversations." : "Shared project agent. Changes apply to new runs and conversation turns.")</div>
+                <div class="sub-115">@(Vm.EditingPrivateAgent ? "Private dashboard agent. Changes apply to your dashboard conversations." : "Shared project agent. Changes apply to new runs and session turns.")</div>
             </div>
             <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseEditor(Section)"><AppIcon Kind="close" /></button>
         </div>
@@ -85,7 +86,7 @@ else
         <div class="dctabs editor-tabs" aria-label="Agent settings sections">
             @foreach (var tab in new[] { "Overview", "System prompt", "Workflows", "Data", "MCPs" })
             {
-                <button type="button" class="dctab @(Vm.AgentTab == tab ? "active" : "")" aria-pressed="@(Vm.AgentTab == tab)" disabled="@Vm.Busy" @onclick="() => Vm.AgentTab = tab">@tab</button>
+                <button type="button" class="dctab @(Vm.AgentTab == tab ? "active" : "")" aria-pressed="@(Vm.AgentTab == tab)" disabled="@Vm.Busy" @onclick="() => Vm.AgentTab = tab">@(tab == "System prompt" ? "Instructions" : tab == "MCPs" ? "Connected tools" : tab)</button>
             }
         </div>
 
@@ -115,7 +116,7 @@ else
             </div>
 
             <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "System prompt")">
-                <label>System prompt</label>
+                <label>Agent instructions</label>
                 <p>Define this agent's role, behavior and response style for chats and workflow steps. Changes apply on the next turn or run. Up to 8,000 characters.</p>
                 @if (Vm.CanEdit) { <div class="instructions-editor"><WorkflowInstructionsEditor @key="agent.Id" @ref="_instructions" Value="@agent.Instructions" Label="Agent system prompt" /></div> }
                 else { <RunOutput Value="@agent.Instructions" Language="markdown" Label="Agent system prompt" /> }
@@ -144,7 +145,17 @@ else
 
             <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Data")">
                 <label for="agent-tables">Tables and charts</label><select id="agent-tables" class="dcinput" @bind="agent.TableAccess" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="none">No access</option><option value="read">Inspect tables and query data for charts</option></select>
-                <label for="agent-sources">Data sources</label><select id="agent-sources" class="dcinput" @bind="agent.SourceAccess" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="none">No access</option><option value="read">Read source metadata and search content</option><option value="manage">Read, search and configure sources</option></select>
+                <fieldset disabled="@(!Vm.CanEdit || Vm.Busy)"><legend>Data source permissions</legend>
+                    <p>Choose each capability independently. These apply to connected sources in this project, within the user's permissions.</p>
+                    @foreach (var (capability, title, description) in SourceCapabilities)
+                    {
+                        <label class="check source-permission"><input type="checkbox" checked="@agent.EffectiveSourceCapabilities.Contains(capability)" @onchange="e => Vm.ToggleSourceCapability(capability, e.Value is true)" /><span><strong>@title</strong><small>@description</small></span></label>
+                    }
+                    @if (agent.EffectiveSourceCapabilities.Contains("pipeline") && agent.WorkflowAccess != "manage")
+                    {
+                        <p>Creating pipelines also needs “Create, edit, run and schedule” in the Workflows tab.</p>
+                    }
+                </fieldset>
                 <label for="agent-artifacts">Artifacts</label><select id="agent-artifacts" class="dcinput" @bind="agent.ArtifactAccess" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="none">No access</option><option value="read">List project artifacts</option></select>
                 <p>These permissions control the agent's data tools within your access. Workflow execution, run output and MCP tools have their own access settings.</p>
             </div>
@@ -175,6 +186,13 @@ else
 }
 
 @code {
+    private static readonly (string Capability, string Title, string Description)[] SourceCapabilities =
+    [
+        ("metadata", "View source details", "See source names, approved fields and sync status, without reading record contents."),
+        ("search", "Search source content", "Retrieve matching records and send their content to the model to answer questions."),
+        ("connect", "Prepare new connections", "Offer the secure connection form. You enter credentials and approve fields yourself."),
+        ("pipeline", "Create source pipelines", "Create an import workflow for a connected source. Does not run or schedule it.")
+    ];
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public string? Section { get; set; }
     private RenderFragment AgentChildren(Guid parentId, HashSet<Guid> ancestors) => @<text>

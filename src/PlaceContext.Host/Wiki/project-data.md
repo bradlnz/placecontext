@@ -246,7 +246,7 @@ can combine source records through the job data API.
 ### Inbound email and event feeds
 
 Saving a feed displays its token once in the current page session. Copy it into your
-forwarding integration; never into a Jev conversation. The endpoint is your workspace URL
+forwarding integration; never into a Jev session. The endpoint is your workspace URL
 followed by `/api/v1/projects/{projectId}/sources/{sourceId}/inbound`. Send
 `Authorization: Bearer <feed-token>` and `Content-Type: application/json`.
 
@@ -313,7 +313,7 @@ configured embedding provider to process approved fields and search queries. Con
 provider first. **Rebuild retrieval** regenerates vectors after changing the embedding model.
 Tags are administrator-supplied classification labels, not automatic PII detection. All
 project `data.read` users can read approved fields. An explicit data question to Jev sends
-retrieved evidence into its conversation/model; connection setup uses metadata only.
+retrieved evidence into its session/model; connection setup uses metadata only.
 
 Personal API token routes under `/api/v1/projects/{projectId}/sources`:
 
@@ -344,7 +344,7 @@ handles this serialization. Feed credentials must contain a high-entropy token o
 
 Configuration, imported records, chunks and vectors are encrypted with Data Protection keys
 and scoped to workspace/project/source. API/MCP access traces omit records, queries and
-credentials. Jev conversations retain deliberately retrieved evidence for the user who
+credentials. Jev sessions retain deliberately retrieved evidence for the user who
 asked. Source removal deletes live documents and vectors together; project deletion cascades.
 Backups retain data until their retention expires; protect and retain the encryption key ring.
 

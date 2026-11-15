@@ -16,6 +16,8 @@ public sealed class WorkflowFirstNavigationTests
         Assert.DoesNotContain("dashboards", ids);
         Assert.DoesNotContain("monitor", ids);
         Assert.True(Array.IndexOf(ids, "chains") < Array.IndexOf(ids, "jobs"));
+        Assert.Null(Assert.Single(layout.Workspace, item => item.Id == "chains").Section);
+        Assert.DoesNotContain(layout.Workspace, item => item.Section == "Automation");
     }
 
     [Fact]

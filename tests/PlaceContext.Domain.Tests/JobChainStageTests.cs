@@ -86,6 +86,34 @@ public class JobChainStageTests
         Assert.Equal(expected, new ConditionGate(expression).Evaluate(payload).Proceed);
     }
 
+    [Theory]
+    [InlineData("all:[\"gte:score:0.9\",\"eq:approved:true\"]", true)]
+    [InlineData("all:[\"gt:score:0.9\",\"eq:approved:true\"]", false)]
+    [InlineData("any:[\"gt:score:0.9\",\"eq:approved:true\"]", true)]
+    [InlineData("all:[\"exists:missing\",\"eq:approved:true\"]", false)]
+    [InlineData("all:[]", false)]
+    [InlineData("any:[null,\"true\"]", false)]
+    [InlineData("all:[\"\"]", false)]
+    [InlineData("all:[broken", false)]
+    [InlineData("any:{}", false)]
+    public void Compound_conditions_require_valid_nonempty_groups(string expression, bool expected)
+        => Assert.Equal(expected, new ConditionGate(expression).Evaluate("""{"score":0.9,"approved":true}""").Proceed);
+
+    [Fact]
+    public void Compound_conditions_work_in_non_English_cultures_and_bound_recursion()
+    {
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new("fr-FR");
+            Assert.True(new ConditionGate("gte:score:0.9").Evaluate("""{"score":0.9}""").Proceed);
+            var expression = "true";
+            for (var i = 0; i < 10; i++) expression = "all:" + System.Text.Json.JsonSerializer.Serialize(new[] { expression });
+            Assert.False(new ConditionGate(expression).Evaluate("{}").Proceed);
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = previous; }
+    }
+
     // ── JobChain stages ─────────────────────────────────────────────────────────────────────────────
 
     [Fact]

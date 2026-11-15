@@ -52,9 +52,13 @@ search.
 
 ## Main areas
 
+Open **Workflows** for the Workflows, Schedules, and Agents tabs.
+Jobs are under **Infrastructure → Jobs**, with tests available through **View tests**.
+Events are under **Settings → Project → Events**.
+
 | Area | Purpose |
 |---|---|
-| **Dashboard** | Project assistant conversations and workspace previews |
+| **Dashboard** | Project assistant sessions and workspace previews |
 | **Project overview** | Project activity, decisions, and dependency graph |
 | **Jobs** | Create, edit, run, and monitor jobs |
 | **Tests** | Check a job with saved example inputs before using it in a workflow |

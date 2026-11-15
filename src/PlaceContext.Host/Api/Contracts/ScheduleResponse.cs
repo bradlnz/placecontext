@@ -4,7 +4,7 @@ namespace PlaceContext.Host.Api;
 public sealed record ScheduleResponse(
     Guid Id,
     Guid ProjectId,
-    Guid JobId,
+    Guid? JobId,
     string Name,
     /// <summary>"Schedule" | "Event".</summary>
     string Kind,
@@ -13,4 +13,4 @@ public sealed record ScheduleResponse(
     string? EventName,
     DateTimeOffset? NextRunAt,
     DateTimeOffset? LastFiredAt,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt, Guid? WorkflowId = null);

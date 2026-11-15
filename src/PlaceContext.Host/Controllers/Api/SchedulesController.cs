@@ -60,25 +60,16 @@ public sealed class SchedulesController : ControllerBase
         {
             return NotFound();
         }
-        var job = await _svc.GetJobAsync(request.JobId, ct);
-        if (job is null)
-        {
-            return NotFound(new
-            {
-                error = $"Job {request.JobId} not found."
-            });
-        }
-        if (job.ProjectId != projectId)
-        {
-            return BadRequest(new
-            {
-                error = $"Job {request.JobId} belongs to a different project."
-            });
-        }
+        if ((request.JobId is null) == (request.WorkflowId is null)) return BadRequest(new { error = "Choose exactly one target." });
+        Guid? targetProject;
+        if (request.WorkflowId is { } workflowId) targetProject = (await _svc.GetJobChainAsync(workflowId, ct))?.ProjectId;
+        else targetProject = (await _svc.GetJobAsync(request.JobId!.Value, ct))?.ProjectId;
+        if (targetProject is null) return NotFound();
+        if (targetProject != projectId) return BadRequest(new { error = "Target belongs to a different project." });
         try
         {
             var trigger = await _svc.CreateTriggerAsync(
-                new CreateTriggerCommand(request.JobId, request.Name, request.Kind, request.CronExpression, request.EventName), ct);
+                new CreateTriggerCommand(request.JobId, request.Name, request.Kind, request.CronExpression, request.EventName, request.WorkflowId), ct);
             var response = ScheduleApiMapper.ToResponse(trigger);
             return CreatedAtRoute("GetScheduleById", new
             {

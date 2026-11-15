@@ -1,0 +1,42 @@
+@using System.Text.Json
+@using PlaceContext.Domain.ValueObjects
+
+@foreach (var branch in _branches)
+{
+    <div class="dcfield">
+        <span>@branch.Name · @branch.Status</span>
+        @if (branch.Route is not null) { <a class="dcbtn" href="@branch.Route">Open sub-workflow run</a> }
+    </div>
+}
+@if (_branches.Count == 0 && Step.ActionType is SubWorkflowChainAction.ActionType or ParallelWorkflowsChainAction.ActionType && Step.Status == "Running")
+{
+    <p class="sub-note">Specialist workflows are running. Results and run links appear here when they finish.</p>
+}
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter, EditorRequired] public ChainStepRunView Step { get; set; } = null!;
+    private readonly List<(string Name, string Status, string? Route)> _branches = [];
+    protected override void OnParametersSet()
+    {
+        _branches.Clear();
+        if (Step.ActionType is not (SubWorkflowChainAction.ActionType or ParallelWorkflowsChainAction.ActionType) || Step.Output is null) return;
+        try
+        {
+            using var doc = JsonDocument.Parse(Step.Output);
+            var entries = doc.RootElement.ValueKind == JsonValueKind.Array ? doc.RootElement.EnumerateArray().ToArray() : [doc.RootElement];
+            foreach (var entry in entries)
+            {
+                if (entry.ValueKind != JsonValueKind.Object) continue;
+                var name = entry.TryGetProperty("workflowName", out var label) && label.ValueKind == JsonValueKind.String ? label.GetString()! : Step.JobName;
+                var status = entry.TryGetProperty("status", out var state) && state.ValueKind == JsonValueKind.String ? state.GetString()! : Step.Status;
+                string? route = null;
+                if (entry.TryGetProperty("workflowId", out var workflow) && workflow.ValueKind == JsonValueKind.String && workflow.TryGetGuid(out var workflowId)
+                    && entry.TryGetProperty("runId", out var run) && run.ValueKind == JsonValueKind.String && run.TryGetGuid(out var runId))
+                    route = $"/project/{ProjectId}/workflows/{workflowId}/runs/{runId}";
+                _branches.Add((name, status, route));
+            }
+        }
+        catch (JsonException) { }
+    }
+}

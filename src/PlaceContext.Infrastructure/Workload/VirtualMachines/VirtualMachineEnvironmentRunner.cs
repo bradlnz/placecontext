@@ -98,7 +98,6 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
             errors = started.Errors;
             using var socket = started.Socket;
             using var stream = new NetworkStream(socket);
-            using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
             using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
             async Task<JsonElement> CallWithProgressCheck(string command, object arguments, CancellationToken token, TimeSpan timeout)
             {
@@ -106,11 +105,11 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
                 progress.CancelAfter(timeout);
                 try
                 {
-                    return await CallAsync(reader, writer, command, arguments, progress.Token);
+                    return await CallAsync(stream, writer, command, arguments, progress.Token);
                 }
                 catch (OperationCanceledException) when (!token.IsCancellationRequested)
                 {
-                    throw new TimeoutException("QEMU guest agent stopped reporting progress.");
+                    throw new TimeoutException($"QEMU guest agent did not reply to '{command}' within {timeout.TotalSeconds:0} seconds.");
                 }
             }
             // The socket accepts connections before the guest agent has booted; its reply is our readiness signal.
@@ -323,7 +322,7 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
     private static string DecodeOutput(JsonElement result, string name) => result.TryGetProperty(name, out var data)
         ? Encoding.UTF8.GetString(Convert.FromBase64String(data.GetString()!)) : "";
 
-    private static async Task<JsonElement> CallAsync(StreamReader reader, StreamWriter writer, string command, object arguments, CancellationToken ct)
+    internal static async Task<JsonElement> CallAsync(Stream reader, StreamWriter writer, string command, object arguments, CancellationToken ct)
     {
         await writer.WriteLineAsync(JsonSerializer.Serialize(new
         {
@@ -331,8 +330,9 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
             arguments
         }).AsMemory(), ct);
         // guest-exec captures at most 16 MiB per stream. Bound the protocol response as well.
-        var line = new StringBuilder();
-        var buffer = new char[4096];
+        // StreamReader can wait for more characters after a complete reply on a persistent socket.
+        using var line = new MemoryStream();
+        var buffer = new byte[4096];
         while (true)
         {
             var count = await reader.ReadAsync(buffer.AsMemory(), ct);
@@ -340,16 +340,16 @@ public sealed class VirtualMachineEnvironmentRunner(IOptions<VirtualMachineEnvir
             {
                 throw new IOException("The QEMU guest agent disconnected.");
             }
-            line.Append(buffer, 0, count);
+            line.Write(buffer, 0, count);
             if (line.Length > 48 * 1024 * 1024)
             {
                 throw new IOException("QEMU guest-agent response exceeded the size limit.");
             }
-            if (Array.IndexOf(buffer, '\n', 0, count) < 0)
+            if (Array.IndexOf(buffer, (byte)'\n', 0, count) < 0)
             {
                 continue;
             }
-            using var document = JsonDocument.Parse(line.ToString());
+            using var document = JsonDocument.Parse(line.GetBuffer().AsMemory(0, (int)line.Length));
             if (document.RootElement.TryGetProperty("error", out var error))
             {
                 throw new InvalidOperationException("QEMU guest agent: " + error.GetProperty("desc").GetString());

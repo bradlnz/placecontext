@@ -1,7 +1,7 @@
 .bell-btn { position:relative; width:32px; height:32px; min-width:32px; min-height:32px; flex:none; border-radius:3px; border:1px solid var(--border); background:var(--card); cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--text-2); transition:background .12s ease, border-color .12s ease, color .12s ease; }
 .bell-btn:hover { background:var(--hover); border-color:var(--border-2); color:var(--text); }
 .bell-icon { width:16px; height:16px; flex:none; }
-.bell-badge { position:absolute; top:-5px; right:-5px; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:var(--brand); color:#fff; font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.bell-badge { position:absolute; top:-5px; right:-5px; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:var(--brand); color:var(--brand-fg); font-size:9.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
 .overlay { position:fixed; inset:0; z-index:80; }
 .pane { position:fixed; top:58px; right:16px; width:380px; max-height:calc(100vh - 80px); overflow-y:auto; z-index:81; padding:8px; box-shadow:0 12px 32px rgba(0,0,0,.4); }
 .pane-head { display:flex; align-items:center; justify-content:space-between; padding:6px 8px; }
@@ -11,7 +11,7 @@
 .op { display:flex; gap:10px; padding:9px 8px; border-top:1px solid var(--border); align-items:start; }
 .op-icon { flex:none; width:18px; text-align:center; font-size:13px; }
 .i-muted { color:var(--text-3); }
-.i-good { color:var(--good); }
+.i-good { color:var(--success); }
 .i-bad { color:var(--bad); }
 .i-attention { color:var(--warn); }
 .bell-needs-input { border-color:var(--warn); color:var(--warn); }

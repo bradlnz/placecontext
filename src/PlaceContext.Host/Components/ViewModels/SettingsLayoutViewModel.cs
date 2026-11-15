@@ -15,6 +15,7 @@ public sealed class SettingsLayoutViewModel : PageViewModel
         new("Workspace", "Navigation", "menu"),
         new("Workspace", "Timezone", "locality"),
         new("Execution", "Cluster", "cluster"),
+        new("Project", "Events", "events"),
         new("Providers", "Data connections", "connections"),
         new("Providers", "Models", "models"),
         new("Providers", "MCP servers", "mcp"),
@@ -27,23 +28,29 @@ public sealed class SettingsLayoutViewModel : PageViewModel
     private readonly NavigationManager _navigation;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ICurrentUser _currentUser;
+    private readonly PortalUiState? _ui;
+    private bool _canManageEvents;
 
     public SettingsLayoutViewModel(
         NavigationManager navigation,
         IServiceScopeFactory scopeFactory,
-        ICurrentUser currentUser
+        ICurrentUser currentUser,
+        PortalUiState? ui = null
     )
     {
         _navigation = navigation;
         _scopeFactory = scopeFactory;
         _currentUser = currentUser;
+        _ui = ui;
     }
 
     public bool NavigationOpen
     {
         get; private set;
     }
-    public IEnumerable<SettingsItem> VisibleItems => Items.Where(item => IsDefaultAdmin || item.Path == ApiTokensPath);
+    public IEnumerable<SettingsItem> VisibleItems => Items.Where(item => item.Path == "events"
+        ? _canManageEvents && _ui?.CurrentProjectId is not null
+        : IsDefaultAdmin || item.Path == ApiTokensPath);
     public IEnumerable<IGrouping<string, SettingsItem>> VisibleGroups => VisibleItems.GroupBy(item => item.Group);
     public string ActiveLabel =>
         VisibleItems.FirstOrDefault(item => IsActive(item.Path))?.Label ?? "Choose a section";
@@ -59,21 +66,26 @@ public sealed class SettingsLayoutViewModel : PageViewModel
     public bool IsActive(string path)
     {
         var currentPath = new Uri(_navigation.Uri).AbsolutePath;
-        return currentPath.Equals($"/settings/{path}", StringComparison.OrdinalIgnoreCase)
+        return currentPath.Equals(Href(path), StringComparison.OrdinalIgnoreCase)
             || path == "cluster" && currentPath.Equals("/cluster", StringComparison.OrdinalIgnoreCase);
     }
 
-    public string Href(string path) => $"/settings/{path}";
+    public string Href(string path) => path == "events"
+        ? $"/project/{_ui?.CurrentProjectId}/events"
+        : $"/settings/{path}";
 
     public async Task InitializeAsync()
     {
         IsDefaultAdmin = false;
+        _canManageEvents = false;
         if (_currentUser.IsAuthenticated)
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             IsDefaultAdmin = await scope
                 .ServiceProvider.GetRequiredService<IPermissionService>()
                 .HasAsync(Permission.SettingsManage);
+            _canManageEvents = await scope.ServiceProvider.GetRequiredService<IPermissionService>()
+                .HasAsync(Permission.EventsManage);
         }
         NotifyStateChanged();
     }

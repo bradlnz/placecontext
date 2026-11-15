@@ -19,4 +19,4 @@ public sealed record ChainActionManifest(
     int Cpus = 1,
     int TimeoutSeconds = 300,
     bool AllowNetwork = false,
-    string? AgentProvider = null, bool PauseForLogin = false, string? UntilCondition = null, int MaxAttempts = 3, Guid? ConnectionId = null, string? Model = null, string? InputField = null, IReadOnlyList<ScoreCriterion>? Criteria = null, double PassScore = 90, double MinimumConfidence = 0.8, bool StopOnFailure = true, string? Sql = null, Guid? AgentId = null);
+    string? AgentProvider = null, bool PauseForLogin = false, string? UntilCondition = null, int MaxAttempts = 3, Guid? ConnectionId = null, string? Model = null, string? InputField = null, IReadOnlyList<ScoreCriterion>? Criteria = null, double PassScore = 90, double MinimumConfidence = 0.8, bool StopOnFailure = true, string? Sql = null, Guid? AgentId = null, string? Dockerfile = null, string? ContextField = null, string? Image = null, string? ImageField = null, IReadOnlyList<string>? ContainerCommand = null, int? Port = null, Guid? WorkflowId = null, string? WorkflowName = null, IReadOnlyList<ConditionalWorkflowBranch>? Branches = null);
