@@ -322,9 +322,9 @@ else
                         @if (Vm.EditChainId.HasValue)
                         {
                             <button type="button" class="dctab @(Vm.IsMarkupView ? "active" : null)" aria-pressed="@Vm.IsMarkupView" @onclick='() => SetWorkflowViewAsync("markup")'>Markup</button>
-                            <button type="button" class="dctab @(Vm.IsRunsView ? "active" : null)" aria-pressed="@Vm.IsRunsView" @onclick="Vm.ShowWorkflowRunsAsync">Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
+                            <button type="button" class="dctab @(Vm.IsRunsView ? "active" : null)" aria-pressed="@Vm.IsRunsView" @onclick='() => SetWorkflowViewAsync("runs")'>Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
                             <AuthorizeView Policy="@Permission.TriggersManage">
-                                <button type="button" class="dctab @(Vm.IsSchedulesView ? "active" : null)" aria-pressed="@Vm.IsSchedulesView" @onclick='() => Vm.SetEditorView("schedules")'>Schedules</button>
+                                <button type="button" class="dctab @(Vm.IsSchedulesView ? "active" : null)" aria-pressed="@Vm.IsSchedulesView" @onclick='() => SetWorkflowViewAsync("schedules")'>Schedules</button>
                             </AuthorizeView>
                         }
                     </nav>
@@ -336,8 +336,22 @@ else
                     {
                         <p class="workflow-canvas-error" role="alert">@canvasError</p>
                     }
-                    <div class="dcmodal-body @(Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView ? "workflow-list-body" : null)" inert="@Vm.ShowWorkflowAssistant">
-                        @if (Vm.IsSchedulesView && Vm.EditChainId is { } scheduledWorkflowId)
+                    <div class="dcmodal-body @(Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView || Vm.IsMarkupView ? "workflow-list-body" : null)" inert="@Vm.ShowWorkflowAssistant">
+                        @if (Vm.IsMarkupView)
+                        {
+                            <section class="workflow-markup" aria-label="Workflow YAML">
+                                <div class="markup-toolbar">
+                                    <p>Deploy validates and saves this definition. Run executes the saved workflow.</p>
+                                    <button type="button" class="dcbtn" disabled="@Vm.Saving" title="Replace the YAML draft with the current canvas definition" @onclick="Vm.ReloadMarkup">Reload from canvas</button>
+                                    <button type="button" class="dcbtn primary" disabled="@Vm.Saving" @onclick="DeployWorkflowMarkupAsync"><AppIcon Kind="save" /> @(Vm.Saving ? "Deploying…" : "Deploy")</button>
+                                </div>
+                                @if (Vm.MarkupNotice is not null) { <p class="markup-notice" role="status">@Vm.MarkupNotice</p> }
+                                <div class="markup-editor" inert="@Vm.Saving">
+                                    <WorkflowInstructionsEditor @key="Vm.MarkupRevision" @ref="_markupEditor" Value="@Vm.MarkupText" Language="yaml" FileName="workflow.yaml" Label="Workflow definition in YAML" />
+                                </div>
+                            </section>
+                        }
+                        else if (Vm.IsSchedulesView && Vm.EditChainId is { } scheduledWorkflowId)
                         {
                             <AuthorizeView Policy="@Permission.TriggersManage">
                                 <Schedules ProjectId="ProjectId" WorkflowId="scheduledWorkflowId" Embedded="true" />
@@ -1853,6 +1867,18 @@ else
     [Parameter] public Guid? WorkflowRouteId { get; set; }
     [Parameter] public string? WorkflowRouteView { get; set; }
     [Parameter] public Guid? WorkflowRouteRunId { get; set; }
+
+    private WorkflowInstructionsEditor? _markupEditor;
+    private async Task SetWorkflowViewAsync(string view)
+    {
+        if (Vm.IsMarkupView && _markupEditor is not null) Vm.MarkupText = await _markupEditor.ReadAsync();
+        if (view == "runs") await Vm.ShowWorkflowRunsAsync();
+        else Vm.SetEditorView(view);
+    }
+    private async Task DeployWorkflowMarkupAsync()
+    {
+        if (_markupEditor is not null) await Vm.DeployMarkupAsync(await _markupEditor.ReadAsync());
+    }
 
     private ElementReference _executionClose;
     private bool _focusExecution;

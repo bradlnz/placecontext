@@ -8,6 +8,7 @@ public sealed partial class JobChainsViewModel
     public bool IsMarkupView => EditorView == "markup";
     public string MarkupText { get; set; } = "";
     public int MarkupRevision { get; private set; }
+    public string? MarkupNotice { get; private set; }
     private string? _markupSource;
     private Guid? _markupWorkflowId;
     private string CurrentMarkup() => WorkflowMarkup.Write(new JobChainView(EditChainId ?? Guid.Empty, ProjectId,
@@ -25,6 +26,7 @@ public sealed partial class JobChainsViewModel
         MarkupText = _markupSource = CurrentMarkup();
         _markupWorkflowId = EditChainId;
         MarkupRevision++;
+        MarkupNotice = null;
         EditorError = null;
         NotifyStateChanged();
     }
@@ -32,7 +34,7 @@ public sealed partial class JobChainsViewModel
     public async Task DeployMarkupAsync(string yaml)
     {
         if (Saving || EditChainId is not { } id) return;
-        MarkupText = yaml; EditorError = null; Saving = true;
+        MarkupText = yaml; EditorError = MarkupNotice = null; Saving = true;
         try
         {
             if (_markupSource != CurrentMarkup())
@@ -45,7 +47,7 @@ public sealed partial class JobChainsViewModel
             Chains = (Chains ?? []).Select(chain => chain.Id == id ? saved : chain).ToArray();
             _markupSource = null;
             await OpenChainEditorAsync(saved, view: "markup");
-            Message = $"Workflow '{saved.Name}' deployed.";
+            Message = MarkupNotice = $"Workflow '{saved.Name}' deployed.";
         }
         catch (Exception ex) { EditorError = ex.Message; }
         finally { Saving = false; NotifyStateChanged(); }

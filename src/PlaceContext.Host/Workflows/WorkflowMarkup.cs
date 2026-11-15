@@ -10,7 +10,7 @@ using YamlDotNet.Serialization;
 
 namespace PlaceContext.Host.Workflows;
 
-public sealed record WorkflowMarkupDocument(int Version, Guid WorkflowId, string Name, string? Description, WorkflowStage[] Stages);
+public sealed record WorkflowMarkupDocument(int Version, Guid WorkflowId, string Name, WorkflowStage[] Stages, string? Description = null);
 
 public static class WorkflowMarkup
 {
@@ -32,11 +32,11 @@ public static class WorkflowMarkup
 
     public static string Write(JobChainView workflow)
     {
-        var document = new WorkflowMarkupDocument(1, workflow.Id, workflow.Name, workflow.Description,
-            workflow.Stages.Select(WorkflowStage.FromView).ToArray());
+        var document = new WorkflowMarkupDocument(1, workflow.Id, workflow.Name,
+            workflow.Stages.Select(WorkflowStage.FromView).ToArray(), workflow.Description);
         var graph = new DeserializerBuilder().WithAttemptingUnquotedStringTypeDeserialization().Build()
             .Deserialize<object>(JsonSerializer.Serialize(document, Json));
-        return new SerializerBuilder().DisableAliases().WithMaximumRecursion(32).Build().Serialize(graph);
+        return new SerializerBuilder().WithQuotingNecessaryStrings().DisableAliases().WithMaximumRecursion(32).Build().Serialize(graph);
     }
 
     public static WorkflowMarkupDocument Read(string yaml, Guid workflowId)

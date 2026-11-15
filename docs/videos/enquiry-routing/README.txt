@@ -6,7 +6,7 @@ The fictional Northstar website sends Jordan Lee's duplicate-payment question to
 
 The recording also shows vertical parallel IF branches and the workflow's Schedules tab. The schedule form is shown without enabling an ongoing schedule. Temporary browser verification schedules were removed. No external messages were sent.
 
-All application states and browser actions are real. The edit removes idle waits and includes separately recorded UI pickups and the saved browser replay. It is silent with chapter captions. The bounded-retry, step-caption, and canvas assistant features added afterwards are covered by automated and browser checks; they are not a claimed part of the recorded run.
+All application states and browser actions are real. The edit removes idle waits and includes separately recorded UI pickups and the saved browser replay. It is silent with chapter captions. The bounded-retry, step-caption, canvas assistant, and YAML editor features added afterwards are covered by automated and browser checks; they are not a claimed part of the recorded run.
 
 Run b703ff4c-5e30-4c88-a18e-62e9a792895b
 Project e8ca3d36-30de-44b4-bbe3-f65d210c0f95
