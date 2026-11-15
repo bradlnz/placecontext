@@ -6,6 +6,10 @@
         <span class="run-step-title" style="color:@Vm.Color(Step.Status)"><AppIcon Kind="@Vm.Icon(Step.Status)" /> @Step.JobName</span>
         <span class="run-step-status">@Vm.Summary(Step)</span>
     </button>
+    @if (Step.ActionType == PlaceContext.Domain.ValueObjects.ParallelWorkflowsChainAction.ActionType)
+    {
+        <SubWorkflowRunLink Step="Step" Compact="true" />
+    }
     @if (!string.IsNullOrWhiteSpace(Step.Provider))
     {
         <div class="run-step-detail">@Step.Provider@(string.IsNullOrWhiteSpace(Step.ExternalId) ? "" : $" · {Step.ExternalId}")</div>

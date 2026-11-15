@@ -1,0 +1,20 @@
+.workflow-branch-runs { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:6px; }
+.workflow-branch-runs li { min-width:0; padding:7px 0 7px 8px; border-left:2px solid var(--border); }
+.branch-run-heading { display:flex; align-items:center; gap:6px; font-size:12px; }
+.branch-run-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+.branch-run-status { flex:none; font-size:10px; font-weight:650; color:var(--text-2); }
+.workflow-branch-runs .dcbtn { margin-top:6px; }
+.compact { gap:3px; }
+.compact li { padding:5px 0 5px 6px; }
+.compact .branch-run-name { font-size:10px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.compact .branch-run-status { font-size:9px; }
+li[data-status="Running"] { border-color:var(--running); }
+li[data-status="Running"] .branch-run-status { color:var(--running); }
+li[data-status="Running"] .branch-run-status::before { content:""; display:inline-block; width:5px; height:5px; margin-right:4px; border-radius:50%; background:currentColor; animation:branch-pulse 1.2s ease-in-out infinite; }
+li[data-status="Succeeded"] { border-color:var(--good); }
+li[data-status="Succeeded"] .branch-run-status { color:var(--good); }
+li[data-status="Failed"] { border-color:var(--bad); }
+li[data-status="Failed"] .branch-run-status { color:var(--bad); }
+li[data-status="Skipped"] { border-left-style:dashed; }
+@keyframes branch-pulse { 50% { opacity:.35; } }
+@media (prefers-reduced-motion:reduce) { li[data-status="Running"] .branch-run-status::before { animation:none; } }

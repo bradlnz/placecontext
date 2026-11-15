@@ -1172,25 +1172,36 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 if (child is null || child.ProjectId != run.ProjectId) throw new InvalidOperationException("Each branch must reference a workflow in this project.");
             }
             using var limit = new SemaphoreSlim(MaxConcurrentBranches);
-            async Task<ParallelWorkflowResult> ExecuteAsync(ConditionalWorkflowBranch branch)
+            using var progressLock = new SemaphoreSlim(1);
+            var results = action.Branches.Select(branch => new ParallelWorkflowResult(branch.WorkflowId, branch.WorkflowName, branch.Condition,
+                new ConditionGate(branch.Condition).Evaluate(payload).Proceed ? "Queued" : "Skipped")).ToArray();
+            async Task PublishAsync(int branchIndex, ParallelWorkflowResult result) => await WithProgressLockAsync(progressLock, async () =>
             {
-                if (!new ConditionGate(branch.Condition).Evaluate(payload).Proceed)
-                    return new(branch.WorkflowId, branch.WorkflowName, branch.Condition, "Skipped");
+                results[branchIndex] = result;
+                run.SetStepProgressOutput(index, JsonSerializer.Serialize(results, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+                await SaveProgressAsync(run, ct);
+            });
+            await PublishAsync(0, results[0]);
+            async Task ExecuteAsync(int branchIndex)
+            {
+                var branch = results[branchIndex];
+                if (branch.Status == "Skipped") return;
                 await limit.WaitAsync(ct);
                 var parents = ParentRuns.Value;
                 try
                 {
+                    await PublishAsync(branchIndex, branch with { Status = "Running" });
                     ParentRuns.Value = [.. parents ?? [], run.Id];
                     var result = await dispatcher.Send(new RunJobChainCommand(branch.WorkflowId, payload), ct);
-                    return new(branch.WorkflowId, branch.WorkflowName, branch.Condition, result.Status, result.Id,
+                    await PublishAsync(branchIndex, new(branch.WorkflowId, branch.WorkflowName, branch.Condition, result.Status, result.Id,
                         ParseWorkflowOutput(result.FinalOutput),
-                        result.Steps.FirstOrDefault(step => step.Status == "Failed")?.Error);
+                        result.Steps.FirstOrDefault(step => step.Status == "Failed")?.Error));
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                catch (Exception ex) { return new(branch.WorkflowId, branch.WorkflowName, branch.Condition, "Failed", Error: ShortError(ex.Message)); }
+                catch (Exception ex) { await PublishAsync(branchIndex, branch with { Status = "Failed", Error = ShortError(ex.Message) }); }
                 finally { ParentRuns.Value = parents; limit.Release(); }
             }
-            var results = await Task.WhenAll(action.Branches.Select(ExecuteAsync));
+            await Task.WhenAll(Enumerable.Range(0, results.Length).Select(ExecuteAsync));
             var status = await IsCancelledAsync(run.Id, ct) || results.Any(result => result.Status == "Cancelled") ? ChainRunStatus.Cancelled
                 : results.Any(result => result.Status is not ("Succeeded" or "Partial" or "Skipped")) ? ChainRunStatus.Failed
                 : results.Any(result => result.Status == "Partial") ? ChainRunStatus.Partial : ChainRunStatus.Succeeded;

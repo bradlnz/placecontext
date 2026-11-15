@@ -1,20 +1,26 @@
 @using System.Text.Json
 @using PlaceContext.Domain.ValueObjects
 
-@foreach (var branch in _branches)
+@if (_branches.Count > 0)
 {
-    <div class="dcfield">
-        <span>@branch.Name · @branch.Status</span>
-        @if (branch.Route is not null) { <a class="dcbtn" href="@branch.Route">Open sub-workflow run</a> }
-    </div>
+    <ul class="workflow-branch-runs @(Compact ? "compact" : null)" aria-label="Sub-workflow runs" aria-live="polite">
+    @foreach (var branch in _branches)
+    {
+        <li data-status="@branch.Status">
+            <div class="branch-run-heading"><span class="branch-run-name" title="@branch.Name">@branch.Name</span><span class="branch-run-status">@branch.Status</span></div>
+            @if (!Compact && branch.Route is not null) { <a class="dcbtn" href="@branch.Route">Open sub-workflow run</a> }
+        </li>
+    }
+    </ul>
 }
 @if (_branches.Count == 0 && Step.ActionType is SubWorkflowChainAction.ActionType or ParallelWorkflowsChainAction.ActionType && Step.Status == "Running")
 {
-    <p class="sub-note">Specialist workflows are running. Results and run links appear here when they finish.</p>
+    <p class="sub-note" role="status">@(Step.ActionType == ParallelWorkflowsChainAction.ActionType ? "Matching workflows run in parallel. Waiting for branch progress…" : "The sub-workflow is running. Its result and run link appear when it finishes.")</p>
 }
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public bool Compact { get; set; }
     [Parameter, EditorRequired] public ChainStepRunView Step { get; set; } = null!;
     private readonly List<(string Name, string Status, string? Route)> _branches = [];
     protected override void OnParametersSet()
@@ -30,6 +36,8 @@
                 if (entry.ValueKind != JsonValueKind.Object) continue;
                 var name = entry.TryGetProperty("workflowName", out var label) && label.ValueKind == JsonValueKind.String ? label.GetString()! : Step.JobName;
                 var status = entry.TryGetProperty("status", out var state) && state.ValueKind == JsonValueKind.String ? state.GetString()! : Step.Status;
+                if (status is "Queued" or "Running" && Step.Status is not ("Pending" or "Running"))
+                    status = Step.Status == "Cancelled" ? "Cancelled" : "Interrupted";
                 string? route = null;
                 if (entry.TryGetProperty("workflowId", out var workflow) && workflow.ValueKind == JsonValueKind.String && workflow.TryGetGuid(out var workflowId)
                     && entry.TryGetProperty("runId", out var run) && run.ValueKind == JsonValueKind.String && run.TryGetGuid(out var runId))

@@ -233,6 +233,13 @@ public sealed class ChainRun
     public void SetCurrentPayload(string? payload) => FinalOutput = payload;
     public void ClearInputRequest() => InputRequestJson = null;
 
+    public void SetStepProgressOutput(int index, string output)
+    {
+        if (_steps[index].Status != ChainStepStatus.Running)
+            throw new InvalidOperationException("Only running steps can report progress.");
+        _steps[index] = _steps[index] with { Output = output };
+    }
+
     /// <summary>Marks a step running. <paramref name="runId"/> is the step's pre-allocated job-run
     /// id, recorded up front so a live pipeline can link to the run while it executes. Steps within
     /// the same stage may be marked running independently of one another (a fan-out group runs

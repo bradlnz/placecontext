@@ -330,6 +330,10 @@
                                         <button type="button" @key="step.Index" class="preview-run-step" aria-pressed="@(Vm.PreviewStep?.Index == step.Index ? "true" : "false")" @onclick="() => Vm.SelectPreviewStepAsync(step)">
                                             <span class="preview-step-number">@(step.Index + 1)</span><strong>@step.JobName</strong><span style="color:@Vm.Presentation.StatusColor(step.Status)">@step.Status</span>
                                         </button>
+                                        @if (step.ActionType == "parallelWorkflows")
+                                        {
+                                            <SubWorkflowRunLink Step="step" Compact="true" />
+                                        }
                                     }
                                 </nav>
                                 @if (Vm.PreviewStep is { } selected)

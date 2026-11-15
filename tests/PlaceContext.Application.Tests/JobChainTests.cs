@@ -17,26 +17,33 @@ namespace PlaceContext.Application.Tests;
 public class JobChainTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Parallel_conditions_start_matching_children_together_and_join_in_branch_order(bool fail)
+    [InlineData(false, 3)]
+    [InlineData(true, 3)]
+    [InlineData(false, 6)]
+    public async Task Parallel_conditions_start_matching_children_together_and_join_in_branch_order(bool fail, int branchCount)
     {
         var chains = new InMemoryJobChainRepository();
-        var children = Enumerable.Range(0, 3).Select(i => JobChain.Create(ProjectId, $"Child {i}", null, [ChainStage.Of(Guid.NewGuid())], T0)).ToArray();
+        var children = Enumerable.Range(0, branchCount).Select(i => JobChain.Create(ProjectId, $"Child {i}", null, [ChainStage.Of(Guid.NewGuid())], T0)).ToArray();
         foreach (var child in children) await chains.AddAsync(child);
         var action = new ParallelWorkflowsChainAction(children.Select((child, i) => new ConditionalWorkflowBranch(child.Id, child.Name,
-            i == 2 ? "eq:approved:false" : "all:[\"eq:approved:true\",\"gte:score:0.9\"]")).ToArray());
+            i == branchCount - 1 ? "eq:approved:false" : "all:[\"eq:approved:true\",\"gte:score:0.9\"]")).ToArray());
         var next = MakeJob("join"); var jobs = new InMemoryJobRepository(); await jobs.AddAsync(next);
         var parent = JobChain.Create(ProjectId, "Parent", null, [ChainStage.ForAction(action), ChainStage.Of(next.Id)], T0);
         await chains.AddAsync(parent);
         var jobDispatcher = new FakeRunDispatcher(); jobDispatcher.Results[next.Id] = Run(next.Id, "Succeeded");
         var dispatcher = new ParallelChildDispatcher(children[0].Id, fail);
-        var handler = new RunJobChainHandler(chains, jobs, new InMemoryChainRunRepository(), new RecordingUnitOfWork(), new FakeClock(T0),
+        var runs = new InMemoryChainRunRepository();
+        var handler = new RunJobChainHandler(chains, jobs, runs, new RecordingUnitOfWork(), new FakeClock(T0),
             new FakeJobRunner(jobDispatcher), permissions: new FakePermissionService(true), dispatcher: dispatcher);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var running = handler.HandleAsync(new(parent.Id, "{\"approved\":true,\"score\":0.95}"), timeout.Token);
         await dispatcher.BothStarted.Task.WaitAsync(timeout.Token);
-        Assert.False(running.IsCompleted); Assert.Equal(2, dispatcher.Started);
+        Assert.False(running.IsCompleted); Assert.Equal(Math.Min(branchCount - 1, 4), dispatcher.Started);
+        var progress = Assert.Single(await runs.ListForChainAsync(parent.Id, 1));
+        using var live = System.Text.Json.JsonDocument.Parse(progress.Steps[0].Output!);
+        Assert.Equal("Running", live.RootElement[0].GetProperty("status").GetString());
+        Assert.Equal("Skipped", live.RootElement[branchCount - 1].GetProperty("status").GetString());
+        if (branchCount == 6) Assert.Equal("Queued", live.RootElement[4].GetProperty("status").GetString());
         dispatcher.Release.TrySetResult();
         var result = await running;
         Assert.Equal(fail ? "Failed" : "Succeeded", result.Status);
@@ -44,7 +51,7 @@ public class JobChainTests
         using var output = System.Text.Json.JsonDocument.Parse(result.Steps[0].Output!);
         Assert.Equal(children[0].Id, output.RootElement[0].GetProperty("workflowId").GetGuid());
         Assert.Equal(children[1].Id, output.RootElement[1].GetProperty("workflowId").GetGuid());
-        Assert.Equal("Skipped", output.RootElement[2].GetProperty("status").GetString());
+        Assert.Equal("Skipped", output.RootElement[branchCount - 1].GetProperty("status").GetString());
         Assert.Contains("parallel_results", result.FinalOutput);
     }
 
