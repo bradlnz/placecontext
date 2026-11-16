@@ -2,11 +2,11 @@
   <img src="docs/images/placecontext-brand.svg" width="640" alt="PlaceContext — paired bracket logo and wordmark">
 </p>
 
-<h1 align="center">Critical work. Connected by context.</h1>
+<h1 align="center">PlaceContext</h1>
 
 <p align="center">
-  An open-source data and agentic workflow platform for critical workflows.<br>
-  Persistent data. Stateless functions. Agents and people in control.
+  Open-source workflow orchestration, project data and agent execution.<br>
+  .NET 10 · Blazor · PostgreSQL · Kubernetes · S3-compatible storage
 </p>
 
 <p align="center">
@@ -14,20 +14,112 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-404040?style=flat-square"></a>
 </p>
 
-PlaceContext connects website inputs, queues and schedules to workflows that coordinate code,
-agents, reviews and human decisions. Every workflow returns data or artifacts: records to query,
-reports to open, and evidence to inspect. Self-host the MIT-licensed platform on your infrastructure,
-with paid support available for deployment, workflow design and operations.
+PlaceContext is a self-hosted platform for workflows that combine stateless jobs, containers,
+AI agents, conditional gates and human input. Workflows accept JSON from API calls, queues or
+schedules and persist step status, logs, structured outputs and generated artifacts.
 
-[Get started](#get-started) · [Use cases](#what-you-can-build) ·
-[Inputs & schedules](#website-inputs-queues-and-schedules) · [Artifacts](#data-and-artifacts-you-can-use) ·
-[Observability](#observability) · [Documentation](#documentation) · [Support](#open-source-and-paid-support)
+The web host exposes a Blazor UI, a management API and an MCP endpoint. PostgreSQL stores platform
+state and project data; Kubernetes executes isolated job workloads; S3-compatible storage holds
+artifacts when configured. AI features use configured external model providers.
+
+[Get started](#get-started) · [Architecture](#architecture) ·
+[Workflow execution](#workflow-execution) · [Documentation](#documentation)
+
+## Get started
+
+Choose the packaged installation for local evaluation, or clone the repository for development.
+
+### Install with Bash
+
+Run the same installer documented in the [deployment guide](deploy/release/README.md#locallab):
+
+```bash
+curl -fsSL https://get.placecontext.io/install.sh | bash
+```
+
+The installer verifies a release bundle and runs PlaceContext in a local k3d/Kubernetes cluster
+inside Docker. It supports Linux and macOS; Docker access is required, and provisioning Docker
+on Linux may require passwordless `sudo`. This is a single-host evaluation installation.
+Object storage is optional and must be configured separately.
+
+### Clone and run from source
+
+Prerequisites: Git, Bash, `curl`, a running Docker daemon, and the .NET SDK selected by
+[`global.json`](global.json) (10.0.403, with patch roll-forward).
+
+```bash
+git clone https://github.com/bradlnz/placecontext.git
+cd placecontext
+dotnet restore PlaceContext.slnx
+./run.sh
+```
+
+`run.sh` creates or starts PostgreSQL 17 on `127.0.0.1:5433`, waits for a database query to succeed,
+then builds and runs the web host. Database files persist in the `placecontext-dev-postgres`
+Docker volume. Stopping the host leaves the database running. If the app is already healthy,
+the script exits without restarting it.
+
+Both paths serve the portal at **http://localhost:7700**. The MCP endpoint is `/mcp` and the
+management API is under `/api/v1`. Configure model providers in **Settings → Models**.
+Running the source host does not provision a Kubernetes worker cluster, an object store or a
+browser VM image; configure those capabilities before running workflows that require them.
+
+For production, use an existing Kubernetes cluster with external PostgreSQL, HTTPS object
+storage, TLS and a digest-pinned image. Follow the [production deployment guide](deploy/release/README.md#production-on-kubernetes).
+For source development and checks, see [Contributing](CONTRIBUTING.md#development-setup).
+
+## Architecture
+
+| Component | Responsibility |
+| --- | --- |
+| `src/PlaceContext.Domain` | Entities, value objects, business rules and repository contracts. |
+| `src/PlaceContext.Application` | Commands, queries, workflow orchestration and infrastructure interfaces. |
+| `src/PlaceContext.Infrastructure` | EF Core persistence, queues, model clients, workload runners and storage adapters. |
+| `src/PlaceContext.Host` | ASP.NET Core host, Blazor UI, management API, MCP and authentication endpoints. |
+| `src/PlaceContext.DesktopAgent` | Guest agent for browser/desktop automation. |
+| `tests` | Layer-specific tests, browser checks and deployment checks. |
+| `deploy` | Release installers, Kubernetes resources and VM setup. |
+
+Dependencies point inward: Application depends on Domain; Infrastructure implements their
+contracts; Host composes the runtime. Tenant and project authorization applies at application
+and persistence boundaries. See [repository conventions](CONTRIBUTING.md#design-boundaries).
+
+## Workflow execution
+
+- Compose sequential stages, parallel branches and sub-workflows in the visual editor or through APIs.
+- Run stateless jobs with explicit inputs, runtime configuration, timeouts and recorded outputs.
+- Use conditions and AI Review gates to select paths; human input steps pause for a response.
+- Trigger runs from API requests, queues or schedules. Queue receipts link intake to execution history.
+- Inspect per-step status, logs, retries, structured output and artifacts from the run views.
+
+Persistent state belongs in project data and artifact storage. Jobs must not depend on memory or
+files from a previous invocation. Delivery retries can repeat external writes; make those writes
+idempotent where required.
+
+## Jev reviews
+
+Connect **Jev** to evaluate workflow evidence against explicit questions and scoring criteria.
+Use the recorded results for deterministic review rules: a Review gate selects a path from a
+confidence threshold, and scoring gates apply configured weights and minimum scores. The rules
+are deterministic; the underlying model assessment is probabilistic and does not guarantee correctness.
+Jev also checks proposed browser actions against live desktop frames.
+
+Add `TYPESAFE_API_KEY` to the project's vault, or configure it on the server before starting the host:
+
+```bash
+export TYPESAFE_API_KEY='your-typesafe-api-key'
+./run.sh
+```
+
+The project vault value takes precedence over server configuration. Configure the service's request
+and token limits for your account as described in the [platform reference](docs/platform-reference.md#decisions-and-human-approval).
+Jev-dependent steps require this key; ordinary conditions and human input steps do not.
 
 ## Inside the platform
 
 ![Website Enquiry workflow with validation, triage, AI review, conditional actions and parallel handoffs](docs/images/enquiry-workflow.png)
 
-**Website input → queue → validate → triage → AI review → Determine → assign → verify → output.**
+**Website input → queue → validate → triage → AI review → Review gate → assign → verify → output.**
 
 The Website Enquiry example routes a question to the right person. Stateless code validates the
 input, agents query team data and review the recommendation, and conditional steps control the
@@ -37,8 +129,7 @@ The screenshot shows the local platform with fictional Northstar enquiry data, c
 16 November 2026. The definition has changed since the recorded successful run on 15 November;
 that earlier run does not validate later edits.
 
-[Workflow reference](src/PlaceContext.Host/Wiki/jobs-and-artifacts.md#workflows) ·
-[Run the landing page and animated walkthroughs locally](#website-and-documentation-preview)
+[Workflow reference](src/PlaceContext.Host/Wiki/jobs-and-artifacts.md#workflows)
 
 ## Data that drives the next step
 
@@ -67,13 +158,13 @@ Use sequential stages, parallel work and sub-workflows to compose a larger proce
 ## Agents, people, and decisions
 
 AI review can gather SQL evidence and run validation code before recording an assessment.
-**Determine** asks a Yes/No question about the evidence and chooses a path. Conditions evaluate
+**Review** asks a Yes/No question about the evidence and chooses a path. Conditions evaluate
 recorded results; human checkpoints pause for a person's answer or approval.
 
 Configure both paths and gate protected actions explicitly. Retries handle execution failures
 within configured limits; they do not replace validation or human approval.
 
-[Reviews, Determine and approvals](docs/platform-reference.md#decisions-and-human-approval) ·
+[Reviews and approvals](docs/platform-reference.md#decisions-and-human-approval) ·
 [Workflow execution reference](docs/platform-reference.md#decisions-and-human-approval)
 
 ## Website inputs, queues and schedules
@@ -116,50 +207,12 @@ provides durable evidence.
 | **Logistics exceptions** | Classify a shipment exception, review evidence and prepare the next action. | Shipment exception data and a handoff PDF. |
 | **Insurance intake** | Validate intake data, assess completeness and route for human review. | Intake records and an evidence PDF. |
 
-Industry examples are illustrative patterns. The Website Enquiry walkthrough uses the existing
-fictional demo project. Full use-case pages and step-through animations are available in the
-[local product website](#website-and-documentation-preview).
-
-## Get started
-
-Install on Linux or macOS:
-
-```bash
-curl -fsSL https://get.placecontext.io/install.sh | bash
-```
-
-Open **http://localhost:7700**, create a project, and start with one useful workflow:
-
-1. **Connect your context.** Add a data source or import records into a project table.
-2. **Build the process.** Describe the outcome to the assistant or compose steps in the workflow editor.
-3. **Run and review.** Inspect returned data and artifacts, answer human checkpoints, and enable a queue or schedule when ready.
-
-The installer sets up a local container-based environment. It requires `curl` and Docker access;
-installing prerequisites may require administrator permissions. For AI features, add a model
-connection under **Settings → Models**.
-
-[Installation guide](deploy/release/README.md) ·
-[Connect an AI client](src/PlaceContext.Host/Wiki/mcp-and-jobs.md) ·
-[Configure models](docs/build-chat.md) · [Set up browser automation](deploy/qemu/README.md)
-
-## Website and documentation preview
-
-The landing page, animated use cases and styled documentation live in the separate
-`~/code/placecontext-website` repository. To run its local preview:
-
-```bash
-cd ~/code/placecontext-website
-npm ci
-npm start
-```
-
-Open **http://localhost:4182**. Website changes belong in that repository; the platform remains here.
+Industry examples are illustrative patterns. The Website Enquiry walkthrough uses fictional demo data.
 
 ## Documentation
 
 | I want to… | Start here |
 | --- | --- |
-| Preview the landing page, use cases and styled docs | [Website development](#website-and-documentation-preview) — local preview at `http://localhost:4182` |
 | Build and run workflows | [Jobs, workflows, and artifacts](src/PlaceContext.Host/Wiki/jobs-and-artifacts.md) |
 | Coordinate multiple agents | [Three-agent walkthrough](docs/multi-agent-workflows.md) |
 | Connect sources, clean output and build analytics | [Data platform](src/PlaceContext.Host/Wiki/project-data.md) |

@@ -1747,7 +1747,7 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
-    public async Task Chat_renders_agent_selection_corgi_and_escapes_assistant_HTML()
+    public async Task Chat_renders_agent_selection_brand_mark_and_escapes_assistant_HTML()
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
@@ -1787,7 +1787,7 @@ public sealed partial class BuildChatTests
         });
         Assert.Contains("Report assistant", html);
         Assert.Contains("class=\"assistant-avatar\"", html);
-        Assert.Contains("class=\"corgi-mark\"", html);
+        Assert.Contains("class=\"placecontext-mark\"", html);
         Assert.DoesNotContain("chat-provider", html);
         Assert.DoesNotContain("chat-model", html);
         Assert.DoesNotContain("Attach images", html);
