@@ -247,7 +247,7 @@
                 @if (Vm.WorkflowPickerOpen)
                 {
                     <div class="preview-content workflow-picker">
-                        <p class="preview-description">Choose a workflow to see it immediately. Then continue in chat for inputs and follow-up. Nothing runs just by selecting it.</p>
+                        <p class="preview-description">Choose a workflow, then click Run workflow to complete its input form. Selecting a workflow does not start it.</p>
                         @if (Vm.WorkflowPickerLoading) { <Skeleton Kind="list" Rows="3" /> }
                         else if (Vm.WorkflowPickerError is { } pickerError)
                         { <p role="alert">@pickerError</p><button class="dcbtn" @onclick="Vm.StartWorkflowChatAsync">Try again</button> }
@@ -375,12 +375,13 @@
                             <div class="preview-run-summary">
                                 <button type="button" class="dcbtn" disabled="@Vm.NavigationLocked" @onclick="Vm.StartWorkflowChatAsync">Choose another workflow</button>
                                 @if (!Vm.PreparingWorkflowRun)
-                                { <button type="button" class="dcbtn primary" disabled="@(!Vm.CanStartChat || !string.IsNullOrWhiteSpace(Vm.Draft))" @onclick="Vm.PrepareWorkflowRunAsync"><AppIcon Kind="play" /> Run workflow</button> }
+                                { <button type="button" class="dcbtn primary" disabled="@Vm.NavigationLocked" @onclick="Vm.PrepareWorkflowRunAsync"><AppIcon Kind="play" /> Run workflow</button> }
                             </div>
                             @if (Vm.PreparingWorkflowRun)
-                            { <p class="preview-run-notice" role="status">Preparing the workflow run. Answer any questions in chat; live progress will appear here when it starts.</p> }
+                            { <p class="preview-run-notice" role="status">Loading workflow input fields…</p> }
                             else
-                            { <p class="preview-description">Chat will check required inputs before starting.</p> }
+                            { <p class="preview-description">Review and complete the input form before starting.</p> }
+                            @if (Vm.WorkflowRunError is { } inputError) { <p role="alert">@inputError</p> }
                             @if (!string.IsNullOrWhiteSpace(workflow.Description)) { <p class="preview-description">@workflow.Description</p> }
                             @if (!Vm.WorkflowSelectedForRun && !Vm.PreparingWorkflowRun)
                             { <ChainCanvas @key="workflow.Id" Stages="workflow.Stages" ReadOnly="true" OnOpenJob="Vm.OpenJobPreviewAsync" /> }
@@ -477,6 +478,10 @@
 @if (Vm.ConfirmDelete)
 {
     <div class="dcmodal-overlay"><section class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="@(Vm.ViewId + "-delete-chat-title")"><div class="dcmodal-head"><h3 id="@(Vm.ViewId + "-delete-chat-title")">Delete session?</h3></div><div class="dcmodal-body">This removes the session and its images. Project memory and completed actions are kept.</div><div class="dcmodal-foot"><button class="dcbtn" @onclick="() => Vm.ConfirmDelete = false">Cancel</button><button class="dcbtn" @onclick="Vm.DeleteAsync">Delete</button></div></section></div>
+}
+@if (Vm.WorkflowRunPrompt is { } runPrompt)
+{
+    <WorkflowRunDialog Vm="runPrompt" />
 }
 @code {
     [Parameter] public Guid ProjectId { get; set; }

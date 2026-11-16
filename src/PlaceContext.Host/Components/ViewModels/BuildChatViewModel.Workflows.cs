@@ -13,6 +13,8 @@ public sealed partial class BuildChatViewModel
     public string WorkflowPickerAgentName { get; private set; } = "";
     public bool WorkflowSelectedForRun { get; private set; }
     public bool PreparingWorkflowRun { get; private set; }
+    public JobChainsViewModel? WorkflowRunPrompt { get; private set; }
+    public string? WorkflowRunError { get; private set; }
     public IReadOnlyList<JobChainView> AvailableWorkflows { get; private set; } = [];
     private int _workflowPickerVersion;
     private int _handledWorkflowPicker;
@@ -96,15 +98,40 @@ public sealed partial class BuildChatViewModel
 
     public async Task PrepareWorkflowRunAsync()
     {
-        if (!CanStartChat || !string.IsNullOrWhiteSpace(Draft) || PreviewLoading
+        if (NavigationLocked || PreparingWorkflowRun || PreviewLoading
             || PreviewError is not null || PreviewWorkflow is not { } workflow
             || workflow.ProjectId != Conversation.ProjectId)
         {
             return;
         }
+        var version = _previewVersion;
         PreparingWorkflowRun = true;
-        await StartDashboardActionAsync($"Help me run the existing workflow {System.Text.Json.JsonSerializer.Serialize(workflow.Name)} (ID: {workflow.Id}). Inspect its required inputs and ask me for any missing values before running it. Do not create or modify workflows.");
-        if (Error is not null) PreparingWorkflowRun = false;
+        WorkflowRunError = null;
+        NotifyStateChanged();
+        try
+        {
+            if (!await permissions.HasAsync(Permission.ProjectsView) || !await permissions.HasAsync(Permission.ChainsManage)
+                || !await permissions.HasAsync(Permission.JobsRun))
+                throw new UnauthorizedAccessException("Permission to run workflows is required.");
+            var selectedAgent = AvailableAgents.FirstOrDefault(a => a.Id == (Conversation.AgentId ?? DashboardSettings.DefaultAgentId));
+            if (selectedAgent?.WorkflowAccess is not ("run" or "manage"))
+                throw new UnauthorizedAccessException("The selected agent does not have workflow run access.");
+            var jobs = await service.ListJobsAsync(workflow.ProjectId);
+            if (version != _previewVersion) return;
+            var prompt = new JobChainsViewModel(service, operations!, permissions, navigation!, submissions);
+            prompt.Initialize(workflow.ProjectId);
+            await prompt.RunChainAsync(workflow, jobs);
+            WorkflowRunPrompt = prompt;
+        }
+        catch (Exception ex)
+        {
+            if (version == _previewVersion) WorkflowRunError = ex.Message;
+        }
+        finally
+        {
+            if (version == _previewVersion) PreparingWorkflowRun = false;
+            NotifyStateChanged();
+        }
     }
 
     private void CloseWorkflowPicker()

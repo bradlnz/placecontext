@@ -8,6 +8,40 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class WorkflowRunInputTests
 {
+    internal static JobView InputJob(Guid projectId, bool declared) => new(
+        Guid.NewGuid(), projectId, "Question", null, "code", null, "node", "", "index.js", [], 1,
+        ["""{"question":"Example question","count":3,"enabled":false}"""], new Dictionary<string, string>(),
+        null, null, null, null, null, [], null, 1, [0], [], false, false,
+        declared ? [new("question", "Question"), new("count", Type: "integer"), new("enabled", Type: "checkbox")] : [],
+        [], PlaceContext.Domain.ValueObjects.JobReturnType.Json, null, 0, 0, [], DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Editor_run_opens_declared_or_json_inferred_fields_before_submission(bool declared)
+    {
+        var queue = new Queue();
+        var vm = new JobChainsViewModel(null!, null!, null!, new Navigation(), submissions: queue);
+        var job = InputJob(Guid.NewGuid(), declared);
+        var chain = Workflow() with { ProjectId = job.ProjectId, Stages = [new([new(job.Id, job.Name)])] };
+        vm.Initialize(job.ProjectId);
+        await vm.RunChainAsync(chain, [job]);
+        Assert.Same(chain, vm.RunPromptChain);
+        Assert.Single(vm.RunPromptSteps);
+        Assert.Equal(0, queue.Count);
+        vm.SetArg("step0:question", "");
+        await vm.SubmitRunPromptAsync();
+        Assert.NotNull(vm.RunPromptError);
+        Assert.Equal(0, queue.Count);
+        vm.SetArg("step0:question", "A real question");
+        await vm.SubmitRunPromptAsync();
+        Assert.Equal(1, queue.Count);
+        using var payload = JsonDocument.Parse(queue.Payload!);
+        Assert.Equal("A real question", payload.RootElement.GetProperty("question").GetString());
+        Assert.Equal(3, payload.RootElement.GetProperty("count").GetInt32());
+        Assert.False(payload.RootElement.GetProperty("enabled").GetBoolean());
+    }
+
     [Fact]
     public async Task Missing_inputs_open_a_form_and_submit_generated_identifiers_as_typed_initial_data()
     {

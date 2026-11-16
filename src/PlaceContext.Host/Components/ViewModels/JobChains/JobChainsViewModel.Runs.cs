@@ -275,9 +275,12 @@ public sealed partial class JobChainsViewModel
     }
 
     // ── Run workflow ─────────────────────────────────────────────────────────────────────────────
-    public Task RunChainAsync(JobChainView chain)
+    public bool SubmittingRun { get; private set; }
+
+    public Task RunChainAsync(JobChainView chain, IReadOnlyList<JobView>? jobs = null)
     {
-        var plan = ChainParameterPromptPlan.Build(chain, Jobs ?? Array.Empty<JobView>());
+        Message = null;
+        var plan = ChainParameterPromptPlan.Build(chain, jobs ?? Jobs ?? Array.Empty<JobView>());
         RunPromptChain = chain;
         RunPromptSteps.Clear();
         RunPromptSteps.AddRange(plan.Steps);
@@ -297,7 +300,7 @@ public sealed partial class JobChainsViewModel
 
     public async Task SubmitRunPromptAsync()
     {
-        if (RunPromptChain is null)
+        if (RunPromptChain is null || SubmittingRun)
         {
             return;
         }
@@ -322,11 +325,15 @@ public sealed partial class JobChainsViewModel
             NotifyStateChanged();
             return;
         }
-        await RunChainCoreAsync(RunPromptChain, payload, overrides);
+        SubmittingRun = true;
+        NotifyStateChanged();
+        try { await RunChainCoreAsync(RunPromptChain, payload, overrides); }
+        finally { SubmittingRun = false; NotifyStateChanged(); }
     }
 
     public void CancelRunPrompt()
     {
+        if (SubmittingRun) return;
         RunInputFields.Clear();
         RunPromptChain = null;
         RunPromptSteps.Clear();

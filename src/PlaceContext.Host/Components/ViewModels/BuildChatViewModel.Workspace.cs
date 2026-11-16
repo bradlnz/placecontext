@@ -409,6 +409,8 @@ public sealed partial class BuildChatViewModel
     public void ClosePreview()
     {
         WorkflowSelectedForRun = PreparingWorkflowRun = false;
+        WorkflowRunPrompt = null;
+        WorkflowRunError = null;
         CloseArtifactPreview();
         PreviewRunArtifacts = [];
         RunArtifactsError = null;

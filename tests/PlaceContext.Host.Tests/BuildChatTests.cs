@@ -899,6 +899,8 @@ public sealed partial class BuildChatTests
         await vm.PrepareWorkflowRunAsync();
         Assert.Empty(vm.Conversation.Messages);
         Assert.Equal(0, dispatcher.Commands);
+        Assert.NotNull(vm.WorkflowRunPrompt?.RunPromptChain);
+        Assert.Equal("Keep my draft", vm.Draft);
         await vm.DisposePageAsync();
     }
 
@@ -990,28 +992,50 @@ public sealed partial class BuildChatTests
         await vm.DisposePageAsync();
     }
 
-    [Fact]
-    public async Task Preparing_selected_workflow_queues_chat_with_its_real_id_without_starting_a_run()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Run_workflow_opens_typed_form_without_a_model_and_only_queues_after_valid_submission(bool declared)
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
+        var job = WorkflowRunInputTests.InputJob(fixture.ProjectId, declared);
         var dispatcher = new ToolDispatcher(fixture.ProjectId)
         {
-            Workflow = new(Guid.NewGuid(), fixture.ProjectId, "Report", null, [], DateTimeOffset.UtcNow)
+            Workflow = new(Guid.NewGuid(), fixture.ProjectId, "Report", null, [new([new(job.Id, job.Name)])], DateTimeOffset.UtcNow),
+            Jobs = [job]
         };
-        var agent = fixture.Provider.GetRequiredService<BuildChatAgent>();
-        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, agent, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions);
+        var queue = new SubmissionQueue(fixture.ProjectId, dispatcher.Workflow.Id);
+        var nav = new DashboardNavigation("/");
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(),
+            new(dispatcher, null!, null!, null!), fixture.Permissions, submissions: queue, navigation: nav);
         await vm.LoadAsync(fixture.ProjectId);
+        vm.Conversation.ConnectionId = Guid.Empty;
         await vm.StartWorkflowChatAsync();
         await vm.SelectWorkflowAsync(dispatcher.Workflow.Id);
-        Assert.False(vm.ChatOpen);
         await vm.PrepareWorkflowRunAsync();
-        Assert.Equal(BuildRunStatus.Queued, vm.Conversation.Status);
-        Assert.True(vm.PreparingWorkflowRun);
-        var prompt = BuildChatViewModel.Text(Assert.Single(vm.Conversation.Messages)!);
-        Assert.Contains(dispatcher.Workflow.Id.ToString(), prompt);
-        Assert.Contains("required inputs", prompt);
+        Assert.False(vm.PreparingWorkflowRun);
+        Assert.Null(vm.WorkflowRunError);
+        Assert.Empty(vm.Conversation.Messages);
         Assert.Equal(0, dispatcher.Commands);
+        Assert.Equal(0, queue.Submitted);
+        var form = Assert.IsType<JobChainsViewModel>(vm.WorkflowRunPrompt);
+        Assert.Equal(job.ProjectId, form.ProjectId);
+        Assert.Same(dispatcher.Workflow, form.RunPromptChain);
+        Assert.Single(form.RunPromptSteps);
+        form.SetArg("step0:question", "");
+        await form.SubmitRunPromptAsync();
+        Assert.NotNull(form.RunPromptError);
+        Assert.Equal(0, queue.Submitted);
+        form.SetArg("step0:question", "Help with a report");
+        await form.SubmitRunPromptAsync();
+        Assert.Equal(1, queue.Submitted);
+        var payload = JsonNode.Parse(queue.Payload!)!;
+        Assert.Equal("Help with a report", payload["question"]!.GetValue<string>());
+        Assert.Equal(3, payload["count"]!.GetValue<int>());
+        Assert.False(payload["enabled"]!.GetValue<bool>());
+        Assert.Single(nav.Visits);
+        Assert.Null(form.RunPromptChain);
         await vm.DisposePageAsync();
     }
 
@@ -2891,6 +2915,7 @@ public sealed partial class BuildChatTests
         public ChainRunView? Run;
         public JobChainView? Workflow;
         public JobRunDetailView? JobRun;
+        public IReadOnlyList<JobView> Jobs = [];
         public IReadOnlyList<RunArtifactLinkView> Artifacts = [];
         public IReadOnlyList<ArtifactFileView> ProjectArtifacts = [];
         public TaskCompletionSource<ChainRunView?>? PendingRun;
@@ -2921,7 +2946,7 @@ public sealed partial class BuildChatTests
             object result = query switch
             {
                 GetProjectByIdQuery => new ProjectSummaryView(projectId, "test", "/tmp", "Registered", false, 0, 0, 0),
-                ListJobsQuery => Array.Empty<JobView>(),
+                ListJobsQuery => Jobs,
                 GetProjectRunCountsQuery => Counts,
                 ListProjectTableSchemasQuery => Array.Empty<PlaceContext.Application.ProjectData.ProjectTableSchema>(),
                 ListJobChainsQuery => Workflow is null ? Array.Empty<JobChainView>() : new[] { Workflow },

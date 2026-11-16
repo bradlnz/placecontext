@@ -650,8 +650,3 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .sub-workflow-modal ::deep .chain-canvas { flex:none }
 .sub-workflow-modal ::deep .canvas-viewport { height:auto; overflow-y:hidden; overscroll-behavior-y:auto }
 .sub-workflow-modal ::deep .canvas-pipeline { min-height:0 }
-
-.run-input-field { display:grid; grid-template-columns:minmax(0, 1fr) 110px 28px; gap:10px; padding:12px; margin-bottom:12px; border:1px solid var(--border); border-radius:8px }
-.run-input-field > .dcfield { min-width:0 }
-.run-input-field > .dcfield:nth-child(3) { grid-column:1 / -1 }
-.run-input-field > button { grid-column:3; grid-row:1; align-self:end; padding:6px }

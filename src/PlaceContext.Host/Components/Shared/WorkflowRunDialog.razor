@@ -1,0 +1,89 @@
+@using PlaceContext.Host.Components.ViewModels
+@using PlaceContext.Host.Components.ViewModels.Helpers
+
+@if (Vm.RunPromptChain is not null)
+{
+    <div class="dcmodal-overlay workflow-run-overlay" @onclick="() => Vm.CancelRunPrompt()">
+        <div class="dcmodal run-modal" role="dialog" aria-modal="true" aria-label="Run workflow" @onclick:stopPropagation="true">
+            <div class="dcmodal-head"><WorkflowDialogHandle />
+                <div class="flex-min">
+                    <div class="title-14">Run @Vm.RunPromptChain.Name</div>
+                    <div class="sub-115">
+                        Review the input fields before running. Missing UUIDs and integer IDs are generated automatically; supplied values are kept.
+                        Jobs and containers must pass AI safety review before execution.
+                    </div>
+                </div>
+                <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CancelRunPrompt()"><AppIcon Kind="close" /></button>
+            </div>
+            <div class="dcmodal-body modal-body-scroll">
+                @foreach (var step in Vm.RunPromptSteps)
+                {
+                    <div class="prompt-step">
+                        <div class="prompt-step-head">
+                            <span class="step-badge">step @(step.Index + 1)</span>
+                            <span class="step-jobtitle">@step.Job.Name</span>
+                        </div>
+                        @foreach (var p in step.Job.Parameters)
+                        {
+                            var key = JobChainsViewModel.ArgKey(step.Index, p.Name);
+                            <div class="dcfield">
+                                <label>
+                                    @(p.Label ?? p.Name)
+                                    @if (p.Required)
+                                    {
+                                        <span class="req">*</span>
+                                    }
+                                </label>
+                                <ParamInput Parameter="p" ProjectId="@Vm.ProjectId" Value="@Vm.GetArg(key)"
+                                            ValueChanged="@(v => Vm.SetArg(key, v))" />
+                            </div>
+                        }
+                    </div>
+                }
+                <div class="prompt-step">
+                    <div class="prompt-step-head"><strong>@(Vm.RunPromptSteps.Count > 0 ? "Additional input (optional)" : "Workflow input")</strong></div>
+                    @if (Vm.RunPromptSteps.Count == 0)
+                    {
+                        <p class="sub-note">No input fields are defined. Add the fields this workflow expects, or leave them empty if it creates its own input.</p>
+                    }
+                    @foreach (var field in Vm.RunInputFields)
+                    {
+                        <div class="run-input-field" @key="field">
+                            <div class="dcfield"><label>Field name</label><input class="dcinput" aria-label="Input field name" placeholder="question or request_id" @bind="field.Name" @bind:after="() => Vm.GenerateRunInputDefault(field)" /></div>
+                            <div class="dcfield"><label>Type</label><select class="dcinput" aria-label="Input field type" @bind="field.Type" @bind:after="() => Vm.GenerateRunInputDefault(field)">
+                                <option value="text">Text</option><option value="uuid">UUID</option><option value="integer">Integer</option><option value="number">Number</option><option value="checkbox">Boolean</option><option value="date">Date</option><option value="datetime-local">Date and time</option><option value="json">JSON</option>
+                            </select></div>
+                            <div class="dcfield"><label>Value</label><ParamInput Parameter="field.Parameter" ProjectId="@Vm.ProjectId" @bind-Value="field.Value" /></div>
+                            <button type="button" class="dcbtn" aria-label="@($"Remove input field {Vm.RunInputFields.IndexOf(field) + 1}")" @onclick="() => Vm.RemoveRunInputField(field)"><AppIcon Kind="close" /></button>
+                        </div>
+                    }
+                    <button type="button" class="dcbtn" @onclick="Vm.AddRunInputField"><AppIcon Kind="plus" /> Add input field</button>
+                </div>
+                <div class="dcfield">
+                    <label>
+                        @ParameterPromptState.ChainAttachmentParameter.Label
+                    </label>
+                    <ParamInput Parameter="@ParameterPromptState.ChainAttachmentParameter"
+                                ProjectId="@Vm.ProjectId"
+                                Value="@Vm.RunAttachment"
+                                ValueChanged="@Vm.SetRunAttachment" />
+                    <small>Available to the workflow as <code>attachment.$file</code>.</small>
+                </div>
+                @if ((Vm.RunPromptError ?? Vm.Message) is { } error)
+                {
+                    <div class="prompt-err" role="alert">@error</div>
+                }
+            </div>
+            <div class="dcmodal-foot">
+                <button class="dcbtn" @onclick="() => Vm.CancelRunPrompt()">Cancel</button>
+                <button class="dcbtn primary" disabled="@Vm.SubmittingRun" @onclick="() => Vm.SubmitRunPromptAsync()">
+                    <AppIcon Kind="play" /> @(Vm.SubmittingRun ? "Submitting…" : "Run workflow")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public JobChainsViewModel Vm { get; set; } = default!;
+}
