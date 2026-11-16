@@ -17,7 +17,8 @@ public sealed partial class JobChainsViewModel
 
     private void PrepareMarkup()
     {
-        if (_markupWorkflowId != EditChainId || _markupSource is null || MarkupText == _markupSource)
+        if (_markupWorkflowId != EditChainId || _markupSource is null ||
+            (MarkupText == _markupSource && _markupSource != CurrentMarkup()))
             ReloadMarkup();
     }
 

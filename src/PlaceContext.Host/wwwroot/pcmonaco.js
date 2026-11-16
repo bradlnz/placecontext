@@ -502,8 +502,8 @@ window.pcmonaco = (function () {
       skeleton.setAttribute('role', 'status');
       skeleton.setAttribute('aria-label', 'Loading code editor');
       skeleton.innerHTML = '<span class="pcmonaco-loading-label">Loading code editor…</span>' +
-        [64, 82, 48, 72, 56, 88, 40, 68].map((width, i) =>
-          `<span aria-hidden="true" class="dcskel dcskel-line" style="width:${width}%;margin-left:${i % 3 ? 20 : 0}px"></span>`).join('');
+        [64, 82, 48, 72, 56, 88, 40, 68].map(width =>
+          `<span aria-hidden="true" class="dcskel dcskel-line" style="width:${width}%"></span>`).join('');
       el.classList.add('pcmonaco-pending');
       el.setAttribute('aria-busy', 'true');
       el.appendChild(skeleton);
@@ -546,7 +546,12 @@ window.pcmonaco = (function () {
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
         });
         editors.set(id, editor);
+        // Creating the model starts the lazy language loader; wait before revealing its code.
+        await monaco.editor.colorize('', model.getLanguageId(), {});
+        if (editors.get(id) !== editor) return true;
         editor.layout();
+        // Tokenize the visible lines now instead of exposing Monaco's plain-text first paint.
+        monaco.editor.colorizeModelLine(model, editor.getVisibleRanges().at(-1)?.endLineNumber || 1);
         editor.render(true);
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         if (editors.get(id) !== editor) {

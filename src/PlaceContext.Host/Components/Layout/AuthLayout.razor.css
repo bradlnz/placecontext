@@ -19,7 +19,7 @@
     min-height: 88px; padding: 24px clamp(24px, 4vw, 64px);
     border-bottom: 1px solid var(--border);
 }
-.auth-brand { display: inline-flex; align-items: center; gap: 11px; font-size: 23px; font-weight: 650; letter-spacing: -.05em; }
+.auth-brand { display: inline-flex; align-items: center; gap: 11px; font-family: Arial, Helvetica, sans-serif; font-size: 23px; font-weight: 650; letter-spacing: -.03em; font-synthesis: none; }
 .auth-brand img { width: 34px; height: 34px; border-radius: 7px; }
 .auth-brand:focus-visible { outline: 2px solid #315bc4; outline-offset: 6px; border-radius: 4px; }
 .auth-header-note { color: var(--text-3); font-size: 14px; }

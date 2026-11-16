@@ -61,7 +61,7 @@ internal static class MainLayoutIconCatalog
             "pulse" => "<path d='M3 12h4l2.5-5 5 10 2.5-5h4'/>",
             "file" => "<path d='M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-5-5Z'/><path d='M14 2v5h5M9 13h6M9 17h6'/>",
             "ledger" => "<rect x='4' y='3' width='16' height='18' rx='2'/><path d='M8 3v18M12 8h5M12 12h5M12 16h3'/>",
-            "data" or "data.tables" => "<ellipse cx='12' cy='5' rx='8' ry='3'/><path d='M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6'/>",
+            "data" or "data.tables" or "database" => "<ellipse cx='12' cy='5' rx='8' ry='3'/><path d='M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6'/>",
             "data.analytics" => "<path d='M4 20V10M10 20V4M16 20v-7M22 20H2'/>",
             "data.search" => "<circle cx='11' cy='11' r='7'/><path d='m20 20-4-4'/>",
             "data.datamap" => "<circle cx='5' cy='6' r='2'/><circle cx='19' cy='6' r='2'/><circle cx='12' cy='18' r='2'/><path d='M7 6h10M6 8l5 8M18 8l-5 8'/>",

@@ -91,6 +91,25 @@ public sealed class WorkflowMarkupTests
     }
 
     [Fact]
+    public async Task Markup_navigation_preserves_editor_until_canvas_changes()
+    {
+        var store = new Store(); var vm = Editor(store);
+        await vm.OpenChainEditorAsync(store.Workflow, view: "markup");
+        var revision = vm.MarkupRevision;
+        vm.SetEditorView("markup");
+        Assert.Equal(revision, vm.MarkupRevision);
+        vm.SetEditorView("canvas");
+        vm.EdName = "Changed on canvas";
+        vm.SetEditorView("markup");
+        Assert.Equal(revision + 1, vm.MarkupRevision);
+        Assert.Contains("Changed on canvas", vm.MarkupText);
+        vm.MarkupText = "Unsaved draft";
+        vm.SetEditorView("markup");
+        Assert.Equal(revision + 1, vm.MarkupRevision);
+        Assert.Equal("Unsaved draft", vm.MarkupText);
+    }
+
+    [Fact]
     public async Task Assistant_keeps_canvas_mounted_and_refreshes_revision_for_the_next_save()
     {
         var store = new Store(); var vm = Editor(store);

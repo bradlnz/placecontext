@@ -7,7 +7,7 @@
         <li>
             @if (stage.Gate is ConditionGateView condition)
             {
-                <div class="branch-condition"><AppIcon Kind="split" /> @(condition.ReviewQuestion is null ? "If" : "AI If") <code>@(condition.ReviewQuestion ?? condition.Expression)</code></div>
+                <div class="branch-condition"><AppIcon Kind="split" /> @(condition.ReviewQuestion is null ? "If" : "Determine") <code>@(condition.ReviewQuestion ?? condition.Expression)</code></div>
             }
             else if (stage.Gate is WaitGateView wait)
             {

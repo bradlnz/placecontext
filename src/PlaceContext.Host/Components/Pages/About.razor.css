@@ -1,8 +1,7 @@
 .page { padding:24px 24px 40px; max-width:720px; margin:0 auto; }
 .card { padding:28px 30px; }
 .brand-row { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
-.logo { width:36px; height:36px; flex:none; border-radius:9px; background:var(--brand); display:flex; align-items:center; justify-content:center; }
-.product { font-size:17px; font-weight:600; letter-spacing:-.3px; }
+.product { font-family:Arial,Helvetica,sans-serif; font-size:17px; font-weight:650; letter-spacing:-.03em; font-synthesis:none; }
 .tagline { font-size:12px; color:var(--text-3); }
 .lead { font-size:13px; color:var(--text-2); line-height:1.7; margin:0 0 14px; }
 .section { border-top:1px solid var(--border); padding-top:14px; margin-bottom:14px; }
@@ -20,7 +19,6 @@
     .page { max-width:none; padding:14px 10px calc(28px + env(safe-area-inset-bottom)); }
     .card { padding:20px 16px; }
     .brand-row { align-items:flex-start; }
-    .logo { width:40px; height:40px; }
     .product { font-size:18px; }
     .lead { font-size:13px; line-height:1.6; }
     .section { padding-top:16px; margin-bottom:16px; }

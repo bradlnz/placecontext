@@ -26,7 +26,6 @@
 
 .brand-text,
 .brand-text .title-14,
-.brand-text .org-name,
 .nav-label,
 .nav-section,
 .switcher-name,
@@ -55,7 +54,7 @@
 .brand-row {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 16px;
     min-height: 60px;
     padding: 14px 18px;
     border-bottom: 1px solid var(--border);
@@ -67,6 +66,12 @@
     flex: none;
     border-radius: 6px;
     object-fit: contain;
+}
+
+.brand-row .placecontext-mark {
+    width: 22px;
+    height: 22px;
+    color: var(--text-2);
 }
 
 .brand-text {
@@ -95,11 +100,12 @@
     letter-spacing: -.015em;
 }
 
-.org-name {
-    font-size: 11px;
-    color: var(--text-3);
-    font-family: var(--font-sans);
-    letter-spacing: .06em;
+.brand-text .title-14 {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 20px;
+    font-weight: 650;
+    letter-spacing: -.03em;
+    font-synthesis: none;
 }
 
 .nav-list {

@@ -8,18 +8,17 @@
 
     <!-- SIDEBAR — structure from tenant menu config; still filtered by effective permissions. -->
     <aside class="sidebar @(Vm.NavOpen ? "open" : null)" aria-label="Primary navigation">
-        <div class="brand-row">
+        <div class="brand-row" title="@Vm.OrganizationName">
             @if (Vm.Brand.LogoDataUri is { } logo)
             {
                 <img src="@logo" alt="logo" class="brand-logo" />
             }
             else
             {
-                <span class="corgi-mark" aria-hidden="true"></span>
+                <span class="placecontext-mark" aria-hidden="true"></span>
             }
             <div class="brand-text">
                 <span class="title-14">@Vm.ProductName</span>
-                <span class="org-name">@Vm.OrganizationName</span>
             </div>
             <button class="sidebar-close" @onclick="Vm.CloseNavigation" aria-label="Close navigation"><AppIcon Kind="close" /></button>
         </div>

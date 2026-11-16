@@ -130,7 +130,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     public string ThemeToggleLabel => Theme == ThemeNames.Dark ? "light" : "dark";
     public bool IsLightTheme => Theme == ThemeNames.Light;
     public string BrandCssOverrides => Brand.CssOverrides();
-    public string ProductName => Brand.ProductName ?? "placecontext";
+    public string ProductName => Brand.ProductName ?? "PlaceContext";
     public bool HasLogo => Brand.LogoDataUri is not null;
 
     public bool IsSection(ResolvedMenuItem item) => item.Kind == MenuKinds.Section;

@@ -18,6 +18,8 @@ function setup(manualFrames = false) {
     Uri: { parse: value => value },
     languages: { registerCompletionItemProvider() {} },
     editor: {
+      colorize: async () => '',
+      colorizeModelLine() {},
       createModel(value, language, uri) {
         const model = { getValue: () => value, getLanguageId: () => language, getPositionAt: n => ({lineNumber:1,column:n+1}),
           getFullModelRange: () => ({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: value.length + 1 }), dispose() {} };
@@ -28,8 +30,10 @@ function setup(manualFrames = false) {
         let value = model.getValue();
         return {
           layout() {}, render() {},
+          getVisibleRanges: () => [{ endLineNumber: 1 }],
           getModel: () => model,
           getValue: () => value,
+          setValue(next) { value = next; },
           getSelection: () => ({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }),
           executeEdits(_source, edits) { value = (value || '') + edits[0].text; },
           setSelection() {},
@@ -44,7 +48,7 @@ function setup(manualFrames = false) {
   runInNewContext(readFileSync(new URL('../../src/PlaceContext.Host/wwwroot/pcmonaco.js', import.meta.url), 'utf8'), {
     window, document, console: { warn() {} }, setTimeout, clearTimeout, requestAnimationFrame: callback => manualFrames ? frames.push(callback) : setTimeout(callback, 0),
   });
-  return { window, document, host, scripts, created, frames };
+  return { window, document, host, scripts, created, frames, monaco };
 }
 
 test('skeleton covers loading while preserving values and the current tab when Monaco arrives', async () => {
@@ -76,6 +80,22 @@ test('a failed CDN keeps the working editor and unsaved text', async () => {
   assert.ok(window.pcmonaco.isMounted('editor'));
   assert.equal(window.pcmonaco.getValue('editor'), 'unsaved');
   assert.equal(host.children[0].hidden, false);
+  assert.equal(host['aria-busy'], undefined);
+});
+
+test('editor stays covered until its language tokenizer is ready', async () => {
+  const {window, host, scripts, created, monaco} = setup();
+  let ready;
+  monaco.editor.colorize = () => new Promise(resolve => { ready = resolve; });
+  const loading = window.pcmonaco.init('editor', 'version: 1', 'yaml');
+  scripts[0].onload();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(host['aria-busy'], 'true');
+  assert.equal(created.length, 1);
+  window.pcmonaco.setValue('editor', 'version: 2', 'yaml');
+  ready('');
+  await loading;
+  assert.equal(window.pcmonaco.getValue('editor'), 'version: 2');
   assert.equal(host['aria-busy'], undefined);
 });
 

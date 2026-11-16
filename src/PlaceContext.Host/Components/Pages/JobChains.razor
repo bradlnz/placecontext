@@ -634,7 +634,7 @@ else
                                                         <div class="list-stage-gate">
                                                             <button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">
                                                                 <AppIcon Kind="@(stageGate is WaitGate ? "clock" : "split")" />
-                                                                <span>@(stageGate is WaitGate wait ? $"Wait {wait.Duration.TotalSeconds:0.#} seconds" : stageGate is ConditionGate condition ? condition.ReviewQuestion is { } question ? $"AI If · {question}" : $"If {condition.Expression}" : "Edit gate")</span>
+                                                                <span>@(stageGate is WaitGate wait ? $"Wait {wait.Duration.TotalSeconds:0.#} seconds" : stageGate is ConditionGate condition ? condition.ReviewQuestion is { } question ? $"Determine · {question}" : $"If {condition.Expression}" : "Edit gate")</span>
                                                             </button>
                                                             <button class="dcbtn danger" aria-label="@($"Remove gate from step {stageIndex + 1}")" title="Remove gate" @onclick="@(() => Vm.RemoveGate(stageIndex))"><AppIcon Kind="close" /></button>
                                                         </div>
@@ -852,7 +852,7 @@ else
                         </button>
                         <button class="node-picker-tile" @onclick="Vm.ChooseAutomaticGateNode">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="split" /></span>
-                            <strong>Automatic if</strong><small>AI Review chooses the best path</small>
+                            <strong>Determine</strong><small>AI Review chooses the best path</small>
                         </button>
                         <button class="node-picker-tile" @onclick="Vm.ChooseConditionNode">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="split" /></span>
@@ -1599,7 +1599,7 @@ else
             <div class="dcmodal-overlay" @onclick="() => Vm.CancelGateEditor()">
                 <div class="dcmodal gate-modal @(Vm.IsConditionGateEditor ? "workflow-conditions-modal" : null)" role="dialog" aria-modal="true" aria-label="Configure workflow step" @onclick:stopPropagation="true">
                     <div class="dcmodal-head"><WorkflowDialogHandle />
-                        <div class="title-14">@(Vm.IsAutomaticGateEditor ? "Automatic if · AI Review" : Vm.IsConditionGateEditor ? "If gate" : "Wait / delay") · Stage @(Vm.GateEditorStageIndex + 1)</div>
+                        <div class="title-14">@(Vm.IsAutomaticGateEditor ? "Determine" : Vm.IsConditionGateEditor ? "If gate" : "Wait / delay") · Stage @(Vm.GateEditorStageIndex + 1)</div>
                         <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CancelGateEditor()"><AppIcon Kind="close" /></button>
                     </div>
                     <div class="dcmodal-body">
@@ -1608,7 +1608,7 @@ else
                             <select id="gate-type" class="dcinput" @bind="Vm.GateEditorType">
                                 <option value="wait">Wait / delay</option>
                                 <option value="condition">Condition / if-else</option>
-                                <option value="automatic">Automatic if · AI Review</option>
+                                <option value="automatic">Determine</option>
                             </select>
                         </div>
 

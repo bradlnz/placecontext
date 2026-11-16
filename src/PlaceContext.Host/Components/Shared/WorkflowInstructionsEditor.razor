@@ -1,7 +1,15 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div id="@_id" class="workflow-instructions-editor" style="flex:1; min-height:0; height:100%; width:100%"></div>
+<div id="@_id" class="workflow-instructions-editor pcmonaco-pending" aria-busy="true" style="flex:1; min-height:0; height:100%; width:100%">
+    <div class="pcmonaco-loading" role="status" aria-label="Loading code editor">
+        <span class="pcmonaco-loading-label">Loading code editor…</span>
+        @foreach (var width in new[] { 64, 82, 48, 72, 56, 88, 40, 68 })
+        {
+            <span aria-hidden="true" class="dcskel dcskel-line" style="width:@(width)%"></span>
+        }
+    </div>
+</div>
 
 @code {
     [Parameter] public string Value { get; set; } = "";

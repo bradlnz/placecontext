@@ -7,10 +7,10 @@
     min-height: 24px;
     color: #0891b2;
     filter: drop-shadow(0 0 2px #22d3ee80);
-    animation: corgi-pulse 2.6s ease-in-out infinite;
+    animation: placecontext-pulse 2.6s ease-in-out infinite;
 }
-.corgi-mark { width: 72%; height: 72%; }
-@keyframes corgi-pulse {
+.placecontext-mark { width: 72%; height: 72%; }
+@keyframes placecontext-pulse {
     0%, 100% { color: #0891b2; filter: drop-shadow(0 0 1px #22d3ee66); }
     50% { color: #22d3ee; filter: drop-shadow(0 0 2px #22d3ee) drop-shadow(0 0 4px #a78bfa99); }
 }
