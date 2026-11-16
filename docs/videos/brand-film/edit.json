@@ -1,0 +1,162 @@
+[
+  {
+    "id": "motion",
+    "start": 0,
+    "end": 2,
+    "duration": 2,
+    "source": "dist/demos/brand-film/opening-original.mp4",
+    "source_start": 0.6,
+    "title": "PlaceContext",
+    "description": "[Instrumental music] White paths converge on black."
+  },
+  {
+    "id": "intro",
+    "start": 2,
+    "end": 6,
+    "duration": 4,
+    "source": "dist/demos/brand-film/frames/intro.png",
+    "source_start": 0,
+    "title": "Critical workflows. People in control.",
+    "description": "The open-source agentic workflow platform."
+  },
+  {
+    "id": "dashboard",
+    "start": 6,
+    "end": 11,
+    "duration": 5,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 2.001,
+    "title": "Start with the whole picture.",
+    "description": "Live project data. Your agents. Your workflows."
+  },
+  {
+    "id": "picker",
+    "start": 11,
+    "end": 14,
+    "duration": 3,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 8.715,
+    "title": "From dashboard to execution.",
+    "description": "Choose a saved workflow and provide its inputs."
+  },
+  {
+    "id": "canvas",
+    "start": 14,
+    "end": 19,
+    "duration": 5,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 14.129,
+    "title": "Design the process that matters.",
+    "description": "Connect validation, specialist agents, review, and action."
+  },
+  {
+    "id": "options",
+    "start": 19,
+    "end": 23,
+    "duration": 4,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 22.573,
+    "title": "Choose the right step.",
+    "description": "Code, agents, data, conditions, human input, and browser actions."
+  },
+  {
+    "id": "review",
+    "start": 23,
+    "end": 27,
+    "duration": 4,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 29.592000000000002,
+    "title": "Make the checks explicit.",
+    "description": "Review the evidence before the next action."
+  },
+  {
+    "id": "limits",
+    "start": 27,
+    "end": 30,
+    "duration": 3,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 36.196,
+    "title": "Control how work proceeds.",
+    "description": "Set retries, timeouts, and execution limits."
+  },
+  {
+    "id": "parallel",
+    "start": 30,
+    "end": 34,
+    "duration": 4,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 42.0,
+    "title": "Coordinate the handoffs.",
+    "description": "Conditional branches. Specialist workflows. Joined results."
+  },
+  {
+    "id": "markup",
+    "start": 34,
+    "end": 38,
+    "duration": 4,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 50.314,
+    "title": "Edit visually. Or work in YAML.",
+    "description": "One workflow definition, with explicit deployment."
+  },
+  {
+    "id": "schedules",
+    "start": 38,
+    "end": 41,
+    "duration": 3,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 56.489,
+    "title": "Run on your terms.",
+    "description": "Manual execution, queues, and workflow schedules."
+  },
+  {
+    "id": "agents",
+    "start": 41,
+    "end": 45,
+    "duration": 4,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 61.488,
+    "title": "Give every agent a clear role.",
+    "description": "Triage. Independent review. Handoff. Follow-up."
+  },
+  {
+    "id": "running",
+    "start": 45,
+    "end": 51,
+    "duration": 6,
+    "source": "dist/demos/enquiry-routing/raw/enquiry-routing.webm",
+    "source_start": 102.3,
+    "title": "Follow the work as it happens.",
+    "description": "Actual enquiry execution \u00b7 15 November 2026 \u00b7 idle waits omitted"
+  },
+  {
+    "id": "replay",
+    "start": 51,
+    "end": 59,
+    "duration": 8,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 73.95100000000001,
+    "title": "See the action. Inspect the evidence.",
+    "description": "Recorded browser replay \u00b7 15 November 2026 \u00b7 fictional enquiry"
+  },
+  {
+    "id": "result",
+    "start": 59,
+    "end": 63,
+    "duration": 4,
+    "source": "dist/demos/brand-film/raw/current.webm",
+    "source_start": 67.955,
+    "title": "An outcome you can inspect.",
+    "description": "Successful recorded run \u00b7 15 November 2026 \u00b7 current UI"
+  },
+  {
+    "id": "outro",
+    "start": 63,
+    "end": 68,
+    "duration": 5,
+    "source": "dist/demos/brand-film/frames/outro.png",
+    "source_start": 0,
+    "title": "Build with confidence. Own your platform.",
+    "description": "Open source. Self-hosted. Paid support."
+  }
+]

@@ -177,7 +177,7 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
         gate switch
         {
             WaitGateView wait => $"{wait.DurationSeconds:0.#}s",
-            ConditionGateView { ReviewQuestion: not null } => "Determine",
+            ConditionGateView { ReviewQuestion: not null } => "Review",
             ConditionGateView => "IF",
             _ => "",
         };
@@ -186,7 +186,7 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
         gate switch
         {
             WaitGateView wait => $"Wait {wait.DurationSeconds:0.#} second(s) before this stage",
-            ConditionGateView { ReviewQuestion: { } question } => $"Determine: {question}",
+            ConditionGateView { ReviewQuestion: { } question } => $"Review: {question}",
             ConditionGateView condition => $"Run when {condition.Expression}",
             _ => "",
         };

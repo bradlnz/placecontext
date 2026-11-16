@@ -1,0 +1,18 @@
+{
+  "motion": {
+    "id": "62b25363-c3bb-46c4-9a58-e81a5f30a7b9",
+    "job_type": "marketing_studio_video",
+    "status": "completed",
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_041652_62b25363-c3bb-46c4-9a58-e81a5f30a7b9.mp4",
+    "created_at": "2026-11-16T04:16:52.380234Z",
+    "prompt": "Create an 8-second abstract motion graphic plate for a premium software product demo. Landscape 16:9. Pure solid black background. A restrained network of thin solid white orthogonal lines traces from the left edge into small outlined square junctions near the right edge, forming two parallel branches that converge. Precise measured animation, locked frontal camera, strict flat two-dimensional geometry. Use only solid black and solid white, no gradients, no glow, no shadows, no textures, no realistic objects, no perspective, no lens effects. Keep the middle third empty throughout for a brand mark composited afterwards. Begin with sparse lines, draw the branches in seconds 1 through 5, hold a clear network in seconds 5 through 7, retract into black at second 8. No typography, no letters, no logos, no software interface, no people. This is an abstract chapter transition to complement real software screen recordings; it must not depict software activity or outcomes.\n"
+  },
+  "music": {
+    "id": "07b6c574-fbfb-4346-aab7-5e3795b89554",
+    "job_type": "sonilo_music",
+    "status": "completed",
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_041653_07b6c574-fbfb-4346-aab7-5e3795b89554.m4a",
+    "created_at": "2026-11-16T04:16:53.449914Z",
+    "prompt": "A 92-second instrumental soundtrack for a premium enterprise software demonstration. Restrained electronic minimalism, 96 BPM, precise soft percussion, warm low synthesizer pulse, sparse clean high notes. Confident, thoughtful, quietly cinematic, suitable for a monochrome mission-control inspired visual identity. A concise opening accent, steady focused momentum from second 6 through 76, a restrained lift at second 68, then a clear satisfying resolution by second 88 and a clean tail. No vocals, no speech, no choir, no harsh alarms, no aggressive bass drops. Keep the arrangement unobtrusive under instructional on-screen text.\n"
+  }
+}

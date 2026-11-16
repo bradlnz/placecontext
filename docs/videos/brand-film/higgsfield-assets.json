@@ -1,0 +1,74 @@
+[
+  {
+    "id": "7f0993f5-52cb-4fbb-91fb-32d4b41acd8a",
+    "job_type": "marketing_studio_video",
+    "display_name": "Marketing Studio Video",
+    "status": "completed",
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_034328_7f0993f5-52cb-4fbb-91fb-32d4b41acd8a.mp4",
+    "created_at": "2026-11-16T03:43:28.037795Z",
+    "params": {
+      "ad_reference_id": null,
+      "ad_reference_summary": null,
+      "aspect_ratio": "16:9",
+      "avatars": [],
+      "batch_size": 1,
+      "duration": 8,
+      "enhanced_prompt": "Style & Mood: Multi-shot high-energy CGI motion reel, 5\u20136 cuts with speed-ramps and whip-pans inside ONE coherent world \u2014 never one static take, never a new world each cut. Cinematic lighting, photorealistic, 35mm film quality, professional color grading, sharp focus, high detail texture, film grain, depth of field mastery, ARRI ALEXA aesthetic. Real weight and motion blur on all movement; the product stays razor-sharp and perfectly intact even at speed. Flat monochrome vector-like motion graphics: pure solid black (#000000) background with precision-thin solid white (#FFFFFF) lines and minimal square checkpoints only; no gradients, no glow, no color, no realistic objects, no text/letters/logos, no UI, no people. 16:9 landscape. CONCEPT: 'critical workflows converge' \u2014 multiple orthogonal parallel paths and checkpoints route with mission-control precision, then resolve into one clean centered line while leaving the center clear for a logo added in editing. ONE coherent system: orthogonal line-routing on a black field with controlled aerospace pacing and mechanical easing. Narrative Summary: One thin line establishes the system, three parallel orthogonal routes are drawn with sparse square checkpoints, the routes converge into a single clean line at center, then everything resolves to pure black for a brand-film opening plate. Starting Composition: Pure black frame; a single hairline-thin horizontal white line sits slightly below center, perfectly crisp, with the central area kept clear (no marks near the center). Dynamic Description: Scene 1 (0.0\u20132.0s): The single horizontal line draws on with a precise stroke-reveal from left to right, easing in and out; the camera is locked orthographic with a subtle, controlled push-in of only a few percent to add cinematic pacing. \u2192 Hard cut (match-frame). Scene 2 (2.0\u20134.0s): The same line now acts as a baseline; three parallel orthogonal paths (thin white right-angle routes) begin drawing in from the left and upper-left edges, staying evenly spaced and strictly 90\u00b0; minimal square checkpoints (tiny outlined squares) appear at a few corners as the stroke passes them; center remains intentionally empty. \u2192 Precision whip-pan (a fast linear reframing along the baseline, no shake). Scene 3 (4.0\u20136.0s): Reframed closer: the three parallel paths extend forward with controlled speed-ramp (slow technical crawl \u2192 brisk draw) toward the middle of frame; square checkpoints register as the stroke crosses them (briefly becoming solid-filled for a few frames, then returning to outline), with no glow and no blur on static elements. \u2192 Hard cut. Scene 4 (6.0\u20138.0s): Wider again: the three routes execute clean orthogonal turns, aligning as they approach the centerline; spacing stays consistent and aerospace-precise; motion remains strictly planar and vector-flat; the central zone is kept clear with a deliberate negative-space window. \u2192 Speed-ramp (mechanical) into the converge moment. Scene 5 (8.0\u201310.0s): The three paths converge into one single clean horizontal line that passes through the composition while leaving a small clear gap at exact center for the logo placement; all motion decelerates to a stop, holding a high-contrast, perfectly crisp mission-control layout on black. \u2192 Hard cut. Scene 6 (10.0\u201312.0s): RESOLVE \u2014 the line and checkpoints retract with a fast, clean stroke-unreveal away from center to the edges, ending on a pure black frame by ~11.0s and holding pure black until 12.0s, center completely empty. Static Description: One coherent minimal graphic world: pure black void, razor-thin solid white orthogonal lines, sparse outlined square checkpoints, strict 2D planar look, no gradients, no glow, no reflections, no additional marks; center kept clear throughout for an official logo added in editing. Facial features clear and undistorted, consistent clothing, 4K Ultra HD, stable and blur-free.",
+      "generate_audio": true,
+      "genre": "auto",
+      "height": 1080,
+      "hook": null,
+      "medias": [],
+      "mode": "product_showcase",
+      "multi_prompt": [],
+      "multi_shot_mode": "custom",
+      "multi_shots": false,
+      "panels": [],
+      "products": [],
+      "prompt": "Create an 8-second premium abstract brand-film opening for PlaceContext, an open-source platform coordinating agents and human decisions in critical workflows. Pure solid black background, precision thin white lines only. Begin with one fine horizontal white line, then draw three orthogonal parallel paths and minimal square checkpoints; paths converge into one clean line at the center. Restrained aerospace mission-control visual language, controlled technical motion, high contrast, cinematic pacing. Flat monochrome vector-like motion graphics. No gradients, no glow, no coloured lights, no realistic objects, no text, no letters, no logos, no people, no invented software UI. Leave the center clear for an official logo added in editing. Finish on a pure black frame. 16:9 landscape.",
+      "prompt_language": "en",
+      "reference_elements": [],
+      "resolution": "1080p",
+      "setting": null,
+      "specific_mode": "default",
+      "speedramp": "auto",
+      "storyboard_id": null,
+      "title": null,
+      "web_product_ids": [],
+      "web_product_type": null,
+      "web_products": [],
+      "width": 1920
+    }
+  },
+  {
+    "id": "40b7f558-1c82-4512-8d9f-46a0d59bf286",
+    "job_type": "sonilo_music",
+    "display_name": "Sonilo Music",
+    "status": "completed",
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_034525_40b7f558-1c82-4512-8d9f-46a0d59bf286.m4a",
+    "created_at": "2026-11-16T03:45:25.533692Z",
+    "params": {
+      "duration": 72,
+      "prompt": "Original instrumental music for a premium technology product film. Minimal cinematic electronic score at 96 BPM: controlled bass pulse, muted analog arpeggios, precise light metallic percussion. Quiet opening, purposeful rhythmic build, restrained optimistic lift in the final third, clean resolved ending. Sophisticated mission-control mood. No vocals or speech. Screen demonstrations must remain the focus."
+    }
+  },
+  {
+    "id": "eddc3333-037f-4517-b203-9a82f44ef71a",
+    "job_type": "seed_audio",
+    "display_name": "Seed Audio 1.0",
+    "status": "nsfw",
+    "result_url": null,
+    "created_at": "2026-11-16T03:43:29.398764Z",
+    "params": {
+      "batch_size": 1,
+      "expression_intensity": 5,
+      "format": "wav",
+      "loudness_rate": 0,
+      "mood": 0,
+      "pitch_rate": 0,
+      "prompt": "Create an original 68-second instrumental soundtrack for a premium monochrome technology brand film. No voice, no speech, no vocals. Minimal cinematic electronic score at 96 BPM: deep controlled sub pulse, muted analog synth arpeggio, precise light metallic percussion. First 5 seconds quiet anticipatory pulse; steady purposeful build from 5 to 45 seconds; restrained confident lift at 45 seconds; clean resolved ending with short tail by 68 seconds. Sophisticated aerospace mission-control mood, human and optimistic, no aggressive drops or overpowering drums. Consistent rhythm suitable for precise screen-recording edits. Studio-quality stereo music.",
+      "sample_rate": 48000,
+      "speech_rate": 0
+    }
+  }
+]

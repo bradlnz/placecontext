@@ -1,0 +1,51 @@
+{
+  "brand_context": {
+    "name": "PlaceContext",
+    "offering": "Agentic workflow platform for critical workflows",
+    "industry": "software",
+    "positioning": "open source with paid support",
+    "audience": "workflow operators",
+    "values": [
+      "control",
+      "visible decisions",
+      "shared context"
+    ]
+  },
+  "visual_axes": {
+    "restrained_expressive": 25,
+    "geometric_organic": 25,
+    "familiar_experimental": 50
+  },
+  "candidate": {
+    "mark_type": "abstract",
+    "central_idea": "Two separate paths become one shared path.",
+    "visual_mechanism": "Two equal-weight horizontal lines enter from the left at different heights, use short rounded diagonal elbows to merge into a single horizontal output on the right, with the junction deliberately displaced above the center to create a distinctive compact stepped silhouette.",
+    "distinctive_element": "An off-center two-to-one junction with equal branch lengths and a long rightward exit.",
+    "shape_logic": "precise open geometry, ample negative space",
+    "treatment": "monoline",
+    "style_register": "restrained technical identity",
+    "user_style_directive": "simple line, no gradients",
+    "composition": "single centered mark occupying half the square canvas"
+  },
+  "palette": {
+    "count": 2,
+    "user_requested_more_than_three": false,
+    "roles": [
+      "line",
+      "background"
+    ]
+  },
+  "reference_signals": [
+    "restrained aerospace precision"
+  ],
+  "forbidden_elements": [
+    "gradients",
+    "shadows",
+    "glow",
+    "text",
+    "badges",
+    "shields",
+    "rockets",
+    "sparkles"
+  ]
+}

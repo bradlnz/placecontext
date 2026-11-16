@@ -1,0 +1,278 @@
+{
+  "capturedDate": "2026-11-16",
+  "project": "Northstar \u00b7 Enquiry routing",
+  "source": "Actual local portal screen recordings; no simulated UI or generated footage",
+  "clips": [
+    {
+      "name": "01-dashboard",
+      "file": "clips/01-dashboard.mp4",
+      "raw": "../../../dist/demos/platform-recordings-2026-11-16/raw/01-dashboard.webm",
+      "trimmedHeadSeconds": 2.593,
+      "duration": 12.6,
+      "width": 1600,
+      "height": 900,
+      "fps": 25,
+      "audio": false,
+      "notes": "Dashboard overview and workflow picker.",
+      "verified": "ffprobe + full decode",
+      "events": [
+        {
+          "label": "overview",
+          "seconds": 2.993,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+        },
+        {
+          "label": "workflow-picker",
+          "seconds": 9.282,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+        }
+      ]
+    },
+    {
+      "name": "02-chat",
+      "file": "clips/02-chat.mp4",
+      "raw": "../../../dist/demos/platform-recordings-2026-11-16/raw/02-chat.webm",
+      "trimmedHeadSeconds": 2.737,
+      "duration": 42.24,
+      "width": 1600,
+      "height": 900,
+      "fps": 25,
+      "audio": false,
+      "notes": "New chat and real assistant response. The assistant cites team data from a saved 15 November triage run; this is not a new workflow execution.",
+      "verified": "ffprobe + full decode",
+      "events": [
+        {
+          "label": "ready",
+          "seconds": 3.137,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+        },
+        {
+          "label": "question",
+          "seconds": 12.407,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+        },
+        {
+          "label": "working",
+          "seconds": 14.736,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+        },
+        {
+          "label": "answer",
+          "seconds": 34.036,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/06a017ca-cfec-4575-bf66-07ad33c46a0b"
+        }
+      ]
+    },
+    {
+      "name": "03-data",
+      "file": "clips/03-data.mp4",
+      "raw": "../../../dist/demos/platform-recordings-2026-11-16/raw/03-data.webm",
+      "trimmedHeadSeconds": 2.463,
+      "duration": 23.44,
+      "width": 1600,
+      "height": 900,
+      "fps": 25,
+      "audio": false,
+      "notes": "Live SQL Studio: team and enquiries tables, query execution and Billing result filter.",
+      "verified": "ffprobe + full decode",
+      "events": [
+        {
+          "label": "tables",
+          "seconds": 2.863,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/data"
+        },
+        {
+          "label": "team-results",
+          "seconds": 6.441,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/data"
+        },
+        {
+          "label": "billing-filter",
+          "seconds": 13.4,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/data"
+        },
+        {
+          "label": "enquiry-results",
+          "seconds": 18.794,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/data"
+        }
+      ]
+    },
+    {
+      "name": "04-workflow-editor",
+      "file": "clips/04-workflow-editor.mp4",
+      "raw": "../../../dist/demos/platform-recordings-2026-11-16/raw/04-workflow-editor.webm",
+      "trimmedHeadSeconds": 3.278,
+      "duration": 50.8,
+      "width": 1600,
+      "height": 900,
+      "fps": 25,
+      "audio": false,
+      "notes": "Current workflow canvas, step options, AI review, retry limits and typing a YAML comment. Draft only; no workflow deployment.",
+      "verified": "ffprobe + full decode",
+      "events": [
+        {
+          "label": "overview",
+          "seconds": 3.678,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+        },
+        {
+          "label": "stages",
+          "seconds": 9.112,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+        },
+        {
+          "label": "parallel",
+          "seconds": 13.346,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+        },
+        {
+          "label": "step-options",
+          "seconds": 18.101,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+        },
+        {
+          "label": "ai-review",
+          "seconds": 26.435,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+        },
+        {
+          "label": "retry-limits",
+          "seconds": 33.627,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+        },
+        {
+          "label": "yaml",
+          "seconds": 41.995,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6/markup"
+        },
+        {
+          "label": "editing-draft",
+          "seconds": 48.007,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6/markup"
+        }
+      ]
+    },
+    {
+      "name": "05-fresh-workflow-run",
+      "file": "clips/05-fresh-workflow-run.mp4",
+      "raw": "../../../dist/demos/platform-recordings-2026-11-16/raw/05-fresh-workflow-run.webm",
+      "trimmedHeadSeconds": 2.439,
+      "duration": 23.44,
+      "width": 1600,
+      "height": 900,
+      "fps": 25,
+      "audio": false,
+      "notes": "New fictional enquiry submitted on 16 November. Full workflow FAILED at validation: AI safety confidence 67%, required 90%. Subsequent steps skipped. Use only as safety-block footage, never as a successful end-to-end run.",
+      "verified": "ffprobe + full decode",
+      "events": [
+        {
+          "label": "run-intake",
+          "seconds": 2.839,
+          "url": "http://localhost:7788/",
+          "at": "2026-11-16T04:03:54.895Z"
+        },
+        {
+          "label": "run-submit",
+          "seconds": 12.976,
+          "url": "http://localhost:7788/",
+          "at": "2026-11-16T04:04:05.032Z"
+        },
+        {
+          "label": "run-accepted",
+          "seconds": 13.619,
+          "url": "http://localhost:7788/enquiries",
+          "at": "2026-11-16T04:04:05.675Z"
+        },
+        {
+          "label": "run-progress-0",
+          "seconds": 16.577,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/d0687236-40e2-42c0-8f7c-4f5a5ca1e0f9/submission/186c23c5-712b-4ee0-bca6-a9d1d1039e62",
+          "at": "2026-11-16T04:04:08.633Z"
+        },
+        {
+          "label": "run-final",
+          "seconds": 16.78,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/d0687236-40e2-42c0-8f7c-4f5a5ca1e0f9/submission/186c23c5-712b-4ee0-bca6-a9d1d1039e62",
+          "at": "2026-11-16T04:04:08.836Z"
+        },
+        {
+          "label": "run-error",
+          "seconds": 24.9,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/d0687236-40e2-42c0-8f7c-4f5a5ca1e0f9/submission/186c23c5-712b-4ee0-bca6-a9d1d1039e62",
+          "at": "2026-11-16T04:04:16.956Z"
+        }
+      ]
+    },
+    {
+      "name": "06-agents",
+      "file": "clips/06-agents.mp4",
+      "raw": "../../../dist/demos/platform-recordings-2026-11-16/raw/06-agents.webm",
+      "trimmedHeadSeconds": 2.378,
+      "duration": 14.92,
+      "width": 1600,
+      "height": 900,
+      "fps": 25,
+      "audio": false,
+      "notes": "Specialist agent catalogue and Triage instructions.",
+      "verified": "ffprobe + full decode",
+      "events": [
+        {
+          "label": "specialists",
+          "seconds": 2.778,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/agents"
+        },
+        {
+          "label": "triage-instructions",
+          "seconds": 9.35,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/agents/f0f643d7-2d61-4328-ab17-33df1751b7d8"
+        }
+      ]
+    },
+    {
+      "name": "07-triage-execution",
+      "file": "clips/07-triage-execution.mp4",
+      "raw": "../../../dist/demos/platform-recordings-2026-11-16/raw/07-triage-execution.webm",
+      "trimmedHeadSeconds": 2.709,
+      "duration": 45.88,
+      "width": 1600,
+      "height": 900,
+      "fps": 25,
+      "audio": false,
+      "notes": "Fresh standalone Triage sub-workflow SUCCEEDED on 16 November: live roster query, agent authorization and result approval, selecting Maya Chen in Billing. This is not a full enquiry-routing run.",
+      "verified": "ffprobe + full decode",
+      "events": [
+        {
+          "label": "overview",
+          "seconds": 3.109,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/ff9062bf-b448-5637-8ccc-5c49988eea51"
+        },
+        {
+          "label": "input",
+          "seconds": 10.677,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/ff9062bf-b448-5637-8ccc-5c49988eea51"
+        },
+        {
+          "label": "submitted",
+          "seconds": 15.081,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/bddb9379-8fe9-405b-8894-88d85ee0b7af/submission/5b59ae51-9563-44b7-b37e-9f4c7fedf78e"
+        },
+        {
+          "label": "progress-0",
+          "seconds": 18.213,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/bddb9379-8fe9-405b-8894-88d85ee0b7af/submission/5b59ae51-9563-44b7-b37e-9f4c7fedf78e"
+        },
+        {
+          "label": "progress-6",
+          "seconds": 37.077,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/bddb9379-8fe9-405b-8894-88d85ee0b7af/submission/5b59ae51-9563-44b7-b37e-9f4c7fedf78e"
+        },
+        {
+          "label": "completed",
+          "seconds": 37.678,
+          "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/bddb9379-8fe9-405b-8894-88d85ee0b7af/submission/5b59ae51-9563-44b7-b37e-9f4c7fedf78e"
+        }
+      ]
+    }
+  ]
+}

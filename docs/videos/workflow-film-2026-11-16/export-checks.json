@@ -1,0 +1,13 @@
+{
+  "duration": 72,
+  "dimensions": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "video": "h264",
+  "audio": "aac",
+  "decode": "passed",
+  "existingSoundtrack": "dist/demos/brand-film/music-original.mp3",
+  "bytes": 6689031
+}

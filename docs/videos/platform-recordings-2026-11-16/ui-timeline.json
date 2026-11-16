@@ -1,0 +1,137 @@
+[
+  {
+    "name": "01-dashboard",
+    "startedAt": "2026-11-16T04:04:58.719Z",
+    "events": [
+      {
+        "label": "overview",
+        "seconds": 2.993,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+      },
+      {
+        "label": "workflow-picker",
+        "seconds": 9.282,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+      }
+    ],
+    "error": null
+  },
+  {
+    "name": "02-chat",
+    "startedAt": "2026-11-16T04:05:13.807Z",
+    "events": [
+      {
+        "label": "ready",
+        "seconds": 3.137,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+      },
+      {
+        "label": "question",
+        "seconds": 12.407,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+      },
+      {
+        "label": "working",
+        "seconds": 14.736,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+      },
+      {
+        "label": "answer",
+        "seconds": 34.036,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/06a017ca-cfec-4575-bf66-07ad33c46a0b"
+      }
+    ],
+    "error": null
+  },
+  {
+    "name": "03-data",
+    "startedAt": "2026-11-16T04:05:58.671Z",
+    "events": [
+      {
+        "label": "tables",
+        "seconds": 2.863,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/data"
+      },
+      {
+        "label": "team-results",
+        "seconds": 6.441,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/data"
+      },
+      {
+        "label": "billing-filter",
+        "seconds": 13.4,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/data"
+      },
+      {
+        "label": "enquiry-results",
+        "seconds": 18.794,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/data"
+      }
+    ],
+    "error": null
+  },
+  {
+    "name": "04-workflow-editor",
+    "startedAt": "2026-11-16T04:06:24.295Z",
+    "events": [
+      {
+        "label": "overview",
+        "seconds": 3.678,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+      },
+      {
+        "label": "stages",
+        "seconds": 9.112,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+      },
+      {
+        "label": "parallel",
+        "seconds": 13.346,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+      },
+      {
+        "label": "step-options",
+        "seconds": 18.101,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+      },
+      {
+        "label": "ai-review",
+        "seconds": 26.435,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+      },
+      {
+        "label": "retry-limits",
+        "seconds": 33.627,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+      },
+      {
+        "label": "yaml",
+        "seconds": 41.995,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6/markup"
+      },
+      {
+        "label": "editing-draft",
+        "seconds": 48.007,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6/markup"
+      }
+    ],
+    "error": null
+  },
+  {
+    "name": "06-agents",
+    "startedAt": "2026-11-16T04:07:17.957Z",
+    "events": [
+      {
+        "label": "specialists",
+        "seconds": 2.778,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/agents"
+      },
+      {
+        "label": "triage-instructions",
+        "seconds": 9.35,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/agents/f0f643d7-2d61-4328-ab17-33df1751b7d8"
+      }
+    ],
+    "error": null
+  }
+]

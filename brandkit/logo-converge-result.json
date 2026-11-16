@@ -1,0 +1,24 @@
+[
+  {
+    "created_at": "2026-11-16T03:54:40.724494Z",
+    "display_name": "Recraft V4.1",
+    "id": "fb3b1094-332f-48f2-b880-cf88789a890c",
+    "job_type": "recraft_v4_1",
+    "min_result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_035440_fb3b1094-332f-48f2-b880-cf88789a890c_min.webp",
+    "params": {
+      "aspect_ratio": "1:1",
+      "background_color": "#000000",
+      "batch_size": 1,
+      "colors": [
+        "#FFFFFF"
+      ],
+      "height": 1024,
+      "model_type": "vector",
+      "prompt": "Abstract symbol-only logo. Two separate paths become one shared path. Two equal-weight horizontal lines enter from the left at different heights, use short rounded diagonal elbows to merge into a single horizontal output on the right, with the junction deliberately displaced above the center to create a distinctive compact stepped silhouette. An off-center two-to-one junction with equal branch lengths and a long rightward exit. Uniform line width approximately one twelfth of the complete mark width, rounded line caps, precise bends, open unfilled interiors, readable at 24 pixels. Restrained technical identity with simple line drawing and generous negative space. Exactly two colors: locked white line tone on locked solid black background, with no other colors. One centered isolated mark occupying half the square canvas, equal generous outer margins. No gradients, no glow, no badge, no shield, no rocket, no sparkle, no decorative dots. Monoline vector design, uniform stroke weight, rounded line caps, no fills, no shadows, no texture, no text. Clean editable vector paths, SVG-friendly, minimal anchor points.",
+      "resolution": "2k",
+      "width": 1024
+    },
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_035440_fb3b1094-332f-48f2-b880-cf88789a890c.svg",
+    "status": "completed"
+  }
+]

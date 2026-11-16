@@ -1,0 +1,24 @@
+[
+  {
+    "created_at": "2026-11-16T03:54:43.469711Z",
+    "display_name": "Recraft V4.1",
+    "id": "0e4a82d8-dcfb-4693-8c5e-342abab2bd1e",
+    "job_type": "recraft_v4_1",
+    "min_result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_035443_0e4a82d8-dcfb-4693-8c5e-342abab2bd1e_min.webp",
+    "params": {
+      "aspect_ratio": "1:1",
+      "background_color": "#000000",
+      "batch_size": 1,
+      "colors": [
+        "#FFFFFF"
+      ],
+      "height": 1024,
+      "model_type": "vector",
+      "prompt": "Abstract symbol-only logo. Two offset open frames define one shared space. Two opposing square-corner bracket outlines are vertically offset by one stroke-width; the upper-left bracket extends halfway across the top and down the left, and the lower-right bracket extends halfway across the bottom and up the right, framing a single empty central square with diagonally placed openings. An open square silhouette with paired diagonal gaps and precisely offset endpoints. Uniform line width approximately one twelfth of the complete mark width, rounded line caps, precise bends, open unfilled interiors, readable at 24 pixels. Restrained technical identity with simple line drawing and generous negative space. Exactly two colors: locked white line tone on locked solid black background, with no other colors. One centered isolated mark occupying half the square canvas, equal generous outer margins. No gradients, no glow, no badge, no shield, no rocket, no sparkle, no decorative dots. Monoline vector design, uniform stroke weight, rounded line caps, no fills, no shadows, no texture, no text. Clean editable vector paths, SVG-friendly, minimal anchor points.",
+      "resolution": "2k",
+      "width": 1024
+    },
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_035443_0e4a82d8-dcfb-4693-8c5e-342abab2bd1e.svg",
+    "status": "completed"
+  }
+]

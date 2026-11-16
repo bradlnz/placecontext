@@ -1,10 +1,16 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Security.Claims;
 
 namespace PlaceContext.Host.Auth;
 
 public static class AgentAuthenticationDefaults
 {
     public const string SchemeName = "AgentUser";
+
+    public static bool CanAccessMcp(ClaimsPrincipal user) => user.Identities.Any(identity => identity.IsAuthenticated
+        && (identity.AuthenticationType == UserApiTokenAuthenticationHandler.SchemeName
+            || identity.FindAll("scope").Any(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Contains("mcp", StringComparer.Ordinal))));
 
     public static string SelectScheme(HttpContext context)
     {

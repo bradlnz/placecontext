@@ -1,0 +1,40 @@
+{
+  "brandbookElements": [],
+  "essentialKitApproved": false,
+  "logo": {
+    "approvalSummary": "User explicitly selected the third Higgsfield option for the website logo on 16 November 2026.",
+    "asset": {
+      "id": "0e4a82d8-dcfb-4693-8c5e-342abab2bd1e",
+      "path": "/home/brad/code/devcontext/brandkit/placecontext-context.svg",
+      "url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_035443_0e4a82d8-dcfb-4693-8c5e-342abab2bd1e.svg"
+    },
+    "geometryFingerprint": "57e233727250076e1f28d66b1450d5149364d9f6fd81705d2a2196301cb818db",
+    "name": "PlaceContext Context — paired brackets",
+    "origin": "user_supplied",
+    "revision": 2
+  },
+  "palette": {
+    "approvalSummary": "Retain the existing monochrome website palette from website/assets/landing.css for the requested accompanying logo; user requested simple line styling and no gradients. No new palette is proposed.",
+    "colors": [
+      {
+        "hex": "#000000",
+        "name": "Black",
+        "role": "background"
+      },
+      {
+        "hex": "#ffffff",
+        "name": "White",
+        "role": "line and text"
+      }
+    ],
+    "gradients": [],
+    "origin": "user_supplied",
+    "revision": 1
+  },
+  "version": 4,
+  "visualAxes": {
+    "familiarExperimental": 50,
+    "geometricOrganic": 25,
+    "restrainedExpressive": 25
+  }
+}

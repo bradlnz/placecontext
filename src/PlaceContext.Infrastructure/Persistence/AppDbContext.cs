@@ -184,6 +184,13 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => x.Slug).HasDatabaseName("ix_pending_signup_slug");
         });
 
+        b.Entity<ExecutionApprovalRow>(e =>
+        {
+            e.ToTable("execution_approvals");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.TenantId, x.ProjectId, x.RunId });
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
         b.Entity<CloudWorkspaceRow>(e =>
         {
             e.ToTable("cloud_workspaces");

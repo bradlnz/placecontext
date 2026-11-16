@@ -13,7 +13,7 @@ namespace PlaceContext.Infrastructure.Workload;
 
 // shortcut: images stay on this execution host; use a registry before distributing these steps across hosts.
 public sealed class ContainerWorkflowBackgroundService(IOptions<ContainerWorkflowOptions> options, IOptions<WorkloadRunnerOptions> workloads,
-    ILogger<ContainerWorkflowBackgroundService> log, IOutcomeReviewer? reviewer = null) : BackgroundService, IContainerWorkflowRunner
+    ILogger<ContainerWorkflowBackgroundService> log, IOutcomeReviewer? reviewer = null, IExecutionApprovals? approvals = null) : BackgroundService, IContainerWorkflowRunner
 {
     private const string RunLabel = "placecontext.workflow.run";
     private const string ExpiryLabel = "placecontext.workflow.expires";
@@ -102,7 +102,7 @@ public sealed class ContainerWorkflowBackgroundService(IOptions<ContainerWorkflo
         {
             kind = "container build", action.Dockerfile, files, action.AllowNetwork, action.TimeoutSeconds,
             sandbox = "Isolated BuildKit builder with memory and CPU limits; no host mounts."
-        }, project, ct);
+        }, project, ct, approvals, run);
         var dir = Path.Combine(Path.GetTempPath(), "pcbuild-" + Guid.NewGuid().ToString("N"));
         var image = $"pcwf-{project:N}-{run:N}-{step}:latest";
         var builder = $"pcwf-build-{run:N}-{step}";
@@ -175,7 +175,7 @@ public sealed class ContainerWorkflowBackgroundService(IOptions<ContainerWorkflo
             kind = "container run", image, action.Command, input = payload,
             action.Port, action.AllowNetwork, action.MemoryMb, action.Cpus, action.TimeoutSeconds,
             sandbox = "Unprivileged read-only container; no host mounts; capabilities dropped; process limit enforced."
-        }, project, ct);
+        }, project, ct, approvals, run);
         if (!image.StartsWith("pcwf-", StringComparison.Ordinal))
         {
             var pull = await DockerAsync(["pull", image], ct);

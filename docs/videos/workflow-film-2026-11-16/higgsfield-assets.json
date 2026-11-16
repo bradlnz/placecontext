@@ -1,0 +1,28 @@
+{
+  "motion": {
+    "id": "2a6e02a5-06c8-4b80-9cff-5431e17a965c",
+    "job_type": "seedance_2_5",
+    "status": "completed",
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_043145_2a6e02a5-06c8-4b80-9cff-5431e17a965c.mp4",
+    "created_at": "2026-11-16T04:31:45.088737Z",
+    "settings": {
+      "resolution": "1080p",
+      "bitrate_mode": "high",
+      "duration": 10,
+      "draft": false
+    },
+    "prompt": "A premium 10-second motion-design sequence for an open-source critical-workflow platform. Strict flat black and white; solid pure black background, fine solid white orthogonal paths, crisp square nodes. No gradients, no glow, no shadows, no textures, no 3D, no typography, no letters, no logos, no user interface, no screens, no people. Restrained mission-control precision, confident editorial timing, deliberate easing. One coherent visual system across two shots. Shot A, seconds 0-5: sparse paths enter from the left and right margins, a tiny white square moves through a branching junction, two parallel paths resolve into a single route; the central 700 by 500 pixel region remains pure empty black for an exact logo and title composited in editing. Shot B, seconds 5-10: match cut to a slightly wider arrangement of branches near the edges; square markers trace the paths in a measured sequence, paths recede toward the edges and resolve to a clean black frame. Maintain the empty central region. Orthographic camera, precise geometric movement, restrained aerospace visual language. The effect should complement authentic screen recordings of a workflow editor. Do not fabricate software interfaces or outcomes. Silent output; an existing 96 BPM premium technology soundtrack will be added separately. 16:9 landscape, high-quality crisp line animation.\n"
+  },
+  "existingSoundtrack": {
+    "id": "40b7f558-1c82-4512-8d9f-46a0d59bf286",
+    "job_type": "sonilo_music",
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_034525_40b7f558-1c82-4512-8d9f-46a0d59bf286.m4a",
+    "params": {
+      "duration": 72,
+      "prompt": "Original instrumental music for a premium technology product film. Minimal cinematic electronic score at 96 BPM: controlled bass pulse, muted analog arpeggios, precise light metallic percussion. Quiet opening, purposeful rhythmic build, restrained optimistic lift in the final third, clean resolved ending. Sophisticated mission-control mood. No vocals or speech. Screen demonstrations must remain the focus."
+    },
+    "localSha256": "eeddc195fc4f48727b9e962c9a766d6899f72a2ed2f0ef6428ce17b56ed04674",
+    "localPath": "dist/demos/brand-film/music-original.mp3"
+  },
+  "newMusicGenerated": false
+}

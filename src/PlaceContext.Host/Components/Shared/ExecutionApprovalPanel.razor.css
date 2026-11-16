@@ -1,0 +1,5 @@
+.execution-approval { padding:18px; margin:12px 0; border:1px solid #b88a25; border-radius:10px; background:color-mix(in srgb, #dca52d 10%, var(--surface)); }
+.execution-approval p { margin:10px 0; line-height:1.5; }
+.execution-approval summary { cursor:pointer; padding:6px 0; }
+.execution-approval pre { max-height:260px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; padding:12px; background:var(--bg); border-radius:6px; }
+.approval-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }

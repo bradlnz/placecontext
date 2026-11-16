@@ -1,0 +1,54 @@
+@inject ExecutionApprovalViewModel Vm
+@implements IAsyncDisposable
+
+@foreach (var request in Vm.Requests)
+{
+    <section class="execution-approval" aria-label="Execution safety approval" @key="request.Id">
+        <strong role="status">@(request.Status == "Pending" ? "Needs approval · Execution paused" : $"Safety review · {request.Status}")</strong>
+        <p>@request.Warning</p>
+        <details><summary>Review execution details</summary><pre>@request.Evidence</pre></details>
+        @if (request.Status == "Pending")
+        {
+            <p>This approves only this execution. The request expires at @request.ExpiresAt.ToLocalTime().ToString("HH:mm") or when the run is cancelled or times out.</p>
+            @if (Vm.CanApprove)
+            {
+                <div class="approval-actions">
+                    <button type="button" class="dcbtn primary" disabled="@Vm.Busy" @onclick="() => Vm.DecideAsync(request.Id, true)">Yes, approve and run</button>
+                    <button type="button" class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.DecideAsync(request.Id, false)">No, reject</button>
+                </div>
+            }
+            else { <p>A member with job management permission must approve or reject this execution.</p> }
+        }
+    </section>
+}
+@if (Vm.Error is { } error) { <p role="alert">@error</p> }
+
+@code {
+    [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public IReadOnlyList<Guid> RunIds { get; set; } = [];
+    private readonly CancellationTokenSource _stop = new();
+    private Task? _poll;
+    protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
+    protected override async Task OnParametersSetAsync()
+    {
+        await Vm.RefreshAsync(ProjectId, RunIds, _stop.Token);
+        _poll ??= PollAsync();
+    }
+    private async Task PollAsync()
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+                await InvokeAsync(async () => { await Vm.RefreshAsync(ProjectId, RunIds, _stop.Token); StateHasChanged(); });
+        }
+        catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        Vm.Detach();
+        await _stop.CancelAsync();
+        if (_poll is not null) await _poll;
+        _stop.Dispose();
+    }
+}

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using PlaceContext.Application.Auth;
+using PlaceContext.Application.Tenancy;
 using PlaceContext.Application.Access.Enums;
 namespace PlaceContext.Host.Controllers;
 
@@ -15,6 +16,7 @@ public sealed class SsoSessionsController : ControllerBase
 {
     private const string StateCookie = "placecontext_external_sso";
     private readonly IAuthService _auth;
+    private readonly ICurrentTenant _tenant;
     private readonly IConfiguration _configuration;
     private readonly IExternalIdentityProvider _identity;
     private readonly IDataProtector _protector;
@@ -23,9 +25,10 @@ public sealed class SsoSessionsController : ControllerBase
         IAuthService auth,
         IConfiguration configuration,
         IExternalIdentityProvider identity,
-        IDataProtectionProvider dataProtection)
+        IDataProtectionProvider dataProtection, ICurrentTenant tenant)
     {
         _auth = auth;
+        _tenant = tenant;
         _configuration = configuration;
         _identity = identity;
         _protector = dataProtection.CreateProtector("PlaceContext.ExternalSso.State.v1");
@@ -35,7 +38,7 @@ public sealed class SsoSessionsController : ControllerBase
     public async Task<IActionResult> New(string? returnUrl)
     {
         var options = GetOptions();
-        if (options is null)
+        if (options is null || !_tenant.IsResolved || _tenant.TenantId == Guid.Empty)
         {
             return StatusCode(503, "External sign-in is not configured.");
         }
@@ -55,7 +58,7 @@ public sealed class SsoSessionsController : ControllerBase
 
         var verifier = RandomToken(64);
         var nonce = RandomToken(32);
-        var state = new LoginState(nonce, verifier, LocalOrHome(returnUrl), DateTimeOffset.UtcNow);
+        var state = new LoginState(nonce, verifier, LocalOrHome(returnUrl), DateTimeOffset.UtcNow, _tenant.TenantId, options);
         Response.Cookies.Append(StateCookie, _protector.Protect(JsonSerializer.Serialize(state)), new CookieOptions
         {
             HttpOnly = true,
@@ -85,7 +88,8 @@ public sealed class SsoSessionsController : ControllerBase
         var options = GetOptions();
         var loginState = ReadState();
         Response.Cookies.Delete(StateCookie, new CookieOptions { Path = "/auth/sso" });
-        if (options is null || loginState is null || string.IsNullOrWhiteSpace(code)
+        if (options is null || loginState is null || !_tenant.IsResolved || loginState.TenantId != _tenant.TenantId
+            || loginState.Options != options || string.IsNullOrWhiteSpace(code)
             || !SecureEquals(loginState.Nonce, state) || loginState.IssuedAt < DateTimeOffset.UtcNow.AddMinutes(-10))
         {
             return LoginError("External sign-in expired. Please try again.");
@@ -182,5 +186,5 @@ public sealed class SsoSessionsController : ControllerBase
         && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\")
             ? returnUrl : "/";
 
-    private sealed record LoginState(string Nonce, string Verifier, string ReturnUrl, DateTimeOffset IssuedAt);
+    private sealed record LoginState(string Nonce, string Verifier, string ReturnUrl, DateTimeOffset IssuedAt, Guid TenantId, SsoOptions Options);
 }

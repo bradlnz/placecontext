@@ -1,3 +1,5 @@
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 
@@ -8,4 +10,7 @@ namespace PlaceContext.Application.Features;
 /// decisions and context so the skill starts grounded in what PlaceContext knows.
 /// </summary>
 public sealed record ScaffoldSkillCommand(Guid ProjectId, string SkillName, string? Description)
-    : ICommand<SkillScaffoldView>;
+    : ICommand<SkillScaffoldView>, IRequiresPermission
+{
+    public string RequiredPermission => Permission.SettingsManage;
+}

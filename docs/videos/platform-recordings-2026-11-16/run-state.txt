@@ -1,0 +1,89 @@
+placecontext
+default
+Dashboard
+Workflows
+Infrastructure
+Data
+Artifacts
+Observability
+Help
+Settings
+OP
+Operator
+Owner
+Dashboard
+Search context, files, changes
+/
+0 running
+Northstar · Enquiry routing
+Agent
+Master agent
+Triage
+Routing Reviewer
+Follow-up Planner
+Handoff Writer
+Workflows
+How can I help?
+
+Explore your project, create a chart, or get help with a workflow.
+
+Enter to send. Shift and Enter for a new line.
+Uses the CLI sign-in on this host; inference runs remotely.
+Website enquiry → right person
+Failed
+Open full run 
+
+Started 2026-11-16 14:04 · 1s
+
+1
+Validate website enquiry
+Failed
+2
+Sub-workflow · Triage - classify the question
+Skipped
+3
+Sub-workflow · Routing Review · agent + AI verification
+Skipped
+4
+Check routing and review
+Skipped
+5
+Browser workspace
+Skipped
+6
+Query data
+Skipped
+7
+Verify saved assignment
+Skipped
+8
+Parallel if gates
+Skipped
+Step 1 · Validate website enquiry
+
+AI safety review blocked execution: potentially dangerous behavior or insufficient evidence (safety confidence 67%; requires 90%).
+
+[04:04:06 UTC] [execution_blocked] AI safety review blocked execution: potentially dangerous behavior or insufficient evidence (safety confidence 67%; requires 90%).
+[error] AI safety review blocked execution: potentially dangerous behavior or insufficient evidence (safety confidence 67%; requires 90%).
+[status] Failed
+Scroll up to pause following output.
+Jump to latest ↓
+Log events
+Saved logs
+ Download logs
+Wrap lines
+All streams
+shard 0
+All levels
+TRACE
+DEBUG
+INFO
+WARN
+ERROR
+FATAL
+#	Timestamp	Stream	Level	Message
+1	—	shard 0	—	AI safety review blocked execution: potentially dangerous behavior or insufficient evidence (safety confidence 67%; requires 90%).
+Showing 1 of 1 matching events · 1 loaded
+Newest 100 matches; messages shortened to 2,000 characters. Download logs for full text.
+Updated 04:04:06 UTC
+Final workflow output

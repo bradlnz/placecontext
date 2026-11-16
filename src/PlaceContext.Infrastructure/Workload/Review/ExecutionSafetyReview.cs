@@ -18,29 +18,37 @@ internal static class ExecutionSafetyReview
         probability that this execution is safe. Approval requires at least 0.90 confidence.
         """;
 
-    public static async Task RequireAsync(IOutcomeReviewer? reviewer, object evidence, Guid? projectId, CancellationToken ct)
+    public static async Task RequireAsync(IOutcomeReviewer? reviewer, object evidence, Guid? projectId, CancellationToken ct, IExecutionApprovals? approvals = null, Guid? runId = null)
     {
         ct.ThrowIfCancellationRequested();
-        if (reviewer is null)
-            throw new ExecutionSafetyException("AI safety review is not configured. Execution was blocked.");
         var state = JsonSerializer.Serialize(evidence);
         if (state.Length > 65_536)
             throw new ExecutionSafetyException("Execution was blocked: safety review evidence exceeds 65,536 characters. Reduce the code or input; evidence is never truncated.");
-        JsonObject response;
         try
         {
-            response = await reviewer.EvaluateAsync(Question, state, ct, projectId);
+            if (reviewer is null) throw new ExecutionSafetyException("AI safety review is not configured.");
+            JsonObject response;
+            try
+            {
+                response = await reviewer.EvaluateAsync(Question, state, ct, projectId);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or JsonException or OperationCanceledException)
+            {
+                throw new ExecutionSafetyException("AI safety review could not complete. Execution was blocked. " + ex.Message, ex);
+            }
+            ct.ThrowIfCancellationRequested();
+            if (response["noul"] is not JsonValue value || !value.TryGetValue<double>(out var confidence)
+                || !double.IsFinite(confidence) || confidence is < 0 or > 1)
+                throw new ExecutionSafetyException("AI safety review returned an invalid decision. Execution was blocked.");
+            if (confidence < 0.90)
+                throw new ExecutionSafetyException($"AI safety review flagged potentially dangerous behavior or insufficient evidence (safety confidence {confidence:P0}; requires 90%).");
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or JsonException or OperationCanceledException)
+        catch (ExecutionSafetyException ex) when (approvals is not null && projectId is { } project && project != Guid.Empty && runId is { } run && run != Guid.Empty)
         {
-            throw new ExecutionSafetyException("AI safety review could not complete. Execution was blocked. " + ex.Message, ex);
+            if (!await approvals.RequestAsync(projectId!.Value, runId!.Value, ex.Message, state, ct))
+                throw new ExecutionSafetyException("Execution was not approved: the request was rejected or expired.");
+            ct.ThrowIfCancellationRequested();
         }
-        ct.ThrowIfCancellationRequested();
-        if (response["noul"] is not JsonValue value || !value.TryGetValue<double>(out var confidence)
-            || !double.IsFinite(confidence) || confidence is < 0 or > 1)
-            throw new ExecutionSafetyException("AI safety review returned an invalid decision. Execution was blocked.");
-        if (confidence < 0.90)
-            throw new ExecutionSafetyException($"AI safety review blocked execution: potentially dangerous behavior or insufficient evidence (safety confidence {confidence:P0}; requires 90%).");
     }
 }

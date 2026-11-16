@@ -1,0 +1,24 @@
+{
+  "checkedAt": "2026-11-16T04:22:18.710Z",
+  "browser": "Chromium",
+  "duration": 90,
+  "width": 1920,
+  "height": 1080,
+  "playback": true,
+  "seeks": [
+    1.5,
+    4,
+    8,
+    20,
+    27,
+    39,
+    57,
+    64,
+    71,
+    79,
+    85
+  ],
+  "captions": 17,
+  "chapterNavigation": true,
+  "mobileOverflow": false
+}

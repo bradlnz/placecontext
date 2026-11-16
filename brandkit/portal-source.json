@@ -1,0 +1,9 @@
+{
+  "source_summary": "User requested the same simple outline mark as the portal for the website. Preserve that official asset while new alternatives are reviewed.",
+  "logo": {
+    "name": "Existing portal outline",
+    "asset": {
+      "path": "/home/brad/code/devcontext/src/PlaceContext.Host/wwwroot/images/corgi-outline.png"
+    }
+  }
+}

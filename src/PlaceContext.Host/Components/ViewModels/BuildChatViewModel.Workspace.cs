@@ -10,6 +10,10 @@ public sealed partial class BuildChatViewModel
 {
     public sealed record WorkspaceItem(Guid Id, string Kind, string Name, Guid? WorkflowId = null, Guid? TrackingId = null, Guid? RunId = null);
     public ChainRunView? PreviewRun { get; private set; }
+    public bool ShowPreviewResult { get; private set; }
+    private Guid? _resultOpenedForRun;
+    public void ShowRunResult() { ShowPreviewResult = true; NotifyStateChanged(); }
+    public void ShowRunSteps() { ShowPreviewResult = false; NotifyStateChanged(); }
     public JobChainSubmission? PreviewSubmission { get; private set; }
     public string? PreviewRunStatus => PreviewRun?.Status ?? PreviewSubmission?.Status;
     private CancellationTokenSource? _previewPolling;
@@ -30,6 +34,7 @@ public sealed partial class BuildChatViewModel
         {
             return;
         }
+        ShowPreviewResult = false;
         _previewStepIndex = step.Index;
         _previewChildRunId = null;
         PreviewStepRun = null;
@@ -367,6 +372,11 @@ public sealed partial class BuildChatViewModel
                 return;
             }
             PreviewRun = run;
+            if (run?.FinishedAt is not null && _resultOpenedForRun != run.Id)
+            {
+                ShowPreviewResult = true;
+                _resultOpenedForRun = run.Id;
+            }
             CanRespondToWorkflow = canRespond;
             SyncHumanInput();
             PreviewSubmission = receipt;
@@ -428,6 +438,8 @@ public sealed partial class BuildChatViewModel
         _previewPolling?.Cancel();
         _previewPolling?.Dispose();
         _previewPolling = null;
+        ShowPreviewResult = false;
+        _resultOpenedForRun = null;
         PreviewRun = null;
         SyncHumanInput();
         CanRespondToWorkflow = SubmittingHumanInput = false;

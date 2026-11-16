@@ -1,0 +1,231 @@
+{
+  "capturedAt": "2026-11-16T04:34:58.933Z",
+  "project": "e8ca3d36-30de-44b4-bbe3-f65d210c0f95",
+  "workflow": "e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+  "width": 1600,
+  "height": 900,
+  "source": "See each scene source",
+  "scenes": [
+    {
+      "id": "overview",
+      "start": 3.933,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 3.933
+        },
+        {
+          "label": "branches",
+          "seconds": 10.602
+        }
+      ],
+      "error": null,
+      "end": 13.397,
+      "duration": 9.464,
+      "source": "raw/workflow-modals.webm"
+    },
+    {
+      "id": "code",
+      "start": 11.995,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 11.995
+        },
+        {
+          "label": "opened",
+          "seconds": 14.618
+        },
+        {
+          "label": "scrolled",
+          "seconds": 22.449
+        }
+      ],
+      "error": null,
+      "end": 23.725,
+      "duration": 11.730000000000002,
+      "source": "raw/workflow-code.webm"
+    },
+    {
+      "id": "conditions",
+      "start": 36.766,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 36.767
+        },
+        {
+          "label": "logic",
+          "seconds": 39.868
+        },
+        {
+          "label": "inspector",
+          "seconds": 41.209
+        },
+        {
+          "label": "false-path",
+          "seconds": 47.774
+        }
+      ],
+      "error": null,
+      "end": 48.776,
+      "duration": 12.010000000000005,
+      "source": "raw/workflow-modals.webm"
+    },
+    {
+      "id": "ai-if",
+      "start": 52.286,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 52.286
+        },
+        {
+          "label": "question",
+          "seconds": 56.54
+        }
+      ],
+      "error": null,
+      "end": 63.884,
+      "duration": 11.597999999999999,
+      "source": "raw/workflow-modals.webm"
+    },
+    {
+      "id": "subworkflow",
+      "start": 66.815,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 66.815
+        },
+        {
+          "label": "opened",
+          "seconds": 69.124
+        }
+      ],
+      "error": null,
+      "end": 75.764,
+      "duration": 8.948999999999998,
+      "source": "raw/workflow-modals.webm"
+    },
+    {
+      "id": "ai-review",
+      "start": 78.674,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/c3c005b8-a768-578a-9d84-e0625a1b2ffe",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 78.674
+        },
+        {
+          "label": "opened",
+          "seconds": 81.431
+        }
+      ],
+      "error": null,
+      "end": 89.313,
+      "duration": 10.638999999999996,
+      "source": "raw/workflow-modals.webm"
+    },
+    {
+      "id": "browser",
+      "start": 6.364,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 6.364
+        },
+        {
+          "label": "opened",
+          "seconds": 9.259
+        }
+      ],
+      "error": null,
+      "end": 16.422,
+      "duration": 10.058,
+      "source": "raw/workflow-pickups.webm"
+    },
+    {
+      "id": "parallel",
+      "start": 19.128,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 19.128
+        },
+        {
+          "label": "opened",
+          "seconds": 21.642
+        }
+      ],
+      "error": null,
+      "end": 27.78,
+      "duration": 8.652000000000001,
+      "source": "raw/workflow-pickups.webm"
+    },
+    {
+      "id": "limits",
+      "start": 30.256,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 30.256
+        },
+        {
+          "label": "opened",
+          "seconds": 32.507
+        }
+      ],
+      "error": null,
+      "end": 37.624,
+      "duration": 7.368000000000002,
+      "source": "raw/workflow-pickups.webm"
+    },
+    {
+      "id": "yaml",
+      "start": 40.453,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 40.453
+        },
+        {
+          "label": "opened",
+          "seconds": 43.983
+        }
+      ],
+      "error": null,
+      "end": 49.173,
+      "duration": 8.719999999999999,
+      "source": "raw/workflow-pickups.webm"
+    },
+    {
+      "id": "return-canvas",
+      "start": 50.983,
+      "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6",
+      "events": [
+        {
+          "label": "before",
+          "seconds": 50.983
+        },
+        {
+          "label": "complete",
+          "seconds": 56.493
+        }
+      ],
+      "error": null,
+      "end": 58.214,
+      "duration": 7.231000000000002,
+      "source": "raw/workflow-pickups.webm"
+    }
+  ]
+}

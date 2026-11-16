@@ -961,8 +961,9 @@ public sealed partial class JobChainsViewModel
         NotifyStateChanged();
     }
 
-    public void OpenStageNodePicker(int stageIndex)
+    public async Task OpenStageNodePicker(int stageIndex)
     {
+        await RefreshJevAvailabilityAsync();
         StageNodePickerIndex = stageIndex;
         ShowStageNodePicker = true;
         NotifyStateChanged();
@@ -990,6 +991,11 @@ public sealed partial class JobChainsViewModel
 
     public async Task ChooseStageNode(string type)
     {
+        if (type is "automatic" or ScoringGateChainAction.ActionType or VirtualMachineChainAction.ActionType)
+        {
+            await RefreshJevAvailabilityAsync();
+            if (!JevAvailable) { Message = JevSetupMessage; NotifyStateChanged(); return; }
+        }
         ShowStageNodePicker = false;
         switch (type)
         {
@@ -1086,7 +1092,7 @@ public sealed partial class JobChainsViewModel
         GateEditorError = null;
         if (IsAutomaticGateEditor && (string.IsNullOrWhiteSpace(GateReviewQuestion) || GateReviewQuestion.Length > 4000))
         {
-            GateEditorError = "Enter a Determine question of up to 4,000 characters.";
+            GateEditorError = "Enter a Review question of up to 4,000 characters.";
             NotifyStateChanged();
             return;
         }

@@ -1,0 +1,98 @@
+[
+  {
+    "id": "dashboard",
+    "start": 1.881,
+    "duration": 6,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:46:41.322Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+  },
+  {
+    "id": "picker",
+    "start": 8.595,
+    "duration": 4,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:46:46.038Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard"
+  },
+  {
+    "id": "canvas",
+    "start": 14.009,
+    "duration": 7,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:46:54.451Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+  },
+  {
+    "id": "options",
+    "start": 22.453,
+    "duration": 5,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:47:00.896Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+  },
+  {
+    "id": "review",
+    "start": 29.472,
+    "duration": 5,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:47:07.914Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+  },
+  {
+    "id": "limits",
+    "start": 36.076,
+    "duration": 4,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:47:13.517Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+  },
+  {
+    "id": "parallel",
+    "start": 41.88,
+    "duration": 5,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:47:20.321Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6"
+  },
+  {
+    "id": "markup",
+    "start": 50.194,
+    "duration": 5,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:47:28.634Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6/markup"
+  },
+  {
+    "id": "schedules",
+    "start": 56.369,
+    "duration": 4,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:47:33.809Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/e1bdf465-a00e-48f1-9315-c57e74ade9d6/schedules"
+  },
+  {
+    "id": "agents",
+    "start": 61.368,
+    "duration": 5,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:47:39.808Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/agents"
+  },
+  {
+    "id": "result",
+    "start": 67.835,
+    "duration": 5,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:47:46.276Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/b703ff4c-5e30-4c88-a18e-62e9a792895b/submission/fedc15a2-b396-4a51-907c-14618548da4f"
+  },
+  {
+    "id": "replay",
+    "start": 73.831,
+    "duration": 10,
+    "source": "current.webm",
+    "capturedAt": "2026-11-16T03:47:57.273Z",
+    "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/b703ff4c-5e30-4c88-a18e-62e9a792895b/submission/fedc15a2-b396-4a51-907c-14618548da4f"
+  }
+]

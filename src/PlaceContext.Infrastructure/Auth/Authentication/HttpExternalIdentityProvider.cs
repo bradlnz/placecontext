@@ -19,11 +19,12 @@ public sealed class HttpExternalIdentityProvider(IHttpClientFactory _httpClients
         }
 
         var discoveryUrl = $"{options.BaseUri.ToString().TrimEnd('/')}/.well-known/openid-configuration";
-        using var response = await _httpClients.CreateClient().GetAsync(discoveryUrl, ct);
+        using var response = await _httpClients.CreateClient("external-identity").GetAsync(discoveryUrl, ct);
         response.EnsureSuccessStatusCode();
         var metadata = JsonSerializer.Deserialize<OpenIdMetadata>(
             await response.Content.ReadAsStringAsync(ct));
         if (metadata is null
+            || !string.Equals(metadata.Issuer?.TrimEnd('/'), options.BaseUri.AbsoluteUri.TrimEnd('/'), StringComparison.Ordinal)
             || !IsHttpsUrl(metadata.AuthorizationEndpoint)
             || !IsHttpsUrl(metadata.TokenEndpoint)
             || !IsHttpsUrl(metadata.UserInfoEndpoint))
@@ -42,7 +43,7 @@ public sealed class HttpExternalIdentityProvider(IHttpClientFactory _httpClients
 
     public async Task<ExternalIdentity> ExchangeAsync(SsoOptions options, string code, string verifier, CancellationToken ct)
     {
-        using var client = _httpClients.CreateClient();
+        using var client = _httpClients.CreateClient("external-identity");
         var endpoints = await ResolveEndpointsAsync(options, ct);
         using var tokenResponse = await client.PostAsync(endpoints.TokenEndpoint,
             new FormUrlEncodedContent(new Dictionary<string, string>
@@ -67,13 +68,14 @@ public sealed class HttpExternalIdentityProvider(IHttpClientFactory _httpClients
         var identity = JsonSerializer.Deserialize<SsoIdentity>(
             await identityResponse.Content.ReadAsStringAsync(ct));
         if (identity is null || string.IsNullOrWhiteSpace(identity.Subject)
-            || string.IsNullOrWhiteSpace(identity.Email))
+            || string.IsNullOrWhiteSpace(identity.Email) || identity.EmailVerified != true)
         {
-            throw new JsonException("The identity response is incomplete.");
+            throw new JsonException("The identity response must include a verified email address.");
         }
         return new ExternalIdentity(identity.Subject, identity.Email, identity.Name, identity.Role);
     }
     private sealed record OpenIdMetadata(
+        [property: JsonPropertyName("issuer")] string Issuer,
         [property: JsonPropertyName("authorization_endpoint")] string AuthorizationEndpoint,
         [property: JsonPropertyName("token_endpoint")] string TokenEndpoint,
         [property: JsonPropertyName("userinfo_endpoint")] string UserInfoEndpoint);
@@ -81,6 +83,7 @@ public sealed class HttpExternalIdentityProvider(IHttpClientFactory _httpClients
     private sealed record SsoIdentity(
         [property: JsonPropertyName("sub")] string Subject,
         [property: JsonPropertyName("email")] string Email,
+        [property: JsonPropertyName("email_verified")] bool? EmailVerified,
         [property: JsonPropertyName("name")] string? Name,
         [property: JsonPropertyName("role")] string? Role);
 }

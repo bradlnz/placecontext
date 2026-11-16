@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-11-16T03:56:13.340Z",
+  "checks": [
+    "Desktop: playback, seeking, 16 captions, description, pause/resume, offscreen pause, no JS errors",
+    "Responsive: 768, 390, 320 px; no horizontal overflow",
+    "Reduced motion: poster without downloading video, explicit play works",
+    "Save-Data: poster without downloading video",
+    "Shared portal outline logo on docs"
+  ]
+}

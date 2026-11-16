@@ -1,0 +1,39 @@
+[
+  {
+    "name": "07-triage-execution",
+    "startedAt": "2026-11-16T04:07:35.481Z",
+    "events": [
+      {
+        "label": "overview",
+        "seconds": 3.109,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/ff9062bf-b448-5637-8ccc-5c49988eea51"
+      },
+      {
+        "label": "input",
+        "seconds": 10.677,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/workflows/ff9062bf-b448-5637-8ccc-5c49988eea51"
+      },
+      {
+        "label": "submitted",
+        "seconds": 15.081,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/bddb9379-8fe9-405b-8894-88d85ee0b7af/submission/5b59ae51-9563-44b7-b37e-9f4c7fedf78e"
+      },
+      {
+        "label": "progress-0",
+        "seconds": 18.213,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/bddb9379-8fe9-405b-8894-88d85ee0b7af/submission/5b59ae51-9563-44b7-b37e-9f4c7fedf78e"
+      },
+      {
+        "label": "progress-6",
+        "seconds": 37.077,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/bddb9379-8fe9-405b-8894-88d85ee0b7af/submission/5b59ae51-9563-44b7-b37e-9f4c7fedf78e"
+      },
+      {
+        "label": "completed",
+        "seconds": 37.678,
+        "url": "http://localhost:7700/project/e8ca3d36-30de-44b4-bbe3-f65d210c0f95/dashboard/runs/bddb9379-8fe9-405b-8894-88d85ee0b7af/submission/5b59ae51-9563-44b7-b37e-9f4c7fedf78e"
+      }
+    ],
+    "error": null
+  }
+]

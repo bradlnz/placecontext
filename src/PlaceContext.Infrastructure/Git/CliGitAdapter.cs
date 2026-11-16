@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+using PlaceContext.Application.Billing;
 using System.Diagnostics;
 using PlaceContext.Application.Projects;
 using PlaceContext.Domain.ValueObjects;
@@ -9,11 +11,11 @@ namespace PlaceContext.Infrastructure.Git;
 /// a native dependency on this machine; the port keeps it swappable. Commits are scoped to exactly
 /// the touched files.
 /// </summary>
-public sealed class CliGitAdapter : IGitPort
+public sealed class CliGitAdapter(IOptions<RunBillingDeploymentOptions>? hosting = null) : IGitPort
 {
     public bool IsRepository(ProjectPath path)
-        => Directory.Exists(Path.Combine(path.Value, ".git"))
-           || Run(path.Value, "rev-parse", "--is-inside-work-tree").ExitCode == 0;
+        => hosting?.Value.ManagedHosting != true && (Directory.Exists(Path.Combine(path.Value, ".git"))
+           || Run(path.Value, "rev-parse", "--is-inside-work-tree").ExitCode == 0);
 
     public async Task<CommitSha?> CommitScopedAsync(
         ProjectPath path, IReadOnlyList<string> files, string message, Author author, CancellationToken ct = default)
@@ -43,6 +45,7 @@ public sealed class CliGitAdapter : IGitPort
 
     public Task<DateTimeOffset?> GetFileLastModifiedAsync(ProjectPath path, string relativeFile, CancellationToken ct = default)
     {
+        if (hosting?.Value.ManagedHosting == true) return Task.FromResult<DateTimeOffset?>(null);
         var r = Run(path.Value, "log", "-1", "--format=%cI", "--", relativeFile);
         if (r.ExitCode != 0 || string.IsNullOrWhiteSpace(r.Stdout))
         {

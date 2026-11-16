@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "brand_context": {
+    "name": "PlaceContext",
+    "offering": "Open-source agentic workflow platform supporting critical workflows, with paid support",
+    "audience": "Teams building and operating critical workflows"
+  },
+  "requested_outputs": [
+    "Three original editable SVG logo concepts for selection"
+  ],
+  "authoritative_assets": {
+    "logo": {
+      "source": "/home/brad/code/devcontext/brandkit/placecontext-context.svg",
+      "status": "fixed",
+      "origin": "brandkit_generated",
+      "upload_or_job_id": "0e4a82d8-dcfb-4693-8c5e-342abab2bd1e"
+    }
+  },
+  "palette": {
+    "source": "website/assets/landing.css",
+    "foreground": "#FFFFFF",
+    "background": "#000000",
+    "gradients": []
+  },
+  "typography": {
+    "status": "not_applicable",
+    "reason": "Symbol-only logo concepts"
+  },
+  "shape_language": {
+    "status": "proposed",
+    "forms": [
+      "simple lines",
+      "consistent stroke weight",
+      "open negative space"
+    ]
+  },
+  "composition": {
+    "centered": true,
+    "clear_space": "25% of canvas on every side"
+  },
+  "avoid": [
+    "gradients",
+    "shadows",
+    "glow",
+    "3D",
+    "stock sparkles",
+    "shields",
+    "rocket silhouettes",
+    "tiny nodes",
+    "readable words"
+  ],
+  "reference_preferences": [
+    "restrained aerospace styling",
+    "simple portal line mark"
+  ]
+}

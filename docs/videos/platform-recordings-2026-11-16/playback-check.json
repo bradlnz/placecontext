@@ -1,0 +1,55 @@
+{
+  "checkedAt": "2026-11-16T04:10:45.567Z",
+  "browser": "Chromium",
+  "results": [
+    {
+      "file": "clips/01-dashboard.mp4",
+      "currentTime": 0.663993,
+      "width": 1600,
+      "height": 900,
+      "error": null
+    },
+    {
+      "file": "clips/02-chat.mp4",
+      "currentTime": 0.678591,
+      "width": 1600,
+      "height": 900,
+      "error": null
+    },
+    {
+      "file": "clips/03-data.mp4",
+      "currentTime": 0.629193,
+      "width": 1600,
+      "height": 900,
+      "error": null
+    },
+    {
+      "file": "clips/04-workflow-editor.mp4",
+      "currentTime": 0.607394,
+      "width": 1600,
+      "height": 900,
+      "error": null
+    },
+    {
+      "file": "clips/05-fresh-workflow-run.mp4",
+      "currentTime": 0.632273,
+      "width": 1600,
+      "height": 900,
+      "error": null
+    },
+    {
+      "file": "clips/06-agents.mp4",
+      "currentTime": 0.669676,
+      "width": 1600,
+      "height": 900,
+      "error": null
+    },
+    {
+      "file": "clips/07-triage-execution.mp4",
+      "currentTime": 0.621556,
+      "width": 1600,
+      "height": 900,
+      "error": null
+    }
+  ]
+}

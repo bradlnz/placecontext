@@ -29,6 +29,9 @@ public sealed partial class JobChainsViewModel : PageViewModel
     private readonly IProjectAgentStore? _projectAgents;
     private readonly IBuildChatStore? _dashboardStore;
     private IDisposable? _operationSubscription;
+    private readonly IModelCredentialsResolver? _reviewCredentials;
+    public bool JevAvailable { get; private set; }
+    public const string JevSetupMessage = "Connect Jev by adding TYPESAFE_API_KEY to this project’s vault or the server configuration.";
 
     public JobChainsViewModel(
         PlaceContextService svc,
@@ -39,10 +42,11 @@ public sealed partial class JobChainsViewModel : PageViewModel
         IVirtualMachineEnvironmentCatalog? qemuCatalog = null,
         ICurrentTenant? tenant = null,
         IVirtualMachineLoginStore? qemuLogins = null,
-        IOptions<RunBillingDeploymentOptions>? hosting = null, IModelConnections? modelConnections = null, IProjectAgentStore? projectAgents = null, IBuildChatStore? dashboardStore = null
+        IOptions<RunBillingDeploymentOptions>? hosting = null, IModelConnections? modelConnections = null, IProjectAgentStore? projectAgents = null, IBuildChatStore? dashboardStore = null, IModelCredentialsResolver? reviewCredentials = null
     )
     {
         _svc = svc;
+        _reviewCredentials = reviewCredentials;
         _modelConnections = modelConnections;
         _projectAgents = projectAgents;
         _dashboardStore = dashboardStore;
@@ -180,6 +184,7 @@ public sealed partial class JobChainsViewModel : PageViewModel
             Jobs = await _svc.ListJobsAsync(ProjectId);
             CanSendEmailAction = await _permissions.HasAsync(Permission.EmailSend);
             CanSendSmsAction = await _permissions.HasAsync(Permission.SmsSend);
+            await RefreshJevAvailabilityAsync();
         }
         catch (Exception ex)
         {
@@ -190,6 +195,19 @@ public sealed partial class JobChainsViewModel : PageViewModel
             Loading = false;
             NotifyStateChanged();
         }
+    }
+
+    private async Task RefreshJevAvailabilityAsync()
+    {
+        JevAvailable = false;
+        if (_reviewCredentials is null) return;
+        try
+        {
+            var credentials = await _reviewCredentials.ResolveAsync(ProjectId);
+            JevAvailable = !string.IsNullOrWhiteSpace(credentials.ApiKey)
+                && !credentials.ApiKey.Any(c => char.IsWhiteSpace(c) || char.IsControl(c));
+        }
+        catch (Exception) { /* The picker stays disabled when configuration cannot be read. */ }
     }
 
     private void OnOpsChanged()

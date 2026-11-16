@@ -1,0 +1,110 @@
+[
+  {
+    "id": "intro",
+    "start": 0,
+    "end": 4,
+    "title": "PlaceContext",
+    "description": "Critical workflows. People in control.",
+    "source": "dist/demos/workflow-film-2026-11-16/motion-original.mp4",
+    "sourceStart": 0
+  },
+  {
+    "id": "overview",
+    "start": 4,
+    "end": 9,
+    "title": "Build critical workflows.",
+    "description": "Website enquiry \u2192 right person \u00b7 real workflow editor",
+    "source": "dist/demos/workflow-film-2026-11-16/raw/workflow-modals.webm",
+    "sourceStart": 3.9829999999999997
+  },
+  {
+    "id": "code",
+    "start": 9,
+    "end": 19,
+    "title": "Open the code behind each step.",
+    "description": "Inspect the validation job directly from the canvas.",
+    "source": "dist/demos/workflow-film-2026-11-16/raw/workflow-code.webm",
+    "sourceStart": 12.045
+  },
+  {
+    "id": "conditions",
+    "start": 19,
+    "end": 28,
+    "title": "Make every condition explicit.",
+    "description": "Inspect AND conditions, payload fields and decision thresholds.",
+    "source": "dist/demos/workflow-film-2026-11-16/raw/workflow-modals.webm",
+    "sourceStart": 36.815999999999995
+  },
+  {
+    "id": "ai-if",
+    "start": 28,
+    "end": 36,
+    "title": "Review the evidence with AI.",
+    "description": "Open the AI Review question that selects the True or False path.",
+    "source": "dist/demos/workflow-film-2026-11-16/raw/workflow-modals.webm",
+    "sourceStart": 52.336
+  },
+  {
+    "id": "subworkflow",
+    "start": 36,
+    "end": 40,
+    "title": "Compose reusable workflows.",
+    "description": "Open the Routing Review sub-workflow and inspect its stages.",
+    "source": "dist/demos/workflow-film-2026-11-16/raw/workflow-modals.webm",
+    "sourceStart": 66.865
+  },
+  {
+    "id": "ai-review",
+    "start": 40,
+    "end": 48,
+    "title": "Configure an independent review.",
+    "description": "Inspect the AI evidence check and its review instructions.",
+    "source": "dist/demos/workflow-film-2026-11-16/raw/workflow-modals.webm",
+    "sourceStart": 78.724
+  },
+  {
+    "id": "parallel",
+    "start": 48,
+    "end": 54,
+    "title": "Coordinate parallel branches.",
+    "description": "Inspect each branch\u2019s condition and the workflows it starts.",
+    "source": "dist/demos/workflow-film-2026-11-16/raw/workflow-pickups.webm",
+    "sourceStart": 19.178
+  },
+  {
+    "id": "browser",
+    "start": 54,
+    "end": 59,
+    "title": "Define browser actions.",
+    "description": "Review the workspace, instructions and execution settings.",
+    "source": "dist/demos/workflow-film-2026-11-16/raw/workflow-pickups.webm",
+    "sourceStart": 6.414
+  },
+  {
+    "id": "limits",
+    "start": 59,
+    "end": 63,
+    "title": "Put bounds on execution.",
+    "description": "Inspect retries, delay and timeout for a workflow step.",
+    "source": "dist/demos/workflow-film-2026-11-16/raw/workflow-pickups.webm",
+    "sourceStart": 30.306
+  },
+  {
+    "id": "yaml",
+    "start": 63,
+    "end": 67,
+    "title": "Keep the definition visible.",
+    "description": "Open the workflow YAML alongside the visual editor.",
+    "source": "dist/demos/workflow-film-2026-11-16/raw/workflow-pickups.webm",
+    "sourceStart": 40.503
+  },
+  {
+    "id": "outro",
+    "start": 67,
+    "end": 72,
+    "title": "PlaceContext",
+    "description": "Open source. Self-hosted. Paid support.",
+    "source": "dist/demos/workflow-film-2026-11-16/motion-original.mp4",
+    "sourceStart": 5
+  }
+]

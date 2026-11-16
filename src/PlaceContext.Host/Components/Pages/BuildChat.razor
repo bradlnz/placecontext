@@ -310,6 +310,7 @@
                             @if (Vm.PreviewRun is { } run)
                             {
                                 <p class="preview-description">Started @Vm.Presentation.DateTime(run.StartedAt) · @(run.FinishedAt is { } finished ? Vm.Presentation.Duration(run.StartedAt, finished) : "Updates automatically")</p>
+                                <ExecutionApprovalPanel @key="run.Id" ProjectId="run.ProjectId" RunIds="@(new[] { run.Id }.Concat(run.Steps.Select(s => s.RunId).OfType<Guid>()).ToArray())" />
                                 @if (Vm.RunArtifactsError is { } artifactsError) { <p role="alert">@artifactsError</p> }
                                 @if (Vm.PreviewRunArtifacts.Count > 0)
                                 {
@@ -324,6 +325,27 @@
                                 {
                                     <div class="preview-run-notice" role="status"><strong>Input needed</strong><p>@request.Instructions</p><a href="@Vm.PreviewEditorUrl">Respond in the run view</a></div>
                                 }
+                                @if (run.FinishedAt is not null)
+                                {
+                                    <div class="approval-actions">
+                                        <button class="dcbtn" aria-pressed="@Vm.ShowPreviewResult" @onclick="Vm.ShowRunResult">Result</button>
+                                        <button class="dcbtn" aria-pressed="@(!Vm.ShowPreviewResult)" @onclick="Vm.ShowRunSteps">Steps and logs</button>
+                                    </div>
+                                }
+                                @if (Vm.ShowPreviewResult)
+                                {
+                                    <section class="preview-step-output" aria-label="Workflow result" role="region">
+                                        <h3>Workflow result · @run.Status</h3>
+                                        @foreach (var failed in run.Steps.Where(step => step.Error is not null))
+                                        { <p role="alert"><strong>@failed.JobName:</strong> @failed.Error</p> }
+                                        @if (run.FinalOutput is { Length: > 0 } result)
+                                        { <RunOutput Value="@Vm.Presentation.Json(result)" Label="Final workflow output" /> }
+                                        else { <p>No final output was recorded.</p> }
+                                        <p class="preview-description">@run.Steps.Count(step => step.Status == "Succeeded") of @run.Steps.Count steps succeeded. Open Steps and logs for execution details.</p>
+                                    </section>
+                                }
+                                else
+                                {
                                 <nav class="preview-run-steps" aria-label="Workflow run steps">
                                     @foreach (var step in run.Steps)
                                     {
@@ -360,7 +382,8 @@
                                         { <p class="preview-description">@(selected.Status is "Pending" or "Running" ? "Waiting for step output… Updates appear here as the step runs." : "No output was recorded for this step.")</p> }
                                     </section>
                                 }
-                                @if (run.FinalOutput is { Length: > 0 } finalOutput)
+                                }
+                                @if (!Vm.ShowPreviewResult && run.FinalOutput is { Length: > 0 } finalOutput)
                                 { <details class="job-source"><summary>@(run.FinishedAt is null ? "Current workflow output" : "Final workflow output")</summary><RunOutput Value="@Vm.Presentation.Json(finalOutput)" /></details> }
                             }
                             else if (Vm.PreviewSubmission is { } receipt)

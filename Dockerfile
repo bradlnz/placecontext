@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 # QEMU images are x86-64, independently of the application host architecture.
-FROM --platform=linux/amd64 rust:1.98-bookworm AS qemu-agent
+FROM --platform=linux/amd64 rust:1.98-bookworm@sha256:93ce27a88655056a51dbdd8f5f2d7ddc071c7b0070fb288a37b5a285fc83971e AS qemu-agent
 WORKDIR /agent
 COPY src/PlaceContext.DesktopAgent/ ./
 RUN cargo test --locked && \
     cargo rustc --locked --release --target x86_64-unknown-linux-gnu -- -C target-feature=+crt-static
 
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.403 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.403@sha256:212fe4cb74627d5adf9817a4088906ae3edff1bd853bb27565d4b46731efe61e AS build
 ARG TARGETARCH
 WORKDIR /src
 COPY . .
@@ -15,7 +15,7 @@ RUN arch="$TARGETARCH"; [ "$arch" != amd64 ] || arch=x64; \
     dotnet restore src/PlaceContext.Host/PlaceContext.Host.csproj -a "$arch" && \
     dotnet publish src/PlaceContext.Host/PlaceContext.Host.csproj -c Release -o /app/host -a "$arch" --no-restore -p:QemuAgentPrebuilt=true
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.14 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.14@sha256:1a48394b6f29d3a32c79d9edecd4abda0ecbe8776d567dbfc4590ed6979c740c AS runtime
 LABEL org.opencontainers.image.source="https://github.com/bradlnz/placecontext" \
       org.opencontainers.image.description="Self-hosted job engine for local and distributed infrastructure" \
       org.opencontainers.image.licenses="MIT"

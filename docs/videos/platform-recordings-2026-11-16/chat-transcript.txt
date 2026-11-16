@@ -1,0 +1,21 @@
+You
+Using this project’s team data, who should handle an enquiry about a duplicate invoice payment, and why? Read the data and answer briefly. Do not modify data or run a workflow.
+Copy
+Edit
+Assistant
+ search_data_sources
+Assistant
+ list_project_tables
+Assistant
+ list_workflow_runs
+Triage · classify the question
+Open run
+Assistant
+
+Maya Chen in Billing should handle it. Her listed expertise is “Invoices, duplicate charges, payments and refunds,” directly matching the enquiry.
+
+Source: team data captured in the existing 15 November triage run. No data was modified or workflow run.
+
+Copy
+Retry
+Branch from here

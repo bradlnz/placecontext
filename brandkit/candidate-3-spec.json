@@ -1,0 +1,51 @@
+{
+  "brand_context": {
+    "name": "PlaceContext",
+    "offering": "Agentic workflow platform for critical workflows",
+    "industry": "software",
+    "positioning": "open source with paid support",
+    "audience": "workflow operators",
+    "values": [
+      "control",
+      "visible decisions",
+      "shared context"
+    ]
+  },
+  "visual_axes": {
+    "restrained_expressive": 25,
+    "geometric_organic": 25,
+    "familiar_experimental": 50
+  },
+  "candidate": {
+    "mark_type": "abstract",
+    "central_idea": "Two offset open frames define one shared space.",
+    "visual_mechanism": "Two opposing square-corner bracket outlines are vertically offset by one stroke-width; the upper-left bracket extends halfway across the top and down the left, and the lower-right bracket extends halfway across the bottom and up the right, framing a single empty central square with diagonally placed openings.",
+    "distinctive_element": "An open square silhouette with paired diagonal gaps and precisely offset endpoints.",
+    "shape_logic": "precise open geometry, ample negative space",
+    "treatment": "monoline",
+    "style_register": "restrained technical identity",
+    "user_style_directive": "simple line, no gradients",
+    "composition": "single centered mark occupying half the square canvas"
+  },
+  "palette": {
+    "count": 2,
+    "user_requested_more_than_three": false,
+    "roles": [
+      "line",
+      "background"
+    ]
+  },
+  "reference_signals": [
+    "restrained aerospace precision"
+  ],
+  "forbidden_elements": [
+    "gradients",
+    "shadows",
+    "glow",
+    "text",
+    "badges",
+    "shields",
+    "rockets",
+    "sparkles"
+  ]
+}

@@ -439,6 +439,36 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("chain_runs", (string)null);
                 });
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CloudWorkspaceRow", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Plan")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("TenantId");
+
+                    b.HasIndex("NextAttemptAt");
+
+                    b.ToTable("cloud_workspaces", (string)null);
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CommunicationProviderRow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -811,6 +841,54 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.HasIndex("Name", "OccurredAt");
 
                     b.ToTable("event_occurrences", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ExecutionApprovalRow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Evidence")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProjectId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Warning")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ProjectId", "RunId");
+
+                    b.ToTable("execution_approvals", (string)null);
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.InviteRow", b =>
@@ -1269,9 +1347,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<DateTimeOffset?>("LastFiredAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("WorkflowId").HasColumnType("uuid");
-                    b.Property<Guid?>("ScheduledBy").HasColumnType("uuid");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1283,12 +1358,18 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ScheduledBy")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("TenantId")
                         .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("WorkflowId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -2206,19 +2287,6 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("tenants", (string)null);
                 });
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CloudWorkspaceRow", b =>
-                {
-                    b.Property<Guid>("TenantId").IsConcurrencyToken().HasColumnType("uuid");
-                    b.Property<string>("Plan").IsRequired().HasColumnType("text");
-                    b.Property<string>("State").IsRequired().HasColumnType("text");
-                    b.Property<int>("Attempts").HasColumnType("integer");
-                    b.Property<DateTimeOffset>("NextAttemptAt").HasColumnType("timestamp with time zone");
-                    b.Property<Guid?>("LeaseToken").HasColumnType("uuid");
-                    b.HasKey("TenantId");
-                    b.HasIndex("NextAttemptAt");
-                    b.ToTable("cloud_workspaces", (string)null);
-                });
-
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.TenantRunPlanRow", b =>
                 {
                     b.Property<Guid>("TenantId")
@@ -2255,7 +2323,8 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.Property<string>("StripeSubscriptionId")
                         .HasColumnType("text");
 
-                    b.Property<long>("UsedAiRequests").HasColumnType("bigint");
+                    b.Property<long>("UsedAiRequests")
+                        .HasColumnType("bigint");
 
                     b.Property<long>("UsedRuns")
                         .HasColumnType("bigint");
@@ -2560,20 +2629,20 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("workflow_demo_shares", (string)null);
                 });
 
-            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CloudWorkspaceRow", b =>
-                {
-                    b.HasOne("PlaceContext.Infrastructure.Persistence.TenantRow", null)
-                        .WithOne()
-                        .HasForeignKey("PlaceContext.Infrastructure.Persistence.CloudWorkspaceRow", "TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ArtifactShareTokenRow", b =>
                 {
                     b.HasOne("PlaceContext.Infrastructure.Persistence.RunArtifactLinkRow", null)
                         .WithMany()
                         .HasForeignKey("ArtifactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CloudWorkspaceRow", b =>
+                {
+                    b.HasOne("PlaceContext.Infrastructure.Persistence.TenantRow", null)
+                        .WithOne()
+                        .HasForeignKey("PlaceContext.Infrastructure.Persistence.CloudWorkspaceRow", "TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

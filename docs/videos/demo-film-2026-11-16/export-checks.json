@@ -1,0 +1,12 @@
+{
+  "duration": 90,
+  "size": [
+    1920,
+    1080
+  ],
+  "fps": 30,
+  "video": "h264",
+  "audio": "aac",
+  "decode": "passed",
+  "bytes": 4816646
+}

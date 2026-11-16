@@ -1,3 +1,5 @@
+using PlaceContext.Application.Access;
+using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.Dtos;
 
@@ -9,4 +11,7 @@ namespace PlaceContext.Application.Features;
 /// tools — author, upload, run, monitor, collect artifacts, automate with triggers/events — so an
 /// agent can operate the platform's job system without rediscovering the contract each session.
 /// </summary>
-public sealed record SetupHermesCommand(Guid ProjectId) : ICommand<SkillScaffoldView>;
+public sealed record SetupHermesCommand(Guid ProjectId) : ICommand<SkillScaffoldView>, IRequiresPermission
+{
+    public string RequiredPermission => Permission.SettingsManage;
+}

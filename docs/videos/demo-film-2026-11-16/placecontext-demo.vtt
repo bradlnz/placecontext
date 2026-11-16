@@ -1,0 +1,87 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:03.000
+PlaceContext
+[Instrumental music] Abstract workflow paths on black.
+
+2
+00:00:03.000 --> 00:00:06.000
+Critical workflows. People in control.
+The open-source agentic workflow platform.
+
+3
+00:00:06.000 --> 00:00:12.000
+Your project. In view.
+Live dashboard and workflow access.
+
+4
+00:00:12.000 --> 00:00:17.000
+Ask in plain language.
+A real question about a duplicate invoice payment.
+
+5
+00:00:17.000 --> 00:00:24.000
+Inspect the answer and its evidence.
+This chat response cites team data from a saved 15 November run.
+
+6
+00:00:24.000 --> 00:00:31.000
+Work from your data.
+Query the team roster, then filter for Billing.
+
+7
+00:00:31.000 --> 00:00:36.000
+Give each agent a clear role.
+Triage, review, handoff and follow-up specialists.
+
+8
+00:00:36.000 --> 00:00:41.000
+Design the workflow visually.
+Connect jobs, agents, decisions and browser actions.
+
+9
+00:00:41.000 --> 00:00:45.000
+Choose the step the work needs.
+Human approvals, agents, queries, browser workspaces and more.
+
+10
+00:00:45.000 --> 00:00:49.000
+Review before action.
+Inspect the AI review question and branching conditions.
+
+11
+00:00:49.000 --> 00:00:52.000
+Set explicit limits.
+Configure retries, delay and timeout for a step.
+
+12
+00:00:52.000 --> 00:00:56.000
+Edit the definition directly.
+A YAML draft edit, shown without deploying it.
+
+13
+00:00:56.000 --> 00:01:00.000
+Run the Triage workflow.
+A new standalone run using the duplicate-payment question.
+
+14
+00:01:00.000 --> 00:01:08.000
+Watch execution as it happens.
+Query data → agent authorization → classification.
+
+15
+00:01:08.000 --> 00:01:16.000
+A result you can inspect.
+Triage succeeded: Maya Chen, Billing. Recorded 16 November 2026.
+
+16
+00:01:16.000 --> 00:01:23.000
+When checks fail, execution stops.
+Separate full-workflow attempt: 67% safety confidence; 90% required.
+
+17
+00:01:23.000 --> 00:01:30.000
+Build your next critical workflow.
+Open source. Self-hosted. Paid support.
+

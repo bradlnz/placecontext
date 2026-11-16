@@ -1,0 +1,62 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:04.000
+PlaceContext
+Critical workflows. People in control.
+
+2
+00:00:04.000 --> 00:00:09.000
+Build critical workflows.
+Website enquiry → right person · real workflow editor
+
+3
+00:00:09.000 --> 00:00:19.000
+Open the code behind each step.
+Inspect the validation job directly from the canvas.
+
+4
+00:00:19.000 --> 00:00:28.000
+Make every condition explicit.
+Inspect AND conditions, payload fields and decision thresholds.
+
+5
+00:00:28.000 --> 00:00:36.000
+Review the evidence with AI.
+Open the AI Review question that selects the True or False path.
+
+6
+00:00:36.000 --> 00:00:40.000
+Compose reusable workflows.
+Open the Routing Review sub-workflow and inspect its stages.
+
+7
+00:00:40.000 --> 00:00:48.000
+Configure an independent review.
+Inspect the AI evidence check and its review instructions.
+
+8
+00:00:48.000 --> 00:00:54.000
+Coordinate parallel branches.
+Inspect each branch’s condition and the workflows it starts.
+
+9
+00:00:54.000 --> 00:00:59.000
+Define browser actions.
+Review the workspace, instructions and execution settings.
+
+10
+00:00:59.000 --> 00:01:03.000
+Put bounds on execution.
+Inspect retries, delay and timeout for a workflow step.
+
+11
+00:01:03.000 --> 00:01:07.000
+Keep the definition visible.
+Open the workflow YAML alongside the visual editor.
+
+12
+00:01:07.000 --> 00:01:12.000
+PlaceContext
+Open source. Self-hosted. Paid support.
+

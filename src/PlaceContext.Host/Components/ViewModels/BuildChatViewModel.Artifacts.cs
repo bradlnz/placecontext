@@ -125,8 +125,6 @@ public sealed partial class BuildChatViewModel
             PreviewRunArtifacts = files.DistinctBy(a => a.Id).OrderByDescending(a => a.CreatedAt).ToArray();
             RunArtifactsError = null;
             _artifactOpenedForRun = run.Id;
-            if ((PreviewRunArtifacts.FirstOrDefault(a => ArtifactsViewModel.IsPdf(a.ContentType)) ?? PreviewRunArtifacts.FirstOrDefault()) is { } artifact)
-                await OpenArtifactAsync(artifact.Id, artifact.RunId);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
         catch (Exception)

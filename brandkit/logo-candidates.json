@@ -1,0 +1,44 @@
+[
+  {
+    "name": "continuity",
+    "svg": "/home/brad/code/devcontext/brandkit/placecontext-continuity.svg",
+    "preview": "/home/brad/code/devcontext/brandkit/placecontext-continuity-preview.png",
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_035440_082a5af5-4432-4af4-ac4a-3817721cf6c5.svg",
+    "job_id": "082a5af5-4432-4af4-ac4a-3817721cf6c5",
+    "status": "candidate awaiting selection",
+    "checks": [
+      "editable SVG",
+      "no embedded raster",
+      "no generated text",
+      "no gradients"
+    ]
+  },
+  {
+    "name": "converge",
+    "svg": "/home/brad/code/devcontext/brandkit/placecontext-converge.svg",
+    "preview": "/home/brad/code/devcontext/brandkit/placecontext-converge-preview.png",
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_035440_fb3b1094-332f-48f2-b880-cf88789a890c.svg",
+    "job_id": "fb3b1094-332f-48f2-b880-cf88789a890c",
+    "status": "candidate awaiting selection",
+    "checks": [
+      "editable SVG",
+      "no embedded raster",
+      "no generated text",
+      "no gradients"
+    ]
+  },
+  {
+    "name": "context",
+    "svg": "/home/brad/code/devcontext/brandkit/placecontext-context.svg",
+    "preview": "/home/brad/code/devcontext/brandkit/placecontext-context-preview.png",
+    "result_url": "https://d8j0ntlcm91z4.cloudfront.net/user_3MAi8sXzffB98LoTf9SQPzXL2RW/hf_20261116_035443_0e4a82d8-dcfb-4693-8c5e-342abab2bd1e.svg",
+    "job_id": "0e4a82d8-dcfb-4693-8c5e-342abab2bd1e",
+    "status": "candidate awaiting selection",
+    "checks": [
+      "editable SVG",
+      "no embedded raster",
+      "no generated text",
+      "no gradients"
+    ]
+  }
+]

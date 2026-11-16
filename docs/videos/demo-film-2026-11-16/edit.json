@@ -1,0 +1,155 @@
+[
+  {
+    "id": "motion",
+    "start": 0,
+    "end": 3,
+    "source": "dist/demos/demo-film-2026-11-16/motion-original.mp4",
+    "sourceStart": 0.7,
+    "title": "PlaceContext",
+    "description": "[Instrumental music] Abstract workflow paths on black."
+  },
+  {
+    "id": "intro",
+    "start": 3,
+    "end": 6,
+    "source": "dist/demos/demo-film-2026-11-16/frames/intro.png",
+    "sourceStart": 0,
+    "title": "Critical workflows. People in control.",
+    "description": "The open-source agentic workflow platform."
+  },
+  {
+    "id": "dashboard",
+    "start": 6,
+    "end": 12,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/01-dashboard.mp4",
+    "sourceStart": 0.45,
+    "title": "Your project. In view.",
+    "description": "Live dashboard and workflow access."
+  },
+  {
+    "id": "chat-question",
+    "start": 12,
+    "end": 17,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/02-chat.mp4",
+    "sourceStart": 7.7,
+    "title": "Ask in plain language.",
+    "description": "A real question about a duplicate invoice payment."
+  },
+  {
+    "id": "chat-answer",
+    "start": 17,
+    "end": 24,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/02-chat.mp4",
+    "sourceStart": 31.55,
+    "title": "Inspect the answer and its evidence.",
+    "description": "This chat response cites team data from a saved 15 November run."
+  },
+  {
+    "id": "data",
+    "start": 24,
+    "end": 31,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/03-data.mp4",
+    "sourceStart": 4.15,
+    "title": "Work from your data.",
+    "description": "Query the team roster, then filter for Billing."
+  },
+  {
+    "id": "agents",
+    "start": 31,
+    "end": 36,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/06-agents.mp4",
+    "sourceStart": 0.6,
+    "title": "Give each agent a clear role.",
+    "description": "Triage, review, handoff and follow-up specialists."
+  },
+  {
+    "id": "canvas",
+    "start": 36,
+    "end": 41,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/04-workflow-editor.mp4",
+    "sourceStart": 0.6,
+    "title": "Design the workflow visually.",
+    "description": "Connect jobs, agents, decisions and browser actions."
+  },
+  {
+    "id": "options",
+    "start": 41,
+    "end": 45,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/04-workflow-editor.mp4",
+    "sourceStart": 15.1,
+    "title": "Choose the step the work needs.",
+    "description": "Human approvals, agents, queries, browser workspaces and more."
+  },
+  {
+    "id": "review",
+    "start": 45,
+    "end": 49,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/04-workflow-editor.mp4",
+    "sourceStart": 23.4,
+    "title": "Review before action.",
+    "description": "Inspect the AI review question and branching conditions."
+  },
+  {
+    "id": "limits",
+    "start": 49,
+    "end": 52,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/04-workflow-editor.mp4",
+    "sourceStart": 30.55,
+    "title": "Set explicit limits.",
+    "description": "Configure retries, delay and timeout for a step."
+  },
+  {
+    "id": "markup",
+    "start": 52,
+    "end": 56,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/04-workflow-editor.mp4",
+    "sourceStart": 42.2,
+    "title": "Edit the definition directly.",
+    "description": "A YAML draft edit, shown without deploying it."
+  },
+  {
+    "id": "triage-input",
+    "start": 56,
+    "end": 60,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/07-triage-execution.mp4",
+    "sourceStart": 8.15,
+    "title": "Run the Triage workflow.",
+    "description": "A new standalone run using the duplicate-payment question."
+  },
+  {
+    "id": "triage-running",
+    "start": 60,
+    "end": 68,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/07-triage-execution.mp4",
+    "sourceStart": 15.7,
+    "title": "Watch execution as it happens.",
+    "description": "Query data \u2192 agent authorization \u2192 classification."
+  },
+  {
+    "id": "triage-result",
+    "start": 68,
+    "end": 76,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/07-triage-execution.mp4",
+    "sourceStart": 35.2,
+    "title": "A result you can inspect.",
+    "description": "Triage succeeded: Maya Chen, Billing. Recorded 16 November 2026."
+  },
+  {
+    "id": "safety",
+    "start": 76,
+    "end": 83,
+    "source": "docs/videos/platform-recordings-2026-11-16/clips/05-fresh-workflow-run.mp4",
+    "sourceStart": 14.55,
+    "title": "When checks fail, execution stops.",
+    "description": "Separate full-workflow attempt: 67% safety confidence; 90% required."
+  },
+  {
+    "id": "outro",
+    "start": 83,
+    "end": 90,
+    "source": "dist/demos/demo-film-2026-11-16/frames/outro.png",
+    "sourceStart": 0,
+    "title": "Build your next critical workflow.",
+    "description": "Open source. Self-hosted. Paid support."
+  }
+]

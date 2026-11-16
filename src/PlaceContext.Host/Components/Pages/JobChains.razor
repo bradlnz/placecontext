@@ -451,6 +451,8 @@ else
                                         }
                                     </div>
 
+                                    <ExecutionApprovalPanel @key="Vm.OpenRun.Id" ProjectId="Vm.ProjectId" RunIds="@(new[] { Vm.OpenRun.Id }.Concat(Vm.OpenRun.Steps.Select(s => s.RunId).OfType<Guid>()).ToArray())" />
+
                                     @if (Vm.OpenRun.InputRequest is { } inputRequest)
                                     {
                                         <section class="workflow-input" aria-label="Required workflow inputs">
@@ -634,7 +636,7 @@ else
                                                         <div class="list-stage-gate">
                                                             <button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">
                                                                 <AppIcon Kind="@(stageGate is WaitGate ? "clock" : "split")" />
-                                                                <span>@(stageGate is WaitGate wait ? $"Wait {wait.Duration.TotalSeconds:0.#} seconds" : stageGate is ConditionGate condition ? condition.ReviewQuestion is { } question ? $"Determine · {question}" : $"If {condition.Expression}" : "Edit gate")</span>
+                                                                <span>@(stageGate is WaitGate wait ? $"Wait {wait.Duration.TotalSeconds:0.#} seconds" : stageGate is ConditionGate condition ? condition.ReviewQuestion is { } question ? $"Review · {question}" : $"If {condition.Expression}" : "Edit gate")</span>
                                                             </button>
                                                             <button class="dcbtn danger" aria-label="@($"Remove gate from step {stageIndex + 1}")" title="Remove gate" @onclick="@(() => Vm.RemoveGate(stageIndex))"><AppIcon Kind="close" /></button>
                                                         </div>
@@ -814,6 +816,8 @@ else
                                 @onclick="() => Vm.CloseStageNodePicker()"><AppIcon Kind="close" /></button>
                     </div>
                     <div class="dcmodal-body pipeline-step-body">
+                        @if (!Vm.JevAvailable)
+                        { <p class="field-hint" role="status">@JobChainsViewModel.JevSetupMessage Review gates, scoring and browser workspaces require Jev.</p> }
                         <section class="step-picker-section" aria-labelledby="step-picker-agents">
                         <h4 id="step-picker-agents">Agents &amp; review</h4>
                         <div class="node-picker-grid">
@@ -831,7 +835,7 @@ else
                         </button>
                         <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(ContainerBuildChainAction.ActionType))"><span class="node-picker-icon"><AppIcon Kind="code" /></span><strong>Build container</strong><small>Build an image from a Dockerfile and workflow files</small></button>
                         <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(ContainerRunChainAction.ActionType))"><span class="node-picker-icon"><AppIcon Kind="code" /></span><strong>Run container</strong><small>Run a built or pulled image in a sandbox</small></button>
-                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(VirtualMachineChainAction.ActionType))">
+                        <button class="node-picker-tile" disabled="@(!Vm.JevAvailable)" title="@(!Vm.JevAvailable ? JobChainsViewModel.JevSetupMessage : null)" @onclick="@(() => Vm.ChooseStageNode(VirtualMachineChainAction.ActionType))">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="vm" /></span>
                             <strong>Browser workspace</strong><small>Work in a secure, disposable browser desktop</small>
                         </button>
@@ -846,13 +850,13 @@ else
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="data" /></span>
                             <strong>Query data</strong><small>Read project tables for the next step</small>
                         </button>
-                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(ScoringGateChainAction.ActionType))">
+                        <button class="node-picker-tile" disabled="@(!Vm.JevAvailable)" title="@(!Vm.JevAvailable ? JobChainsViewModel.JevSetupMessage : null)" @onclick="@(() => Vm.ChooseStageNode(ScoringGateChainAction.ActionType))">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="check" /></span>
                             <strong>Scoring gate</strong><small>Check evidence against quality thresholds</small>
                         </button>
-                        <button class="node-picker-tile" @onclick="Vm.ChooseAutomaticGateNode">
+                        <button class="node-picker-tile" disabled="@(!Vm.JevAvailable)" title="@(!Vm.JevAvailable ? JobChainsViewModel.JevSetupMessage : null)" @onclick="Vm.ChooseAutomaticGateNode">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="split" /></span>
-                            <strong>Determine</strong><small>AI Review chooses the best path</small>
+                            <strong>Review</strong><small>AI Review chooses the best path</small>
                         </button>
                         <button class="node-picker-tile" @onclick="Vm.ChooseConditionNode">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="split" /></span>
@@ -1501,7 +1505,7 @@ else
                                 <select id="loop-agent" class="dcinput" @bind="Vm.LoopAgentProvider" aria-describedby="loop-agent-help">
                                     <option value="@LoopChainAction.AutomaticAgent">@(Vm.LoopKind == LoopChainAction.AgentType ? "Automatic — ask the parent agent for approval" : "Automatic — have an AI agent do the task")</option>
                                     <option value="@LoopChainAction.ExternalAgent">External — pause for a connected agent</option>
-                                    @if (Vm.LoopKind == LoopChainAction.AgentType) { <option value="@LoopChainAction.JevAgent">AI evidence check — return a confidence score</option> }
+                                    @if (Vm.LoopKind == LoopChainAction.AgentType) { <option value="@LoopChainAction.JevAgent" disabled="@(!Vm.JevAvailable)">Jev review — return a confidence score@(!Vm.JevAvailable ? " (API key required)" : "")</option> }
                                 </select>
                                 <span id="loop-agent-help" class="sub-note">@(Vm.LoopAgentProvider == LoopChainAction.AutomaticAgent
                                     ? Vm.LoopKind == LoopChainAction.AgentType ? "The parent of the agent selected below reviews the previous results against your instructions. If no agent is selected, the master agent reviews them. A rejection stops the workflow." : "Runs the agent with parent approval before actions and completion, then saves its JSON result."
@@ -1599,7 +1603,7 @@ else
             <div class="dcmodal-overlay" @onclick="() => Vm.CancelGateEditor()">
                 <div class="dcmodal gate-modal @(Vm.IsConditionGateEditor ? "workflow-conditions-modal" : null)" role="dialog" aria-modal="true" aria-label="Configure workflow step" @onclick:stopPropagation="true">
                     <div class="dcmodal-head"><WorkflowDialogHandle />
-                        <div class="title-14">@(Vm.IsAutomaticGateEditor ? "Determine" : Vm.IsConditionGateEditor ? "If gate" : "Wait / delay") · Stage @(Vm.GateEditorStageIndex + 1)</div>
+                        <div class="title-14">@(Vm.IsAutomaticGateEditor ? "Review" : Vm.IsConditionGateEditor ? "If gate" : "Wait / delay") · Stage @(Vm.GateEditorStageIndex + 1)</div>
                         <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CancelGateEditor()"><AppIcon Kind="close" /></button>
                     </div>
                     <div class="dcmodal-body">
@@ -1608,7 +1612,7 @@ else
                             <select id="gate-type" class="dcinput" @bind="Vm.GateEditorType">
                                 <option value="wait">Wait / delay</option>
                                 <option value="condition">Condition / if-else</option>
-                                <option value="automatic">Determine</option>
+                                <option value="automatic" disabled="@(!Vm.JevAvailable)">Review@(!Vm.JevAvailable ? " (Jev API key required)" : "")</option>
                             </select>
                         </div>
 

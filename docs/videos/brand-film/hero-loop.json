@@ -1,0 +1,23 @@
+{
+  "source": "dist/demos/enquiry-routing/raw/enquiry-routing.webm",
+  "intervals": [
+    [
+      102.3,
+      108.3
+    ],
+    [
+      113.1,
+      119.1
+    ]
+  ],
+  "recordedAt": "2026-11-15",
+  "duration": 12,
+  "crop": {
+    "x": 918,
+    "y": 120,
+    "width": 682,
+    "height": 780
+  },
+  "audio": false,
+  "bytes": 94066
+}

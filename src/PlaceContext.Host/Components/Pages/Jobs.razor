@@ -279,6 +279,7 @@ else
                         }
                     </div>
 
+                    <ExecutionApprovalPanel @key="Vm.RunDetail.Id" ProjectId="Vm.RunDetail.ProjectId" RunIds="@(new[] { Vm.RunDetail.Id })" />
                     <JobRunLogs Run="Vm.RunDetail" />
 
                     @if (Vm.RunArtifacts is { Count: > 0 })

@@ -1,0 +1,18 @@
+{
+  "source_summary": "Retain the existing monochrome website palette from website/assets/landing.css for the requested accompanying logo; user requested simple line styling and no gradients. No new palette is proposed.",
+  "palette": {
+    "colors": [
+      {
+        "hex": "#000000",
+        "name": "Black",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "name": "White",
+        "role": "line and text"
+      }
+    ],
+    "gradients": []
+  }
+}

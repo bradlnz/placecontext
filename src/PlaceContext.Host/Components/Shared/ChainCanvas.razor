@@ -263,7 +263,7 @@
                         @if (gate is ConditionGateView cg)
                         {
                             <div class="condition-strip" title="@(cg.ReviewQuestion ?? cg.Expression)">
-                                <span>@(cg.ReviewQuestion is null ? "IF" : "Determine")</span>
+                                <span>@(cg.ReviewQuestion is null ? "IF" : "Review")</span>
                                 <code>@(cg.ReviewQuestion ?? cg.Expression)</code>
                             </div>
                         }

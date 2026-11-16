@@ -1,0 +1,51 @@
+{
+  "brand_context": {
+    "name": "PlaceContext",
+    "offering": "Agentic workflow platform for critical workflows",
+    "industry": "software",
+    "positioning": "open source with paid support",
+    "audience": "workflow operators",
+    "values": [
+      "control",
+      "visible decisions",
+      "shared context"
+    ]
+  },
+  "visual_axes": {
+    "restrained_expressive": 25,
+    "geometric_organic": 25,
+    "familiar_experimental": 50
+  },
+  "candidate": {
+    "mark_type": "abstract",
+    "central_idea": "One continuous path doubles back around an open central space.",
+    "visual_mechanism": "A single uniform line starts at upper left, travels right, turns downward through two rounded right-angle bends and returns left at the lower level, then folds inward to end at the center-right; a deliberate short gap in the right boundary keeps the central negative space open.",
+    "distinctive_element": "An asymmetrical squared spiral with exactly two generous turns and one open gate.",
+    "shape_logic": "precise open geometry, ample negative space",
+    "treatment": "monoline",
+    "style_register": "restrained technical identity",
+    "user_style_directive": "simple line, no gradients",
+    "composition": "single centered mark occupying half the square canvas"
+  },
+  "palette": {
+    "count": 2,
+    "user_requested_more_than_three": false,
+    "roles": [
+      "line",
+      "background"
+    ]
+  },
+  "reference_signals": [
+    "restrained aerospace precision"
+  ],
+  "forbidden_elements": [
+    "gradients",
+    "shadows",
+    "glow",
+    "text",
+    "badges",
+    "shields",
+    "rockets",
+    "sparkles"
+  ]
+}
