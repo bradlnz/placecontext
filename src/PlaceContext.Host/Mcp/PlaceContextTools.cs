@@ -651,9 +651,8 @@ public sealed class PlaceContextTools
                 "wait" => element.TryGetProperty("duration", out var durProp)
                     ? new WaitGate(TimeSpan.FromSeconds(durProp.GetDouble()))
                     : new WaitGate(TimeSpan.FromSeconds(30)),
-                "condition" => element.TryGetProperty("expression", out var exprProp)
-                    ? new ConditionGate(exprProp.GetString() ?? "exists:data")
-                    : new ConditionGate("exists:data"),
+                "condition" => new ConditionGate(element.TryGetProperty("expression", out var exprProp) ? exprProp.GetString() ?? "exists:data" : "exists:data",
+                    ReviewQuestion: element.TryGetProperty("reviewQuestion", out var question) ? question.GetString() : null),
                 _ => throw new ArgumentException($"Unknown gate type '{type}'. Use 'wait' or 'condition'."),
             });
         }

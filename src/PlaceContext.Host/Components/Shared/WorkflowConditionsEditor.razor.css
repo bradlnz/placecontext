@@ -1,5 +1,57 @@
-.condition-builder { display:grid; grid-template-columns:1.1fr 1fr; gap:10px }
-.condition-builder .dcfield:last-child:nth-child(3) { grid-column:1 / -1 }
+.conditions-editor { flex:none; min-width:0; --condition-accent:#6b91d6 }
+.condition-builder { display:grid; grid-template-columns:1fr; gap:10px }
+.condition-builder .condition-value { grid-column:1 / -1; gap:8px }
+.condition-builder > * { min-width:0 }
+.field-hint { color:var(--text-3); font-size:12px; line-height:1.5; margin:8px 0 }
+.field-tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px }
+.field-tag { display:inline-flex; align-items:center; gap:6px; max-width:100%; padding:5px 9px; border:1px solid color-mix(in srgb, var(--condition-accent) 30%, var(--border)); border-radius:14px; background:color-mix(in srgb, var(--condition-accent) 8%, var(--card)); color:var(--text); cursor:pointer; text-align:left }
+.field-tag span { overflow-wrap:anywhere; font-size:11px }
+.field-tag small { color:var(--text-3); font-size:10px }
+.field-tag:hover { background:color-mix(in srgb, var(--condition-accent) 18%, var(--card)) }
+.field-tag:focus-visible { outline:2px solid var(--condition-accent); outline-offset:2px }
 .condition-preview { display:flex; align-items:center; gap:8px; margin-top:10px; padding:8px 10px; border:1px solid var(--border); border-radius:7px; background:var(--card-2); font-size:10px; color:var(--text-3) }
-.condition-preview code { color:var(--brand-2); font-size:10.5px }
+.condition-preview code { color:var(--condition-accent); font-size:10.5px }
+.condition-preview code { overflow-wrap:anywhere; min-width:0 }
 .condition-row { padding: 12px 0; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.condition-row > .dcbtn { margin-top:8px }
+.condition-canvas { padding:20px; overflow:auto; height:440px; min-height:440px; border:1px solid var(--border); border-radius:10px; background-color:color-mix(in srgb, var(--condition-accent) 4%, var(--card-2)); background-image:radial-gradient(color-mix(in srgb, var(--condition-accent) 28%, transparent) 1px, transparent 1px); background-size:16px 16px }
+.logic-flow { display:flex; flex-direction:column; align-items:center; width:max-content; min-width:100%; margin:auto }
+.logic-endpoint, .logic-decision { padding:8px 16px; border:1px solid var(--border); border-radius:20px; background:var(--card); font-size:12px; text-align:center }
+.logic-decision { border-color:var(--condition-accent); color:var(--condition-accent) }
+.logic-connector { display:flex; flex-direction:column; align-items:center; min-height:26px; padding:3px; color:var(--text-3); font-size:12px }
+.logic-connector small { font-size:10px }
+.logic-conditions { display:flex; gap:16px }
+.logic-all { flex-direction:column; gap:0 }
+.logic-any { border-top:1px solid var(--condition-accent); border-bottom:1px solid var(--condition-accent); padding:16px 0; position:relative }
+.logic-any .logic-step { position:relative }
+.logic-any .logic-step::before, .logic-any .logic-step::after { content:""; position:absolute; left:50%; height:16px; border-left:1px solid var(--condition-accent) }
+.logic-any .logic-step::before { top:-16px }
+.logic-any .logic-step::after { bottom:-16px }
+.logic-node { display:flex; flex-direction:column; gap:5px; width:220px; padding:12px 16px; border:1px solid var(--border); border-left:3px solid var(--condition-accent); border-radius:8px; background:var(--card); color:var(--text); cursor:pointer; text-align:left; overflow-wrap:anywhere }
+.logic-node small { font-size:10px; color:var(--condition-accent) }
+.logic-node.ai-review-node { width:min(360px, calc(100vw - 96px)) }
+.logic-node strong { font-size:12px }
+.logic-node span { font-size:11px; color:var(--text-2) }
+.logic-node.selected, .logic-node:focus-visible { outline:2px solid var(--condition-accent); outline-offset:2px }
+.logic-outcomes { display:grid; grid-template-columns:1fr 1fr; gap:20px; width:100%; max-width:520px; padding-top:16px; margin-top:16px; border-top:1px solid var(--border-2); border-bottom:1px solid var(--border-2); padding-bottom:16px }
+.logic-outcome { position:relative; display:flex; flex-direction:column; gap:8px; padding:12px; border:1px solid var(--border); border-top:3px solid var(--success); border-radius:8px; background:var(--card); text-align:center; max-width:250px; overflow-wrap:anywhere }
+.logic-outcome::before, .logic-outcome::after { content:""; position:absolute; left:50%; height:16px; border-left:1px solid var(--border-2) }
+.logic-outcome::before { top:-19px }.logic-outcome::after { bottom:-17px }
+.logic-outcome small { font-size:10px; color:var(--text-2) }.logic-outcome strong { font-size:12px }
+.logic-outcome.false-path { border-top-color:var(--warn) }
+.condition-edit-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; font-size:12px }
+.condition-edit-heading span { color:var(--text-3) }
+@media (max-width:600px) { .condition-builder { grid-template-columns:1fr } }
+
+.condition-toolbar { display:flex; align-items:flex-end; flex-wrap:wrap; gap:12px; margin-bottom:10px }
+.condition-toolbar .dcfield { flex:1; min-width:180px }
+.condition-toolbar .dcbtn { margin-bottom:0 }
+.condition-workspace { display:grid; grid-template-columns:minmax(0, 1fr); gap:12px; position:relative; min-width:0 }
+.condition-workspace.pane-open { grid-template-columns:minmax(0, 1fr) 300px }
+.condition-inspector { min-width:0; height:440px; overflow:auto; padding:14px; border:1px solid var(--border); border-radius:10px; background:var(--card) }
+.condition-inspector[hidden] { display:none }
+.condition-inspector .condition-row { margin:0; padding:0; border:0 }
+@media (max-width:700px) {
+    .condition-workspace.pane-open { grid-template-columns:minmax(0, 1fr) }
+    .condition-inspector { position:absolute; top:0; right:0; width:min(320px, 100%); z-index:1; box-shadow:-8px 0 24px #0003 }
+}

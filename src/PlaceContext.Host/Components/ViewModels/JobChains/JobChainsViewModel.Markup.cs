@@ -43,7 +43,8 @@ public sealed partial class JobChainsViewModel
             var stages = document.Stages.Select(stage => stage.ToStage()).ToArray();
             var saved = await _svc.UpdateJobChainAsync(id, document.Name, document.Description, [],
                 stages.Select(stage => stage.JobIds).ToArray(), stages.Select(stage => stage.Gate).ToArray(),
-                stages.Select(stage => stage.Action).ToArray(), expectedUpdatedAt: _openedWorkflowUpdatedAt);
+                stages.Select(stage => stage.Action).ToArray(), expectedUpdatedAt: _openedWorkflowUpdatedAt,
+                stagePolicies: stages.Select(stage => stage.ExecutionPolicy).ToArray());
             Chains = (Chains ?? []).Select(chain => chain.Id == id ? saved : chain).ToArray();
             _markupSource = null;
             await OpenChainEditorAsync(saved, view: "markup");

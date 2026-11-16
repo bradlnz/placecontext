@@ -51,7 +51,7 @@ public sealed class ContainerWorkflowRunnerTests
     public async Task Build_command_web_readiness_cancellation_and_cleanup_work_on_docker()
     {
         using var runner = new ContainerWorkflowBackgroundService(Options.Create(new ContainerWorkflowOptions { Enabled = true }),
-            Options.Create(new WorkloadRunnerOptions()), NullLogger<ContainerWorkflowBackgroundService>.Instance);
+            Options.Create(new WorkloadRunnerOptions()), NullLogger<ContainerWorkflowBackgroundService>.Instance, new SafetyReviewer());
         var project = Guid.NewGuid();
         var run = Guid.NewGuid();
         string? url = null;

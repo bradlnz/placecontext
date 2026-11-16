@@ -115,16 +115,30 @@ public sealed partial class JobChainsViewModel
     {
         get; private set;
     }
-    public string GateEditorType { get; set; } = "wait"; // "wait" or "condition"
+    public string GateEditorType { get; set; } = "wait"; // "wait", "condition" or "automatic"
+    public string GateReviewQuestion { get; set; } = "";
+    public string GateEditorTrueJobId { get; set; } = "";
+    public string? GateEditorError { get; private set; }
     public double GateEditorDuration { get; set; } = 30;
     public string GateEditorExpression { get; set; } = "exists:data";
     public string GateEditorMatch { get; set; } = "all";
+    public string GateEditorPath { get; set; } = "true";
     public List<ConditionRow> GateEditorConditions { get; } = [new()];
     public sealed class ConditionRow
     {
         public string Operator { get; set; } = "exists";
         public string Path { get; set; } = "data";
         public string Value { get; set; } = "";
+        public string ValueType { get; set; } = "text";
+        public string InputType => Operator is "gt" or "gte" or "lt" or "lte" ? "number"
+            : Operator is "eq" or "neq" ? ValueType : "text";
+        public void SetValueType(string type)
+        {
+            ValueType = type;
+            if (type == "boolean" && Value is not ("true" or "false")) Value = "true";
+            if (type == "null") Value = "null";
+            if (type == "number" && !double.TryParse(Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _)) Value = "";
+        }
         public bool NeedsValue => Operator is not ("exists" or "notexists" or "empty" or "notempty" or "true" or "false");
         public string Expression => Operator == "custom" ? Value
             : Operator is "true" or "false" ? Operator
@@ -136,7 +150,10 @@ public sealed partial class JobChainsViewModel
             if (expression is "true" or "false") return new() { Operator = expression };
             if (parts.Length < 2 || parts[0] is not ("exists" or "notexists" or "empty" or "notempty" or "eq" or "neq" or "contains" or "starts" or "ends" or "in" or "gt" or "gte" or "lt" or "lte"))
                 return new() { Operator = "custom", Value = expression };
-            return new() { Operator = parts[0], Path = parts[1], Value = parts.Length > 2 ? parts[2] : "" };
+            var value = parts.Length > 2 ? parts[2] : "";
+            var type = value is "true" or "false" ? "boolean" : value == "null" ? "null"
+                : double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _) ? "number" : "text";
+            return new() { Operator = parts[0], Path = parts[1], Value = value, ValueType = type };
         }
     }
     public void AddCondition() { GateEditorConditions.Add(new()); NotifyStateChanged(); }
@@ -175,6 +192,8 @@ public sealed partial class JobChainsViewModel
         EdBranchJobIds.Clear();
         EdStageGates.Clear();
         EdStageActions.Clear();
+        EdStagePolicies.Clear();
+        PolicyStageIndex = null;
         EditorError = null;
         EditorTab = "details";
         EditorView = "canvas";
@@ -196,12 +215,15 @@ public sealed partial class JobChainsViewModel
         EdStages.Clear();
         EdStageGates.Clear();
         EdStageActions.Clear();
+        EdStagePolicies.Clear();
+        PolicyStageIndex = null;
         foreach (var (stage, i) in chain.Stages.Select((stage, i) => (stage, i)))
         {
             var definition = PlaceContext.Application.Build.WorkflowStage.FromView(stage).ToStage();
             EdStages.Add(definition.JobIds.ToList());
             EdStageGates[i] = definition.Gate;
             EdStageActions[i] = definition.Action;
+            EdStagePolicies[i] = definition.ExecutionPolicy;
         }
         EdAddJobId = "";
         EdBranchJobIds.Clear();
@@ -273,6 +295,7 @@ public sealed partial class JobChainsViewModel
         ShowScoringEditor = false;
         ShowParallelWorkflowEditor = false;
         ShowSubWorkflowEditor = false;
+        PolicyStageIndex = null;
         ShowQueryDataEditor = false;
         ShowQemuEditor = false;
         ShowContainerEditor = false;
@@ -393,6 +416,7 @@ public sealed partial class JobChainsViewModel
         SetGate(target, sourceGate);
         SetAction(index, targetAction);
         SetAction(target, sourceAction);
+        (EdStagePolicies[index], EdStagePolicies[target]) = (EdStagePolicies.GetValueOrDefault(target), EdStagePolicies.GetValueOrDefault(index));
         NotifyStateChanged();
     }
 
@@ -411,6 +435,7 @@ public sealed partial class JobChainsViewModel
         var stage = EdStages[sourceIndex];
         var gate = EdStageGates.GetValueOrDefault(sourceIndex);
         var action = EdStageActions.GetValueOrDefault(sourceIndex);
+        var policy = EdStagePolicies.GetValueOrDefault(sourceIndex);
         EdStages.RemoveAt(sourceIndex);
         ShiftGatesAfterRemoval(sourceIndex);
         ShiftActionsAfterRemoval(sourceIndex);
@@ -423,6 +448,7 @@ public sealed partial class JobChainsViewModel
         ShiftActionsForInsert(targetIndex);
         SetGate(targetIndex, gate);
         SetAction(targetIndex, action);
+        EdStagePolicies[targetIndex] = policy;
         NotifyStateChanged();
     }
 
@@ -517,6 +543,7 @@ public sealed partial class JobChainsViewModel
 
     private void ShiftActionsAfterRemoval(int removedIndex)
     {
+        ShiftPolicies(removedIndex, inserting: false);
         var shifted = EdStageActions
             .Where(kv => kv.Key != removedIndex)
             .ToDictionary(kv => kv.Key > removedIndex ? kv.Key - 1 : kv.Key, kv => kv.Value);
@@ -529,6 +556,7 @@ public sealed partial class JobChainsViewModel
 
     private void ShiftActionsForInsert(int insertedIndex)
     {
+        ShiftPolicies(insertedIndex, inserting: true);
         var shifted = EdStageActions.OrderByDescending(kv => kv.Key).ToList();
         EdStageActions.Clear();
         foreach (var (key, value) in shifted)
@@ -1000,9 +1028,10 @@ public sealed partial class JobChainsViewModel
             case "sms":
                 OpenSmsActionAt(StageNodePickerIndex);
                 break;
+            case "automatic":
             case "condition":
                 OpenGateEditor(StageNodePickerIndex);
-                GateEditorType = "condition";
+                GateEditorType = type;
                 break;
             default:
                 OpenGateEditor(StageNodePickerIndex);
@@ -1018,6 +1047,10 @@ public sealed partial class JobChainsViewModel
     public void OpenGateEditor(int stageIndex)
     {
         GateEditorStageIndex = stageIndex;
+        GateEditorPath = "true";
+        GateEditorError = null;
+        GateReviewQuestion = "";
+        GateEditorTrueJobId = "";
         var existing = EdStageGates.GetValueOrDefault(stageIndex);
         GateEditorElseStages.Clear();
         GateEditorElseStages.AddRange((existing as ConditionGate)?.ElseBranch ?? []);
@@ -1031,7 +1064,8 @@ public sealed partial class JobChainsViewModel
                 ParseCondition("exists:data");
                 break;
             case ConditionGate c:
-                GateEditorType = "condition";
+                GateEditorType = c.ReviewQuestion is null ? "condition" : "automatic";
+                GateReviewQuestion = c.ReviewQuestion ?? "";
                 GateEditorExpression = c.Expression;
                 ParseCondition(c.Expression);
                 GateEditorDuration = 30;
@@ -1049,6 +1083,23 @@ public sealed partial class JobChainsViewModel
 
     public void SaveGate()
     {
+        GateEditorError = null;
+        if (IsAutomaticGateEditor && (string.IsNullOrWhiteSpace(GateReviewQuestion) || GateReviewQuestion.Length > 4000))
+        {
+            GateEditorError = "Enter an AI Review question of up to 4,000 characters.";
+            NotifyStateChanged();
+            return;
+        }
+        if (GateEditorStageIndex == EdStages.Count)
+        {
+            if (!Guid.TryParse(GateEditorTrueJobId, out var jobId) || jobId == Guid.Empty)
+            {
+                GateEditorError = "Choose the job this gate should run.";
+                NotifyStateChanged();
+                return;
+            }
+            EdStages.Add([jobId]);
+        }
         if (GateEditorType == "condition")
         {
             GateEditorExpression = BuildConditionExpression();
@@ -1056,6 +1107,7 @@ public sealed partial class JobChainsViewModel
         EdStageGates[GateEditorStageIndex] = GateEditorType switch
         {
             "wait" => new WaitGate(TimeSpan.FromSeconds(GateEditorDuration)),
+            "automatic" => new ConditionGate(ConditionGate.AutomaticExpression, GateEditorElseStages.Count > 0 ? GateEditorElseStages.ToList() : null, GateReviewQuestion),
             "condition" => new ConditionGate(GateEditorExpression, GateEditorElseStages.Count > 0 ? GateEditorElseStages.ToList() : null),
             _ => null,
         };
@@ -1123,14 +1175,14 @@ public sealed partial class JobChainsViewModel
     /// <summary>Build a view model for the canvas from current editor state.</summary>
     public List<JobChainStageView> BuildCanvasStageViews() => EdStages
         .Select((jobs, index) => BuildStageView(jobs,
-            EdStageGates.GetValueOrDefault(index), EdStageActions.GetValueOrDefault(index)))
+            EdStageGates.GetValueOrDefault(index), EdStageActions.GetValueOrDefault(index), executionPolicy: EdStagePolicies.GetValueOrDefault(index)))
         .ToList();
 
     public JobChainStageView BuildStageView(ChainStage stage) =>
-        BuildStageView(stage.JobIds, stage.Gate, stage.Action, stage.ElseBranch);
+        BuildStageView(stage.JobIds, stage.Gate, stage.Action, stage.ElseBranch, stage.ExecutionPolicy);
 
     private JobChainStageView BuildStageView(IReadOnlyList<Guid> jobs, ChainGate? gate,
-        ChainAction? action, IReadOnlyList<ChainStage>? elseBranch = null) => new(
+        ChainAction? action, IReadOnlyList<ChainStage>? elseBranch = null, StepExecutionPolicy? executionPolicy = null) => new(
         jobs.Select(id => new JobChainStepView(id, JobName(id))).ToList(),
         ToViewGate(gate),
         (elseBranch ?? (gate as ConditionGate)?.ElseBranch)?.Select(BuildStageView).ToList(),
@@ -1149,7 +1201,7 @@ public sealed partial class JobChainsViewModel
             SendSmsChainAction sms => new SendSmsChainActionView(sms.Recipient, sms.Body),
             null => null,
             _ => throw new InvalidOperationException($"Unsupported chain action '{action.Type}'."),
-        });
+        }, executionPolicy);
 
     // ── Save ──────────────────────────────────────────────────────────────────────────────────
 
@@ -1221,6 +1273,7 @@ public sealed partial class JobChainsViewModel
                                     stages,
                                     stageGates,
                                     stageActions,
+                                    stagePolicies: populatedStages.Select(item => EdStagePolicies.GetValueOrDefault(item.OriginalIndex)).ToList(),
                                     expectedUpdatedAt: _openedWorkflowUpdatedAt
                                 );
                     return;
@@ -1232,7 +1285,8 @@ public sealed partial class JobChainsViewModel
                                         flatJobIds,
                                         stages,
                                         stageGates,
-                                        stageActions
+                                        stageActions,
+                                        stagePolicies: populatedStages.Select(item => EdStagePolicies.GetValueOrDefault(item.OriginalIndex)).ToList()
                                     );
             }
             await SaveChainAsync();
@@ -1281,7 +1335,7 @@ public sealed partial class JobChainsViewModel
             null => null,
             NoGate => null,
             WaitGate w => new WaitGateView(w.Duration.TotalSeconds),
-            ConditionGate c => new ConditionGateView(c.Expression),
+            ConditionGate c => new ConditionGateView(c.Expression, ReviewQuestion: c.ReviewQuestion),
             _ => null,
         };
 

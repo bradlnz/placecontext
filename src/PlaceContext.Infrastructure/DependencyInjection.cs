@@ -241,7 +241,8 @@ public static class DependencyInjection
         services.AddScoped<IServiceConsole>(sp => sp.GetRequiredService<ClusterServiceConsole>());
         services.AddScoped<IDatabaseConsole>(sp => sp.GetRequiredService<ClusterServiceConsole>());
         services.AddHttpClient("persistent-workloads", client => client.Timeout = Timeout.InfiniteTimeSpan);
-        services.AddSingleton<IWorkloadRunner>(sp => sp.GetRequiredService<ClusterWorkloadRunner>());
+        services.AddSingleton<IWorkloadRunner>(sp => new ReviewedWorkloadRunner(
+            sp.GetRequiredService<ClusterWorkloadRunner>(), sp.GetRequiredService<IOutcomeReviewer>()));
 
         // Field encryption at rest (AES via Data Protection). Portal/jobs decrypt in-process;
         // raw Postgres/MinIO without the DP key ring only see ciphertext.

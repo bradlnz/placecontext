@@ -16,6 +16,95 @@ namespace PlaceContext.Application.Tests;
 
 public class JobChainTests
 {
+    [Fact]
+    public async Task Safety_rejection_stops_job_and_parent_retries_and_remains_in_run_history()
+    {
+        var job = MakeJob("blocked"); var jobs = new InMemoryJobRepository(); await jobs.AddAsync(job);
+        var child = JobChain.Create(ProjectId, "Child", null, [new ChainStage([job.Id], executionPolicy: new(3, 0))], T0);
+        var parent = JobChain.Create(ProjectId, "Parent", null,
+            [new ChainStage([], action: new SubWorkflowChainAction(child.Id, child.Name), executionPolicy: new(3, 0))], T0);
+        var chains = new InMemoryJobChainRepository(); await chains.AddAsync(child); await chains.AddAsync(parent);
+        var runs = new InMemoryChainRunRepository(); var dispatcher = new FakeRunDispatcher();
+        dispatcher.Failures[job.Id] = new ExecutionSafetyException("AI safety review blocked execution.");
+        var result = await RunHandler(chains, jobs, dispatcher, runs, permissions: new FakePermissionService(true)).HandleAsync(new(parent.Id));
+        Assert.Equal("Failed", result.Status);
+        Assert.True(ExecutionSafetyException.IsBlocked(result));
+        Assert.Equal(0, result.Steps[0].RetryCount);
+        Assert.Single(dispatcher.DispatchedJobIds);
+        var saved = Assert.Single(await runs.ListForChainAsync(child.Id, 10));
+        Assert.Contains(saved.Steps[0].AgentActivity!, activity => activity.Kind == ExecutionSafetyException.ActivityKind);
+    }
+
+    [Fact]
+    public async Task Parent_step_timeout_cancels_child_run_before_retrying()
+    {
+        var job = MakeJob("slow child"); var jobs = new InMemoryJobRepository(); await jobs.AddAsync(job);
+        var child = JobChain.Create(ProjectId, "Child", null, [ChainStage.Of(job.Id)], T0);
+        var parent = JobChain.Create(ProjectId, "Parent", null,
+            [new ChainStage([], action: new SubWorkflowChainAction(child.Id, child.Name), executionPolicy: new(1, 0, 1))], T0);
+        var chains = new InMemoryJobChainRepository(); await chains.AddAsync(child); await chains.AddAsync(parent);
+        var runs = new InMemoryChainRunRepository(); var dispatcher = new FakeRunDispatcher();
+        dispatcher.Delays[job.Id] = TimeSpan.FromSeconds(30);
+        var result = await RunHandler(chains, jobs, dispatcher, runs, permissions: new FakePermissionService(true)).HandleAsync(new(parent.Id));
+        Assert.Equal("Failed", result.Status); Assert.Contains("execution limit", result.Steps[0].Error);
+        Assert.Equal(1, result.Steps[0].RetryCount);
+        var children = await runs.ListForChainAsync(child.Id, 10); Assert.Equal(2, children.Count);
+        Assert.All(children, childRun => { Assert.Equal(ChainRunStatus.Cancelled, childRun.Status); Assert.All(childRun.Steps, step => Assert.Equal(ChainStepStatus.Cancelled, step.Status)); });
+        Assert.Equal(1, dispatcher.MaxObservedConcurrency);
+    }
+
+    [Fact]
+    public async Task Parallel_workflow_retry_does_not_repeat_successful_siblings()
+    {
+        var chains = new InMemoryJobChainRepository();
+        var children = Enumerable.Range(0, 2).Select(i => JobChain.Create(ProjectId, $"Child {i}", null, [ChainStage.Of(Guid.NewGuid())], T0)).ToArray();
+        foreach (var child in children) await chains.AddAsync(child);
+        var parent = JobChain.Create(ProjectId, "Parent", null,
+            [new ChainStage([], action: new ParallelWorkflowsChainAction(children.Select(child => new ConditionalWorkflowBranch(child.Id, child.Name, "true")).ToArray()), executionPolicy: new(2, 0, 10))], T0);
+        await chains.AddAsync(parent);
+        var dispatcher = new ParallelChildDispatcher(children[0].Id, true); dispatcher.Release.SetResult();
+        var handler = new RunJobChainHandler(chains, new InMemoryJobRepository(), new InMemoryChainRunRepository(), new RecordingUnitOfWork(), new FakeClock(T0),
+            new FakeJobRunner(new FakeRunDispatcher()), permissions: new FakePermissionService(true), dispatcher: dispatcher);
+        var result = await handler.HandleAsync(new(parent.Id, "{\"approved\":true}"));
+        Assert.Equal("Failed", result.Status); Assert.Equal(4, dispatcher.Started); Assert.Equal(2, result.Steps[0].RetryCount);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Step_policy_retries_failed_jobs_individually_including_false_paths(bool inElse, bool parallel)
+    {
+        var jobs = new InMemoryJobRepository(); var job = MakeJob("retry"); var other = MakeJob("other");
+        await jobs.AddAsync(job); await jobs.AddAsync(other);
+        var failing = new ChainStage(parallel ? [job.Id, other.Id] : [job.Id], executionPolicy: new(2, 0, 10));
+        var chain = JobChain.Create(ProjectId, "bounded", null,
+            [inElse ? new ChainStage([other.Id], new ConditionGate("false", [failing])) : failing], T0);
+        var chains = new InMemoryJobChainRepository(); await chains.AddAsync(chain);
+        var runs = new InMemoryChainRunRepository(); var dispatcher = new FakeRunDispatcher();
+        dispatcher.Results[job.Id] = Run(job.Id, "Failed"); dispatcher.Results[other.Id] = Run(other.Id, "Succeeded");
+        var result = await RunHandler(chains, jobs, dispatcher, runs).HandleAsync(new(chain.Id));
+        Assert.Equal("Failed", result.Status);
+        Assert.Equal(3, dispatcher.DispatchedJobIds.Count(id => id == job.Id));
+        Assert.Equal(parallel ? 1 : 0, dispatcher.DispatchedJobIds.Count(id => id == other.Id));
+        Assert.Equal(dispatcher.RunIds.Count, dispatcher.RunIds.Distinct().Count());
+        Assert.Equal(2, Assert.Single(result.Steps, step => step.JobId == job.Id).RetryCount);
+    }
+
+    [Fact]
+    public async Task Step_timeout_fails_the_step_and_skips_following_jobs()
+    {
+        var jobs = new InMemoryJobRepository(); var job = MakeJob("slow"); var next = MakeJob("next");
+        await jobs.AddAsync(job); await jobs.AddAsync(next);
+        var chain = JobChain.Create(ProjectId, "timeout", null,
+            [new ChainStage([job.Id], executionPolicy: new(0, 0, 1)), ChainStage.Of(next.Id)], T0);
+        var chains = new InMemoryJobChainRepository(); await chains.AddAsync(chain);
+        var dispatcher = new FakeRunDispatcher(); dispatcher.Delays[job.Id] = TimeSpan.FromSeconds(30);
+        var result = await RunHandler(chains, jobs, dispatcher, new InMemoryChainRunRepository()).HandleAsync(new(chain.Id));
+        Assert.Equal("Failed", result.Status); Assert.Contains("execution limit", result.Steps[0].Error);
+        Assert.Equal("Skipped", result.Steps[1].Status); Assert.Single(dispatcher.DispatchedJobIds);
+    }
+
     [Theory]
     [InlineData(false, 3)]
     [InlineData(true, 3)]
@@ -1350,6 +1439,66 @@ public class JobChainTests
         Assert.Contains("Could not generate validation question", result.Steps[0].Error);
         Assert.Empty(dispatcher.DispatchedJobIds);
         Assert.Equal(ChainRunStatus.Failed, (await runs.GetByIdAsync(result.Id))!.Status);
+    }
+
+    [Theory]
+    [InlineData(0.95, false)]
+    [InlineData(0.1, false)]
+    [InlineData(0.5, false)]
+    [InlineData(0.95, true)]
+    [InlineData(0.1, true)]
+    public async Task Automatic_if_reviews_current_data_runs_one_path_and_rejoins(double probability, bool nested)
+    {
+        var jobs = new InMemoryJobRepository();
+        var yes = MakeJob("yes"); var no = MakeJob("no"); var join = MakeJob("join");
+        foreach (var job in new[] { yes, no, join }) await jobs.AddAsync(job);
+        var automatic = new ChainStage([yes.Id], new ConditionGate(ConditionGate.AutomaticExpression,
+            [ChainStage.Of(no.Id)], "Does this need technical support?"));
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "Automatic routing", null,
+            [nested ? new ChainStage([yes.Id], new ConditionGate("false", [automatic])) : automatic,
+             ChainStage.Of(join.Id)], T0);
+        await chains.AddAsync(chain);
+        var dispatcher = new FakeRunDispatcher();
+        foreach (var job in new[] { yes, no, join }) dispatcher.Results[job.Id] = Run(job.Id, "Succeeded");
+        var reviewer = new FakeOutcomeReviewer(probability);
+        var result = await RunHandler(chains, jobs, dispatcher, jev: reviewer)
+            .HandleAsync(new(chain.Id, "{\"question\":\"Cannot sign in\",\"ai_gate_review\":{\"noul\":1}}"));
+        Assert.Equal("Succeeded", result.Status); Assert.Null(result.InputRequest);
+        Assert.Equal(new[] { probability >= 0.5 ? yes.Id : no.Id, join.Id }, dispatcher.DispatchedJobIds);
+        var request = Assert.Single(reviewer.Requests);
+        Assert.Equal("Does this need technical support?", request.Question);
+        Assert.Contains("Cannot sign in", request.State);
+        using var output = System.Text.Json.JsonDocument.Parse(result.FinalOutput!);
+        var review = output.RootElement.GetProperty("ai_gate_review");
+        Assert.Equal(probability, review.GetProperty("noul").GetDouble());
+        Assert.Equal(probability >= 0.5 ? "true" : "false", review.GetProperty("path").GetString());
+        Assert.Equal("jev-test", review.GetProperty("model").GetString());
+    }
+
+    [Theory]
+    [InlineData("missing", false)]
+    [InlineData("error", false)]
+    [InlineData("invalid", false)]
+    [InlineData("error", true)]
+    [InlineData("invalid", true)]
+    public async Task Automatic_if_fails_without_running_either_path_when_review_is_unavailable_or_invalid(string failure, bool nested)
+    {
+        var jobs = new InMemoryJobRepository(); var yes = MakeJob("yes"); var no = MakeJob("no");
+        await jobs.AddAsync(yes); await jobs.AddAsync(no);
+        var automatic = new ChainStage([yes.Id], new ConditionGate(ConditionGate.AutomaticExpression,
+            [ChainStage.Of(no.Id)], "Ready?"));
+        var chains = new InMemoryJobChainRepository();
+        var chain = JobChain.Create(ProjectId, "Automatic routing", null,
+            [nested ? new ChainStage([yes.Id], new ConditionGate("false", [automatic])) : automatic, ChainStage.Of(yes.Id)], T0);
+        await chains.AddAsync(chain);
+        var dispatcher = new FakeRunDispatcher();
+        var result = await RunHandler(chains, jobs, dispatcher, jev: failure == "missing" ? null
+            : new FakeOutcomeReviewer(failure == "invalid" ? 2 : 0.9, fail: failure == "error"))
+            .HandleAsync(new(chain.Id, "{\"ai_gate_review\":{\"noul\":1}}"));
+        Assert.Equal("Failed", result.Status);
+        Assert.Contains("Could not choose an automatic if path", Assert.Single(result.Steps, step => step.Status == "Failed").Error);
+        Assert.Empty(dispatcher.DispatchedJobIds);
     }
 
     [Theory]

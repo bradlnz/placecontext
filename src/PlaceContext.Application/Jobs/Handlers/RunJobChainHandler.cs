@@ -241,7 +241,19 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 {
                     payload = await ResolvePreviousRunPayloadAsync(chain.Id, command.ResumeFromStageIndex, ct);
                 }
-                var gateResult = gate.Evaluate(payload);
+                GateResult gateResult;
+                try
+                {
+                    (gateResult, payload) = await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, flatIndex, token => EvaluateGateAsync(gate, payload, chainRun, token), ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Failed, _clock.UtcNow,
+                        error: ShortError("Could not choose an automatic if path: " + ex.Message));
+                    status = ChainRunStatus.Failed;
+                    break;
+                }
                 if (gateResult.WaitDuration is { } wait)
                 {
                     var overridesJson = command.StepPayloadOverrides is null
@@ -330,8 +342,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 {
                     if (_permissions is null || !await _permissions.HasAsync(Permission.DataRead, ct))
                         throw new UnauthorizedAccessException("Data read permission is required for Query data steps.");
-                    var data = await (_dataReader ?? throw new InvalidOperationException("Project data queries are not configured."))
-                        .QueryAsync(chain.ProjectId, queryData.Sql, ct);
+                    var data = await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, flatIndex, token => (_dataReader ?? throw new InvalidOperationException("Project data queries are not configured."))
+                        .QueryAsync(chain.ProjectId, queryData.Sql, token), ct);
                     ct.ThrowIfCancellationRequested();
                     if (await IsCancelledAsync(chainRun.Id, progressLock, ct))
                     {
@@ -391,8 +403,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     var evidence = ChainInputPayload.Get(envelope, scoring.InputField);
                     if (ChainInputPayload.Missing(evidence)) throw new InvalidOperationException($"Evidence field '{scoring.InputField}' is missing or empty.");
                     var state = evidence!.ToJsonString();
-                    var response = await (_jev ?? throw new InvalidOperationException("AI verification is not configured."))
-                        .ScoreAsync(scoring.Criteria, state, ct, chain.ProjectId);
+                    var response = await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, flatIndex, token => (_jev ?? throw new InvalidOperationException("AI verification is not configured."))
+                        .ScoreAsync(scoring.Criteria, state, token, chain.ProjectId), ct);
                     ct.ThrowIfCancellationRequested();
                     if (await IsCancelledAsync(chainRun.Id, progressLock, ct))
                     {
@@ -444,7 +456,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     await SaveProgressAsync(chainRun, ct);
                     try
                     {
-                        var result = await RunAgentUntilCancelledAsync(loop, chainRun, flatIndex, payload, ct);
+                        var result = await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, flatIndex, token => RunAgentUntilCancelledAsync(loop, chainRun, flatIndex, payload, token), ct);
                         if (result is null)
                         {
                             chainRun.MarkStepFinished(flatIndex, null, ChainStepStatus.Cancelled, _clock.UtcNow);
@@ -496,14 +508,14 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 await SaveProgressAsync(chainRun, ct);
                 try
                 {
-                    question = loop.Type == LoopChainAction.TaskType || _questions is null ? loop.Instructions : await _questions.GenerateAsync(loop, payload, ct);
+                    question = loop.Type == LoopChainAction.TaskType || _questions is null ? loop.Instructions : await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, flatIndex, token => _questions.GenerateAsync(loop, payload, token), ct);
                     if (loop.AgentProvider == LoopChainAction.JevAgent)
                     {
-                        verification = await (_jev ?? throw new InvalidOperationException("AI verification is not configured."))
-                                                .EvaluateAsync(question, payload, ct, chain.ProjectId);
+                        verification = await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, flatIndex, token => (_jev ?? throw new InvalidOperationException("AI verification is not configured."))
+                                                .EvaluateAsync(question, payload, token, chain.ProjectId), ct);
                     }
                 }
-                catch (OutcomeReviewThrottledException ex) when (loop.AgentProvider == LoopChainAction.JevAgent
+                catch (OutcomeReviewThrottledException ex) when (stage.ExecutionPolicy is null && loop.AgentProvider == LoopChainAction.JevAgent
                     && chainRun.Steps[flatIndex].RetryCount < 3 && !ct.IsCancellationRequested && ParentRuns.Value is not { Count: > 0 })
                 {
                     var retry = chainRun.Steps[flatIndex].RetryCount + 1;
@@ -576,7 +588,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
 
             if (stage.Action is ParallelWorkflowsChainAction parallel)
             {
-                var outcome = await ExecuteParallelWorkflowsAsync(parallel, chainRun, flatIndex++, payload, ct);
+                var outcome = await ExecuteParallelWorkflowsAsync(parallel, chainRun, flatIndex++, payload, ct, stage.ExecutionPolicy);
                 payload = outcome.Payload;
                 if (outcome.Status is ChainRunStatus.Failed or ChainRunStatus.Cancelled) { status = outcome.Status; break; }
                 if (outcome.Status == ChainRunStatus.Partial) status = outcome.Status;
@@ -584,7 +596,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             }
             if (stage.Action is SubWorkflowChainAction child)
             {
-                var outcome = await ExecuteSubWorkflowAsync(child, chainRun, flatIndex++, payload, ct);
+                var outcome = await ExecuteSubWorkflowAsync(child, chainRun, flatIndex++, payload, ct, stage.ExecutionPolicy);
                 payload = outcome.Payload;
                 if (outcome.Status is ChainRunStatus.Failed or ChainRunStatus.Cancelled) { status = outcome.Status; break; }
                 if (outcome.Status == ChainRunStatus.Partial) status = outcome.Status;
@@ -592,7 +604,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             }
             if (stage.Action is ContainerBuildChainAction or ContainerRunChainAction)
             {
-                var outcome = await ExecuteContainerAsync(stage.Action, chainRun, flatIndex++, payload, ct);
+                var outcome = await ExecuteContainerAsync(stage.Action, chainRun, flatIndex++, payload, ct, stage.ExecutionPolicy);
                 payload = outcome.Payload;
                 if (outcome.Status is ChainRunStatus.Failed or ChainRunStatus.Cancelled)
                 {
@@ -603,7 +615,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             }
             if (stage.Action is VirtualMachineChainAction vm)
             {
-                var outcome = await ExecuteQemuAsync(vm, chainRun, flatIndex++, payload, ct);
+                var outcome = await ExecuteQemuAsync(vm, chainRun, flatIndex++, payload, ct, stage.ExecutionPolicy);
                 payload = outcome.Payload;
                 if (outcome.Status is ChainRunStatus.Failed or ChainRunStatus.Cancelled)
                 {
@@ -639,8 +651,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                         throw new InvalidOperationException(
                                                 "Email subject and body must not be empty after payload substitution.");
                     }
-                    var delivery = await _communications.SendEmailAsync(
-                        recipient, recipientName, subject, body, ct, attachments);
+                    var delivery = await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, actionIndex,
+                        token => _communications.SendEmailAsync(recipient, recipientName, subject, body, token, attachments), ct);
                     chainRun.MarkStepFinished(actionIndex, runId: null,
                         ChainStepStatus.Succeeded, _clock.UtcNow,
                         delivery.Provider, delivery.ExternalId);
@@ -690,7 +702,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                         throw new InvalidOperationException(
                                                 "SMS body must not be empty after payload substitution.");
                     }
-                    var delivery = await _communications.SendSmsAsync(recipient, body, ct);
+                    var delivery = await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, actionIndex, token => _communications.SendSmsAsync(recipient, body, token), ct);
                     chainRun.MarkStepFinished(actionIndex, runId: null,
                         ChainStepStatus.Succeeded, _clock.UtcNow,
                         delivery.Provider, delivery.ExternalId);
@@ -764,14 +776,14 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                         branchStatuses[branchIndex] = ChainStepStatus.Cancelled;
                         return;
                     }
-                    run = await _jobRunner.RunWorkflowStepAsync(stage.JobIds[branchIndex], stepPayload, stepRunId, ct);
+                    run = await RunJobWithPolicyAsync(stage, chainRun, flat, stage.JobIds[branchIndex], stepPayload, stepRunId, progressLock, ct);
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
                 {
                     branchStatuses[branchIndex] = ChainStepStatus.Failed;
                     await WithProgressLockAsync(progressLock, async () =>
                     {
-                        chainRun.MarkStepFinished(flat, stepRunId, ChainStepStatus.Failed,
+                        chainRun.MarkStepFinished(flat, chainRun.Steps[flat].RunId, ChainStepStatus.Failed,
                             _clock.UtcNow, error: ShortError(ex.Message));
                         await SaveProgressAsync(chainRun, ct);
                     });
@@ -820,6 +832,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             await SaveProgressAsync(chainRun, ct);
         }
 
+        if (await IsCancelledAsync(chainRun.Id, ct)) status = ChainRunStatus.Cancelled;
         chainRun.Complete(status, payload, _clock.UtcNow);
         await SaveProgressAsync(chainRun, ct);
         await SaveContextAsync(chainRun, payload, ct);
@@ -843,6 +856,110 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         }
 
         return ChainRunMapper.ToView(chainRun);
+    }
+
+    private async Task<T> WithStepPolicyAsync<T>(StepExecutionPolicy? policy, ChainRun run, int? index,
+        Func<CancellationToken, Task<T>> execute, CancellationToken ct, SemaphoreSlim? progressLock = null,
+        Func<T, bool>? failed = null, int? retriesUsed = null)
+    {
+        try
+        {
+            return await WorkflowStepExecution.RunAsync(policy, execute, ct,
+                retriesUsed ?? (index is { } step ? run.Steps[step].RetryCount : 0), async (retry, reason) =>
+                {
+                    if (index is not { } stepIndex) return;
+                    async Task RecordAsync()
+                    {
+                        run.RecordStepRetry(stepIndex, ShortError($"Retry {retry}/{policy!.MaxRetries}: {reason}"), _clock.UtcNow);
+                        await SaveProgressAsync(run, ct);
+                    }
+                    if (progressLock is null) await RecordAsync();
+                    else await WithProgressLockAsync(progressLock, RecordAsync);
+                }, failed, async () =>
+                {
+                    var cancelled = progressLock is null ? await IsCancelledAsync(run.Id, ct)
+                        : await IsCancelledAsync(run.Id, progressLock, ct);
+                    if (cancelled) throw new OperationCanceledException("Workflow was cancelled.");
+                });
+        }
+        catch (ExecutionSafetyException ex)
+        {
+            if (index is { } step)
+            {
+                async Task RecordAsync()
+                {
+                    run.AppendAgentActivity(step, new(_clock.UtcNow, ExecutionSafetyException.ActivityKind, ShortError(ex.Message)));
+                    await SaveProgressAsync(run, ct);
+                }
+                if (progressLock is null) await RecordAsync();
+                else await WithProgressLockAsync(progressLock, RecordAsync);
+            }
+            throw;
+        }
+    }
+
+    private Task<JobRunDetailView> RunJobWithPolicyAsync(ChainStage stage, ChainRun run, int index,
+        Guid jobId, string? payload, Guid runId, SemaphoreSlim progressLock, CancellationToken ct)
+    {
+        var attempt = 0;
+        return WithStepPolicyAsync(stage.ExecutionPolicy, run, index, async token =>
+        {
+            if (attempt++ > 0)
+            {
+                runId = Guid.NewGuid();
+                await WithProgressLockAsync(progressLock, async () =>
+                {
+                    run.MarkStepRunning(index, runId, _clock.UtcNow);
+                    await SaveProgressAsync(run, ct);
+                });
+            }
+            return await _jobRunner.RunWorkflowStepAsync(jobId, payload, runId, token, useJobRetries: stage.ExecutionPolicy is null);
+        }, ct, progressLock, failed: result => result.Status == "Failed");
+    }
+
+    private async Task<ChainRunView> RunChildAsync(Guid workflowId, string? payload, IDispatcher? dispatcher,
+        CancellationToken attemptToken, CancellationToken ct)
+    {
+        var command = new RunJobChainCommand(workflowId, payload, ChainRunId: Guid.NewGuid());
+        try
+        {
+            var result = dispatcher is null ? await RunChainAsync(command, attemptToken) : await dispatcher.Send(command, attemptToken);
+            if (ExecutionSafetyException.IsBlocked(result))
+                throw new ExecutionSafetyException("AI safety review blocked a step in the sub-workflow. Automatic retries were stopped; inspect the child run for details.");
+            return result;
+        }
+        catch (OperationCanceledException) when (attemptToken.IsCancellationRequested && !ct.IsCancellationRequested)
+        {
+            if (dispatcher is not null) await dispatcher.Send(new CancelChainRunCommand(command.ChainRunId!.Value), ct);
+            else if (await _runs.GetByIdAsync(command.ChainRunId!.Value, ct) is { } child)
+            {
+                foreach (var step in child.Steps.Where(step => step.Status == ChainStepStatus.Running).ToArray())
+                    child.MarkStepFinished(step.Index, step.RunId, ChainStepStatus.Cancelled, _clock.UtcNow);
+                child.Complete(ChainRunStatus.Cancelled, child.FinalOutput, _clock.UtcNow);
+                await SaveProgressAsync(child, ct);
+            }
+            throw;
+        }
+    }
+
+    private async Task<(GateResult Result, string? Payload)> EvaluateGateAsync(
+        ChainGate gate, string? payload, ChainRun chainRun, CancellationToken ct)
+    {
+        if (gate is not ConditionGate { ReviewQuestion: { } question })
+            return (gate.Evaluate(payload), payload);
+
+        var review = await (_jev ?? throw new InvalidOperationException("AI Review is not configured."))
+            .EvaluateAsync(question, payload, ct, chainRun.ProjectId);
+        if (review["noul"] is not System.Text.Json.Nodes.JsonValue value
+            || !value.TryGetValue<double>(out var probability) || !double.IsFinite(probability)
+            || probability is < 0 or > 1)
+            throw new InvalidOperationException("AI Review returned an invalid probability.");
+
+        review["path"] = probability >= 0.5 ? "true" : "false";
+        payload = MergePayload(payload, new System.Text.Json.Nodes.JsonObject { ["ai_gate_review"] = review }.ToJsonString());
+        chainRun.SetCurrentPayload(payload);
+        await SaveProgressAsync(chainRun, ct);
+        return (new GateResult(probability >= 0.5, null), payload);
     }
 
     private async Task<(string? Payload, ChainRunStatus Status)> ExecuteConditionalBranchAsync(
@@ -877,7 +994,20 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             {
                 payload = await ResolvePreviousRunPayloadAsync(chainRun.ChainId, null, ct);
             }
-            var gateResult = gate.Evaluate(payload);
+            GateResult gateResult;
+            try
+            {
+                (gateResult, payload) = await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, null, token => EvaluateGateAsync(gate, payload, chainRun, token), ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                var failedIndex = chainRun.AppendStep(LoopChainAction.AgentType, stageIndex);
+                chainRun.MarkStepFinished(failedIndex, null, ChainStepStatus.Failed, _clock.UtcNow,
+                    error: ShortError("Could not choose an automatic if path: " + ex.Message));
+                await SaveProgressAsync(chainRun, ct);
+                return (payload, ChainRunStatus.Failed);
+            }
             if (gateResult.WaitDuration is { } wait)
             {
                 var resumeAtStage = stageIndex >= chainRun.StageCount
@@ -899,16 +1029,16 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         }
 
         if (stage.Action is ParallelWorkflowsChainAction parallel)
-            return await ExecuteParallelWorkflowsAsync(parallel, chainRun, chainRun.AppendStep(parallel.Type, stageIndex), payload, ct);
+            return await ExecuteParallelWorkflowsAsync(parallel, chainRun, chainRun.AppendStep(parallel.Type, stageIndex), payload, ct, stage.ExecutionPolicy);
         if (stage.Action is SubWorkflowChainAction child)
-            return await ExecuteSubWorkflowAsync(child, chainRun, chainRun.AppendStep(child.Type, stageIndex), payload, ct);
+            return await ExecuteSubWorkflowAsync(child, chainRun, chainRun.AppendStep(child.Type, stageIndex), payload, ct, stage.ExecutionPolicy);
         if (stage.Action is ContainerBuildChainAction or ContainerRunChainAction)
         {
-            return await ExecuteContainerAsync(stage.Action, chainRun, chainRun.AppendStep(stage.Action.Type, stageIndex), payload, ct);
+            return await ExecuteContainerAsync(stage.Action, chainRun, chainRun.AppendStep(stage.Action.Type, stageIndex), payload, ct, stage.ExecutionPolicy);
         }
         if (stage.Action is VirtualMachineChainAction vm)
         {
-            return await ExecuteQemuAsync(vm, chainRun, chainRun.AppendStep(vm.Type, stageIndex), payload, ct);
+            return await ExecuteQemuAsync(vm, chainRun, chainRun.AppendStep(vm.Type, stageIndex), payload, ct, stage.ExecutionPolicy);
         }
         if (stage.Action is SendEmailChainAction email)
         {
@@ -937,8 +1067,8 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     throw new InvalidOperationException(
                                         "Email subject and body must not be empty after payload substitution.");
                 }
-                var delivery = await _communications.SendEmailAsync(
-                    recipient, recipientName, subject, body, ct, attachments);
+                var delivery = await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, actionIndex,
+                    token => _communications.SendEmailAsync(recipient, recipientName, subject, body, token, attachments), ct);
                 chainRun.MarkStepFinished(actionIndex, runId: null,
                     ChainStepStatus.Succeeded, _clock.UtcNow,
                     delivery.Provider, delivery.ExternalId);
@@ -988,7 +1118,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     throw new InvalidOperationException(
                                         "SMS body must not be empty after payload substitution.");
                 }
-                var delivery = await _communications.SendSmsAsync(recipient, body, ct);
+                var delivery = await WithStepPolicyAsync(stage.ExecutionPolicy, chainRun, actionIndex, token => _communications.SendSmsAsync(recipient, body, token), ct);
                 chainRun.MarkStepFinished(actionIndex, runId: null,
                     ChainStepStatus.Succeeded, _clock.UtcNow,
                     delivery.Provider, delivery.ExternalId);
@@ -1056,14 +1186,14 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     branchStatuses[branchIndex] = ChainStepStatus.Cancelled;
                     return;
                 }
-                run = await _jobRunner.RunWorkflowStepAsync(stage.JobIds[branchIndex], stagePayload, stepRunId, ct);
+                run = await RunJobWithPolicyAsync(stage, chainRun, flat, stage.JobIds[branchIndex], stagePayload, stepRunId, progressLock, ct);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 branchStatuses[branchIndex] = ChainStepStatus.Failed;
                 await WithProgressLockAsync(progressLock, async () =>
                 {
-                    chainRun.MarkStepFinished(flat, stepRunId, ChainStepStatus.Failed,
+                    chainRun.MarkStepFinished(flat, chainRun.Steps[flat].RunId, ChainStepStatus.Failed,
                         _clock.UtcNow, error: ShortError(ex.Message));
                     await SaveProgressAsync(chainRun, ct);
                 });
@@ -1156,7 +1286,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
         Guid? RunId = null, System.Text.Json.Nodes.JsonNode? Output = null, string? Error = null);
 
     private async Task<(string? Payload, ChainRunStatus Status)> ExecuteParallelWorkflowsAsync(
-        ParallelWorkflowsChainAction action, ChainRun run, int index, string? payload, CancellationToken ct)
+        ParallelWorkflowsChainAction action, ChainRun run, int index, string? payload, CancellationToken ct, StepExecutionPolicy? policy = null)
     {
         run.MarkStepRunning(index, null, _clock.UtcNow);
         await SaveProgressAsync(run, ct);
@@ -1192,7 +1322,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 {
                     await PublishAsync(branchIndex, branch with { Status = "Running" });
                     ParentRuns.Value = [.. parents ?? [], run.Id];
-                    var result = await dispatcher.Send(new RunJobChainCommand(branch.WorkflowId, payload), ct);
+                    var result = await WithStepPolicyAsync(policy, run, index, token => RunChildAsync(branch.WorkflowId, payload, dispatcher, token, ct), ct, progressLock, failed: result => result.Status == "Failed", retriesUsed: 0);
                     await PublishAsync(branchIndex, new(branch.WorkflowId, branch.WorkflowName, branch.Condition, result.Status, result.Id,
                         ParseWorkflowOutput(result.FinalOutput),
                         result.Steps.FirstOrDefault(step => step.Status == "Failed")?.Error));
@@ -1224,7 +1354,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     }
 
     private async Task<(string? Payload, ChainRunStatus Status)> ExecuteSubWorkflowAsync(
-        SubWorkflowChainAction action, ChainRun run, int index, string? payload, CancellationToken ct)
+        SubWorkflowChainAction action, ChainRun run, int index, string? payload, CancellationToken ct, StepExecutionPolicy? policy = null)
     {
         run.MarkStepRunning(index, null, _clock.UtcNow);
         await SaveProgressAsync(run, ct);
@@ -1237,9 +1367,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 ?? throw new InvalidOperationException("The sub-workflow no longer exists.");
             if (child.ProjectId != run.ProjectId) throw new InvalidOperationException("Sub-workflows must belong to the same project.");
             ParentRuns.Value = [.. parents ?? [], run.Id];
-            var result = _dispatcher is null
-                ? await RunChainAsync(new RunJobChainCommand(child.Id, payload), ct)
-                : await _dispatcher.Send(new RunJobChainCommand(child.Id, payload), ct);
+            var result = await WithStepPolicyAsync(policy, run, index, token => RunChildAsync(child.Id, payload, _dispatcher, token, ct), ct, failed: result => result.Status == "Failed");
             var status = result.Status switch
             {
                 "Succeeded" => ChainRunStatus.Succeeded,
@@ -1275,7 +1403,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     }
 
     private async Task<(string? Payload, ChainRunStatus Status)> ExecuteContainerAsync(
-        ChainAction action, ChainRun run, int index, string? payload, CancellationToken ct)
+        ChainAction action, ChainRun run, int index, string? payload, CancellationToken ct, StepExecutionPolicy? policy = null)
     {
         run.MarkStepRunning(index, null, _clock.UtcNow);
         await SaveProgressAsync(run, ct);
@@ -1290,7 +1418,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                 throw new InvalidOperationException("Container workflow execution is not configured.");
             }
             using var execution = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            var task = _containers.ExecuteAsync(action, run.ProjectId, run.Id, index, payload, execution.Token);
+            var task = WithStepPolicyAsync(policy, run, index, token => _containers.ExecuteAsync(action, run.ProjectId, run.Id, index, payload, token), execution.Token, failed: result => result.ExitCode != 0);
             ContainerStepResult result;
             try
             {
@@ -1342,7 +1470,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     }
 
     private async Task<(string? Payload, ChainRunStatus Status)> ExecuteQemuAsync(
-        VirtualMachineChainAction action, ChainRun run, int index, string? payload, CancellationToken ct)
+        VirtualMachineChainAction action, ChainRun run, int index, string? payload, CancellationToken ct, StepExecutionPolicy? policy = null)
     {
         run.MarkStepRunning(index, null, _clock.UtcNow);
         await SaveProgressAsync(run, ct);
@@ -1356,7 +1484,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             {
                 throw new InvalidOperationException("QEMU execution is not configured on this host.");
             }
-            var result = await RunQemuUntilCancelledAsync(action, run.ProjectId, run.Id, index, payload, ct);
+            var result = await WithStepPolicyAsync(policy, run, index, token => RunQemuUntilCancelledAsync(action, run.ProjectId, run.Id, index, payload, token), ct, failed: result => result is { ExitCode: not 0 });
             if (result is null)
             {
                 run.MarkStepFinished(index, null, ChainStepStatus.Cancelled, _clock.UtcNow, "QEMU");

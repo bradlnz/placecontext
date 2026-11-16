@@ -35,7 +35,7 @@ public sealed class UpdateJobChainHandler : ICommandHandler<UpdateJobChainComman
             if (command.Stages is { Count: > 0 } stages)
             {
                 chain.Update(command.Name, command.Description,
-                            CreateJobChainHandler.ToStages(stages, command.StageGates, command.StageActions), updatedAt);
+                            CreateJobChainHandler.ToStages(stages, command.StageGates, command.StageActions, command.StagePolicies), updatedAt);
                 return;
             }
             chain.Update(command.Name, command.Description, command.StepJobIds, updatedAt);

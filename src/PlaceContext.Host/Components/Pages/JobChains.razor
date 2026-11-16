@@ -318,7 +318,6 @@ else
                     </div>
                     <nav class="dctabs workflow-view-tabs" aria-label="Workflow view" inert="@(Vm.ShowWorkflowAssistant || Vm.Saving)">
                         <button type="button" class="dctab @(Vm.IsCanvasView ? "active" : null)" aria-pressed="@Vm.IsCanvasView" @onclick='() => SetWorkflowViewAsync("canvas")'>Canvas</button>
-                        <button type="button" class="dctab @(Vm.IsListView ? "active" : null)" aria-pressed="@Vm.IsListView" @onclick='() => SetWorkflowViewAsync("list")'>List</button>
                         @if (Vm.EditChainId.HasValue)
                         {
                             <button type="button" class="dctab @(Vm.IsMarkupView ? "active" : null)" aria-pressed="@Vm.IsMarkupView" @onclick='() => SetWorkflowViewAsync("markup")'>Markup</button>
@@ -589,6 +588,8 @@ else
                                      Gates="@Vm.BuildCanvasGates()"
                                      OnAddGate="@(stageIndex => Vm.OpenStageNodePicker(stageIndex))"
                                      OnEditGate="@(pair => Vm.OpenGateEditor(pair.StageIndex))"
+                                     OnRemoveGate="Vm.RemoveGate"
+                                     OnEditPolicy="Vm.OpenStepPolicy"
                                      OnEditEmailAction="@(stageIndex => Vm.OpenEmailActionEditor(stageIndex))"
                                      OnEditSmsAction="@(stageIndex => Vm.OpenSmsActionEditor(stageIndex))"
                                      OnEditLoopAction="@(stageIndex => Vm.EditLoopAction(stageIndex))" OnEditRepeatAction="@(index => Vm.OpenRepeatAction(index))" OnEditScoringAction="@(index => Vm.OpenScoringAction(index, true))" OnEditQueryDataAction="@(index => Vm.OpenQueryDataAction(index, true))" OnEditSubWorkflowAction="@(index => Vm.OpenSubWorkflowAction(index, true))" OnEditParallelWorkflowAction="@(index => Vm.OpenParallelWorkflowAction(index, true))"
@@ -633,7 +634,7 @@ else
                                                         <div class="list-stage-gate">
                                                             <button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">
                                                                 <AppIcon Kind="@(stageGate is WaitGate ? "clock" : "split")" />
-                                                                <span>@(stageGate is WaitGate wait ? $"Wait {wait.Duration.TotalSeconds:0.#} seconds" : stageGate is ConditionGate condition ? $"If {condition.Expression}" : "Edit gate")</span>
+                                                                <span>@(stageGate is WaitGate wait ? $"Wait {wait.Duration.TotalSeconds:0.#} seconds" : stageGate is ConditionGate condition ? condition.ReviewQuestion is { } question ? $"AI If · {question}" : $"If {condition.Expression}" : "Edit gate")</span>
                                                             </button>
                                                             <button class="dcbtn danger" aria-label="@($"Remove gate from step {stageIndex + 1}")" title="Remove gate" @onclick="@(() => Vm.RemoveGate(stageIndex))"><AppIcon Kind="close" /></button>
                                                         </div>
@@ -849,6 +850,10 @@ else
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="check" /></span>
                             <strong>Scoring gate</strong><small>Check evidence against quality thresholds</small>
                         </button>
+                        <button class="node-picker-tile" @onclick="Vm.ChooseAutomaticGateNode">
+                            <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="split" /></span>
+                            <strong>Automatic if</strong><small>AI Review chooses the best path</small>
+                        </button>
                         <button class="node-picker-tile" @onclick="Vm.ChooseConditionNode">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="split" /></span>
                             <strong>Condition</strong><small>Branch based on the workflow data</small>
@@ -981,7 +986,7 @@ else
                             <div class="dcfield"><label for="qemu-image">Image profile</label><input id="qemu-image" class="dcinput" list="qemu-profiles" maxlength="80" placeholder="browser-linux" @bind="Vm.VirtualMachineImageProfile" @bind:event="oninput" /><datalist id="qemu-profiles">@foreach (var profile in Vm.QemuEnvironment.Images.Where(image => image.Available)) { <option value="@profile.Name" /> }</datalist><small>Choose a Linux desktop profile available on your execution hosts.</small></div>
                             <div class="qemu-readiness" role="status">
                                 <span class="qemu-status @(environmentReady ? "ready" : "")"><AppIcon Kind="@(environmentReady ? "check" : "warning")" /> @(environmentReady ? "Ready to run" : "Setup required")</span>
-                                @if (!Vm.QemuEnvironment.Enabled) { <p>Execution is disabled on this host. You can save this step; an administrator must enable QEMU to run it.</p> }
+                                @if (!Vm.QemuEnvironment.Enabled) { <p>Execution is disabled on this host. You can save this step; an administrator must enable browser workspaces to run it.</p> }
                                 @if (Vm.QemuEnvironment.Enabled && !imageAvailable) { <p>This image profile is unavailable on this host. Configure its image before running.</p> }
                                 @if (!Vm.QemuEnvironment.AgentReady) { <p>The task agent needs an execution provider and model credentials.</p> }
                                 else { <p>Agent model: <strong>@Vm.QemuEnvironment.AgentModel</strong></p> }
@@ -1069,22 +1074,30 @@ else
         @if (Vm.ShowParallelWorkflowEditor)
         {
             <div class="dcmodal-overlay" @onclick="Vm.CloseParallelWorkflowEditor">
-                <div class="dcmodal" style="width:760px" role="dialog" aria-modal="true" aria-label="Parallel if gates" @onclick:stopPropagation="true">
+                <div class="dcmodal parallel-workflow-modal workflow-conditions-modal" role="dialog" aria-modal="true" aria-label="Parallel if gates" @onclick:stopPropagation="true">
                     <div class="dcmodal-head"><WorkflowDialogHandle /><div class="title-14">Parallel if gates</div><button class="dcslide-x" aria-label="Close" @onclick="Vm.CloseParallelWorkflowEditor"><AppIcon Kind="close" /></button></div>
                     <div class="dcmodal-body">
                         <p class="sub-note">Each branch checks the same incoming payload. Every matching workflow runs, up to four at once. The next step waits for all matching branches. Results stay separate in branch order.</p>
-                        @foreach (var branch in Vm.ParallelBranches)
+                        <nav class="dctabs parallel-branch-tabs" aria-label="Parallel branches">
+                            @foreach (var tabBranch in Vm.ParallelBranches)
+                            {
+                                <button type="button" class="dctab @(Vm.ActiveParallelBranch == tabBranch ? "active" : null)" aria-pressed="@(Vm.ActiveParallelBranch == tabBranch ? "true" : "false")" @onclick="() => Vm.SelectParallelBranch(tabBranch)">Branch @(Vm.ParallelBranches.IndexOf(tabBranch) + 1)</button>
+                            }
+                        </nav>
+                        @if (Vm.ActiveParallelBranch is { } branch)
                         {
-                            <section class="dcform-section" @key="branch">
+                            <section class="parallel-branch" @key="branch">
                                 <h4>Branch @(Vm.ParallelBranches.IndexOf(branch) + 1)</h4>
-                                <label>Run workflow<select class="dcinput" @bind="branch.WorkflowId"><option value="">Choose a workflow</option>
+                                <div class="dcfield"><label for="parallel-workflow">Run workflow</label><select id="parallel-workflow" class="dcinput" @bind="branch.WorkflowId"><option value="">Choose a workflow</option>
                                     @foreach (var workflow in (Vm.Chains ?? []).Where(chain => chain.Id != Vm.EditChainId)) { <option value="@workflow.Id">@workflow.Name</option> }
-                                </select></label>
-                                <WorkflowConditionsEditor Rows="branch.Conditions" @bind-Match="branch.Match" />
+                                </select></div>
+                                <div><WorkflowConditionsEditor Rows="branch.Conditions" @bind-Match="branch.Match" LoadFields="Vm.LoadParallelConditionFieldsAsync"
+                                    TrueLabel="@((Vm.Chains ?? []).FirstOrDefault(chain => chain.Id.ToString() == branch.WorkflowId)?.Name ?? "Run selected workflow")"
+                                    FalseLabel="Skip this branch" JoinLabel="Wait for matching branches, then continue" /></div>
                                 <button class="dcbtn btn-xs" disabled="@(Vm.ParallelBranches.Count <= 2)" @onclick="() => Vm.RemoveParallelBranch(branch)">Remove branch</button>
                             </section>
                         }
-                        <button class="dcbtn" disabled="@(Vm.ParallelBranches.Count >= 8)" @onclick="Vm.AddParallelBranch">Add parallel branch</button>
+                        <div><button class="dcbtn" disabled="@(Vm.ParallelBranches.Count >= 8)" @onclick="Vm.AddParallelBranch">Add parallel branch</button></div>
                         <div class="dcfield"><label for="parallel-output">Join output field</label><input id="parallel-output" class="dcinput" @bind="Vm.ParallelOutputField" /></div>
                         @if (Vm.ParallelWorkflowError is { } error) { <div role="alert">@error</div> }
                     </div>
@@ -1093,10 +1106,27 @@ else
             </div>
         }
 
+        @if (Vm.PolicyStageIndex is { } policyIndex)
+        {
+            <div class="dcmodal-overlay step-policy-overlay" @onclick="Vm.CloseStepPolicy">
+                <div class="dcmodal run-modal" role="dialog" aria-modal="true" aria-label="Step retries and limits" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head"><div class="title-14">Retries and limits · @(Vm.PolicyIsFalsePath ? "False path step" : "Step") @(policyIndex + 1)</div><button class="dcslide-x" aria-label="Close" @onclick="Vm.CloseStepPolicy"><AppIcon Kind="close" /></button></div>
+                    <div class="dcmodal-body">
+                        <div class="dcfield"><label for="step-max-retries">Maximum retries</label><input id="step-max-retries" class="dcinput" type="number" min="0" max="10" @bind="Vm.StepMaxRetries" /><small>Additional attempts after a failure. Zero disables retries.</small></div>
+                        <div class="dcfield"><label for="step-retry-delay">Delay between retries (seconds)</label><input id="step-retry-delay" class="dcinput" type="number" min="0" max="3600" @bind="Vm.StepRetryDelaySeconds" /></div>
+                        <div class="dcfield"><label for="step-timeout">Timeout per attempt (seconds)</label><input id="step-timeout" class="dcinput" type="number" min="1" max="86400" placeholder="Use runtime limit" @bind="Vm.StepTimeoutSeconds" /><small>Leave empty to keep the runtime limit. Human input and scheduled waits are excluded.</small></div>
+                        <p class="sub-note">Applies to each job in a parallel step. Retrying may repeat side effects such as sending messages.</p>
+                        @if (Vm.StepPolicyError is { } policyError) { <div class="prompt-err" role="alert">@policyError</div> }
+                    </div>
+                    <div class="dcmodal-foot"><button class="dcbtn" @onclick="Vm.ResetStepPolicy">Use defaults</button><button class="dcbtn" @onclick="Vm.CloseStepPolicy">Cancel</button><button class="dcbtn primary" @onclick="Vm.SaveStepPolicy">Apply</button></div>
+                </div>
+            </div>
+        }
+
         @if (Vm.ShowSubWorkflowEditor)
         {
             <div class="dcmodal-overlay" @onclick="Vm.CloseSubWorkflowEditor">
-                <div class="dcmodal gate-modal" role="dialog" aria-modal="true" aria-label="Run sub-workflow" @onclick:stopPropagation="true">
+                <div class="dcmodal sub-workflow-modal" role="dialog" aria-modal="true" aria-label="Run sub-workflow" @onclick:stopPropagation="true">
                     <div class="dcmodal-head"><WorkflowDialogHandle /><div class="title-14">Run sub-workflow</div><button class="dcslide-x" aria-label="Close" @onclick="Vm.CloseSubWorkflowEditor"><AppIcon Kind="close" /></button></div>
                     <div class="dcmodal-body">
                         <div class="dcfield"><label for="sub-workflow">Workflow</label><select id="sub-workflow" class="dcinput" @bind="Vm.SubWorkflowId"><option value="">Choose a workflow</option>
@@ -1104,6 +1134,18 @@ else
                             { <option value="@workflow.Id">@workflow.Name</option> }
                         </select></div>
                         <p class="sub-note">Passes the current payload to an automatic workflow and merges its result into the next step. Put waits and requests for human input in the parent workflow.</p>
+                        @if (Vm.SelectedSubWorkflow is { } subWorkflow)
+                        {
+                            <div><a class="dcbtn" href="@($"{Vm.WorkflowsRoute}/{subWorkflow.Id}/canvas")"
+                                    target="_blank" rel="noopener noreferrer" title="Edit workflow in a new tab">
+                                <AppIcon Kind="edit" /> Edit workflow <AppIcon Kind="external-link" />
+                            </a></div>
+                            <ChainCanvas @key="subWorkflow.Id" Stages="subWorkflow.Stages" Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())" ReadOnly="true" />
+                        }
+                        else
+                        {
+                            <p class="sub-note" role="status">@(string.IsNullOrEmpty(Vm.SubWorkflowId) ? "Choose a workflow to see its canvas." : "This sub-workflow is unavailable. Choose another workflow to see its canvas.")</p>
+                        }
                         @if (Vm.SubWorkflowError is { } error) { <div role="alert">@error</div> }
                     </div>
                     <div class="dcmodal-foot"><button class="dcbtn" @onclick="Vm.CloseSubWorkflowEditor">Cancel</button><button class="dcbtn primary" @onclick="Vm.SaveSubWorkflowAction">Save step</button></div>
@@ -1555,19 +1597,34 @@ else
         @if (Vm.ShowGateEditor)
         {
             <div class="dcmodal-overlay" @onclick="() => Vm.CancelGateEditor()">
-                <div class="dcmodal gate-modal" role="dialog" aria-modal="true" aria-label="Configure workflow step" @onclick:stopPropagation="true">
+                <div class="dcmodal gate-modal @(Vm.IsConditionGateEditor ? "workflow-conditions-modal" : null)" role="dialog" aria-modal="true" aria-label="Configure workflow step" @onclick:stopPropagation="true">
                     <div class="dcmodal-head"><WorkflowDialogHandle />
-                        <div class="title-14">Gate on stage @(Vm.GateEditorStageIndex + 1)</div>
+                        <div class="title-14">@(Vm.IsAutomaticGateEditor ? "Automatic if · AI Review" : Vm.IsConditionGateEditor ? "If gate" : "Wait / delay") · Stage @(Vm.GateEditorStageIndex + 1)</div>
                         <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CancelGateEditor()"><AppIcon Kind="close" /></button>
                     </div>
                     <div class="dcmodal-body">
                         <div class="dcfield mb-8">
-                            <label>Gate type</label>
-                            <select class="dcinput" @bind="Vm.GateEditorType">
+                            <label for="gate-type">Gate type</label>
+                            <select id="gate-type" class="dcinput" @bind="Vm.GateEditorType">
                                 <option value="wait">Wait / delay</option>
                                 <option value="condition">Condition / if-else</option>
+                                <option value="automatic">Automatic if · AI Review</option>
                             </select>
                         </div>
+
+                        @if (Vm.GateEditorStageIndex == Vm.EdStages.Count)
+                        {
+                            <div class="dcfield">
+                                <label for="gate-true-job">@(Vm.IsConditionGateEditor ? "Job on the True path" : "Job after the delay")</label>
+                                <select id="gate-true-job" class="dcinput" @bind="Vm.GateEditorTrueJobId">
+                                    <option value="">Choose a job…</option>
+                                    @foreach (var job in Vm.Jobs ?? Array.Empty<JobView>())
+                                    {
+                                        <option value="@job.Id">@job.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        }
 
                         @if (Vm.IsWaitGateEditor)
                         {
@@ -1581,24 +1638,34 @@ else
 
                         @if (Vm.IsConditionGateEditor)
                         {
-                            <WorkflowConditionsEditor Rows="Vm.GateEditorConditions" @bind-Match="Vm.GateEditorMatch" />
-                            <div class="sub-note">
-                                When true, run this stage's jobs. When false, run the steps below instead.
-                                Both paths rejoin at the next workflow stage.
-                            </div>
-                            <div class="dcform-section">
-                                <h4>Retry on a failed condition</h4>
-                                <p>Insert a Repeat step before this gate. Retry the preceding process until these conditions pass, or fail after a fixed number of attempts.</p>
-                                <button class="dcbtn" disabled="@(!Vm.CanRetryGate)" @onclick="Vm.RetryGateProcess">Add bounded retry</button>
-                                @if (!Vm.CanRetryGate) { <p class="sub-note">A preceding step is required, and a workflow can have one Repeat step.</p> }
-                            </div>
-                            <div class="dcform-section">
+                            <p class="sub-note">@(Vm.IsAutomaticGateEditor ? "AI Review checks the incoming workflow data against your question and chooses the True or False path. Both paths rejoin at the next stage." : "Check the incoming payload. When true, run this stage. When false, follow the other path. Both paths rejoin at the next stage.")</p>
+                            <nav class="dctabs parallel-branch-tabs" aria-label="Gate paths">
+                                <button type="button" class="dctab @(Vm.GateEditorPath == "true" ? "active" : null)" aria-pressed="@(Vm.GateEditorPath == "true" ? "true" : "false")" @onclick='() => Vm.GateEditorPath = "true"'>True path</button>
+                                <button type="button" class="dctab @(Vm.GateEditorPath == "false" ? "active" : null)" aria-pressed="@(Vm.GateEditorPath == "false" ? "true" : "false")" @onclick='() => Vm.GateEditorPath = "false"'>False path</button>
+                            </nav>
+                            <section class="parallel-branch" hidden="@(Vm.GateEditorPath != "true")">
+                                <h4>True path</h4>
+                                <div class="gate-path-target"><span>Run stage</span><strong>@Vm.GateTruePathLabel</strong></div>
+                                <div><WorkflowConditionsEditor Automatic="Vm.IsAutomaticGateEditor" @bind-ReviewQuestion="Vm.GateReviewQuestion" Rows="Vm.GateEditorConditions" @bind-Match="Vm.GateEditorMatch" LoadFields="() => Vm.LoadConditionFieldsAsync(Vm.GateEditorStageIndex)"
+                                    TrueLabel="@Vm.GateTruePathLabel" FalseLabel="@Vm.GateFalsePathLabel" /></div>
+                                @if (!Vm.IsAutomaticGateEditor)
+                                {
+                                <details class="gate-retry-options">
+                                    <summary>Retry on a failed condition</summary>
+                                    <p>Retry the preceding process until these conditions pass, or fail after a fixed number of attempts.</p>
+                                    <button class="dcbtn" disabled="@(!Vm.CanRetryGate)" @onclick="Vm.RetryGateProcess">Add bounded retry</button>
+                                    @if (!Vm.CanRetryGate) { <p class="sub-note">A preceding step is required, and a workflow can have one Repeat step.</p> }
+                                </details>
+                                }
+                            </section>
+                            <section class="parallel-branch" hidden="@(Vm.GateEditorPath != "false")">
                                 <h4>False path</h4>
                                 @for (var i = 0; i < Vm.GateEditorElseStages.Count; i++)
                                 {
                                     var index = i;
                                     <div class="dcfield">
                                         <WorkflowBranchPreview Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())" Stages="@(new[] { Vm.BuildStageView(Vm.GateEditorElseStages[index]) })" />
+                                        <button class="dcbtn btn-xs" aria-label="@($"Retries and limits for false path step {index + 1}")" @onclick="() => Vm.OpenElseStepPolicy(index)">Retries and limits</button>
                                         <button class="dcbtn btn-xs" aria-label="@($"Remove false path step {index + 1}")"
                                                 @onclick="@(() => Vm.RemoveElseStage(index))">Remove step</button>
                                     </div>
@@ -1618,11 +1685,12 @@ else
                                     </select>
                                     <button class="dcbtn" disabled="@(string.IsNullOrEmpty(Vm.GateEditorElseJobId))" @onclick="Vm.AddElseJob">Add step</button>
                                 </div>
-                            </div>
+                            </section>
                         }
                     </div>
                     <div class="dcmodal-foot">
                         <button class="dcbtn" @onclick="() => Vm.CancelGateEditor()">Cancel</button>
+                        @if (Vm.GateEditorError is not null) { <p class="danger" role="alert">@Vm.GateEditorError</p> }
                         <button class="dcbtn primary" @onclick="() => Vm.SaveGate()">Save gate</button>
                     </div>
                 </div>
@@ -1805,12 +1873,32 @@ else
                 <div class="flex-min">
                     <div class="title-14">Run @Vm.RunPromptChain.Name</div>
                     <div class="sub-115">
-                        Add an optional attachment, then review any declared step inputs below.
+                        Review the input fields before running. Missing UUIDs and integer IDs are generated automatically; supplied values are kept.
+                        Jobs and containers must pass AI safety review before execution.
                     </div>
                 </div>
                 <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CancelRunPrompt()"><AppIcon Kind="close" /></button>
             </div>
             <div class="dcmodal-body modal-body-scroll">
+                <div class="prompt-step">
+                    <div class="prompt-step-head"><strong>Workflow input</strong></div>
+                    @if (Vm.RunPromptSteps.Count == 0)
+                    {
+                        <p class="sub-note">No input fields are defined. Add the fields this workflow expects, or leave them empty if it creates its own input.</p>
+                    }
+                    @foreach (var field in Vm.RunInputFields)
+                    {
+                        <div class="run-input-field" @key="field">
+                            <div class="dcfield"><label>Field name</label><input class="dcinput" aria-label="Input field name" placeholder="question or request_id" @bind="field.Name" @bind:after="() => Vm.GenerateRunInputDefault(field)" /></div>
+                            <div class="dcfield"><label>Type</label><select class="dcinput" aria-label="Input field type" @bind="field.Type" @bind:after="() => Vm.GenerateRunInputDefault(field)">
+                                <option value="text">Text</option><option value="uuid">UUID</option><option value="integer">Integer</option><option value="number">Number</option><option value="checkbox">Boolean</option><option value="date">Date</option><option value="datetime-local">Date and time</option><option value="json">JSON</option>
+                            </select></div>
+                            <div class="dcfield"><label>Value</label><ParamInput Parameter="field.Parameter" ProjectId="@ProjectId" @bind-Value="field.Value" /></div>
+                            <button type="button" class="dcbtn" aria-label="@($"Remove input field {Vm.RunInputFields.IndexOf(field) + 1}")" @onclick="() => Vm.RemoveRunInputField(field)"><AppIcon Kind="close" /></button>
+                        </div>
+                    }
+                    <button type="button" class="dcbtn" @onclick="Vm.AddRunInputField"><AppIcon Kind="plus" /> Add input field</button>
+                </div>
                 <div class="dcfield">
                     <label>
                         @ParameterPromptState.ChainAttachmentParameter.Label

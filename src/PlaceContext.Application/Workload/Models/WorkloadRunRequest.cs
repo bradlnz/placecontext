@@ -45,4 +45,5 @@ public sealed record WorkloadRunRequest(
     string? Entrypoint,
     bool AllowNetworkEgress = true,
     int? TimeoutSeconds = null,
-    PlaceContext.Domain.ValueObjects.WorkerNetworkPolicy? Network = null);
+    PlaceContext.Domain.ValueObjects.WorkerNetworkPolicy? Network = null,
+    Guid? ProjectId = null);

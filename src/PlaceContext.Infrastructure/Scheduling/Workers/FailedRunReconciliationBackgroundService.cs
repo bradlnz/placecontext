@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Secrets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -59,7 +60,7 @@ public sealed class FailedRunReconciliationBackgroundService(
                 CurrentTenant.Clear();
             }
         }
-        var queues = await RpcChainSubmissionBackgroundService.ReconcileFailuresAsync(db, ct);
+        var queues = await RpcChainSubmissionBackgroundService.ReconcileFailuresAsync(db, discovery.ServiceProvider.GetRequiredService<IDataEncryptor>(), ct);
         log.LogInformation("Failed-run reconciliation completed: {Receipts} job receipts, {Workflows} workflows repaired; {Queues} queue failures retried or closed by policy.", receipts, workflows, queues);
     }
 }

@@ -31,6 +31,12 @@ public class JobParameterTests
     }
 
     [Theory]
+    [InlineData("uuid", "uuid")]
+    [InlineData("guid", "uuid")]
+    [InlineData("integer", "integer")]
+    [InlineData("int", "integer")]
+    [InlineData("boolean", "checkbox")]
+    [InlineData("json", "json")]
     [InlineData("date", "date")]
     [InlineData("datetime", "datetime-local")]
     [InlineData("datetime-local", "datetime-local")]
@@ -41,6 +47,17 @@ public class JobParameterTests
         var parameter = new JobParameter("when", type: input);
 
         Assert.Equal(expected, parameter.Type);
+    }
+
+    [Theory]
+    [InlineData("uuid", "\"bad\"")]
+    [InlineData("integer", "1.5")]
+    [InlineData("checkbox", "\"maybe\"")]
+    public void Workflow_input_resume_rejects_invalid_typed_values(string type, string value)
+    {
+        var request = new PlaceContext.Application.Dtos.ChainInputRequest(Guid.NewGuid(),
+            [new(0, "Input", [new("value", Type: type)])]);
+        Assert.Throws<ArgumentException>(() => ChainInputPayload.Apply(request, "{\"0\":{\"value\":" + value + "}}", null, null));
     }
 
     [Fact]

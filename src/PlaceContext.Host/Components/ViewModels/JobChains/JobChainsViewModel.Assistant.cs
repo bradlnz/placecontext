@@ -22,6 +22,7 @@ public sealed partial class JobChainsViewModel
         try
         {
             Chains = await _svc.ListJobChainsAsync(ProjectId);
+            Jobs = await _svc.ListJobsAsync(ProjectId);
             if (Chains.FirstOrDefault(chain => chain.Id == id) is { } saved)
                 await OpenChainEditorAsync(saved, view: "canvas");
         }

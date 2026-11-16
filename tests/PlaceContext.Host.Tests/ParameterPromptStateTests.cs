@@ -7,6 +7,71 @@ namespace PlaceContext.Host.Tests;
 public sealed class ParameterPromptStateTests
 {
     [Fact]
+    public void Workflow_form_infers_first_step_examples_and_preserves_structured_and_typed_values()
+    {
+        var job = Job("Input") with { InputPayloads = ["""{"request_id":"c6b8fef6-36b4-43db-a7b6-806873e05db5","count":12,"enabled":false,"data":{"name":"Ada"},"items":[1,2],"optional":null}"""] };
+        var downstream = Job("Later") with { InputPayloads = ["""{"do_not_override":"upstream output"}"""] };
+        var chain = new JobChainView(Guid.NewGuid(), job.ProjectId, "Test", null,
+            [new([new(job.Id, job.Name)]), new([new(downstream.Id, downstream.Name)])], DateTimeOffset.UtcNow);
+        var plan = ChainParameterPromptPlan.Build(chain, [job, downstream]);
+        var step = Assert.Single(plan.Steps);
+        Assert.Empty(job.Parameters);
+        Assert.Equal("uuid", step.Job.Parameters.Single(p => p.Name == "request_id").Type);
+        var prompt = new ParameterPromptState(); prompt.Reset(plan.Defaults);
+        Assert.True(prompt.ValidateChainStepParameters(plan.Steps));
+        using var actual = JsonDocument.Parse(prompt.ToStepPayloadOverrides(plan.Steps)[0]);
+        Assert.Equal(12, actual.RootElement.GetProperty("count").GetInt32());
+        Assert.False(actual.RootElement.GetProperty("enabled").GetBoolean());
+        Assert.Equal("Ada", actual.RootElement.GetProperty("data").GetProperty("name").GetString());
+        Assert.Equal(2, actual.RootElement.GetProperty("items").GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, actual.RootElement.GetProperty("optional").ValueKind);
+    }
+
+    [Fact]
+    public void Workflow_defaults_generate_only_missing_identifiers_and_keep_provided_values()
+    {
+        var existing = Guid.NewGuid().ToString();
+        var job = Job("Input", new("request_id", Type: "uuid"), new("record_id", Type: "integer"),
+            new("count", Type: "integer"), new("approved", Type: "checkbox"), new("existing", Type: "uuid"))
+            with { InputPayloads = [System.Text.Json.JsonSerializer.Serialize(new { existing, request_id = (string?)null, record_id = (int?)null })] };
+        var chain = new JobChainView(Guid.NewGuid(), job.ProjectId, "Test", null, [new([new(job.Id, job.Name)])], DateTimeOffset.UtcNow);
+        var plan = ChainParameterPromptPlan.Build(chain, [job]);
+        Assert.True(Guid.TryParse(plan.Defaults["step0:request_id"], out _));
+        Assert.True(int.Parse(plan.Defaults["step0:record_id"]) > 0);
+        Assert.Equal("", plan.Defaults["step0:count"]);
+        Assert.Equal("false", plan.Defaults["step0:approved"]);
+        Assert.Equal(existing, plan.Defaults["step0:existing"]);
+        Assert.NotEqual(plan.Defaults["step0:request_id"], ChainParameterPromptPlan.Build(chain, [job]).Defaults["step0:request_id"]);
+    }
+
+    [Theory]
+    [InlineData("uuid", "not-a-uuid")]
+    [InlineData("integer", "1.5")]
+    [InlineData("integer", "9223372036854775808")]
+    [InlineData("number", "NaN")]
+    [InlineData("checkbox", "yes")]
+    [InlineData("json", "{bad")]
+    public void Invalid_typed_run_values_are_rejected_without_losing_the_draft(string type, string value)
+    {
+        var prompt = new ParameterPromptState(); prompt.Set("input", value);
+        Assert.False(prompt.ValidateJobParameters([new("input", Type: type)]));
+        Assert.NotNull(prompt.Error); Assert.Equal(value, prompt.Get("input"));
+        Assert.Contains(value.Replace("\"", "\\\""), prompt.ToJobPayload([new("input", Type: type)]));
+    }
+
+    [Fact]
+    public void Numbers_and_booleans_are_not_strings_in_run_payloads()
+    {
+        var prompt = new ParameterPromptState(); prompt.Set("number", "12.75"); prompt.Set("integer", "2147483647"); prompt.Set("flag", "false");
+        JobParameterDto[] fields = [new("number", Type: "number"), new("integer", Type: "integer"), new("flag", Type: "checkbox")];
+        Assert.True(prompt.ValidateJobParameters(fields));
+        using var json = JsonDocument.Parse(prompt.ToJobPayload(fields));
+        Assert.Equal(12.75m, json.RootElement.GetProperty("number").GetDecimal());
+        Assert.Equal(2147483647, json.RootElement.GetProperty("integer").GetInt64());
+        Assert.False(json.RootElement.GetProperty("flag").GetBoolean());
+    }
+
+    [Fact]
     public void ChainParameterPromptPlan_finds_parameterized_steps_and_prefills_stored_values()
     {
         var first = Job("first");

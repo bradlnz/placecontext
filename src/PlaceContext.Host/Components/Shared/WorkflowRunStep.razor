@@ -18,6 +18,10 @@
     {
         <div class="run-step-detail" title="@Step.Error">@Step.Error</div>
     }
+    @if (Step.RetryCount > 0)
+    {
+        <div class="run-step-detail">@Step.RetryCount @(Step.RetryCount == 1 ? "retry" : "retries")</div>
+    }
     @if (OnStepCancel.HasDelegate && Vm.CanCancel(Step))
     {
         <button class="dcbtn btn-2-8 text-bad" @onclick="@(() => OnStepCancel.InvokeAsync(Step))">Cancel</button>

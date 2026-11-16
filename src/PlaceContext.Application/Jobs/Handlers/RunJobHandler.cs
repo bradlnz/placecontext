@@ -447,7 +447,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 
             var result = await _runner.RunAsync(request with
             {
-                Network = _network
+                Network = _network, ProjectId = job.ProjectId
             }, ct);
             var outcome = job.ExitCodePolicy.Classify(result.ExitCode);
             var log = CombineLog(result.Stdout, result.Stderr);
@@ -586,7 +586,7 @@ public sealed class RunJobHandler : ICommandHandler<RunJobCommand, JobRunDetailV
 
         var result = await _runner.RunAsync(request with
         {
-            Network = _network
+            Network = _network, ProjectId = job.ProjectId
         }, ct);
         var succeeded = job.ExitCodePolicy.SuccessCodes.Contains(result.ExitCode);
         var log = CombineLog(result.Stdout, result.Stderr);

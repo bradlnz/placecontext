@@ -13,9 +13,11 @@ public sealed partial class JobChainsViewModel
     }
     public bool ShowParallelWorkflowEditor { get; private set; }
     public List<ParallelBranchEditor> ParallelBranches { get; } = [];
+    public ParallelBranchEditor? ActiveParallelBranch { get; private set; }
     public string ParallelOutputField { get; set; } = "parallel_results";
     public string? ParallelWorkflowError { get; private set; }
     private int _parallelStageIndex;
+    public Task<ConditionFieldOptions> LoadParallelConditionFieldsAsync() => LoadConditionFieldsAsync(_parallelStageIndex);
     private bool _editingParallel;
     public void OpenParallelWorkflowAction(int index, bool editing = false)
     {
@@ -41,10 +43,31 @@ public sealed partial class JobChainsViewModel
             ParallelBranches.Add(row);
         }
         if (ParallelBranches.Count == 0) { ParallelBranches.Add(new()); ParallelBranches.Add(new()); }
+        ActiveParallelBranch = ParallelBranches[0];
         ShowParallelWorkflowEditor = true; NotifyStateChanged();
     }
-    public void AddParallelBranch() { if (ParallelBranches.Count < 8) ParallelBranches.Add(new()); NotifyStateChanged(); }
-    public void RemoveParallelBranch(ParallelBranchEditor branch) { if (ParallelBranches.Count > 2) ParallelBranches.Remove(branch); NotifyStateChanged(); }
+    public void SelectParallelBranch(ParallelBranchEditor branch)
+    {
+        if (!ParallelBranches.Contains(branch)) return;
+        ActiveParallelBranch = branch;
+        NotifyStateChanged();
+    }
+    public void AddParallelBranch()
+    {
+        if (ParallelBranches.Count >= 8) return;
+        ActiveParallelBranch = new();
+        ParallelBranches.Add(ActiveParallelBranch);
+        NotifyStateChanged();
+    }
+    public void RemoveParallelBranch(ParallelBranchEditor branch)
+    {
+        var index = ParallelBranches.IndexOf(branch);
+        if (ParallelBranches.Count <= 2 || index < 0) return;
+        ParallelBranches.RemoveAt(index);
+        if (ActiveParallelBranch == branch)
+            ActiveParallelBranch = ParallelBranches[Math.Min(index, ParallelBranches.Count - 1)];
+        NotifyStateChanged();
+    }
     public void CloseParallelWorkflowEditor() { ShowParallelWorkflowEditor = false; NotifyStateChanged(); }
     public void SaveParallelWorkflowAction()
     {

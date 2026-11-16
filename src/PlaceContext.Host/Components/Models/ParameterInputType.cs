@@ -10,4 +10,5 @@ public enum ParameterInputType
     Time,
     Checkbox,
     File,
+    Json,
 }

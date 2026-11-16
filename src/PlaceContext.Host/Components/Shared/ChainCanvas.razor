@@ -8,7 +8,7 @@
     <div class="canvas-toolbar">
         <div>
             <div class="toolbar-title">@(RunSteps is null ? "Workflow canvas" : "Workflow run") <span class="step-count">@Vm.Stages.Count steps</span></div>
-            <div class="canvas-hint">@(ReadOnly ? "Select a job to inspect it. Scroll to explore the workflow." : RunSteps is null ? "Drag stages to reorder. Select a step to configure it." : "Step colours show what ran, what failed, and what was skipped.")</div>
+            <div class="canvas-hint">@(ReadOnly ? OnOpenJob.HasDelegate ? "Select a job to inspect it. Scroll to explore the workflow." : "Scroll to explore the workflow." : RunSteps is null ? "Drag stages to reorder. Select a step to configure it." : "Step colours show what ran, what failed, and what was skipped.")</div>
         </div>
         @if (RunSteps is null && !ReadOnly)
         {
@@ -54,11 +54,20 @@
                         }
                         else if (gate is not null)
                         {
+                            <div class="gate-controls">
                             <button class="gate-node @Vm.GateClass(gate)"
                                     title="@Vm.GateTooltip(gate)"
                                     @onclick="@(() => OnEditGate.InvokeAsync((stageIndex, gate)))">
                                 <span class="gate-content"><AppIcon Kind="@Vm.GateIcon(gate)" /><span class="gate-label">@Vm.GateLabel(gate)</span></span>
                             </button>
+                            @if (gate is ConditionGateView && OnRemoveGate.HasDelegate)
+                            {
+                                <button type="button" class="gate-remove" aria-label="@($"Remove if gate from step {stageIndex + 1}")"
+                                        title="Remove if gate and its false path" @onclick="@(() => OnRemoveGate.InvokeAsync(stageIndex))">
+                                    <AppIcon Kind="close" />
+                                </button>
+                            }
+                            </div>
                         }
                         else if (RunSteps is null && !ReadOnly)
                         {
@@ -104,6 +113,15 @@
                             }
                         </div>
 
+                        @if (RunSteps is null && !ReadOnly && OnEditPolicy.HasDelegate && stage.Action is not RepeatFlowChainActionView)
+                        {
+                            <button type="button" class="step-policy" aria-label="@($"Retries and limits for step {stageIndex + 1}")"
+                                    @onclick="() => OnEditPolicy.InvokeAsync(stageIndex)">
+                                <AppIcon Kind="settings" /> Retries and limits
+                                @if (stage.ExecutionPolicy is { } policy)
+                                { <small>@policy.MaxRetries retries · @(policy.TimeoutSeconds is { } timeout ? $"{timeout}s timeout" : "runtime limit")</small> }
+                            </button>
+                        }
                         <div class="stage-paths">
                             @if (RunSteps is not null)
                             {
@@ -210,7 +228,7 @@
                                     else { <span class="job-name" title="@job.JobName">@job.JobName</span> }
                                     @if (!ReadOnly)
                                     {
-                                    <JobCodeLink Job="@Jobs.FirstOrDefault(candidate => candidate.Id == job.JobId)" OnEdit="OnEditCode" />
+                                    <div class="job-edit-actions"><JobCodeLink Job="@Jobs.FirstOrDefault(candidate => candidate.Id == job.JobId)" OnEdit="OnEditCode" /></div>
                                     <button class="path-remove" title="Remove path"
                                             @onclick="@(() => OnRemovePath.InvokeAsync((stageIndex, branchIndex)))"><AppIcon Kind="close" /></button>
                                     }
@@ -244,9 +262,9 @@
 
                         @if (gate is ConditionGateView cg)
                         {
-                            <div class="condition-strip" title="@cg.Expression">
-                                <span>IF</span>
-                                <code>@cg.Expression</code>
+                            <div class="condition-strip" title="@(cg.ReviewQuestion ?? cg.Expression)">
+                                <span>@(cg.ReviewQuestion is null ? "IF" : "AI IF")</span>
+                                <code>@(cg.ReviewQuestion ?? cg.Expression)</code>
                             </div>
                         }
                         else if (gate is WaitGateView wg)
@@ -262,7 +280,7 @@
                             <div class="canvas-stage false-route">
                                 @if ((stage.ElseBranch ?? condition.ElseBranch) is { Count: > 0 } other)
                                 {
-                                    <WorkflowBranchPreview Jobs="@(ReadOnly ? Array.Empty<JobView>() : Jobs)" OnOpenJob="OnOpenJob" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{stageIndex}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
+                                    <WorkflowBranchPreview Jobs="@(ReadOnly ? Array.Empty<JobView>() : Jobs)" OnOpenJob="OnOpenJob" OnEditCode="OnEditCode" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{stageIndex}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
                                 }
                                 else
                                 {
@@ -311,6 +329,7 @@
     [Parameter] public Dictionary<int, ChainGateView> Gates { get; set; } = new();
     [Parameter] public EventCallback<int> OnAddGate { get; set; }
     [Parameter] public EventCallback<(int StageIndex, ChainGateView Gate)> OnEditGate { get; set; }
+    [Parameter] public EventCallback<int> OnRemoveGate { get; set; }
     [Parameter] public EventCallback<int> OnEditEmailAction { get; set; }
     [Parameter] public EventCallback<int> OnEditSmsAction { get; set; }
     [Parameter] public EventCallback<int> OnEditParallelWorkflowAction { get; set; }
@@ -326,6 +345,7 @@
     [Parameter] public EventCallback<(int SourceStage, int SourceBranch, int TargetStage)> OnMovePath { get; set; }
     [Parameter] public EventCallback<(int StageIndex, int BranchIndex)> OnRemovePath { get; set; }
     [Parameter] public EventCallback<int> OnRemoveStage { get; set; }
+    [Parameter] public EventCallback<int> OnEditPolicy { get; set; }
 
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override void OnParametersSet() => Vm.SetParameters(Stages, Jobs, Gates);

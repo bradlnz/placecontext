@@ -78,13 +78,14 @@ public sealed class EfJobChainRepository : IJobChainRepository
     /// (backward compatible), or as an object when gates/else-branch are present.</summary>
     private static object SerializeStage(ChainStage s)
     {
-        if (s.Gate is null && s.ElseBranch is null && s.Action is null)
+        if (s.Gate is null && s.ElseBranch is null && s.Action is null && s.ExecutionPolicy is null)
         {
             return s.JobIds; // plain array — legacy compat
         }
         return new
         {
             jobs = s.JobIds,
+            executionPolicy = s.ExecutionPolicy,
             action = SerializeAction(s.Action),
             gate = SerializeGate(s.Gate),
             elseBranch = s.ElseBranch?.Select(SerializeStage).ToList()
@@ -150,6 +151,7 @@ public sealed class EfJobChainRepository : IJobChainRepository
         {
             type = "condition",
             expression = c.Expression,
+            reviewQuestion = c.ReviewQuestion,
             elseBranch = c.ElseBranch?.Select(SerializeStage).ToList()
         },
         _ => null,
@@ -194,7 +196,9 @@ public sealed class EfJobChainRepository : IJobChainRepository
             {
                 elseBranch = eb.EnumerateArray().Select(DeserializeStageElement).ToList();
             }
-            return new ChainStage(jobs, gateObj, elseBranch, action);
+            var policy = element.TryGetProperty("executionPolicy", out var policyElement) && policyElement.ValueKind == JsonValueKind.Object
+                ? policyElement.Deserialize<StepExecutionPolicy>() : null;
+            return new ChainStage(jobs, gateObj, elseBranch, action, policy);
         }
 
         if (element.ValueKind == JsonValueKind.Array)
@@ -278,6 +282,7 @@ public sealed class EfJobChainRepository : IJobChainRepository
         {
             elseBranch = eb.EnumerateArray().Select(DeserializeStageElement).ToList();
         }
-        return new ConditionGate(expression ?? "", elseBranch);
+        return new ConditionGate(expression ?? "", elseBranch,
+            element.TryGetProperty("reviewQuestion", out var question) ? question.GetString() : null);
     }
 }

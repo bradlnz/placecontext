@@ -6,12 +6,13 @@ public static class ParameterInputCatalog
         value?.ToLowerInvariant() switch
         {
             "select" => ParameterInputType.Select,
-            "number" => ParameterInputType.Number,
+            "number" or "integer" or "int" => ParameterInputType.Number,
             "date" => ParameterInputType.Date,
             "datetime" or "datetime-local" => ParameterInputType.DateTime,
             "time" => ParameterInputType.Time,
-            "checkbox" => ParameterInputType.Checkbox,
+            "checkbox" or "boolean" or "bool" => ParameterInputType.Checkbox,
             "file" => ParameterInputType.File,
+            "json" => ParameterInputType.Json,
             _ => ParameterInputType.Text,
         };
 }

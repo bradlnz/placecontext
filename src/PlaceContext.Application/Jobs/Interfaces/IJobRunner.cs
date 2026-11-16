@@ -31,6 +31,6 @@ public interface IJobRunner
     /// <summary>Child jobs belong to the enclosing workflow's single billable run.
     /// The default implementation preserves compatibility with existing test runners.</summary>
     Task<JobRunDetailView> RunWorkflowStepAsync(Guid jobId, string? inputPayload = null,
-        Guid? runId = null, CancellationToken ct = default)
+        Guid? runId = null, CancellationToken ct = default, bool useJobRetries = true)
         => RunAsync(jobId, inputPayload, runId, ct: ct);
 }

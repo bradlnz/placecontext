@@ -20,7 +20,8 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
     private DateTimeOffset? _workflowEditorVersion = workflowEditorVersion;
     private bool EditorAllowsTool(string name) => workflowEditorId is null || name is
         nameof(ask_user) or nameof(project_context) or nameof(list_workflows) or nameof(get_workflow)
-        or nameof(list_jobs) or nameof(get_job) or nameof(save_workflow) or nameof(check_workflow_readiness);
+        or nameof(list_jobs) or nameof(get_job) or nameof(save_job) or nameof(job_authoring_guide)
+        or nameof(save_workflow) or nameof(check_workflow_readiness);
     private readonly IMcpClientService? _mcp = mcpConnectionIds is { Count: 0 } ? null : mcp;
     public IReadOnlyList<AIFunction> Functions() => GetType().GetMethods()
         .Where(m => m.GetCustomAttribute<DescriptionAttribute>() is not null)
@@ -55,7 +56,7 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
     private async Task RequireAsync(string permission, CancellationToken ct, [System.Runtime.CompilerServices.CallerMemberName] string tool = "")
     {
         if (!EditorAllowsTool(tool))
-            throw new UnauthorizedAccessException("The workflow editor can inspect definitions and edit its selected workflow only.");
+            throw new UnauthorizedAccessException("The workflow editor can inspect definitions and edit its selected workflow and attached jobs only.");
         if (profile is not null && !profile.AllowsTool(tool))
             throw new UnauthorizedAccessException("This tool is disabled for the selected agent.");
         if (!await permissions.HasAsync(Permission.ProjectsView, ct) || !await permissions.HasAsync(permission, ct))
@@ -176,6 +177,7 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         JobIds = stage.Jobs.Select(x => x.JobId).ToArray(),
         WaitSeconds = (stage.Gate as WaitGateView)?.DurationSeconds,
         Condition = (stage.Gate as ConditionGateView)?.Expression,
+        ReviewQuestion = (stage.Gate as ConditionGateView)?.ReviewQuestion,
         ElseBranch = (stage.ElseBranch ?? (stage.Gate as ConditionGateView)?.ElseBranch)?.Select(StageMap).ToArray(),
         Action = stage.Action?.GetType().Name
     };
@@ -295,10 +297,19 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         return JobDefinitionMapper.ToResponse(await JobAsync(jobId, ct));
     }
 
-    [Description("Create or replace a job's complete definition. Omit jobId to create. Read the existing job first and preserve settings the user did not ask to change. Use inputPayloads containing '{}' for a single run. Credentials belong in the vault, never in source or memory.")]
+    [Description("Create or replace a job's complete definition, including code files and map/reduce runtimes. Omit jobId to create. In the workflow editor, jobId is required and must belong to the selected workflow, including its false branches. Read the existing job first and preserve settings the user did not ask to change. Use inputPayloads containing '{}' for a single run. Credentials belong in the vault, never in source or memory.")]
     public async Task<object> save_job(JobRequest definition, Guid? jobId, CancellationToken ct)
     {
         await RequireAsync(Permission.JobsEdit, ct);
+        if (workflowEditorId is { } selected)
+        {
+            await RequireAsync(Permission.ChainsManage, ct);
+            var workflow = await WorkflowAsync(selected, ct);
+            if (_workflowEditorVersion is null || workflow.UpdatedAt != _workflowEditorVersion)
+                throw new InvalidOperationException("The workflow changed; reopen the editor before editing its jobs.");
+            if (jobId is not { } attached || !AllJobs(workflow.Stages.Select(stage => WorkflowStage.FromView(stage).ToStage())).Contains(attached))
+                throw new UnauthorizedAccessException("This editor can only update existing jobs attached to the selected workflow.");
+        }
         if (jobId is { } id)
         {
             await JobAsync(id, ct);
@@ -350,7 +361,7 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         return (await service.ListJobChainsAsync(projectId, ct)).Select(x => new { x.Id, x.Name, x.Description, Stages = x.Stages.Select(WorkflowStage.FromView).ToArray() }).ToArray();
     }
 
-    [Description("Create or replace a complete workflow. Omit workflowId to create. Read existing definitions first. Each stage runs its jobIds in parallel, or one action (qemu, review, email, sms, repeat, query, score, containerBuild, containerRun, subWorkflow, parallelWorkflows). parallelWorkflows takes branches [{workflowId, workflowName, condition}] and an outputField; every matching branch runs concurrently (up to four at once), then joins. Results are kept in branch order under outputField; a failed branch stops later stages. subWorkflow takes workflowId and workflowName for an automatic workflow in this project; its final payload merges into the caller. Cycles, waits and human input in children are rejected. Conditions can combine clauses with all:[\"gte:review.noul:0.9\",\"eq:approved:true\"] (AND) or any:[...] (OR). containerBuild uses a Dockerfile and a contextField of relative text-file paths to contents, and saves outputField.image. containerRun accepts either image or imageField, optional command arguments, and an optional web port. A web run saves outputField.qemuUrl for a following qemu step with allowNetwork=true; it lasts until workflow exit/pause or timeout. Both container actions default to no outbound network access. A review with type=agentTask assigns instructions. For agentTask or agentInput, agentProvider=automatic runs the selected saved connectionId and model with sandbox job tools and saves a JSON object in responseField; external waits for a submitted response. One repeat action may follow the process to retry. It repeats all preceding stages until untilCondition passes, up to maxAttempts total attempts (1-10), then continues; exhaustion fails the workflow before later stages. Place delivery actions after repeat. For an agentInput review, agentProvider=jev is the internal AI verification mode and calls the configured provider with a generated yes/no question and preceding output; external waits for an agent response. Verification saves {noul, model, question, type} in responseField. Use an explicit condition on responseField.noul to decide subsequent actions; a completed AI verification call is not approval. Stages run sequentially. A stage may have waitSeconds or condition and an elseBranch. Preserve all existing stages and settings unless asked to change them.")]
+    [Description("Create or replace a complete workflow. Omit workflowId to create. Read existing definitions first. Each stage runs its jobIds in parallel, or one action (qemu, review, email, sms, repeat, query, score, containerBuild, containerRun, subWorkflow, parallelWorkflows). parallelWorkflows takes branches [{workflowId, workflowName, condition}] and an outputField; every matching branch runs concurrently (up to four at once), then joins. Results are kept in branch order under outputField; a failed branch stops later stages. subWorkflow takes workflowId and workflowName for an automatic workflow in this project; its final payload merges into the caller. Cycles, waits and human input in children are rejected. Conditions can combine clauses with all:[\"gte:review.noul:0.9\",\"eq:approved:true\"] (AND) or any:[...] (OR). containerBuild uses a Dockerfile and a contextField of relative text-file paths to contents, and saves outputField.image. containerRun accepts either image or imageField, optional command arguments, and an optional web port. A web run saves outputField.qemuUrl for a following qemu step with allowNetwork=true; it lasts until workflow exit/pause or timeout. Both container actions default to no outbound network access. A review with type=agentTask assigns instructions. For agentTask or agentInput, agentProvider=automatic runs the selected saved connectionId and model with sandbox job tools and saves a JSON object in responseField; external waits for a submitted response. One repeat action may follow the process to retry. It repeats all preceding stages until untilCondition passes, up to maxAttempts total attempts (1-10), then continues; exhaustion fails the workflow before later stages. Place delivery actions after repeat. For an agentInput review, agentProvider=jev is the internal AI verification mode and calls the configured provider with a generated yes/no question and preceding output; external waits for an agent response. Verification saves {noul, model, question, type} in responseField. Use an explicit condition on responseField.noul to decide subsequent actions; a completed AI verification call is not approval. Stages run sequentially. A stage may have waitSeconds or condition and an elseBranch. For an automatic if gate, set reviewQuestion to a yes/no routing question instead of condition. AI Review uses incoming data: Yes probability at least 0.5 takes the stage, otherwise elseBranch; errors fail the workflow. The review result is saved as ai_gate_review. Preserve reviewQuestion when editing existing automatic gates. Preserve all existing stages and settings unless asked to change them.")]
     public async Task<object> save_workflow(string name, string? description, WorkflowStage[] stages, Guid? workflowId, CancellationToken ct)
     {
         await RequireAsync(Permission.ChainsManage, ct);
@@ -372,11 +383,12 @@ public sealed partial class BuildTools(Guid projectId, PlaceContextService servi
         {
             var existing = await WorkflowAsync(idToUpdate, ct);
             var updated = await service.UpdateJobChainAsync(idToUpdate, name, description, [], jobs, gates, actions, ct,
-                expectedUpdatedAt: workflowEditorId.HasValue ? _workflowEditorVersion : existing.UpdatedAt);
+                expectedUpdatedAt: workflowEditorId.HasValue ? _workflowEditorVersion : existing.UpdatedAt,
+                stagePolicies: converted.Select(stage => stage.ExecutionPolicy).ToArray());
             _workflowEditorVersion = updated.UpdatedAt;
             return updated;
         }
-        return await service.CreateJobChainAsync(projectId, name, description, [], jobs, gates, actions, ct);
+        return await service.CreateJobChainAsync(projectId, name, description, [], jobs, gates, actions, ct, stagePolicies: converted.Select(stage => stage.ExecutionPolicy).ToArray());
     }
     private static IEnumerable<Guid> AllJobs(IEnumerable<ChainStage> stages) => stages.SelectMany(s => s.JobIds.Concat(AllJobs(s.ElseBranch ?? (s.Gate as ConditionGate)?.ElseBranch ?? [])));
 

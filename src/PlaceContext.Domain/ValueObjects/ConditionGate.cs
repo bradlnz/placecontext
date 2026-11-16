@@ -8,10 +8,17 @@ namespace PlaceContext.Domain.ValueObjects;
 /// When the expression evaluates to true the stage runs normally; when false the stage is skipped
 /// (and <see cref="ElseBranch"/> stages run instead, if present).
 /// </summary>
-public sealed record ConditionGate(string Expression, IReadOnlyList<ChainStage>? ElseBranch = null) : ChainGate
+public sealed record ConditionGate(string Expression, IReadOnlyList<ChainStage>? ElseBranch = null, string? ReviewQuestion = null) : ChainGate
 {
+    public const string AutomaticExpression = "gte:ai_gate_review.noul:0.5";
+    public string? ReviewQuestion { get; init; } = ReviewQuestion is null ? null
+        : !string.IsNullOrWhiteSpace(ReviewQuestion) && ReviewQuestion.Length <= 4000 ? ReviewQuestion.Trim()
+        : throw new ArgumentException("Enter an AI Review question of up to 4,000 characters.", nameof(ReviewQuestion));
+
     public override GateResult Evaluate(string? payload)
     {
+        if (ReviewQuestion is not null)
+            throw new InvalidOperationException("An automatic if gate must run AI Review before choosing a path.");
         var result = EvaluateExpression(Expression, payload);
         return new GateResult(result, null);
     }

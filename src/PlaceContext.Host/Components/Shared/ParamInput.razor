@@ -9,7 +9,7 @@
 @switch (Vm.InputType)
 {
     case ParameterInputType.Select:
-        <select class="dcinput" value="@Vm.Value" @onchange="OnValueChanged">
+        <select aria-label="@(Vm.Parameter.Label ?? Vm.Parameter.Name)" class="dcinput" value="@Vm.Value" @onchange="OnValueChanged">
             <option value="">— pick —</option>
             @foreach (var o in Vm.Parameter.Options ?? Array.Empty<string>())
             {
@@ -18,19 +18,19 @@
         </select>
         break;
     case ParameterInputType.Number:
-        <input class="dcinput number-input" type="number" value="@Vm.Value"
+        <input aria-label="@(Vm.Parameter.Label ?? Vm.Parameter.Name)" class="dcinput number-input" type="number" step="@(Vm.Parameter.Type is "integer" or "int" ? "1" : "any")" value="@Vm.Value"
                @oninput="OnValueChanged" />
         break;
     case ParameterInputType.Date:
-        <input class="dcinput" type="date" value="@Vm.Value"
+        <input aria-label="@(Vm.Parameter.Label ?? Vm.Parameter.Name)" class="dcinput" type="date" value="@Vm.Value"
                @oninput="OnValueChanged" />
         break;
     case ParameterInputType.DateTime:
-        <input class="dcinput" type="datetime-local" value="@Vm.Value"
+        <input aria-label="@(Vm.Parameter.Label ?? Vm.Parameter.Name)" class="dcinput" type="datetime-local" value="@Vm.Value"
                @oninput="OnValueChanged" />
         break;
     case ParameterInputType.Time:
-        <input class="dcinput" type="time" value="@Vm.Value"
+        <input aria-label="@(Vm.Parameter.Label ?? Vm.Parameter.Name)" class="dcinput" type="time" value="@Vm.Value"
                @oninput="OnValueChanged" />
         break;
     case ParameterInputType.Checkbox:
@@ -39,6 +39,9 @@
                    @onchange="OnCheckboxChanged" />
             @(Vm.Parameter.Label ?? Vm.Parameter.Name)
         </label>
+        break;
+    case ParameterInputType.Json:
+        <textarea class="dcinput" aria-label="@(Vm.Parameter.Label ?? Vm.Parameter.Name)" rows="4" value="@Vm.Value" @oninput="OnValueChanged"></textarea>
         break;
     case ParameterInputType.File:
         <div class="file-input-field">
@@ -58,7 +61,7 @@
         </div>
         break;
     default:
-        <input class="dcinput" value="@Vm.Value" @oninput="OnValueChanged" />
+        <input aria-label="@(Vm.Parameter.Label ?? Vm.Parameter.Name)" class="dcinput" value="@Vm.Value" @oninput="OnValueChanged" />
         break;
 }
 

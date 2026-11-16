@@ -5,4 +5,5 @@ public sealed record JobChainStageManifest(
     IReadOnlyList<Guid> JobIds,
     ChainGateManifest? Gate = null,
     ChainActionManifest? Action = null,
-    IReadOnlyList<JobChainStageManifest>? ElseBranch = null);
+    IReadOnlyList<JobChainStageManifest>? ElseBranch = null,
+    PlaceContext.Domain.ValueObjects.StepExecutionPolicy? ExecutionPolicy = null);

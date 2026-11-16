@@ -122,7 +122,7 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
             stage.Gate switch
             {
                 WaitGate wait => new ChainGateManifest("wait", wait.Duration.TotalSeconds),
-                ConditionGate condition => new ChainGateManifest("condition", Expression: condition.Expression),
+                ConditionGate condition => new ChainGateManifest("condition", Expression: condition.Expression, ReviewQuestion: condition.ReviewQuestion),
                 _ => null,
             },
             stage.Action switch
@@ -151,5 +151,5 @@ public sealed class ExportManifestHandler : IQueryHandler<ExportManifestQuery, B
                     Body: sms.Body),
                 _ => null,
             },
-            (stage.ElseBranch ?? (stage.Gate as ConditionGate)?.ElseBranch)?.Select(ToStageManifest).ToList());
+            (stage.ElseBranch ?? (stage.Gate as ConditionGate)?.ElseBranch)?.Select(ToStageManifest).ToList(), stage.ExecutionPolicy);
 }

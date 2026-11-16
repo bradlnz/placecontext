@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +12,7 @@ using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Features;
 using PlaceContext.Application.Secrets;
 using PlaceContext.Application.Tenancy;
+using PlaceContext.Application.Workload;
 using PlaceContext.Application;
 using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Application.Access.Enums;
@@ -98,8 +100,22 @@ public class RpcChainSubmissionBackgroundService : BackgroundService
     }
 
     /// <summary>Apply configured queue retries even when all execution slots are occupied.</summary>
-    internal static Task<int> ReconcileFailuresAsync(AppDbContext db, CancellationToken ct = default)
-        => db.Database.ExecuteSqlRawAsync("""
+    internal static async Task<int> ReconcileFailuresAsync(AppDbContext db, IDataEncryptor encryptor, CancellationToken ct = default)
+    {
+        var failed = await db.Database.SqlQueryRaw<FailedRunSafetyRecord>("""
+            SELECT DISTINCT run."Id", run."StepsJson" FROM chain_runs run
+            JOIN rpc_chain_submissions submission ON run."Id" = submission."ChainRunId" AND run."TenantId" = submission."TenantId"
+            WHERE submission."QueueId" IS NOT NULL AND submission."Status" IN ('Running', 'Waiting', 'AwaitingInput', 'RetryPending')
+              AND run."Status" = 'Failed'
+            """).ToListAsync(ct);
+        var blocked = failed.Where(run => SafetyBlocked(encryptor.Unprotect(run.StepsJson, IDataEncryptor.Purpose.ChainRun))).Select(run => run.Id).ToArray();
+        var retryable = failed.Select(run => run.Id).Except(blocked).ToArray();
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE rpc_chain_submissions SET "Status" = 'Failed', "FinishedAt" = now(), "ClaimedBy" = NULL, "ClaimedAt" = NULL,
+                "InputPayload" = NULL, "StepPayloadOverrides" = NULL
+            WHERE "ChainRunId" = ANY({blocked}) AND "Status" IN ('Running', 'Waiting', 'AwaitingInput', 'RetryPending')
+            """, ct);
+        return await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE rpc_chain_submissions submission
             SET "Attempts" = "Attempts" + 1,
                 "Status" = CASE WHEN "Attempts" + 1 >= "MaxAttempts" THEN 'Failed' ELSE 'Queued' END,
@@ -112,8 +128,19 @@ public class RpcChainSubmissionBackgroundService : BackgroundService
                 "StartedAt" = CASE WHEN "Attempts" + 1 >= "MaxAttempts" THEN "StartedAt" ELSE NULL END,
                 "ClaimedBy" = NULL, "ClaimedAt" = NULL, "HeartbeatAt" = NULL
             WHERE "QueueId" IS NOT NULL AND "Status" IN ('Running', 'Waiting', 'AwaitingInput', 'RetryPending')
-              AND EXISTS (SELECT 1 FROM chain_runs run WHERE run."Id" = submission."ChainRunId" AND run."TenantId" = submission."TenantId" AND run."Status" = 'Failed')
+              AND "ChainRunId" = ANY({retryable})
             """, ct);
+    }
+
+    private sealed record FailedRunSafetyRecord(Guid Id, string StepsJson);
+
+    internal static bool SafetyBlocked(string steps)
+    {
+        using var json = JsonDocument.Parse(steps);
+        return json.RootElement.EnumerateArray().Any(step => step.TryGetProperty("agentActivity", out var activity)
+            && activity.ValueKind == JsonValueKind.Array && activity.EnumerateArray().Any(item =>
+                item.TryGetProperty("kind", out var kind) && kind.GetString() == ExecutionSafetyException.ActivityKind));
+    }
 
     protected virtual async Task<IReadOnlyList<ClaimedSubmission>> ClaimAsync(int available, CancellationToken ct)
     {
@@ -124,7 +151,7 @@ public class RpcChainSubmissionBackgroundService : BackgroundService
         {
             await connection.OpenAsync(ct);
         }
-        await ReconcileFailuresAsync(db, ct);
+        await ReconcileFailuresAsync(db, scope.ServiceProvider.GetRequiredService<IDataEncryptor>(), ct);
         // Expiry applies before dispatch, including abandoned claims that never created a run.
         await db.Database.ExecuteSqlRawAsync("""
             UPDATE rpc_chain_submissions submission
@@ -350,16 +377,17 @@ public class RpcChainSubmissionBackgroundService : BackgroundService
     private async Task ReflectRunStatusAsync(Guid id, ChainRunView run, CancellationToken ct)
     {
         var terminal = run.Status is "Succeeded" or "Partial" or "Failed" or "Cancelled";
+        var retryable = run.Status == "Failed" && !ExecutionSafetyException.IsBlocked(run);
         await using var scope = _scopes.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
             UPDATE rpc_chain_submissions
-            SET "Status" = CASE WHEN "QueueId" IS NOT NULL AND {run.Status} = 'Failed' THEN 'RetryPending' ELSE {run.Status} END, "ClaimedBy" = NULL, "ClaimedAt" = NULL,
+            SET "Status" = CASE WHEN "QueueId" IS NOT NULL AND {retryable} THEN 'RetryPending' ELSE {run.Status} END, "ClaimedBy" = NULL, "ClaimedAt" = NULL,
                 "HeartbeatAt" = now(), "FinishedAt" = {run.FinishedAt},
                 "LastError" = NULL,
-                "InputPayload" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR {run.Status} <> 'Failed') THEN NULL ELSE "InputPayload" END,
-                "StepPayloadOverrides" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR {run.Status} <> 'Failed') THEN NULL ELSE "StepPayloadOverrides" END
+                "InputPayload" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR NOT {retryable}) THEN NULL ELSE "InputPayload" END,
+                "StepPayloadOverrides" = CASE WHEN {terminal} AND ("QueueId" IS NULL OR NOT {retryable}) THEN NULL ELSE "StepPayloadOverrides" END
             WHERE "Id" = {id} AND "ChainRunId" = {run.Id}
               AND "Status" NOT IN ('Queued', 'Failed', 'Expired', 'Succeeded', 'Cancelled')
             """, ct);

@@ -164,7 +164,7 @@ public sealed partial class JobChainsViewModel
         {
             if (project == ProjectId)
             {
-                QemuError = "Could not load the project's QEMU configuration. Check its vault settings.";
+                QemuError = "Could not load the project's browser workspace configuration. Check its vault settings.";
             }
         }
         NotifyStateChanged();

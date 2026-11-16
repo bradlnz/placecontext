@@ -50,7 +50,7 @@ public sealed class VirtualMachineChainAction : ChainAction
     }
 
     public override string Type => ActionType;
-    public override string DisplayName => "QEMU environment";
+    public override string DisplayName => "Browser workspace";
     public string ImageProfile
     {
         get;

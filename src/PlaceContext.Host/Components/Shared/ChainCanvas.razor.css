@@ -1,4 +1,5 @@
 .chain-canvas {
+    --canvas-accent:#6b91d6;
     border:1px solid color-mix(in srgb, var(--border) 84%, var(--brand-2));
     border-radius:14px;
     background:var(--card);
@@ -23,8 +24,8 @@
     overflow-x:scroll;
     overflow-y:auto;
     height:min(480px, 50dvh);
-    background-color:var(--bg);
-    background-image:radial-gradient(color-mix(in srgb, var(--text-3) 23%, transparent) .7px, transparent .7px);
+    background-color:color-mix(in srgb, var(--canvas-accent) 3%, var(--bg));
+    background-image:radial-gradient(color-mix(in srgb, var(--canvas-accent) 30%, transparent) .7px, transparent .7px);
     background-size:18px 18px;
     overscroll-behavior:contain;
 }
@@ -59,13 +60,22 @@
 .gate-condition > * { transform:rotate(-45deg) }
 .gate-icon { font-size:14px; line-height:1 }
 .gate-content { display:flex; flex-direction:column; align-items:center; gap:2px }
+.gate-controls { position:relative; display:flex; flex:0 0 38px; width:38px; height:38px }
+.gate-remove { position:absolute; top:-22px; right:-20px; display:flex; align-items:center; justify-content:center; width:24px; height:24px; padding:0; border:1px solid var(--border); border-radius:50%; background:var(--card); color:var(--text-3); cursor:pointer }
+.gate-remove:hover { color:var(--bad); border-color:var(--bad) }
+.gate-remove:focus-visible { outline:2px solid var(--brand-2); outline-offset:2px }
 .gate-label { font-size:7px; line-height:1; font-weight:800; letter-spacing:.05em }
-.canvas-stage { width:250px; flex:none; border:1px solid var(--border); border-radius:12px; background:var(--card); box-shadow:0 4px 16px rgba(0,0,0,.06); transition:border-color .15s, box-shadow .15s, transform .15s; overflow:hidden }
+.canvas-stage { --stage-accent:var(--canvas-accent); width:250px; flex:none; border:1px solid var(--border); border-top:3px solid var(--stage-accent); border-radius:12px; background:var(--card); box-shadow:0 4px 16px rgba(0,0,0,.06); transition:border-color .15s, box-shadow .15s, transform .15s; overflow:hidden }
+.canvas-stage:has(.human-path) { --stage-accent:var(--warn) }
+.canvas-stage:has(.parallel-workflow-heading) { --stage-accent:#9a86d8 }
 .canvas-stage.drag-over { transform:translateY(-3px); border-color:var(--brand-2); box-shadow:0 0 0 3px var(--brand-bg), 0 16px 34px rgba(0,0,0,.16) }
-.stage-head { display:flex; align-items:center; gap:8px; min-height:44px; padding:0 12px; border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--card-2) 68%, transparent); cursor:grab; user-select:none }
+.stage-head { display:flex; align-items:center; gap:8px; min-height:44px; padding:0 12px; border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--stage-accent) 9%, var(--card)); cursor:grab; user-select:none }
 .stage-head:active { cursor:grabbing }
+.step-policy { display:flex; align-items:center; flex-wrap:wrap; gap:6px; width:100%; padding:10px 12px; border:0; border-bottom:1px solid var(--border); background:var(--card); color:var(--text-2); font:inherit; font-size:11px; cursor:pointer; text-align:left }
+.step-policy small { width:100%; color:var(--text-3) }
+.step-policy:hover { background:var(--card-2) }
 .drag-handle { color:var(--text-3); font-size:14px; line-height:1 }
-.stage-num { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:6px; background:var(--brand-bg); color:var(--brand-2); font-size:9px; font-weight:800 }
+.stage-num { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:6px; background:color-mix(in srgb, var(--stage-accent) 18%, var(--card)); color:var(--text); font-size:9px; font-weight:800 }
 .stage-label { color:var(--text-2); font-size:10px; font-weight:750; text-transform:uppercase; letter-spacing:.06em }
 .parallel-badge { display:flex; align-items:center; gap:4px; margin-left:auto; padding:2px 5px; border-radius:5px; background:var(--good-bg); color:var(--good); font-size:8px; font-weight:700 }
 .stage-menu { margin-left:auto; width:22px; height:22px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--text-3); cursor:pointer }
@@ -75,6 +85,9 @@
 .job-path { display:flex; align-items:center; gap:7px; min-height:34px; padding:0 7px; border:1px solid color-mix(in srgb, var(--border) 82%, var(--brand-2)); border-radius:8px; background:var(--card-2); cursor:grab }
 .job-path:active { cursor:grabbing }
 .job-path:hover { border-color:color-mix(in srgb, var(--brand-2) 55%, var(--border)) }
+.job-path:has(.job-edit-actions) { display:grid; grid-template-columns:auto minmax(0, 1fr) auto; padding:9px }
+.job-edit-actions { grid-column:1 / -1; grid-row:2; display:flex; gap:6px }
+.job-path:has(.job-edit-actions) > .path-remove { grid-column:3; grid-row:1 }
 .stage-paths button.job-path { cursor:pointer; text-align:left; padding:12px 9px; width:100%; font:inherit }
 .node-copy { display:block; min-width:0; flex:1 }
 .node-copy strong { display:block; font-size:12px; color:var(--text); font-weight:650 }
@@ -138,6 +151,6 @@
 .parallel-workflow-branch + .parallel-workflow-branch { border-top: 1px solid var(--border); }
 .parallel-workflow-branch code { font-size:10px; line-height:1.4; overflow-wrap:anywhere; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:var(--text-2); }
 
-.stage-caption { width:250px; max-width:100%; margin-bottom:12px; color:var(--text); }
+.stage-caption { width:250px; max-width:100%; margin-bottom:12px; padding:10px 14px; color:var(--text); }
 .stage-caption strong { display:block; font-size:14px; line-height:1.4; font-weight:650; overflow-wrap:anywhere; }
 .stage-caption p { margin:5px 0 0; color:var(--text-2); font-size:12px; line-height:1.5; overflow-wrap:anywhere; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }

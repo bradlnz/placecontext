@@ -39,7 +39,8 @@ public sealed class RunStatusReconciliationTests
             CREATE TABLE rpc_chain_submissions ("TenantId" uuid,"ChainRunId" uuid,"Status" text,"HeartbeatAt" timestamptz,"FinishedAt" timestamptz,"ClaimedBy" text,"QueueId" uuid,
               "Attempts" int NOT NULL DEFAULT 0,"MaxAttempts" int NOT NULL DEFAULT 1,"PreviousRunIds" uuid[] NOT NULL DEFAULT ARRAY[]::uuid[],
               "NextAttemptAt" timestamptz,"ExpiresAt" timestamptz,"StartedAt" timestamptz,"ClaimedAt" timestamptz,
-              "RetryDelaySeconds" int NOT NULL DEFAULT 30,"MessageTtlSeconds" int NOT NULL DEFAULT 3600);
+              "RetryDelaySeconds" int NOT NULL DEFAULT 30,"MessageTtlSeconds" int NOT NULL DEFAULT 3600,
+              "InputPayload" text,"StepPayloadOverrides" text);
             CREATE TABLE tenants ("Id" uuid,"Slug" text,"Name" text,"TimeZoneId" text);
             CREATE TABLE rpc_job_submissions ("TenantId" uuid,"RunId" uuid,"Status" text,"FinishedAt" timestamptz,
               "ClaimedBy" text,"ClaimedAt" timestamptz,"HeartbeatAt" timestamptz,"LastError" text);

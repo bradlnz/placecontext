@@ -1,66 +1,234 @@
 @using System.Text.Json
 @using static PlaceContext.Host.Components.ViewModels.JobChainsViewModel
-                            <div class="dcfield mb-8">
-                                <label for="@_matchId">Match</label>
-                                <select id="@_matchId" class="dcinput" value="@Match" @onchange="@(e => MatchChanged.InvokeAsync(e.Value?.ToString() ?? "all"))">
-                                    <option value="all">All conditions (AND)</option>
-                                    <option value="any">Any condition (OR)</option>
-                                </select>
-                            </div>
-                            @foreach (var row in Rows)
-                            {
-                                <div class="condition-row" @key="row">
-                            <div class="condition-builder">
-                                <div class="dcfield">
-                                    <label>Payload path</label>
-                                    <input aria-label="Payload path" class="dcinput mono" @bind="row.Path"
-                                           placeholder="data.status" />
-                                </div>
-                                <div class="dcfield">
-                                    <label>Condition</label>
-                                    <select aria-label="Condition" class="dcinput" @bind="row.Operator">
-                                        <option value="true">always true</option>
-                                        <option value="false">always false</option>
-                                        <option value="custom">expression</option>
-                                        <option value="exists">exists</option>
-                                        <option value="notexists">does not exist</option>
-                                        <option value="eq">equals</option>
-                                        <option value="neq">does not equal</option>
-                                        <option value="contains">contains</option>
-                                        <option value="starts">starts with</option>
-                                        <option value="ends">ends with</option>
-                                        <option value="in">is one of</option>
-                                        <option value="empty">is empty</option>
-                                        <option value="notempty">is not empty</option>
-                                        <option value="gt">is greater than</option>
-                                        <option value="gte">is greater than or equal</option>
-                                        <option value="lt">is less than</option>
-                                        <option value="lte">is less than or equal</option>
-                                    </select>
-                                </div>
-                                @if (row.NeedsValue)
-                                {
-                                    <div class="dcfield">
-                                        <label>Value @(row.Operator == "in" ? "(comma separated)" : "")</label>
-                                        <input aria-label="Condition value" class="dcinput" @bind="row.Value" placeholder="approved" />
-                                    </div>
-                                }
-                            </div>
-                                    <button class="dcbtn btn-xs" disabled="@(Rows.Count == 1)" @onclick="() => Remove(row)">Remove condition</button>
-                                </div>
-                            }
-                            <button class="dcbtn btn-xs" @onclick="Add">Add condition</button>
-                            <div class="condition-preview">
-                                <span>Expression</span>
-                                <code>@Expression</code>
-                            </div>
+
+<section class="conditions-editor">
+@if (!Automatic)
+{
+<div class="condition-toolbar">
+<div class="dcfield">
+    <label for="@_matchId">Match</label>
+    <select id="@_matchId" class="dcinput" value="@Match" @onchange="@(e => MatchChanged.InvokeAsync(e.Value?.ToString() ?? "all"))">
+        <option value="all">All conditions (AND)</option>
+        <option value="any">Any condition (OR)</option>
+    </select>
+</div>
+<button type="button" class="dcbtn btn-xs" disabled="@(Rows.Count >= 32)" @onclick="Add">Add condition</button>
+</div>
+}
+<p class="field-hint">Select @(Automatic ? "AI Review" : "a condition") on the canvas to edit it in the side pane.</p>
+<div class="condition-workspace @(_paneOpen ? "pane-open" : null)">
+<div class="condition-canvas" role="region" aria-label="Condition logic canvas">
+    <div class="logic-flow">
+        <div class="logic-endpoint">Incoming payload</div>
+        <div class="logic-connector" aria-hidden="true">↓</div>
+        @if (Automatic)
+        {
+            <button type="button" class="logic-node ai-review-node @(_paneOpen ? "selected" : "")"
+                    aria-label="Edit AI Review" aria-controls="@(_matchId + "-inspector")"
+                    aria-expanded="@(_paneOpen ? "true" : "false")" @onclick="() => _paneOpen = true">
+                <small>AUTOMATIC IF</small><strong>AI Review</strong>
+                <span>@(string.IsNullOrWhiteSpace(ReviewQuestion) ? "Describe when to take the True path" : ReviewQuestion)</span>
+            </button>
+        }
+        else
+        {
+        <div class="logic-conditions @(Match == "any" ? "logic-any" : "logic-all")">
+            @foreach (var condition in Rows)
+            {
+                <div class="logic-step" @key="condition">
+                    <button type="button" class="logic-node @(_paneOpen && SelectedRow == condition ? "selected" : "")"
+                            aria-pressed="@(_paneOpen && SelectedRow == condition ? "true" : "false")"
+                            aria-controls="@(_matchId + "-inspector")" aria-expanded="@(_paneOpen && SelectedRow == condition ? "true" : "false")"
+                            aria-label="@($"Edit condition {Rows.IndexOf(condition) + 1}")" @onclick="() => SelectCondition(condition)">
+                        <small>IF @(Rows.IndexOf(condition) + 1)</small>
+                        <strong>@(condition.Operator is "true" or "false" ? "Always " + condition.Operator : condition.Operator == "custom" ? "Custom expression" : condition.Path)</strong>
+                        <span>@Describe(condition)</span>
+                    </button>
+                    @if (Match == "all" && condition != Rows.Last())
+                    {
+                        <div class="logic-connector"><span>True ↓</span><small>False → false path</small></div>
+                    }
+                </div>
+            }
+        </div>
+        }
+        <div class="logic-connector" aria-hidden="true">↓</div>
+        <div class="logic-decision">@(Automatic ? "Does AI Review answer Yes?" : Match == "any" ? "Any condition true?" : "All conditions true?")</div>
+        <div class="logic-outcomes">
+            <div class="logic-outcome true-path"><small>TRUE ↓</small><strong>@TrueLabel</strong></div>
+            <div class="logic-outcome false-path"><small>FALSE ↓</small><strong>@FalseLabel</strong></div>
+        </div>
+        <div class="logic-connector" aria-hidden="true">↓</div>
+        <div class="logic-endpoint">@JoinLabel</div>
+    </div>
+</div>
+<aside id="@(_matchId + "-inspector")" class="condition-inspector" role="region" aria-label="Condition editor" hidden="@(!_paneOpen)">
+<header class="condition-edit-heading"><strong>@(Automatic ? "AI Review" : $"Edit condition {Rows.IndexOf(SelectedRow) + 1}")</strong><button type="button" class="dcslide-x" aria-label="Close condition editor" @onclick="() => _paneOpen = false"><AppIcon Kind="close" /></button></header>
+@if (Automatic)
+{
+    <div class="dcfield">
+        <label for="@(_matchId + "-question")">When should the True path run?</label>
+        <textarea id="@(_matchId + "-question")" class="dcinput" rows="7" maxlength="4000"
+                  value="@ReviewQuestion" @oninput="e => ReviewQuestionChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)"
+                  placeholder="Does this question need technical support rather than a billing response?"></textarea>
+        <p class="field-hint">Ask a Yes/No question about the incoming data. Yes selects the True path; No selects the False path.</p>
+        <p class="field-hint">Uses your configured AI Review service. A Yes probability of 50% or higher selects True. Review errors fail the step.</p>
+    </div>
+}
+else
+{
+<datalist id="@(_matchId + "-fields")">
+    @foreach (var field in _fields)
+    {
+        <option value="@field.Path">@field.Type</option>
+    }
+</datalist>
+<p class="field-hint" role="status">@(_loading ? "Finding fields from earlier steps…" : _notice ?? (_fields.Count == 0
+    ? "Enter a field path. Suggestions appear once earlier steps have fields or successful output."
+    : "Choose a field tag or type to find a field. Suggestions use earlier steps and their latest successful output."))</p>
+@foreach (var row in Rows.Where(row => row == SelectedRow))
+{
+    <div class="condition-row" @key="row">
+        <div class="condition-builder">
+            @if (row.Operator is not ("true" or "false" or "custom"))
+            {
+                <div class="dcfield">
+                    <label>Payload path</label>
+                    <input aria-label="Payload path" class="dcinput mono" list="@(_matchId + "-fields")"
+                           value="@row.Path" @oninput="@(e => SetPath(row, e.Value?.ToString() ?? ""))" placeholder="data.status" />
+                    <div class="field-tags" aria-label="Suggested fields">
+                        @foreach (var field in SuggestedFields(row))
+                        {
+                            <button type="button" class="field-tag" title="@($"{field.Path} ({field.Type})")"
+                                    @onclick="() => SetPath(row, field.Path)"><span>@field.Path</span><small>@field.Type</small></button>
+                        }
+                    </div>
+                </div>
+            }
+            <div class="dcfield">
+                <label>Condition</label>
+                <select aria-label="Condition" class="dcinput" @bind="row.Operator">
+                    <option value="true">always true</option>
+                    <option value="false">always false</option>
+                    <option value="custom">expression</option>
+                    <option value="exists">exists</option>
+                    <option value="notexists">does not exist</option>
+                    <option value="eq">equals</option>
+                    <option value="neq">does not equal</option>
+                    <option value="contains">contains</option>
+                    <option value="starts">starts with</option>
+                    <option value="ends">ends with</option>
+                    <option value="in">is one of</option>
+                    <option value="empty">is empty</option>
+                    <option value="notempty">is not empty</option>
+                    <option value="gt">is greater than</option>
+                    <option value="gte">is greater than or equal</option>
+                    <option value="lt">is less than</option>
+                    <option value="lte">is less than or equal</option>
+                </select>
+            </div>
+            @if (row.NeedsValue)
+            {
+                <div class="condition-value dcfield">
+                    @if (row.Operator is "eq" or "neq")
+                    {
+                        <label>Value type</label>
+                        <select aria-label="Value type" class="dcinput" value="@row.ValueType" @onchange="@(e => row.SetValueType(e.Value?.ToString() ?? "text"))">
+                            <option value="text">Text</option>
+                            <option value="boolean">Boolean</option>
+                            <option value="number">Number</option>
+                            <option value="null">Null</option>
+                        </select>
+                    }
+                    <label>Value @(row.Operator == "in" ? "(comma separated)" : "")</label>
+                    @if (row.InputType == "boolean")
+                    {
+                        <select aria-label="Condition value" class="dcinput" @bind="row.Value">
+                            <option value="true">True</option>
+                            <option value="false">False</option>
+                        </select>
+                    }
+                    else if (row.InputType == "null")
+                    {
+                        <input aria-label="Condition value" class="dcinput" value="null" readonly />
+                    }
+                    else
+                    {
+                        <input aria-label="Condition value" class="dcinput" type="@(row.InputType == "number" ? "number" : "text")"
+                               step="any" @bind="row.Value" @bind:event="oninput" placeholder="@(row.InputType == "number" ? "0" : "Value")" />
+                    }
+                </div>
+            }
+        </div>
+        <button type="button" class="dcbtn btn-xs" disabled="@(Rows.Count == 1)" @onclick="() => Remove(row)">Remove condition</button>
+    </div>
+}
+}
+</aside>
+</div>
+@if (Automatic)
+{
+    <p class="field-hint">The latest review, probability, and chosen path are saved in <code>ai_gate_review</code>.</p>
+}
+else
+{
+    <div class="condition-preview"><span>Expression</span><code>@Expression</code></div>
+}
+
+</section>
 
 @code {
+    [Parameter] public bool Automatic { get; set; }
+    [Parameter] public string ReviewQuestion { get; set; } = "";
+    [Parameter] public EventCallback<string> ReviewQuestionChanged { get; set; }
     [Parameter, EditorRequired] public List<ConditionRow> Rows { get; set; } = [];
     [Parameter] public string Match { get; set; } = "all";
     [Parameter] public EventCallback<string> MatchChanged { get; set; }
+    [Parameter] public Func<Task<ConditionFieldOptions>>? LoadFields { get; set; }
+    [Parameter] public string TrueLabel { get; set; } = "Run this stage";
+    [Parameter] public string FalseLabel { get; set; } = "Skip this stage";
+    [Parameter] public string JoinLabel { get; set; } = "Continue to next stage";
+    private bool _paneOpen;
+    private ConditionRow? _selectedRow;
+    private void SelectCondition(ConditionRow row) { _selectedRow = row; _paneOpen = true; }
+    private ConditionRow SelectedRow => _selectedRow is not null && Rows.Contains(_selectedRow) ? _selectedRow : Rows[0];
+    private IReadOnlyList<ConditionField> _fields = [];
+    private bool _loading;
+    private string? _notice;
     private readonly string _matchId = "condition-match-" + Guid.NewGuid().ToString("N");
     private string Expression => Rows.Count == 1 ? Rows[0].Expression : $"{Match}:{JsonSerializer.Serialize(Rows.Select(row => row.Expression))}";
-    private void Add() { if (Rows.Count < 32) Rows.Add(new()); }
+    protected override async Task OnInitializedAsync()
+    {
+        if (Automatic || LoadFields is null) return;
+        _loading = true;
+        try
+        {
+            var options = await LoadFields();
+            _fields = options.Fields;
+            _notice = options.Notice;
+        }
+        catch (Exception) { _notice = "Field suggestions are unavailable. You can still enter a field path."; }
+        finally { _loading = false; }
+    }
+    private IEnumerable<ConditionField> SuggestedFields(ConditionRow row)
+    {
+        var matches = _fields.Where(field => field.Path.Contains(row.Path, StringComparison.OrdinalIgnoreCase)).ToArray();
+        return (matches.Length > 0 ? matches : _fields).Take(12);
+    }
+    private void SetPath(ConditionRow row, string path)
+    {
+        row.Path = path;
+        var field = _fields.FirstOrDefault(field => field.Path == path.Trim().TrimStart('$', '.'));
+        if (field?.Type is "boolean" or "number" or "text" or "null") row.SetValueType(field.Type);
+    }
+    private static string Describe(ConditionRow row) => row.Operator switch
+    {
+        "true" or "false" => "", "custom" => row.Value,
+        "exists" => "exists", "notexists" => "does not exist", "empty" => "is empty", "notempty" => "is not empty",
+        "eq" => "= " + row.Value, "neq" => "≠ " + row.Value, "gt" => "> " + row.Value, "gte" => "≥ " + row.Value,
+        "lt" => "< " + row.Value, "lte" => "≤ " + row.Value, "starts" => "starts with " + row.Value,
+        "ends" => "ends with " + row.Value, "in" => "is one of " + row.Value, _ => row.Operator + " " + row.Value
+    };
+    private void Add() { if (Rows.Count < 32) { _selectedRow = new(); Rows.Add(_selectedRow); _paneOpen = true; } }
     private void Remove(ConditionRow row) { if (Rows.Count > 1) Rows.Remove(row); }
 }

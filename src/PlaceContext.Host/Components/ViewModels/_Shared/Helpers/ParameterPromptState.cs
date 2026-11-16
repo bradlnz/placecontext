@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.Json;
+using System.Globalization;
 using PlaceContext.Application.Dtos;
 
 namespace PlaceContext.Host.Components.ViewModels.Helpers;
@@ -68,20 +69,63 @@ public sealed class ParameterPromptState
     }
 
     public bool ValidateJobParameters(IEnumerable<JobParameterDto> parameters) =>
-        ValidateRequired(parameters.Select(p => (p.Name, p.Label ?? p.Name, p.Required)));
+        ValidateFields(parameters.Select(field => (field.Name, field, field.Label ?? field.Name)));
 
     public bool ValidateChainStepParameters(IEnumerable<(int Index, JobView Job)> steps) =>
-        ValidateRequired(
-            steps.SelectMany(s =>
-                s.Job.Parameters.Select(p =>
-                    (
-                        ChainArgKey(s.Index, p.Name),
-                        $"step {s.Index + 1}: {p.Label ?? p.Name}",
-                        p.Required
-                    )
-                )
-            )
-        );
+        ValidateFields(steps.SelectMany(step => step.Job.Parameters.Select(field =>
+            (ChainArgKey(step.Index, field.Name), field, $"step {step.Index + 1}: {field.Label ?? field.Name}"))));
+
+    private bool ValidateFields(IEnumerable<(string Key, JobParameterDto Field, string Label)> fields)
+    {
+        var entries = fields.ToArray();
+        if (!ValidateRequired(entries.Select(item => (item.Key, item.Label, item.Field.Required)))) return false;
+        foreach (var (key, field, label) in entries)
+        {
+            var value = Get(key);
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            var parsed = TypedValue(field.Type, value);
+            var valid = field.Type switch
+            {
+                "uuid" or "guid" => Guid.TryParse(value, out _),
+                "integer" or "int" => parsed is long,
+                "number" => parsed is decimal or double,
+                "checkbox" or "boolean" or "bool" => parsed is bool,
+                "json" => parsed is JsonElement,
+                _ => true
+            };
+            if (valid) continue;
+            Error = $"{label} must be a valid {field.Type}.";
+            return false;
+        }
+        return true;
+    }
+
+    private static object? TypedValue(string type, string value)
+    {
+        switch (type)
+        {
+            case "integer" or "int":
+                if (string.IsNullOrWhiteSpace(value)) return null;
+                if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer)) return integer;
+                break;
+            case "number":
+                if (string.IsNullOrWhiteSpace(value)) return null;
+                if (decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)) return number;
+                if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var large) && double.IsFinite(large)) return large;
+                break;
+            case "checkbox" or "boolean" or "bool":
+                if (string.IsNullOrWhiteSpace(value)) return false;
+                if (bool.TryParse(value, out var boolean)) return boolean;
+                break;
+            case "json":
+                if (string.IsNullOrWhiteSpace(value)) return null;
+                try { using var document = JsonDocument.Parse(value); return document.RootElement.Clone(); }
+                catch (JsonException) { }
+                break;
+        }
+        // Keep incomplete editor drafts; run forms validate before submission.
+        return value;
+    }
 
     /// <summary>Serialize bare parameter names → JSON object for job stdin / step override.</summary>
     public static string ToJsonPayload(
@@ -96,7 +140,7 @@ public sealed class ParameterPromptState
             payload[parameter.Name] =
                 parameter.Type == "file" && TryParseFileReference(value, out var reference)
                     ? reference
-                    : value;
+                    : TypedValue(parameter.Type, value);
         }
         return JsonSerializer.Serialize(payload);
     }

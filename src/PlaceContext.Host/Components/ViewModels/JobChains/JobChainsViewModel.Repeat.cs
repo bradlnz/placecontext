@@ -23,7 +23,7 @@ public sealed partial class JobChainsViewModel
         NotifyStateChanged();
     }
 
-    public bool CanRetryGate => GateEditorStageIndex > 0 && !EdStageActions.Values.Any(action => action is RepeatFlowChainAction);
+    public bool CanRetryGate => !IsAutomaticGateEditor && GateEditorStageIndex > 0 && !EdStageActions.Values.Any(action => action is RepeatFlowChainAction);
 
     public void RetryGateProcess()
     {

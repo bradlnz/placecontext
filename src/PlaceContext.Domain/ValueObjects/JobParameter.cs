@@ -21,8 +21,11 @@ public sealed record JobParameter
         var normalizedType = type?.Trim().ToLowerInvariant();
         Type = normalizedType switch
         {
-            "number" or "select" or "checkbox" or "file" or "date" or "time" =>
+            "number" or "integer" or "uuid" or "json" or "select" or "checkbox" or "file" or "date" or "time" =>
                 normalizedType!,
+            "int" => "integer",
+            "guid" => "uuid",
+            "bool" or "boolean" => "checkbox",
             "datetime" or "datetime-local" => "datetime-local",
             _ => "text",
         };
@@ -49,7 +52,7 @@ public sealed record JobParameter
         get;
     }
 
-    /// <summary>Input kind rendered in run forms: "text" | "number" | "date" | "datetime-local" |
+    /// <summary>Input kind rendered in run forms: "text" | "number" | "integer" | "uuid" | "json" | "date" | "datetime-local" |
     /// "time" | "select" | "checkbox" | "file".</summary>
     public string Type
     {

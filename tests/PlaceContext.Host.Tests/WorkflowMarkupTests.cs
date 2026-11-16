@@ -29,7 +29,7 @@ public sealed class WorkflowMarkupTests
             new SendEmailChainAction("test@example.test", "Test", "Subject", "Body"), new SendSmsChainAction("+61400000000", "Body")
         ];
         var job = Guid.NewGuid();
-        var stages = actions.Select(action => vm.BuildStageView(ChainStage.ForAction(action))).ToList();
+        var stages = actions.Select(action => vm.BuildStageView(new ChainStage([], action: action, executionPolicy: new(2, 5, 60)))).ToList();
         stages.Add(vm.BuildStageView(new([job], new ConditionGate("all:[\"eq:ok:true\",\"gte:score:0.9\"]", [new([job], new WaitGate(TimeSpan.FromSeconds(12)))]))));
         var workflow = new JobChainView(Guid.NewGuid(), Guid.NewGuid(), "true", "00123", stages, DateTimeOffset.UtcNow);
         var yaml = WorkflowMarkup.Write(workflow);

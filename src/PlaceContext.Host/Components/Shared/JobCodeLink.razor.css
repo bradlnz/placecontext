@@ -1,6 +1,7 @@
 .job-code-link {
     display: inline-flex;
     align-items: center;
+    gap: 4px;
     flex-shrink: 0;
     padding: 4px 6px;
     border: 1px solid var(--border);

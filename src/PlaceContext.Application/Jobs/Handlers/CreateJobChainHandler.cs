@@ -26,7 +26,7 @@ public sealed class CreateJobChainHandler : ICommandHandler<CreateJobChainComman
     {
         var chain = command.Stages is { Count: > 0 } stages
             ? JobChain.Create(command.ProjectId, command.Name, command.Description,
-                ToStages(stages, command.StageGates, command.StageActions), _clock.UtcNow)
+                ToStages(stages, command.StageGates, command.StageActions, command.StagePolicies), _clock.UtcNow)
             : JobChain.Create(command.ProjectId, command.Name, command.Description, command.StepJobIds, _clock.UtcNow);
         await ValidateStepsAsync(_jobs, chain, ct);
         await SubWorkflowValidation.ValidateAsync(chain, _chains, ct);
@@ -37,11 +37,12 @@ public sealed class CreateJobChainHandler : ICommandHandler<CreateJobChainComman
 
     internal static List<ChainStage> ToStages(IReadOnlyList<IReadOnlyList<Guid>> stages,
         IReadOnlyList<ChainGate?>? gates = null,
-        IReadOnlyList<ChainAction?>? actions = null)
+        IReadOnlyList<ChainAction?>? actions = null, IReadOnlyList<StepExecutionPolicy?>? policies = null)
         => stages.Select((s, i) => new ChainStage(
             s,
             gate: gates is not null && i < gates.Count ? gates[i] : null,
-            action: actions is not null && i < actions.Count ? actions[i] : null)).ToList();
+            action: actions is not null && i < actions.Count ? actions[i] : null,
+            executionPolicy: policies is not null && i < policies.Count ? policies[i] : null)).ToList();
 
     /// <summary>Every step must reference an existing job in the chain's project — a typo'd or foreign
     /// job id should fail at definition time, not at run time.</summary>

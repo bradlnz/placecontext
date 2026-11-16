@@ -5,7 +5,7 @@ namespace PlaceContext.Application.Build;
 
 public sealed record WorkflowStage(Guid[] JobIds, double? WaitSeconds = null, string? Condition = null,
     WorkflowStage[]? ElseBranch = null, VirtualMachineChainAction? Qemu = null, LoopChainAction? Review = null,
-    SendEmailChainAction? Email = null, SendSmsChainAction? Sms = null, RepeatFlowChainAction? Repeat = null, ScoringGateChainAction? Score = null, QueryDataChainAction? Query = null, ContainerBuildChainAction? ContainerBuild = null, ContainerRunChainAction? ContainerRun = null, SubWorkflowChainAction? SubWorkflow = null, ParallelWorkflowsChainAction? ParallelWorkflows = null)
+    SendEmailChainAction? Email = null, SendSmsChainAction? Sms = null, RepeatFlowChainAction? Repeat = null, ScoringGateChainAction? Score = null, QueryDataChainAction? Query = null, ContainerBuildChainAction? ContainerBuild = null, ContainerRunChainAction? ContainerRun = null, SubWorkflowChainAction? SubWorkflow = null, ParallelWorkflowsChainAction? ParallelWorkflows = null, string? ReviewQuestion = null, StepExecutionPolicy? ExecutionPolicy = null)
 {
     public static WorkflowStage FromView(JobChainStageView stage) => new(
         stage.Jobs.Select(x => x.JobId).ToArray(),
@@ -21,7 +21,8 @@ public sealed record WorkflowStage(Guid[] JobIds, double? WaitSeconds = null, st
         stage.Action is ContainerBuildChainActionView build ? new(build.Dockerfile, build.ContextField, build.OutputField, build.TimeoutSeconds, build.AllowNetwork) : null,
         stage.Action is ContainerRunChainActionView container ? new(container.Image, container.ImageField, container.OutputField, container.Command, container.Port, container.MemoryMb, container.Cpus, container.TimeoutSeconds, container.AllowNetwork) : null,
         stage.Action is SubWorkflowChainActionView child ? new(child.WorkflowId, child.WorkflowName) : null,
-        stage.Action is ParallelWorkflowsChainActionView parallel ? new(parallel.Branches, parallel.OutputField) : null);
+        stage.Action is ParallelWorkflowsChainActionView parallel ? new(parallel.Branches, parallel.OutputField) : null,
+        (stage.Gate as ConditionGateView)?.ReviewQuestion, stage.ExecutionPolicy);
 
     public ChainStage ToStage(int depth = 0)
     {
@@ -30,7 +31,7 @@ public sealed record WorkflowStage(Guid[] JobIds, double? WaitSeconds = null, st
             throw new ArgumentException("Workflow branches are nested too deeply.");
         }
         var actions = new ChainAction?[] { Qemu, Review, Email, Sms, Repeat, Score, Query, ContainerBuild, ContainerRun, SubWorkflow, ParallelWorkflows }.OfType<ChainAction>().ToArray();
-        if (actions.Length > 1 || (WaitSeconds.HasValue && Condition is not null))
+        if (actions.Length > 1 || (WaitSeconds.HasValue && (Condition is not null || ReviewQuestion is not null)))
         {
             throw new ArgumentException("Choose one action and one gate per stage.");
         }
@@ -38,12 +39,13 @@ public sealed record WorkflowStage(Guid[] JobIds, double? WaitSeconds = null, st
         {
             throw new ArgumentException("Invalid wait duration.");
         }
-        if (ElseBranch is { Length: > 0 } && Condition is null)
+        if (ElseBranch is { Length: > 0 } && Condition is null && ReviewQuestion is null)
         {
             throw new ArgumentException("An else branch needs a condition.");
         }
         ChainGate? gate = WaitSeconds.HasValue ? new WaitGate(TimeSpan.FromSeconds(WaitSeconds.Value))
-                    : Condition is not null ? new ConditionGate(Condition, ElseBranch?.Select(x => x.ToStage(depth + 1)).ToArray()) : null;
-        return new ChainStage(JobIds, gate, action: actions.SingleOrDefault());
+                    : Condition is not null || ReviewQuestion is not null ? new ConditionGate(ReviewQuestion is null ? Condition! : ConditionGate.AutomaticExpression,
+                        ElseBranch?.Select(x => x.ToStage(depth + 1)).ToArray(), ReviewQuestion) : null;
+        return new ChainStage(JobIds, gate, action: actions.SingleOrDefault(), executionPolicy: ExecutionPolicy);
     }
 }

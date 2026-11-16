@@ -137,6 +137,20 @@
 .gate-tag-condition { background:#fef9e7; border:1px solid #f0d060; color:#7a5c00 }
 .gate-remove { font-size:11px; margin-left:2px }
 .gate-modal { width:440px }
+.workflow-conditions-modal .dcmodal-body, .sub-workflow-modal .dcmodal-body { gap:20px; padding:22px }
+.workflow-conditions-modal .sub-note, .sub-workflow-modal .sub-note { margin:0; line-height:1.6 }
+.parallel-branch-tabs { margin:0; overflow-x:auto; flex-shrink:0 }
+.parallel-branch-tabs .dctab { flex:none }
+.parallel-branch { display:flex; flex-direction:column; gap:16px }
+.parallel-branch h4 { margin:0 }
+.parallel-branch[hidden] { display:none }
+.parallel-branch { flex:none; min-width:0 }
+.gate-path-target { display:flex; flex-direction:column; gap:8px; padding:12px 14px; border:1px solid var(--border); border-radius:8px; font-size:12px }
+.gate-path-target span { color:var(--text-3) }
+.gate-retry-options { padding:12px 14px; border:1px solid var(--border); border-radius:8px; font-size:12px }
+.gate-retry-options summary { cursor:pointer }
+.gate-retry-options p { line-height:1.6 }
+.parallel-branch > .dcbtn { align-self:flex-start }
 .tab-icon { font-size:11px; opacity:.8 }
 .condition-builder { display:grid; grid-template-columns:1.1fr 1fr; gap:10px }
 .condition-builder .dcfield:last-child:nth-child(3) { grid-column:1 / -1 }
@@ -145,10 +159,11 @@
 .btn-2-8 { padding:2px 8px }
 .btn-2-8-del { padding:2px 8px }
 .editor-err { color:var(--bad); font-size:12px; flex:1 }
-.run-modal { width:520px;  display:flex; flex-direction:column }
+.run-modal { width:640px;  display:flex; flex-direction:column }
+.step-policy-overlay { z-index:70 }
 .modal-body-scroll { overflow-y:auto }
 .prompt-step { margin-bottom:14px }
-.prompt-step-head { display:flex; align-items:center; gap:8px; margin-bottom:6px }
+.prompt-step-head { display:flex; align-items:center; gap:8px; padding:4px 2px; margin-bottom:10px }
 .step-badge { font-family:var(--font-sans); font-size:10.5px; padding:1px 7px; border-radius:5px; background:var(--card-2); color:var(--text-3) }
 .step-jobtitle { font-size:12.5px; font-weight:600 }
 .ml-5 { margin-left:5px }
@@ -631,3 +646,12 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .markup-editor { flex:1; min-height:360px; border:1px solid var(--border); overflow:hidden; border-radius:8px; }
 .markup-notice { margin:0; font-size:12px; color:var(--good); }
 .workflow-canvas-dialog .dcmodal-body:has(> .workflow-markup) { display:flex; }
+.dcmodal-overlay > .workflow-conditions-modal, .dcmodal-overlay > .sub-workflow-modal { width:960px }
+.sub-workflow-modal ::deep .chain-canvas { flex:none }
+.sub-workflow-modal ::deep .canvas-viewport { height:auto; overflow-y:hidden; overscroll-behavior-y:auto }
+.sub-workflow-modal ::deep .canvas-pipeline { min-height:0 }
+
+.run-input-field { display:grid; grid-template-columns:minmax(0, 1fr) 110px 28px; gap:10px; padding:12px; margin-bottom:12px; border:1px solid var(--border); border-radius:8px }
+.run-input-field > .dcfield { min-width:0 }
+.run-input-field > .dcfield:nth-child(3) { grid-column:1 / -1 }
+.run-input-field > button { grid-column:3; grid-row:1; align-self:end; padding:6px }

@@ -17,5 +17,6 @@ public sealed record CreateJobChainCommand(
     Guid ProjectId, string Name, string? Description, IReadOnlyList<Guid> StepJobIds,
     IReadOnlyList<IReadOnlyList<Guid>>? Stages = null,
     IReadOnlyList<ChainGate?>? StageGates = null,
-    IReadOnlyList<ChainAction?>? StageActions = null)
+    IReadOnlyList<ChainAction?>? StageActions = null,
+    IReadOnlyList<StepExecutionPolicy?>? StagePolicies = null)
     : ICommand<JobChainView>;

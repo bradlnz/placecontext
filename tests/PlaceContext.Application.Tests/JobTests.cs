@@ -109,6 +109,7 @@ public class JobTests
         Assert.Equal(2, runner.ReceivedRequests.Count);
         Assert.All(runner.ReceivedRequests, request =>
         {
+            Assert.Equal(job.ProjectId, request.ProjectId);
             Assert.Equal(job.ProjectId.ToString(), request.Env["PC_PROJECT_ID"]);
             Assert.Equal(job.Id.ToString(), request.Env["PC_JOB_ID"]);
             Assert.Equal(run.Id.ToString(), request.Env["PC_RUN_ID"]);

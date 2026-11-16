@@ -14,6 +14,16 @@ namespace PlaceContext.Application.Tests;
 /// </summary>
 public class JobRunnerTests
 {
+    [Fact]
+    public async Task Workflow_policy_can_disable_job_retries_to_avoid_multiplying_attempts()
+    {
+        var job = CreateJob(retryCount: 3); var jobs = new InMemoryJobRepository(); await jobs.AddAsync(job);
+        var dispatcher = new RecordingDispatcher(id => DetailView(id, "Failed"));
+        var runner = new JobRunner(jobs, dispatcher);
+        Assert.Equal("Failed", (await runner.RunWorkflowStepAsync(job.Id, useJobRetries: false)).Status);
+        Assert.Single(dispatcher.Commands);
+    }
+
     private static readonly DateTimeOffset T0 = new(2026, 6, 25, 12, 0, 0, TimeSpan.Zero);
 
     private static Job CreateJob(int retryCount = 0, int retryDelaySeconds = 0)

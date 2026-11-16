@@ -7,7 +7,7 @@
         <li>
             @if (stage.Gate is ConditionGateView condition)
             {
-                <div class="branch-condition"><AppIcon Kind="split" /> If <code>@condition.Expression</code></div>
+                <div class="branch-condition"><AppIcon Kind="split" /> @(condition.ReviewQuestion is null ? "If" : "AI If") <code>@(condition.ReviewQuestion ?? condition.Expression)</code></div>
             }
             else if (stage.Gate is WaitGateView wait)
             {
@@ -24,14 +24,14 @@
             {
             @if (stage.Action is { } action)
             {
-                <span><AppIcon Kind="@ChainCanvasViewModel.StageIcon(stage)" /> @action.DisplayName</span>
+                <div class="branch-action"><AppIcon Kind="@ChainCanvasViewModel.StageIcon(stage)" /><span>@action.DisplayName</span></div>
             }
             @foreach (var job in stage.Jobs)
             {
                 @if (OnOpenJob.HasDelegate)
                 { <button class="branch-job" @onclick="() => OnOpenJob.InvokeAsync(job.JobId)"><AppIcon Kind="code" /> @job.JobName</button> }
                 else { <div class="branch-job"><AppIcon Kind="code" /> @job.JobName</div> }
-                <JobCodeLink Job="@Jobs.FirstOrDefault(candidate => candidate.Id == job.JobId)" />
+                <JobCodeLink Job="@Jobs.FirstOrDefault(candidate => candidate.Id == job.JobId)" OnEdit="OnEditCode" />
             }
             }
             @if (stage.IsParallel)
@@ -41,7 +41,7 @@
             @if ((stage.ElseBranch ?? (stage.Gate as ConditionGateView)?.ElseBranch) is { Count: > 0 } other)
             {
                 <div class="branch-condition">If false</div>
-                <WorkflowBranchPreview Jobs="Jobs" OnOpenJob="OnOpenJob" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{path}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
+                <WorkflowBranchPreview Jobs="Jobs" OnOpenJob="OnOpenJob" OnEditCode="OnEditCode" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{path}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
             }
         </li>
     }
@@ -50,6 +50,7 @@
 @code {
     [Parameter] public IReadOnlyList<JobView> Jobs { get; set; } = [];
     [Parameter] public EventCallback<Guid> OnOpenJob { get; set; }
+    [Parameter] public EventCallback<JobView> OnEditCode { get; set; }
     [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps { get; set; }
     [Parameter] public string PathPrefix { get; set; } = "";
     [Parameter] public bool InspectActions { get; set; }

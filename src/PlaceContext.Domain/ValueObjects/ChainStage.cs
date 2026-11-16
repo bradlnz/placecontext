@@ -19,7 +19,7 @@ public sealed class ChainStage
     private readonly List<ChainStage>? _elseBranch;
 
     public ChainStage(IEnumerable<Guid> jobIds, ChainGate? gate = null,
-        IReadOnlyList<ChainStage>? elseBranch = null, ChainAction? action = null)
+        IReadOnlyList<ChainStage>? elseBranch = null, ChainAction? action = null, StepExecutionPolicy? executionPolicy = null)
     {
         if (jobIds is null)
         {
@@ -47,10 +47,12 @@ public sealed class ChainStage
         }
         Gate = gate;
         Action = action;
+        ExecutionPolicy = executionPolicy;
     }
 
     /// <summary>The job(s) that run at this stage — run in parallel when there is more than one.</summary>
     public IReadOnlyList<Guid> JobIds => _jobIds;
+    public StepExecutionPolicy? ExecutionPolicy { get; }
 
     /// <summary>True when this stage fans out to more than one job.</summary>
     public bool IsParallel => _jobIds.Count > 1;

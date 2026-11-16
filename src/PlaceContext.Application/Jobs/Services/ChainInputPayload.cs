@@ -133,6 +133,13 @@ public static class ChainInputPayload
                 {
                     throw new ArgumentException($"{field.Label ?? field.Name} must be a number.");
                 }
+                if (!Missing(value) && field.Type == "integer"
+                    && !long.TryParse(value!.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+                    throw new ArgumentException($"{field.Label ?? field.Name} must be an integer.");
+                if (!Missing(value) && field.Type == "uuid" && !Guid.TryParse(value!.ToString(), out _))
+                    throw new ArgumentException($"{field.Label ?? field.Name} must be a UUID.");
+                if (!Missing(value) && field.Type == "checkbox" && !bool.TryParse(value!.ToString(), out _))
+                    throw new ArgumentException($"{field.Label ?? field.Name} must be true or false.");
                 Set(payload, field.Name, value);
             }
             var effective = Object(currentPayload);

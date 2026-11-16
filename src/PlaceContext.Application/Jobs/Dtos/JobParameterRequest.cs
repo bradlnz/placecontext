@@ -6,7 +6,7 @@ public sealed record JobParameterRequest(
     string Name,
     string? Label = null,
     bool Required = true,
-    /// <summary>"text" | "number" | "date" | "datetime-local" | "time" | "select" |
+    /// <summary>"text" | "number" | "integer" | "uuid" | "json" | "date" | "datetime-local" | "time" | "select" |
     /// "checkbox" | "file".</summary>
     string Type = "text",
     IReadOnlyList<string>? Options = null);

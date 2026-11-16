@@ -13,6 +13,38 @@ namespace PlaceContext.Infrastructure.Tests;
 public sealed class JobChainActionPersistenceTests
 {
     [Fact]
+    public async Task Step_limits_survive_reload_for_plain_jobs_actions_and_false_paths()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var repository = new EfJobChainRepository(db); var policy = new StepExecutionPolicy(3, 12, 90);
+        var chain = JobChain.Create(Guid.NewGuid(), "Limits", null,
+            [new([Guid.NewGuid()], executionPolicy: policy), new([], action: new SendSmsChainAction("+61400000000", "Hello"), executionPolicy: policy),
+             new([Guid.NewGuid()], new ConditionGate("false", [new([Guid.NewGuid()], executionPolicy: policy)])), ChainStage.Of(Guid.NewGuid())], T0);
+        await repository.AddAsync(chain); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        var loaded = (await repository.GetByIdAsync(chain.Id))!;
+        Assert.Equal(policy, loaded.Stages[0].ExecutionPolicy); Assert.Equal(policy, loaded.Stages[1].ExecutionPolicy);
+        Assert.Equal(policy, Assert.Single(Assert.IsType<ConditionGate>(loaded.Stages[2].Gate).ElseBranch!).ExecutionPolicy);
+        Assert.Null(loaded.Stages[3].ExecutionPolicy);
+    }
+
+    [Fact]
+    public async Task Automatic_if_question_and_false_path_survive_reload()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
+        var repository = new EfJobChainRepository(db);
+        var no = Guid.NewGuid();
+        var chain = JobChain.Create(Guid.NewGuid(), "Automatic", null,
+            [new ChainStage([Guid.NewGuid()], new ConditionGate(ConditionGate.AutomaticExpression, [ChainStage.Of(no)], "Technical question?"))], T0);
+        await repository.AddAsync(chain); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
+        var gate = Assert.IsType<ConditionGate>((await repository.GetByIdAsync(chain.Id))!.Stages[0].Gate);
+        Assert.Equal("Technical question?", gate.ReviewQuestion);
+        Assert.Equal(ConditionGate.AutomaticExpression, gate.Expression);
+        Assert.Equal(no, Assert.Single(Assert.Single(gate.ElseBranch!).JobIds));
+    }
+
+    [Fact]
     public async Task Workflow_schedule_target_and_owner_survive_reload()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;

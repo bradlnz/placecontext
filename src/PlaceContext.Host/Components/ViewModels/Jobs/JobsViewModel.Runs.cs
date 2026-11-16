@@ -165,11 +165,11 @@ public sealed partial class JobsViewModel
             RunFileMode = false;
             _runFilePayload = null;
             RunFileName = null;
-            var stored = JsonPayloadHelper.FlattenScalars(job.InputPayloads);
+            var stored = JsonPayloadHelper.FlattenScalars(job.InputPayloads, includeStructured: true);
             _runPrompt.Reset(
                 job.Parameters.ToDictionary(
                     p => p.Name,
-                    p => stored.GetValueOrDefault(p.Name, ""),
+                    p => !string.IsNullOrWhiteSpace(stored.GetValueOrDefault(p.Name)) ? stored[p.Name] : RunInputDefaults.Generate(p),
                     StringComparer.Ordinal
                 )
             );

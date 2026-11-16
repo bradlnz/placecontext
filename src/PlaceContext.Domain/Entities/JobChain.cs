@@ -135,7 +135,7 @@ public sealed class JobChain
                 (index == 0 || stages[index].Gate is not null))
                 throw new ArgumentException("Repeat flow must follow at least one step and have no gate of its own.", nameof(stages));
         }
-        return stages.Select(s => new ChainStage(s.JobIds, s.Gate, s.ElseBranch, s.Action)).ToList();
+        return stages.Select(s => new ChainStage(s.JobIds, s.Gate, s.ElseBranch, s.Action, s.ExecutionPolicy)).ToList();
     }
 
     public static JobChain Rehydrate(Guid id, Guid projectId, string name, string? description,

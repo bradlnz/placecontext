@@ -10,7 +10,7 @@ public static class JsonPayloadHelper
     /// Nested objects/arrays are skipped, except a structured <c>$file</c> marker which is retained
     /// as JSON for the file input control. First occurrence of each key wins.
     /// </summary>
-    public static Dictionary<string, string> FlattenScalars(IEnumerable<string> payloads)
+    public static Dictionary<string, string> FlattenScalars(IEnumerable<string> payloads, bool includeStructured = false)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var payload in payloads)
@@ -34,7 +34,7 @@ public static class JsonPayloadHelper
                         && file.ValueKind == JsonValueKind.Object;
                     if (
                         prop.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array
-                        && !isFileMarker
+                        && !isFileMarker && !includeStructured
                     )
                     {
                         continue;

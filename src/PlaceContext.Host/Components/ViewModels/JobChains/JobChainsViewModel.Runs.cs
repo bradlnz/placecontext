@@ -282,6 +282,8 @@ public sealed partial class JobChainsViewModel
         RunPromptSteps.Clear();
         RunPromptSteps.AddRange(plan.Steps);
         _runPrompt.Reset(plan.Defaults);
+        RunInputFields.Clear();
+        if (RunPromptSteps.Count == 0) RunInputFields.Add(new());
         RunAttachment = "";
         NotifyStateChanged();
         return Task.CompletedTask;
@@ -306,16 +308,26 @@ public sealed partial class JobChainsViewModel
         }
 
         // Form keys stay stepN:param; wire format is per-step bare-param JSON via StepPayloadOverrides.
-        var overrides = _runPrompt.ToStepPayloadOverrides(RunPromptSteps);
-        var payload = ParameterPromptState.WithChainAttachment(
-            overrides.GetValueOrDefault(0),
-            RunAttachment
-        );
+        var overrides = _runPrompt.ToStepPayloadOverrides(RunPromptSteps).ToDictionary();
+        string? payload;
+        try
+        {
+            payload = AddRunInputFields(overrides.GetValueOrDefault(0));
+            if (overrides.ContainsKey(0) && payload is not null) overrides[0] = payload;
+            payload = ParameterPromptState.WithChainAttachment(payload, RunAttachment);
+        }
+        catch (ArgumentException ex)
+        {
+            _runPrompt.SetError(ex.Message);
+            NotifyStateChanged();
+            return;
+        }
         await RunChainCoreAsync(RunPromptChain, payload, overrides);
     }
 
     public void CancelRunPrompt()
     {
+        RunInputFields.Clear();
         RunPromptChain = null;
         RunPromptSteps.Clear();
         _runPrompt.Clear();
@@ -355,6 +367,7 @@ public sealed partial class JobChainsViewModel
         _runPrompt.Clear();
         RunAttachment = "";
         PendingChainRunId = chainRunId;
+        RunInputFields.Clear();
         PendingChainId = chain.Id;
         Message = $"Run of {chain.Name} queued durably — it will continue if the app restarts.";
 

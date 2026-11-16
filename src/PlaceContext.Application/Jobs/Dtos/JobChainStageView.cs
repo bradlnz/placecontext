@@ -6,7 +6,8 @@ public sealed record JobChainStageView(
     IReadOnlyList<JobChainStepView> Jobs,
     ChainGateView? Gate = null,
     IReadOnlyList<JobChainStageView>? ElseBranch = null,
-    ChainActionView? Action = null)
+    ChainActionView? Action = null,
+    PlaceContext.Domain.ValueObjects.StepExecutionPolicy? ExecutionPolicy = null)
 {
     /// <summary>True when this stage fans out to more than one job.</summary>
     public bool IsParallel => Jobs.Count > 1;

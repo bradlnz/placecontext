@@ -14,6 +14,85 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class WorkflowConditionalPathTests
 {
+    [Fact]
+    public void False_path_limits_stay_in_gate_draft_until_the_gate_is_saved()
+    {
+        var vm = new JobChainsViewModel(null!, null!, null!, new Navigation());
+        vm.NewChain(); vm.AddStage(Guid.NewGuid()); vm.OpenGateEditor(0); vm.GateEditorType = "condition";
+        vm.GateEditorElseJobId = Guid.NewGuid().ToString(); vm.AddElseJob();
+        vm.OpenElseStepPolicy(0); vm.StepMaxRetries = 3; vm.StepTimeoutSeconds = 60; vm.SaveStepPolicy();
+        var policy = new StepExecutionPolicy(3, 5, 60);
+        Assert.Equal(policy, vm.GateEditorElseStages[0].ExecutionPolicy);
+        vm.SaveGate(); vm.OpenGateEditor(0);
+        Assert.Equal(policy, vm.GateEditorElseStages[0].ExecutionPolicy);
+        vm.OpenElseStepPolicy(0); vm.ResetStepPolicy(); vm.CancelGateEditor(); vm.OpenGateEditor(0);
+        Assert.Equal(policy, vm.GateEditorElseStages[0].ExecutionPolicy);
+    }
+
+    [Fact]
+    public async Task Step_limits_validate_follow_reordering_and_survive_save_and_reopen()
+    {
+        var dispatcher = new RecordingDispatcher();
+        var vm = new JobChainsViewModel(new PlaceContextService(dispatcher, null!, null!, null!), null!, null!, new Navigation());
+        var first = Guid.NewGuid(); var second = Guid.NewGuid();
+        await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Policies", null,
+            [new([new(first, "First")]), new([new(second, "Second")])], DateTimeOffset.UtcNow));
+        vm.OpenStepPolicy(0); vm.StepMaxRetries = 11; vm.SaveStepPolicy();
+        Assert.NotNull(vm.StepPolicyError); Assert.Equal(0, vm.PolicyStageIndex); Assert.Null(vm.EdStagePolicies[0]);
+        vm.StepMaxRetries = 2; vm.StepRetryDelaySeconds = 0; vm.StepTimeoutSeconds = 30; vm.SaveStepPolicy();
+        Assert.Null(vm.PolicyStageIndex);
+        var policy = new StepExecutionPolicy(2, 0, 30);
+        vm.MoveStageTo(1, 0);
+        Assert.Equal(policy, vm.BuildCanvasStageViews()[1].ExecutionPolicy);
+        vm.RemoveStage(0);
+        Assert.Equal(policy, vm.BuildCanvasStageViews()[0].ExecutionPolicy);
+        await vm.SaveChainAsync(false);
+        Assert.Equal(policy, Assert.Single(dispatcher.Saved!.StagePolicies!));
+        var view = new JobChainView(Guid.NewGuid(), Guid.NewGuid(), "Saved", null, vm.BuildCanvasStageViews(), DateTimeOffset.UtcNow);
+        await vm.OpenChainEditorAsync(view);
+        vm.OpenStepPolicy(0); Assert.Equal(2, vm.StepMaxRetries); Assert.Equal(30, vm.StepTimeoutSeconds);
+        vm.StepMaxRetries = 8; vm.CloseStepPolicy(); vm.OpenStepPolicy(0); Assert.Equal(2, vm.StepMaxRetries);
+        vm.ResetStepPolicy(); Assert.Null(vm.BuildCanvasStageViews()[0].ExecutionPolicy);
+    }
+
+    [Fact]
+    public async Task Adding_an_automatic_gate_at_the_end_creates_its_true_path_stage()
+    {
+        var vm = new JobChainsViewModel(new PlaceContextService(new RecordingDispatcher(), null!, null!, null!), null!, null!, new Navigation());
+        vm.NewChain(); vm.AddStage(Guid.NewGuid()); vm.OpenStageNodePicker(1);
+        await vm.ChooseAutomaticGateNode();
+        Assert.True(vm.IsAutomaticGateEditor); vm.GateReviewQuestion = "Ready?";
+        vm.SaveGate(); Assert.NotNull(vm.GateEditorError); Assert.Single(vm.EdStages);
+        var job = Guid.NewGuid(); vm.GateEditorTrueJobId = job.ToString(); vm.SaveGate();
+        Assert.Null(vm.GateEditorError); Assert.Equal(2, vm.EdStages.Count);
+        Assert.Equal(job, Assert.Single(vm.EdStages[1]));
+        Assert.Equal("Ready?", Assert.IsType<ConditionGateView>(vm.BuildCanvasStageViews()[1].Gate).ReviewQuestion);
+    }
+
+    [Fact]
+    public async Task Automatic_if_validates_question_and_preserves_question_and_paths_when_reopened()
+    {
+        var vm = new JobChainsViewModel(new PlaceContextService(new RecordingDispatcher(), null!, null!, null!), null!, null!, new Navigation());
+        vm.NewChain(); vm.AddStage(Guid.NewGuid());
+        vm.OpenGateEditor(0); vm.GateEditorType = "automatic";
+        vm.SaveGate(); Assert.NotNull(vm.GateEditorError); Assert.True(vm.ShowGateEditor);
+        Assert.False(vm.EdStageGates.ContainsKey(0));
+        vm.GateReviewQuestion = "Does this need technical support?";
+        var fallback = Guid.NewGuid(); vm.GateEditorElseJobId = fallback.ToString(); vm.AddElseJob();
+        vm.SaveGate(); Assert.Null(vm.GateEditorError); Assert.False(vm.ShowGateEditor);
+        var views = vm.BuildCanvasStageViews();
+        Assert.Equal(vm.GateReviewQuestion, Assert.IsType<ConditionGateView>(views[0].Gate).ReviewQuestion);
+        await vm.OpenChainEditorAsync(new(Guid.NewGuid(), Guid.NewGuid(), "Automatic", null, views, DateTimeOffset.UtcNow));
+        vm.OpenGateEditor(0);
+        Assert.True(vm.IsAutomaticGateEditor); Assert.True(vm.IsConditionGateEditor);
+        Assert.Equal("Does this need technical support?", vm.GateReviewQuestion);
+        Assert.Equal(fallback, Assert.Single(Assert.Single(vm.GateEditorElseStages).JobIds));
+        vm.GateReviewQuestion = "Changed"; vm.CancelGateEditor(); vm.OpenGateEditor(0);
+        Assert.Equal("Does this need technical support?", vm.GateReviewQuestion);
+        vm.GateEditorType = "condition"; vm.SaveGate();
+        Assert.Null(Assert.IsType<ConditionGate>(vm.EdStageGates[0]).ReviewQuestion);
+    }
+
     [Theory]
     [InlineData("all", false)]
     [InlineData("any", true)]
@@ -166,12 +245,38 @@ public sealed class WorkflowConditionalPathTests
         Assert.Null(Assert.IsType<ConditionGate>(reopened.EdStageGates[1]).ElseBranch);
     }
 
+    [Theory]
+    [InlineData(null, false, false)]
+    [InlineData("Ready?", false, false)]
+    [InlineData(null, true, false)]
+    [InlineData("Ready?", true, false)]
+    [InlineData(null, false, true)]
+    [InlineData("Ready?", false, true)]
+    public async Task If_gate_remove_button_is_available_only_in_the_editor(string? question, bool readOnly, bool running)
+    {
+        var services = new ServiceCollection().AddLogging().AddAuthorizationCore().AddTransient<ChainCanvasViewModel>();
+        await using var provider = services.BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            var result = await renderer.RenderComponentAsync<ChainCanvas>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                ["Stages"] = new[] { new JobChainStageView([], new ConditionGateView("true", ReviewQuestion: question), Action: new QueryDataChainActionView("SELECT 1", "data")) },
+                ["ReadOnly"] = readOnly,
+                ["RunSteps"] = running ? new Dictionary<string, IReadOnlyList<ChainStepRunView>>() : null,
+                ["OnRemoveGate"] = EventCallback.Factory.Create<int>(this, _ => { })
+            }));
+            return result.ToHtmlString();
+        });
+        Assert.Equal(!readOnly && !running, html.Contains("Remove if gate from step 1"));
+    }
+
     [Fact]
     public async Task Canvas_shows_both_conditional_routes_and_labels_parallel_jobs()
     {
         var stages = new[] { new JobChainStageView([new(Guid.NewGuid(), "Approved")], new ConditionGateView("gte:review.noul:0.8"),
             [new([new(Guid.NewGuid(), "Needs review")])]) };
-        var services = new ServiceCollection().AddLogging().AddTransient<ChainCanvasViewModel>();
+        var services = new ServiceCollection().AddLogging().AddAuthorizationCore().AddTransient<ChainCanvasViewModel>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         var html = await renderer.Dispatcher.InvokeAsync(async () =>

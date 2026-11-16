@@ -648,6 +648,9 @@ else
                                 <select class="dcinput param-type-select" @bind="Vm.EdParams[idx].Type">
                                     <option value="text">text</option>
                                     <option value="number">number</option>
+                                    <option value="integer">integer</option>
+                                    <option value="uuid">UUID</option>
+                                    <option value="json">JSON</option>
                                     <option value="date">date</option>
                                     <option value="datetime-local">date &amp; time</option>
                                     <option value="time">time</option>
@@ -978,12 +981,13 @@ else
 @if (Vm.RunPromptJob is not null)
 {
     <div class="dcmodal-overlay" @onclick="() => Vm.CancelRunPrompt()">
-        <div class="dcmodal modal-440" role="dialog" aria-modal="true" aria-label="Job run input" @onclick:stopPropagation="true">
+        <div class="dcmodal modal-440 run-modal" role="dialog" aria-modal="true" aria-label="Job run input" @onclick:stopPropagation="true">
             <div class="dcmodal-head">
                 <div class="flex-fill-min">
                     <div class="title-14">Run @Vm.RunPromptJob.Name</div>
                     <div class="subtitle-11-5">
                         This job takes input — the values below become the run's payload.
+                        AI reviews the code and input for dangerous behavior before execution.
                     </div>
                 </div>
                 <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CancelRunPrompt()"><AppIcon Kind="close" /></button>
@@ -995,7 +999,7 @@ else
                 </div>
                 @if (Vm.RunFileMode)
                 {
-                    <div class="form-row"><label for="run-input-file">Input JSON file</label><InputFile id="run-input-file" OnChange="Vm.ReadRunFileAsync" accept=".json,application/json" disabled="@Vm.RunFileLoading" />
+                    <div class="dcfield"><label for="run-input-file">Input JSON file</label><InputFile id="run-input-file" OnChange="Vm.ReadRunFileAsync" accept=".json,application/json" disabled="@Vm.RunFileLoading" />
                     <p>A JSON object up to 1 MiB. Nested objects and arrays are preserved.</p>
                     @if (Vm.RunFileLoading) { <p role="status">Reading file…</p> }
                     @if (Vm.RunFileName is not null) { <p role="status">Ready: @Vm.RunFileName</p> }

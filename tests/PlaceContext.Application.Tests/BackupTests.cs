@@ -73,15 +73,17 @@ public class BackupTests
         finally { CurrentUser.Clear(); }
     }
 
-    [Fact]
-    public async Task Backup_rewires_sub_workflows_in_both_routes_even_when_parent_appears_first()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Technical question?")]
+    public async Task Backup_rewires_sub_workflows_in_both_routes_even_when_parent_appears_first(string? question)
     {
         var (source, project, job) = await SeedAsync();
         var child = JobChain.Create(project.Id.Value, "Specialist child", null, [ChainStage.Of(job.Id)], T0);
         await source.Chains.AddAsync(child);
         var parent = JobChain.Create(project.Id.Value, "Routing parent", null,
-            [new ChainStage([], new ConditionGate("all:[\"true\",\"false\"]", [ChainStage.ForAction(new SubWorkflowChainAction(child.Id, child.Name))]),
-                action: new SubWorkflowChainAction(child.Id, child.Name)),
+            [new ChainStage([], new ConditionGate("all:[\"true\",\"false\"]", [ChainStage.ForAction(new SubWorkflowChainAction(child.Id, child.Name))], question),
+                action: new SubWorkflowChainAction(child.Id, child.Name), executionPolicy: new(2, 5, 90)),
              ChainStage.ForAction(new ParallelWorkflowsChainAction([new(child.Id, child.Name, "true"), new(child.Id, child.Name, "false")]))], T0);
         await source.Chains.AddAsync(parent);
         var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
@@ -92,11 +94,13 @@ public class BackupTests
         var workflows = await target.Chains.ListForProjectAsync(importedProject.Id.Value);
         var restoredChild = workflows.Single(chain => chain.Name == child.Name);
         var restored = workflows.Single(chain => chain.Name == parent.Name).Stages[0];
+        Assert.Equal(new StepExecutionPolicy(2, 5, 90), restored.ExecutionPolicy);
         Assert.NotEqual(child.Id, restoredChild.Id);
         Assert.Equal(restoredChild.Id, Assert.IsType<SubWorkflowChainAction>(restored.Action).WorkflowId);
         var gate = Assert.IsType<ConditionGate>(restored.Gate);
         Assert.Equal(restoredChild.Id, Assert.IsType<SubWorkflowChainAction>(Assert.Single(gate.ElseBranch!).Action).WorkflowId);
-        Assert.False(gate.Evaluate("{}").Proceed);
+        Assert.Equal(question, gate.ReviewQuestion);
+        if (question is null) Assert.False(gate.Evaluate("{}").Proceed);
         var parallel = Assert.IsType<ParallelWorkflowsChainAction>(workflows.Single(chain => chain.Name == parent.Name).Stages[1].Action);
         Assert.All(parallel.Branches, branch => Assert.Equal(restoredChild.Id, branch.WorkflowId));
     }

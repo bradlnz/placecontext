@@ -1,29 +1,62 @@
 @using PlaceContext.Application.Access.Models
+@inject IAuthorizationService Authorization
 
-@if (Job is { MapSourceKind: JobSourceCatalog.Code } job)
+@if (_allowed && Job is { } job)
 {
-    <AuthorizeView Policy="@Permission.JobsEdit">
-        @if (OnEdit.HasDelegate)
-        {
-            <button type="button" class="job-code-link" draggable="false"
-                    title="Edit code" aria-label="@($"Edit code for {job.Name}")"
-                    @onclick="() => OnEdit.InvokeAsync(job)" @onclick:stopPropagation="true" @ondragstart:stopPropagation="true">
-                <AppIcon Kind="edit" />
-            </button>
-        }
-        else
-        {
-        <a class="job-code-link" href="@PageRoutes.ProjectJob(job.ProjectId, job.Id)"
+        <a class="job-code-link job-settings-link" href="@(PageRoutes.ProjectJobs(job.ProjectId) + "?job=" + job.Id)"
            target="_blank" rel="noopener noreferrer" draggable="false"
-           title="Edit code in a new tab" aria-label="@($"Edit code for {job.Name} (opens in a new tab)")"
+           title="Edit job settings in a new tab" aria-label="@($"Edit settings for {job.Name} (opens in a new tab)")"
            @onclick:stopPropagation="true" @ondragstart:stopPropagation="true">
-            <AppIcon Kind="edit" />
+            <AppIcon Kind="settings" /> Settings
         </a>
+        @if (job.MapSourceKind == JobSourceCatalog.Code)
+        {
+            @if (OnEdit.HasDelegate)
+            {
+                <button type="button" class="job-code-link" draggable="false"
+                        title="Edit code" aria-label="@($"Edit code for {job.Name}")"
+                        @onclick="() => OnEdit.InvokeAsync(job)" @onclick:stopPropagation="true" @ondragstart:stopPropagation="true">
+                    <AppIcon Kind="edit" /> Code
+                </button>
+            }
+            else
+            {
+                <a class="job-code-link" href="@PageRoutes.ProjectJob(job.ProjectId, job.Id)"
+                   target="_blank" rel="noopener noreferrer" draggable="false"
+                   title="Edit code in a new tab" aria-label="@($"Edit code for {job.Name} (opens in a new tab)")"
+                   @onclick:stopPropagation="true" @ondragstart:stopPropagation="true">
+                    <AppIcon Kind="edit" /> Code
+                </a>
+            }
         }
-    </AuthorizeView>
 }
 
 @code {
     [Parameter] public JobView? Job { get; set; }
     [Parameter] public EventCallback<JobView> OnEdit { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? Authentication { get; set; }
+    private Task<AuthenticationState>? _checkedAuthentication;
+    private Guid? _checkedProject;
+    private int _authorizationVersion;
+    private bool _allowed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var version = ++_authorizationVersion;
+        var authentication = Authentication;
+        var project = Job?.ProjectId;
+        // Keep controls visible during same-context rechecks, without retaining access across users or projects.
+        if (!ReferenceEquals(authentication, _checkedAuthentication) || project != _checkedProject)
+            _allowed = false;
+        _checkedAuthentication = authentication;
+        _checkedProject = project;
+        if (authentication is null || project is null)
+        {
+            _allowed = false;
+            return;
+        }
+        var state = await authentication;
+        var result = await Authorization.AuthorizeAsync(state.User, Permission.JobsEdit);
+        if (version == _authorizationVersion) _allowed = result.Succeeded;
+    }
 }

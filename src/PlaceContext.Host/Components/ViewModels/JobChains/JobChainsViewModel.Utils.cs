@@ -17,7 +17,8 @@ public sealed partial class JobChainsViewModel
     public bool IsWaitGateEditor =>
         GateEditorType.Equals("wait", StringComparison.OrdinalIgnoreCase);
     public bool IsConditionGateEditor =>
-        GateEditorType.Equals("condition", StringComparison.OrdinalIgnoreCase);
+        GateEditorType.Equals("condition", StringComparison.OrdinalIgnoreCase) || IsAutomaticGateEditor;
+    public bool IsAutomaticGateEditor => GateEditorType == "automatic";
 
     public bool IsChainRunActive(string? status) =>
         status is "AwaitingInput" or "Waiting" || ScopedPresentationCatalog.IsQueuedOrRunning(status);
@@ -44,6 +45,8 @@ public sealed partial class JobChainsViewModel
     public string ChainStatusAria(bool running) => running ? "Running" : "Pipeline";
 
     public Task ChooseConditionNode() => ChooseStageNode("condition");
+
+    public Task ChooseAutomaticGateNode() => ChooseStageNode("automatic");
 
     public Task ChooseWaitNode() => ChooseStageNode("wait");
 

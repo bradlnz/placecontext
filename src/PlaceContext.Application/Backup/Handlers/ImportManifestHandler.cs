@@ -306,7 +306,7 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
                     {
                         var jobs = stage.JobIds.Select(id => jobMap.TryGetValue(id, out var job) ? job.Id : throw new KeyNotFoundException()).ToArray();
                         var branches = stage.ElseBranch?.Select(RestoreStage).ToArray();
-                        var gate = stage.Gate?.Type == "condition" ? new ConditionGate(stage.Gate.Expression ?? "", branches) : ToGate(stage.Gate);
+                        var gate = stage.Gate?.Type == "condition" ? new ConditionGate(stage.Gate.Expression ?? "", branches, stage.Gate.ReviewQuestion) : ToGate(stage.Gate);
                         var action = stage.Action is { Type: SubWorkflowChainAction.ActionType } child
                             ? chainMap.TryGetValue(child.WorkflowId ?? Guid.Empty, out var childId)
                                 ? new SubWorkflowChainAction(childId, child.WorkflowName ?? "Sub-workflow")
@@ -315,7 +315,7 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
                                 ? new ParallelWorkflowsChainAction((parallel.Branches ?? []).Select(branch => branch with
                                     { WorkflowId = chainMap.TryGetValue(branch.WorkflowId, out var id) ? id : throw new KeyNotFoundException() }).ToArray(), parallel.OutputField ?? "parallel_results")
                                 : ToAction(stage.Action);
-                        return new ChainStage(jobs, gate, action: action);
+                        return new ChainStage(jobs, gate, action: action, executionPolicy: stage.ExecutionPolicy);
                     }
                     try { stages.AddRange(cm.Stages.Select(RestoreStage)); }
                     catch (KeyNotFoundException) { dangling = true; }
@@ -374,7 +374,7 @@ public sealed class ImportManifestHandler : ICommandHandler<ImportManifestComman
     private static ChainGate? ToGate(ChainGateManifest? gate) => gate?.Type switch
     {
         "wait" => new WaitGate(TimeSpan.FromSeconds(gate.DurationSeconds ?? 0)),
-        "condition" => new ConditionGate(gate.Expression ?? ""),
+        "condition" => new ConditionGate(gate.Expression ?? "", ReviewQuestion: gate.ReviewQuestion),
         _ => null,
     };
 

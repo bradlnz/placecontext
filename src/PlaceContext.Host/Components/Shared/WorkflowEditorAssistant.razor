@@ -7,7 +7,7 @@
         <div><h3 id="workflow-assistant-title">Workflow editor</h3><p>@Workflow.Name</p></div>
         <button class="dcslide-x" aria-label="Close workflow assistant" disabled="@Vm.Locked" @onclick="OnClose"><AppIcon Kind="close" /></button>
     </header>
-    <p class="assistant-hint">Describe the change you want. Edits are saved to this workflow and appear on the canvas.</p>
+    <p class="assistant-hint">Edit this workflow and its jobs, including code and runtimes. Changes are saved and appear on the canvas.</p>
     <details class="assistant-model">
         <summary>Model · @Vm.Conversation.Model</summary>
         <label for="workflow-editor-connection">Connection</label>

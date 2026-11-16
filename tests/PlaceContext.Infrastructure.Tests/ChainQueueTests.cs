@@ -31,7 +31,7 @@ public sealed class ChainQueueTests
             CREATE SCHEMA "{schema}";
             {PostgresProjectAccess.Schema}
             CREATE TABLE job_chains ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "ProjectId" uuid NOT NULL);
-            CREATE TABLE chain_runs ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "Status" text NOT NULL, "FinishedAt" timestamptz, "ProjectId" uuid);
+            CREATE TABLE chain_runs ("Id" uuid PRIMARY KEY, "TenantId" uuid NOT NULL, "Status" text NOT NULL, "FinishedAt" timestamptz, "ProjectId" uuid, "StepsJson" text NOT NULL DEFAULT '[]');
             """, connection))
         {
             await setup.ExecuteNonQueryAsync();
@@ -140,7 +140,7 @@ public sealed class ChainQueueTests
             Assert.DoesNotContain(await queues.ListAsync(project), item => item.Id == queue.Id);
             await Assert.ThrowsAsync<KeyNotFoundException>(() => queues.SubmitAsync(queue.Id, payload, null));
             Assert.NotNull(await queues.GetMessageAsync(queue.Id, receipt.TrackingId));
-            await using var provider = new ServiceCollection().AddScoped(_ => new AppDbContext(options, tenant)).BuildServiceProvider();
+            await using var provider = new ServiceCollection().AddScoped(_ => new AppDbContext(options, tenant)).AddSingleton<IDataEncryptor>(encryptor).BuildServiceProvider();
             using var firstWorker = new ProbeWorker(provider.GetRequiredService<IServiceScopeFactory>());
             using var secondWorker = new ProbeWorker(provider.GetRequiredService<IServiceScopeFactory>());
             var claimed = await Task.WhenAll(firstWorker.Claim(), secondWorker.Claim());
@@ -176,6 +176,15 @@ public sealed class ChainQueueTests
             Assert.Equal("Succeeded", (await queues.GetMessageAsync(queue.Id, receipt.TrackingId))!.Status);
             await Assert.ThrowsAsync<ArgumentException>(() => queues.SaveAsync(null, project, chain, "bad retry", true, 60, 1, 0));
             await queues.SaveAsync(second.Id, project, chain, "retrying", true, 3600, 1, 2, 60);
+            var blocked = await queues.SubmitAsync(second.Id, payload, "safety-blocked");
+            Assert.Equal(blocked.TrackingId, Assert.Single(await firstWorker.Claim()));
+            var blockedSteps = encryptor.Protect("""[{"agentActivity":[{"kind":"execution_blocked"}]}]""", IDataEncryptor.Purpose.ChainRun);
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chain_runs (\"Id\", \"TenantId\", \"Status\", \"FinishedAt\", \"StepsJson\") VALUES ({blocked.ChainRunId}, {tenant.TenantId}, 'Failed', now(), {blockedSteps})");
+            Assert.Empty(await firstWorker.Claim());
+            var rejected = (await queues.GetMessageAsync(second.Id, blocked.TrackingId))!;
+            Assert.Equal("Failed", rejected.Status);
+            Assert.Equal(0, rejected.Attempts);
+            Assert.Equal(blocked.ChainRunId, rejected.ChainRunId);
             var retry = await queues.SubmitAsync(second.Id, payload, "retry-me");
             Assert.Equal(retry.TrackingId, Assert.Single(await firstWorker.Claim()));
             await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO chain_runs (\"Id\", \"TenantId\", \"Status\", \"FinishedAt\") VALUES ({retry.ChainRunId}, {tenant.TenantId}, 'Failed', now())");

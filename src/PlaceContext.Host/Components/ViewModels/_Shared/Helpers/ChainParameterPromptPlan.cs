@@ -26,6 +26,8 @@ public sealed record ChainParameterPromptPlan(
             foreach (var chainStep in stage.Jobs)
             {
                 var job = jobs.FirstOrDefault(item => item.Id == chainStep.JobId);
+                if (job is { Parameters.Count: 0 } && stage == chain.Stages[0])
+                    job = job with { Parameters = RunInputDefaults.Infer(job.InputPayloads) };
                 if (job is { Parameters.Count: > 0 })
                 {
                     steps.Add((executionIndex, job));
@@ -37,11 +39,12 @@ public sealed record ChainParameterPromptPlan(
         var defaults = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (index, job) in steps)
         {
-            var stored = JsonPayloadHelper.FlattenScalars(job.InputPayloads);
+            var stored = JsonPayloadHelper.FlattenScalars(job.InputPayloads, includeStructured: true);
             foreach (var parameter in job.Parameters)
             {
+                var value = stored.GetValueOrDefault(parameter.Name, "");
                 defaults[ParameterPromptState.ChainArgKey(index, parameter.Name)] =
-                    stored.GetValueOrDefault(parameter.Name, "");
+                    string.IsNullOrWhiteSpace(value) ? RunInputDefaults.Generate(parameter) : value;
             }
         }
 

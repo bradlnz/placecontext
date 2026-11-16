@@ -33,7 +33,7 @@ internal static class JobChainMapper
             ElseBranch(stage) is { Count: > 0 } branches
                 ? branches.Select(branch => ToStageView(branch, names)).ToList()
                 : null,
-            ToActionView(stage.Action));
+            ToActionView(stage.Action), stage.ExecutionPolicy);
 
     private static ChainActionView? ToActionView(ChainAction? action) => action switch
     {
@@ -59,8 +59,8 @@ internal static class JobChainMapper
         NoGate => null,
         WaitGate w => new WaitGateView(w.Duration.TotalSeconds),
         ConditionGate c when c.ElseBranch is { Count: > 0 } eb
-            => new ConditionGateView(c.Expression, null), // else-branch mapped separately on the stage
-        ConditionGate c => new ConditionGateView(c.Expression, null),
+            => new ConditionGateView(c.Expression, null, c.ReviewQuestion), // else-branch mapped separately on the stage
+        ConditionGate c => new ConditionGateView(c.Expression, null, c.ReviewQuestion),
         _ => null,
     };
 }

@@ -492,7 +492,7 @@ public sealed partial class JobsViewModel
                 var first = EdInputPayloadsRaw
                     .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .FirstOrDefault();
-                EdPayloadForm = JsonPayloadHelper.FlattenScalars(first);
+                EdPayloadForm = JsonPayloadHelper.FlattenScalars(first is null ? [] : new[] { first }, includeStructured: true);
                 return;
             }
             if (EdPayloadMode == "form")

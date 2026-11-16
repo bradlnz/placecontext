@@ -11,11 +11,25 @@ namespace PlaceContext.Host.Tests;
 public sealed class JobsPaneStateTests
 {
     [Fact]
+    public void Switching_payload_form_preserves_structured_json_inputs()
+    {
+        var vm = new JobsViewModel(null!, new OperationCenter(null!, default), null!, new Navigation(), submissions: new UnusedQueue());
+        vm.EdParams.Add(new() { Name = "metadata", Type = "json" });
+        vm.EdInputPayloadsRaw = """{"metadata":{"active":true,"counts":[1,2]}}""";
+        vm.SwitchPayloadMode("form");
+        vm.SwitchPayloadMode("raw");
+        using var json = System.Text.Json.JsonDocument.Parse(vm.EdInputPayloadsRaw);
+        Assert.True(json.RootElement.GetProperty("metadata").GetProperty("active").GetBoolean());
+        Assert.Equal(2, json.RootElement.GetProperty("metadata").GetProperty("counts").GetArrayLength());
+        vm.DetachEvents();
+    }
+
+    [Fact]
     public async Task Closing_a_run_ignores_an_inflight_detail_response()
     {
         var dispatcher = new DelayedDispatcher();
         var vm = new JobsViewModel(new PlaceContextService(dispatcher, null!, null!, null!),
-            new OperationCenter(null!, default), null!, new Navigation());
+            new OperationCenter(null!, default), null!, new Navigation(), submissions: new UnusedQueue());
         var opening = vm.OpenRunDetailAsync(Guid.NewGuid());
         vm.CloseRunDetail();
         dispatcher.Detail.SetResult(new JobRunDetailView(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Succeeded",
@@ -30,7 +44,7 @@ public sealed class JobsPaneStateTests
     public void Closing_editor_removes_the_deep_link_and_leaving_clears_transient_panes()
     {
         var navigation = new Navigation();
-        var vm = new JobsViewModel(null!, new OperationCenter(null!, default), null!, navigation);
+        var vm = new JobsViewModel(null!, new OperationCenter(null!, default), null!, navigation, submissions: new UnusedQueue());
         vm.NewJob();
         Assert.True(vm.ShowEditor);
         vm.CloseEditor();
@@ -63,6 +77,14 @@ public sealed class JobsPaneStateTests
             }
             throw new NotSupportedException();
         }
+    }
+
+    private sealed class UnusedQueue : PlaceContext.Application.Jobs.IJobRunSubmissionQueue
+    {
+        public Task<PlaceContext.Application.Jobs.JobRunSubmission> EnqueueAsync(Guid projectId, Guid jobId, string? inputPayload,
+            Guid? runId = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<PlaceContext.Application.Jobs.JobRunSubmission?> GetAsync(Guid projectId, Guid jobId, Guid trackingId,
+            CancellationToken ct = default) => throw new NotSupportedException();
     }
 
     private sealed class Navigation : NavigationManager

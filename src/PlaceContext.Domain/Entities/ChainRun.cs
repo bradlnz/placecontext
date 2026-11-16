@@ -194,6 +194,12 @@ public sealed class ChainRun
         };
     }
 
+    public void RecordStepRetry(int index, string reason, DateTimeOffset now)
+    {
+        _steps[index] = _steps[index] with { RetryCount = _steps[index].RetryCount + 1, Error = reason };
+        AppendAgentActivity(index, new(now, "retry", reason));
+    }
+
     public void RepeatFlow(int repeatIndex, string? payload, DateTimeOffset resumeAt, string? overridesJson = null)
     {
         if (repeatIndex <= 0 || repeatIndex >= _steps.Count || _steps[repeatIndex].ActionType != RepeatFlowChainAction.ActionType)
