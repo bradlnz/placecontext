@@ -98,6 +98,8 @@ idempotent where required.
 
 ## Jev reviews
 
+Learn more on the [PlaceContext website](https://placecontext.io).
+
 Connect **Jev** to evaluate workflow evidence against explicit questions and scoring criteria.
 Use the recorded results for deterministic review rules: a Review gate selects a path from a
 confidence threshold, and scoring gates apply configured weights and minimum scores. The rules

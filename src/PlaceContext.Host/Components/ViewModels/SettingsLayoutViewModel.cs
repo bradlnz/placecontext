@@ -17,7 +17,7 @@ public sealed class SettingsLayoutViewModel : PageViewModel
         new("Workspace", "Cloud & usage", "cloud"),
         new("Execution", "Cluster", "cluster"),
         new("Project", "Events", "events"),
-        new("Providers", "Data connections", "connections"),
+        new("Access", "OAuth & SSO", "authentication"),
         new("Providers", "Models", "models"),
         new("Providers", "MCP servers", "mcp"),
         new("Providers", "Communications", "communications"),
@@ -55,7 +55,10 @@ public sealed class SettingsLayoutViewModel : PageViewModel
     public IEnumerable<SettingsItem> VisibleItems => Items.Where(item => item.Path != "cloud" || _managedHosting).Where(item => item.Path == "events"
         ? _canManageEvents && _ui?.CurrentProjectId is not null
         : IsDefaultAdmin || item.Path == ApiTokensPath);
-    public IEnumerable<IGrouping<string, SettingsItem>> VisibleGroups => VisibleItems.GroupBy(item => item.Group);
+    public string Search { get; set; } = "";
+    public IEnumerable<IGrouping<string, SettingsItem>> VisibleGroups => VisibleItems
+        .Where(item => string.IsNullOrWhiteSpace(Search) || (item.Group + " " + item.Label).Contains(Search.Trim(), StringComparison.OrdinalIgnoreCase))
+        .GroupBy(item => item.Group);
     public string ActiveLabel =>
         VisibleItems.FirstOrDefault(item => IsActive(item.Path))?.Label ?? "Choose a section";
     public bool IsDefaultAdmin

@@ -1,0 +1,11 @@
+.authentication-settings { line-height:1.6; }
+.authentication-settings h2 { margin-top:0; }
+.authentication-settings .dccard { margin:20px 0; padding:22px; }
+.authentication-settings h3 { margin:0 0 12px; font-size:18px; }
+.dcfield { margin:16px 0; }
+.dcfield label { display:block; margin-bottom:7px; font-weight:600; }
+.dcfield small { display:block; margin-top:6px; color:var(--text-2); }
+.dcinput { width:100%; box-sizing:border-box; }
+.setup-note { padding:14px; border-left:3px solid var(--brand); background:var(--hover); }
+pre { overflow:auto; padding:16px; background:var(--bg); }
+code { overflow-wrap:anywhere; }

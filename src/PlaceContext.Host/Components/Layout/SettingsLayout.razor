@@ -11,27 +11,21 @@
             <p>Configure workspace access, providers, execution and maintenance.</p>
         </div>
     </header>
-    <nav class="settings-tabs" role="tablist" aria-label="Settings sections">
-        @foreach (var group in Vm.VisibleGroups)
-        {
-            var active = group.Any(item => Vm.IsActive(item.Path));
-            <a href="@(Vm.Href(group.First().Path))" class="dctab @(active ? "active" : null)"
-               role="tab" aria-selected="@(active ? "true" : "false")">
-                @group.Key
-            </a>
-        }
-    </nav>
+    <button type="button" class="dcbtn settings-toggle" aria-controls="settings-sections" aria-expanded="@(Vm.NavigationOpen ? "true" : "false")" @onclick="Vm.ToggleNavigation">@Vm.ActiveLabel · Browse settings</button>
     <div class="settings-content-shell">
-        @foreach (var group in Vm.VisibleGroups.Where(group => group.Any(item => Vm.IsActive(item.Path))))
-        {
-            <nav class="settings-subtabs" aria-label="@group.Key settings">
-                @foreach (var item in group)
-                {
-                    <a href="@(Vm.Href(item.Path))" class="settings-subtab @(Vm.IsActive(item.Path) ? "active" : null)"
-                       aria-current="@(Vm.IsActive(item.Path) ? "page" : null)">@item.Label</a>
-                }
-            </nav>
-        }
+        <nav id="settings-sections" class="settings-nav @(Vm.NavigationOpen ? "open" : null)" aria-label="Settings sections">
+            <input type="search" class="dcinput" aria-label="Find a setting" placeholder="Find a setting…" @bind="Vm.Search" @bind:event="oninput" />
+            @foreach (var group in Vm.VisibleGroups)
+            {
+                <section><h3>@group.Key</h3>
+                    @foreach (var item in group)
+                    {
+                        <a href="@Vm.Href(item.Path)" class="settings-subtab" aria-current="@(Vm.IsActive(item.Path) ? "page" : null)" @onclick="Vm.CloseNavigation">@item.Label</a>
+                    }
+                </section>
+            }
+            @if (!Vm.VisibleGroups.Any()) { <p role="status">No matching settings.</p> }
+        </nav>
         <div class="body">
             @Body
         </div>

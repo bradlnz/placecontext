@@ -1,0 +1,36 @@
+@page "/settings/authentication"
+@layout PlaceContext.Host.Components.Layout.SettingsLayout
+@attribute [Authorize(Policy = Policies.DefaultAdmin)]
+@inject AuthenticationSettingsViewModel Vm
+
+<PageTitle>PlaceContext — OAuth &amp; SSO</PageTitle>
+<div class="authentication-settings">
+    <h2>OAuth &amp; single sign-on</h2>
+    <p>Connect your identity provider for workspace sign-in, or let a trusted application use PlaceContext to sign in its users.</p>
+    <p class="setup-note">Authentication is currently configured by the deployment administrator. These forms generate configuration to merge into the server settings; changes take effect after a restart.</p>
+    <section class="dccard">
+        <h3>Sign in with your identity provider</h3>
+        <p role="status">@(Vm.SsoConfigured ? "SSO configuration is present." : "SSO is not configured.")</p>
+        <p>Register a public client with authorization code and PKCE (S256). The provider must return a verified email address. Keep local administrator access available while testing.</p>
+        <div class="dcfield"><label for="sso-protocol">Provider protocol</label><select id="sso-protocol" class="dcinput" @bind="Vm.Protocol"><option value="OpenIdConnect">OpenID Connect</option><option value="OAuth">OAuth identity service</option></select></div>
+        <div class="dcfield"><label for="sso-authority">Authority URL</label><input id="sso-authority" class="dcinput" placeholder="https://identity.example.com/realms/workspace" @bind="Vm.Authority" /></div>
+        <div class="dcfield"><label for="sso-client">Client ID</label><input id="sso-client" class="dcinput" @bind="Vm.ClientId" /></div>
+        <div class="dcfield"><label for="sso-callback">Callback URL</label><input id="sso-callback" class="dcinput" @bind="Vm.CallbackUrl" /><small>Register this exact HTTPS URL with your provider.</small></div>
+        <button class="dcbtn" @onclick="() => Vm.Generate(true)">Generate SSO configuration</button>
+    </section>
+    <section class="dccard">
+        <h3>Connect a trusted OAuth application</h3>
+        <p>@Vm.TrustedClientCount trusted client(s) configured. Use the <code>identity</code> scope for sign-in; <code>mcp</code> grants access to agent tools.</p>
+        <div class="dcfield"><label for="oauth-name">Application name</label><input id="oauth-name" class="dcinput" @bind="Vm.OAuthName" /></div>
+        <div class="dcfield"><label for="oauth-client">Client ID</label><input id="oauth-client" class="dcinput" @bind="Vm.OAuthClientId" /></div>
+        <div class="dcfield"><label for="oauth-redirect">Allowed redirect URL</label><input id="oauth-redirect" class="dcinput" placeholder="https://app.example.com/callback" @bind="Vm.OAuthRedirect" /><small>Exact match only. Merge this entry with existing trusted clients.</small></div>
+        <button class="dcbtn" @onclick="() => Vm.Generate(false)">Generate OAuth configuration</button>
+        <p>Discovery: <code>@Vm.Origin/.well-known/oauth-authorization-server</code></p>
+    </section>
+    @if (Vm.Error is { } error) { <p role="alert">@error</p> }
+    @if (Vm.Generated is { } generated)
+    { <section class="dccard" aria-label="Generated authentication configuration"><h3>Configuration to apply on the server</h3><pre tabindex="0">@generated</pre><p>Merge the relevant section into your deployment configuration, restart the host, then test sign-in in a separate browser session.</p></section> }
+    <a href="/wiki/sso-and-oauth">Read the OAuth and SSO setup guide</a>
+</div>
+
+@code { protected override void OnInitialized() => Vm.Initialize(); }
