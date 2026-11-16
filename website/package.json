@@ -1,8 +1,0 @@
-{
-  "name": "placecontext-home-docs",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": { "build": "node scripts/build.mjs", "check": "node scripts/check.mjs" },
-  "devDependencies": { "marked": "17.0.5" }
-}
