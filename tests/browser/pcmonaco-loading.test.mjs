@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 
-function setup() {
+function setup(manualFrames = false) {
+  const frames = [];
   const scripts = [], created = [];
-  const host = { children: [], appendChild(child) { this.children.push(child); }, contains(child) { return this.children.includes(child); } };
+  const host = { classList: {add() {}, remove() {}}, setAttribute(name,value) { this[name]=value; }, removeAttribute(name) { delete this[name]; }, children: [], appendChild(child) { this.children.push(child); }, contains(child) { return this.children.includes(child); } };
   const document = {
     activeElement: null,
     getElementById: id => id === 'editor' ? host : null,
@@ -26,6 +27,7 @@ function setup() {
       create(el, {model}) {
         let value = model.getValue();
         return {
+          layout() {}, render() {},
           getModel: () => model,
           getValue: () => value,
           getSelection: () => ({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 }),
@@ -40,24 +42,29 @@ function setup() {
   const window = { require(dependencies, loaded) { window.monaco = monaco; loaded(); } };
   window.require.config = () => {};
   runInNewContext(readFileSync(new URL('../../src/PlaceContext.Host/wwwroot/pcmonaco.js', import.meta.url), 'utf8'), {
-    window, document, console: { warn() {} }, setTimeout, clearTimeout,
+    window, document, console: { warn() {} }, setTimeout, clearTimeout, requestAnimationFrame: callback => manualFrames ? frames.push(callback) : setTimeout(callback, 0),
   });
-  return { window, document, host, scripts, created };
+  return { window, document, host, scripts, created, frames };
 }
 
-test('editor is usable immediately and keeps typed text and the current tab when Monaco arrives', async () => {
+test('skeleton covers loading while preserving values and the current tab when Monaco arrives', async () => {
   const {window, document, host, scripts, created} = setup();
   const loading = window.pcmonaco.init('editor', 'original', 'sql', null, 'first.sql');
   assert.ok(window.pcmonaco.isMounted('editor'));
   assert.equal(window.pcmonaco.getValue('editor'), 'original');
+  assert.equal(host.children[0].hidden, true);
+  assert.equal(host['aria-busy'], 'true');
+  assert.equal(host.children[1].className, 'pcmonaco-loading');
   window.pcmonaco.openFile('editor', 'second.sql', 'second', 'sql');
-  host.children[0].value = 'typed while loading';
+  window.pcmonaco.setValue('editor', 'updated while loading', 'sql');
   host.children[0].selectionStart = host.children[0].selectionEnd = 5;
   document.activeElement = host.children[0];
   scripts[0].onload();
   assert.equal(await loading, true);
-  assert.equal(window.pcmonaco.getValue('editor'), 'typed while loading');
+  assert.equal(window.pcmonaco.getValue('editor'), 'updated while loading');
   assert.equal(created[0].uri, 'file:///editor/second.sql');
+  assert.equal(host['aria-busy'], undefined);
+  assert(!host.children.some(n=>n.className==='pcmonaco-loading'));
 });
 
 test('a failed CDN keeps the working editor and unsaved text', async () => {
@@ -68,6 +75,8 @@ test('a failed CDN keeps the working editor and unsaved text', async () => {
   assert.equal(await loading, true);
   assert.ok(window.pcmonaco.isMounted('editor'));
   assert.equal(window.pcmonaco.getValue('editor'), 'unsaved');
+  assert.equal(host.children[0].hidden, false);
+  assert.equal(host['aria-busy'], undefined);
 });
 
 test('destroying an editor during loading prevents a late rich-editor mount', async () => {
@@ -98,4 +107,25 @@ test('insertText edits a mounted Monaco editor and returns the new text', async 
   await loading;
   assert.equal(window.pcmonaco.insertText('editor', '*'), 'SELECT *');
   assert.equal(window.pcmonaco.getValue('editor'), 'SELECT *');
+});
+
+ test('skeleton remains through Monaco creation until its first rendered frame', async () => {
+  const {window, host, scripts, frames}=setup(true);
+  const loading=window.pcmonaco.init('editor','const ready = true;','javascript');
+  scripts[0].onload();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(host['aria-busy'],'true');
+  frames.shift()();assert.equal(host['aria-busy'],'true');
+  frames.shift()();await loading;
+  assert.equal(host['aria-busy'],undefined);
+ });
+
+test('closing after Monaco creation clears the skeleton and prevents a late mount', async () => {
+ const {window,host,scripts,frames}=setup(true);
+ const loading=window.pcmonaco.init('editor','original','sql');
+ scripts[0].onload();await new Promise(resolve=>setImmediate(resolve));
+ window.pcmonaco.destroy('editor');
+ assert.equal(host['aria-busy'],undefined);
+ frames.shift()();frames.shift()();await loading;
+ assert.equal(window.pcmonaco.getValue('editor'),null);
+ assert(!host.children.some(n=>n.className==='pcmonaco-loading'));
 });

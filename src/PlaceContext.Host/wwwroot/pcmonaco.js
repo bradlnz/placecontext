@@ -8,6 +8,7 @@ window.pcmonaco = (function () {
   const editors = new Map(); // id → Monaco editor
   const models = new Map(); // "id::path" → Monaco TextModel
   const fallbacks = new Map(); // id → plain editor while Monaco loads or is unavailable
+  const loadingViews = new Map(); // id → skeleton shown through Monaco's first render
   const initLocks = new Map(); // id → in-flight init Promise (serializes concurrent inits)
   let loaderPromise = null;
 
@@ -48,7 +49,7 @@ window.pcmonaco = (function () {
     return loaderPromise;
   }
 
-  // A usable plain editor remains available while the optional rich editor loads.
+  // Keep the plain editor's value while loading; expose it only if Monaco fails.
   // The editor follows the portal's theme: light shells get Monaco's white 'vs', dark get
   // a neutral PlaceContext theme — and a toggle mid-session re-themes
   // every mounted editor live.
@@ -485,6 +486,7 @@ window.pcmonaco = (function () {
       const ta = document.createElement('textarea');
       ta.value = value || '';
       ta.readOnly = readOnly;
+      ta.hidden = true;
       ta.spellcheck = false;
       ta.dataset.path = path || '__active__';
       ta.dataset.language = language || 'plaintext';
@@ -495,6 +497,17 @@ window.pcmonaco = (function () {
         "font-family:'JetBrains Mono',ui-monospace,monospace;tab-size:2";
       el.appendChild(ta);
       fallbacks.set(id, ta);
+      const skeleton = document.createElement('div');
+      skeleton.className = 'pcmonaco-loading';
+      skeleton.setAttribute('role', 'status');
+      skeleton.setAttribute('aria-label', 'Loading code editor');
+      skeleton.innerHTML = '<span class="pcmonaco-loading-label">Loading code editor…</span>' +
+        [64, 82, 48, 72, 56, 88, 40, 68].map((width, i) =>
+          `<span aria-hidden="true" class="dcskel dcskel-line" style="width:${width}%;margin-left:${i % 3 ? 20 : 0}px"></span>`).join('');
+      el.classList.add('pcmonaco-pending');
+      el.setAttribute('aria-busy', 'true');
+      el.appendChild(skeleton);
+      loadingViews.set(id, { el, skeleton });
       let upgrading = false;
       try {
         const monaco = await loadMonaco();
@@ -508,7 +521,7 @@ window.pcmonaco = (function () {
         const modelPath = ta.dataset.path,
           currentLanguage = ta.dataset.language;
         upgrading = true;
-        destroy(id);
+        destroy(id, true);
         watchTheme(monaco);
         // Schema may have been pushed (setSqlSchema) before the CDN finished loading — the
         // provider is cheap and guarded, so registering here always wires autocomplete up.
@@ -533,6 +546,12 @@ window.pcmonaco = (function () {
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
         });
         editors.set(id, editor);
+        editor.layout();
+        editor.render(true);
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        if (editors.get(id) !== editor) {
+          return true;
+        }
         if (focused) {
           const from = model.getPositionAt(start),
             to = model.getPositionAt(end);
@@ -553,7 +572,10 @@ window.pcmonaco = (function () {
           el.appendChild(ta);
           fallbacks.set(id, ta);
         }
+        ta.hidden = false;
         return true;
+      } finally {
+        clearLoading(id);
       }
     })();
     initLocks.set(id, lock);
@@ -690,7 +712,17 @@ window.pcmonaco = (function () {
     return null;
   }
 
-  function destroy(id) {
+  function clearLoading(id) {
+    const loading = loadingViews.get(id);
+    if (!loading) return;
+    loading.skeleton.remove();
+    loading.el.classList.remove('pcmonaco-pending');
+    loading.el.removeAttribute('aria-busy');
+    loadingViews.delete(id);
+  }
+
+  function destroy(id, preserveLoading = false) {
+    if (!preserveLoading) clearLoading(id);
     try {
       const ta = fallbacks.get(id);
       if (ta) {
