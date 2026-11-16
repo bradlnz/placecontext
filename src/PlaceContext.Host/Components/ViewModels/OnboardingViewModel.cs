@@ -9,7 +9,8 @@ public sealed class OnboardingViewModel(
     PlaceContextService service,
     NavigationManager navigation,
     PortalUiState ui,
-    IModelConnections modelConnections) : PageViewModel
+    IModelConnections modelConnections,
+    Microsoft.Extensions.Options.IOptions<PlaceContext.Application.Billing.RunBillingDeploymentOptions>? hosting = null) : PageViewModel
 {
     public bool Loading { get; private set; }
     public string? Error { get; private set; }
@@ -34,6 +35,11 @@ public sealed class OnboardingViewModel(
 
     public async Task LoadAsync()
     {
+        if (hosting?.Value.ManagedHosting == true)
+        {
+            navigation.NavigateTo("/cloud", replace: true);
+            return;
+        }
         if (Loading)
         {
             return;

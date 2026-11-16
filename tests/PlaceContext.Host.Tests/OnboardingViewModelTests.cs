@@ -9,6 +9,19 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class OnboardingViewModelTests
 {
+    [Fact]
+    public async Task Managed_onboarding_opens_cloud_status_without_manual_cluster_setup()
+    {
+        var navigation = new Navigation();
+        var queries = new ClusterQueries();
+        var vm = new OnboardingViewModel(new PlaceContextService(queries, null!, null!, null!), navigation,
+            new PortalUiState(), new ModelConnections(), Microsoft.Extensions.Options.Options.Create(
+                new PlaceContext.Application.Billing.RunBillingDeploymentOptions { ManagedHosting = true }));
+        await vm.LoadAsync();
+        Assert.Equal("/cloud", navigation.Destination);
+        Assert.Equal(0, queries.Calls);
+    }
+
     [Theory]
     [InlineData(ExecutionLocation.Cloud, "#cloud-workers")]
     [InlineData(ExecutionLocation.Local, "#install-locally")]
@@ -117,5 +130,6 @@ public sealed class OnboardingViewModelTests
         public string? Destination { get; private set; }
         public Navigation(string path = "/onboarding") => Initialize("https://workspace.example/", "https://workspace.example" + path);
         protected override void NavigateToCore(string uri, bool forceLoad) => Destination = uri;
+        protected override void NavigateToCore(string uri, NavigationOptions options) => Destination = uri;
     }
 }

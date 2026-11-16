@@ -48,8 +48,11 @@ public static class DependencyInjection
         services.Configure<PlaceContextOptions>(configuration.GetSection("PlaceContext"));
         services.Configure<Billing.PaymentBillingOptions>(
             configuration.GetSection("PlaceContext:Stripe"));
-        services.Configure<PlaceContext.Application.Billing.RunBillingDeploymentOptions>(
-            configuration.GetSection("PlaceContext:SaaS"));
+        services.AddOptions<PlaceContext.Application.Billing.RunBillingDeploymentOptions>()
+            .Bind(configuration.GetSection("PlaceContext:SaaS"))
+            .Validate(x => !x.ManagedHosting || x.BasicRunsPerPeriod > 0 && x.StandardRunsPerPeriod > 0
+                && x.BasicAiRequestsPerPeriod > 0 && x.StandardAiRequestsPerPeriod > 0,
+                "Cloud run and AI request limits must be positive.").ValidateOnStart();
         services.Configure<PlaceContext.Application.Billing.WorkspaceSignupOptions>(
             configuration.GetSection("PlaceContext:SaaS:Signup"));
         services.AddScoped<Auth.ManagedWorkspaceSignup>();
@@ -67,7 +70,9 @@ public static class DependencyInjection
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         services.Configure<Connections.ManagedOfficeOAuthOptions>(
             configuration.GetSection("PlaceContext:ManagedOAuth:Microsoft"));
-        services.AddScoped<PlaceContext.Application.Billing.IRunAllowance, Billing.DbRunAllowance>();
+        services.AddScoped<Billing.DbRunAllowance>();
+        services.AddScoped<PlaceContext.Application.Billing.IRunAllowance>(sp => sp.GetRequiredService<Billing.DbRunAllowance>());
+        services.AddTransient<Billing.ManagedAiUsageHandler>();
         services.AddScoped<PlaceContext.Application.Billing.IExecutionCapacity, Billing.DbExecutionCapacity>();
         services.AddScoped<PlaceContext.Application.Billing.IRunBillingPortal, Billing.PaymentBillingPortal>();
         services.AddScoped<PlaceContext.Application.Billing.IRunBillingWebhook, Billing.PaymentBillingWebhook>();
@@ -95,6 +100,7 @@ public static class DependencyInjection
             && sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AgentWorkflows.AgentWorkflowOptions>>().Value.SimulateSubscriptions));
         services.AddScoped<IBuildModelGateway>(sp => sp.GetRequiredService<Build.ModelConnections>());
         services.AddHttpClient("build-model", client => client.Timeout = Timeout.InfiniteTimeSpan)
+            .AddHttpMessageHandler<Billing.ManagedAiUsageHandler>()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
         services.AddScoped<IMcpClientService, McpClientService>();
@@ -114,7 +120,10 @@ public static class DependencyInjection
         services.AddSingleton<ICurrentTenant, CurrentTenant>();
         services.AddSingleton<ICurrentProject, CurrentProject>();
         services.AddScoped<ITenantStore, EfTenantStore>();
-        services.AddSingleton<ITenantRuntime, ClusterTenantRuntime>();
+        services.AddSingleton<ClusterTenantRuntime>();
+        services.AddSingleton<ITenantRuntime>(sp => sp.GetRequiredService<ClusterTenantRuntime>());
+        services.AddScoped<ICloudWorkspace, CloudWorkspace>();
+        services.AddHostedService<CloudWorkspaceProvisioner>();
         services.AddScoped<ITenantSettingsPort, EfTenantSettingsPort>();
         services.AddScoped<ITenantBrandingStore, EfTenantBrandingStore>();
         services.AddScoped<IMenuConfigService, Tenancy.MenuConfigService>();
@@ -198,8 +207,11 @@ public static class DependencyInjection
         // Workloads use Kubernetes in-cluster or the explicitly configured local kubeconfig.
         services.Configure<WorkloadRunnerOptions>(
             configuration.GetSection("PlaceContext:WorkloadRunner"));
-        services.Configure<VirtualMachineEnvironmentOptions>(configuration.GetSection("PlaceContext:Qemu"));
+        services.AddOptions<VirtualMachineEnvironmentOptions>().Bind(configuration.GetSection("PlaceContext:Qemu"))
+            .Validate(x => !configuration.GetValue<bool>("PlaceContext:SaaS:ManagedHosting") || x.Agent.Provider != "codex",
+                "Cloud agents must use a metered HTTP model provider, not a host CLI account.").ValidateOnStart();
         services.AddHttpClient("qemu-agent", client => client.Timeout = TimeSpan.FromSeconds(90))
+            .AddHttpMessageHandler<Billing.ManagedAiUsageHandler>()
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         services.AddSingleton<VirtualMachinePromptAgent>();
         services.AddSingleton<ReviewedVirtualMachineTaskAgent>();
@@ -219,6 +231,7 @@ public static class DependencyInjection
         services.AddTransient<TypeSafeRateLimitHandler>();
         services.AddHttpClient("typesafe", client => client.Timeout = TimeSpan.FromSeconds(90))
             .AddHttpMessageHandler<TypeSafeRateLimitHandler>()
+            .AddHttpMessageHandler<Billing.ManagedAiUsageHandler>()
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         services.AddSingleton<IModelCredentialsResolver, ModelCredentialsResolver>();
         services.AddSingleton<IOutcomeReviewer, ModelOutcomeReviewer>();

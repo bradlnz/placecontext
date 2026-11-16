@@ -1,11 +1,10 @@
-# PlaceContext SaaS: unlimited workflow runs, managed throughput and OAuth
+# PlaceContext Cloud: tenant provisioning, usage limits and OAuth
 
-PlaceContext sells managed hosting, execution throughput, reliability and support
-rather than a monthly number of workflow runs. The open-source, self-hosted
-product ships with **no billing UI**; managed Microsoft authorisation lives under
-Settings → Connections. For managed deployments, plan entitlements are provisioned
-out of band (Stripe subscription events via the webhook below) and enforced by
-the runtime — there is no in-portal billing, checkout or plan-management page.
+Cloud workspaces provision isolated execution resources after verified signup.
+The managed portal provides setup status, Stripe checkout, subscription management
+and usage at `/cloud` (also Settings → Cloud & usage). Self-hosted installations
+keep their existing setup and have no managed usage limits. See
+[managed signup](managed-signup.md) for configuration and the provisioning lifecycle.
 
 ## Plan catalogue
 
@@ -15,13 +14,13 @@ pricing. Actual prices must be configured in Stripe or agreed in signed contract
 | Plan | Price | Workflow/job run starts | Admission throughput | Hosting |
 | --- | ---: | --- | --- | --- |
 | Developer Edition (`free`) | $0 | Unlimited | No application pacing | Self-hosted only, non-production; community support, no managed SLA |
-| Basic Managed (`basic`) | $600/month | Unlimited | **60 starts/minute**, 1 per second | Shared managed; 99.9% SLA target by agreement |
-| Standard Managed (`standard`) | $825/month | Unlimited | **600 starts/minute**, 10 per second | Shared managed; 99.9% SLA target by agreement |
-| Enterprise (`enterprise`) | From $99,000/year | Unlimited | Per-tenant contractual rate | Dedicated or customer-hosted options; up to 99.99% SLA and TAM by contract |
+| Basic Managed (`basic`) | $600/month | 10,000 per billing period by default | **60 starts/minute**, 1 per second | Shared managed; 99.9% SLA target by agreement |
+| Standard Managed (`standard`) | $825/month | 100,000 per billing period by default | **600 starts/minute**, 10 per second | Shared managed; 99.9% SLA target by agreement |
+| Enterprise (`enterprise`) | From $99,000/year | Per-tenant contract allowance | Per-tenant contractual rate | Dedicated or customer-hosted options; up to 99.99% SLA and TAM by contract |
 
 Managed plans also enforce global concurrent top-level execution slots:
 **Basic 2**, **Standard 8**, and **Enterprise contract-specific
-`MaxConcurrentRuns`**. Workers wait for capacity; unlimited runs remain unlimited.
+`MaxConcurrentRuns`**. Workers wait for capacity; new runs stop when the tenant allowance is exhausted.
 Kubernetes tenant namespaces also enforce tier-specific resource quotas:
 Basic 8 pods/4 CPU/8 GiB, Standard 24 pods/16 CPU/32 GiB, Enterprise
 80 pods/64 CPU/128 GiB as guarded defaults (commercial contracts can require
@@ -82,15 +81,15 @@ legacy direct-execution surfaces still need durable submission before launch.
 - A PostgreSQL plan-row `FOR UPDATE` lock coordinates `NextDispatchAt` across replicas.
 - Basic permits at most one new start per second; Standard ten per second; Enterprise is configured per tenant.
 - Every accepted top-level execution gets an immutable ledger key in `billable_runs` and increments the 64-bit reporting counter `UsedRuns`. The ledger also stores the scheduled admission time, so cancelling and retrying the same execution cannot skip its original delay.
-- The old `IncludedRuns` column remains for migration compatibility but is set to **0**, meaning unlimited. It is not used to reject starts.
+- Managed run limits come from operator configuration and are enforced under the same row lock as usage accounting. `IncludedRuns` records the latest admitted limit; zero remains unlimited for self-hosted installations. AI requests have a separate atomic counter and cap.
 - The admission delay happens in the execution handler after committing the reservation; no DB connection is held while waiting.
 - Active subscription status is rechecked after the delay; cancelled/expired paid plans do not start more work.
 - Queued RPC workflow submissions and scheduled jobs already use durable submission queues, but bursty direct UI/API calls may time out while waiting.
 
-Fully durable admission backlog processing, fair tenant scheduling, real workload
-concurrency caps, CPU/memory resource quotas and safeguards against costly
-long-running jobs remain operational work. **Unlimited runs does not imply
-unlimited infrastructure resources, free third-party APIs, or unlimited parallelism.**
+Fair scheduling and capacity planning remain operator responsibilities. Run and AI
+request caps do not guarantee a dollar spending cap or limit third-party API calls
+inside customer code. Existing concurrency limits and Kubernetes resource quotas
+continue to apply independently.
 
 ### Self-hosted versus public hosted SaaS
 
@@ -212,9 +211,9 @@ subdomains can connect automatically in this initial version.
 
 ## Remaining test and launch work
 
-- Verify unlimited ledger accounting and per-tenant pacing against PostgreSQL across replicas.
+- Validate production limits, billing-period resets and tenant pacing under expected load.
 - Confirm direct UI/API backlog timeouts and migrate long waits to fully durable queued admission.
-- Add per-tenant concurrency/pod/resource limits to complement start pacing.
+- Verify the production cluster enforces the configured tenant network policies and resource quotas.
 - Complete live/test-mode Stripe checkout and signed-webhook integration tests.
 - Complete Microsoft consent, callback and refresh tests with a configured provider.
 - Finalize SLA remedies, billing currency, VAT/GST treatment and enterprise operations.

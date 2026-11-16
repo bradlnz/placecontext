@@ -1,7 +1,7 @@
 namespace PlaceContext.Application.Billing;
 
-/// <summary>Each top-level workflow or standalone job start is metered for reporting.
-/// Counts are unlimited; managed tiers pace execution starts instead of rejecting volume.
+/// <summary>Each top-level workflow or standalone job start reserves tenant usage.
+/// Managed tiers enforce period allowances and pace execution starts.
 /// Workflow child jobs, retries and resumptions reuse the original key.</summary>
 public interface IRunAllowance
 {

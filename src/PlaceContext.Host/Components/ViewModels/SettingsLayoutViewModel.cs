@@ -14,6 +14,7 @@ public sealed class SettingsLayoutViewModel : PageViewModel
         new("Workspace", "Branding", "branding"),
         new("Workspace", "Navigation", "menu"),
         new("Workspace", "Timezone", "locality"),
+        new("Workspace", "Cloud & usage", "cloud"),
         new("Execution", "Cluster", "cluster"),
         new("Project", "Events", "events"),
         new("Providers", "Data connections", "connections"),
@@ -30,25 +31,28 @@ public sealed class SettingsLayoutViewModel : PageViewModel
     private readonly ICurrentUser _currentUser;
     private readonly PortalUiState? _ui;
     private bool _canManageEvents;
+    private readonly bool _managedHosting;
 
     public SettingsLayoutViewModel(
         NavigationManager navigation,
         IServiceScopeFactory scopeFactory,
         ICurrentUser currentUser,
-        PortalUiState? ui = null
+        PortalUiState? ui = null,
+        Microsoft.Extensions.Options.IOptions<PlaceContext.Application.Billing.RunBillingDeploymentOptions>? hosting = null
     )
     {
         _navigation = navigation;
         _scopeFactory = scopeFactory;
         _currentUser = currentUser;
         _ui = ui;
+        _managedHosting = hosting?.Value.ManagedHosting == true;
     }
 
     public bool NavigationOpen
     {
         get; private set;
     }
-    public IEnumerable<SettingsItem> VisibleItems => Items.Where(item => item.Path == "events"
+    public IEnumerable<SettingsItem> VisibleItems => Items.Where(item => item.Path != "cloud" || _managedHosting).Where(item => item.Path == "events"
         ? _canManageEvents && _ui?.CurrentProjectId is not null
         : IsDefaultAdmin || item.Path == ApiTokensPath);
     public IEnumerable<IGrouping<string, SettingsItem>> VisibleGroups => VisibleItems.GroupBy(item => item.Group);
@@ -67,6 +71,7 @@ public sealed class SettingsLayoutViewModel : PageViewModel
     {
         var currentPath = new Uri(_navigation.Uri).AbsolutePath;
         return currentPath.Equals(Href(path), StringComparison.OrdinalIgnoreCase)
+            || path == "cloud" && currentPath.Equals("/cloud", StringComparison.OrdinalIgnoreCase)
             || path == "cluster" && currentPath.Equals("/cluster", StringComparison.OrdinalIgnoreCase);
     }
 

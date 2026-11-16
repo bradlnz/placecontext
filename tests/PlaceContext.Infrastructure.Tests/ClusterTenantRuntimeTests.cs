@@ -13,6 +13,20 @@ namespace PlaceContext.Infrastructure.Tests;
 public sealed class ClusterTenantRuntimeTests
 {
     [Fact]
+    public async Task Signup_prepares_resources_without_granting_permission_to_execute()
+    {
+        using var api = new ClusterApi();
+        using var client = new Kubernetes(new KubernetesClientConfiguration { Host = "http://localhost" }, api);
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var runtime = new ClusterTenantRuntime(client, cache, hosting: Options.Create(
+            new PlaceContext.Application.Billing.RunBillingDeploymentOptions { ManagedHosting = true }));
+        var id = Guid.NewGuid();
+        Assert.Equal($"pc-tenant-{id:N}", await runtime.PrepareAsync(id, "basic", default));
+        // A prepared/cached namespace is not an execution entitlement.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.EnsureAsync(id));
+    }
+
+    [Fact]
     public async Task Each_tenant_gets_a_restricted_namespace_and_retries_finish_partial_provisioning()
     {
         using var api = new ClusterApi { FailQuotaOnce = true };

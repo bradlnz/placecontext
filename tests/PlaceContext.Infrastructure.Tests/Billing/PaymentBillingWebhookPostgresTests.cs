@@ -17,7 +17,7 @@ namespace PlaceContext.Infrastructure.Tests.Billing;
 public sealed class PaymentBillingWebhookPostgresTests
 {
     [AgentPostgresFact]
-    public async Task Signed_subscription_grants_unlimited_runs_and_duplicates_cannot_reapply()
+    public async Task Signed_subscription_preserves_usage_on_updates_and_resets_it_on_renewal()
     {
         var schema = "stripe_evt_" + Guid.NewGuid().ToString("N");
         var cs = new NpgsqlConnectionStringBuilder(
@@ -54,7 +54,7 @@ public sealed class PaymentBillingWebhookPostgresTests
             });
             var webhook = new PaymentBillingWebhook(db, options);
             var now = DateTimeOffset.UtcNow;
-            string Event(string eventId, string status, string price, string subscription)
+            string Event(string eventId, string status, string price, string subscription, int periodOffset = 0)
                 => JsonSerializer.Serialize(new
                 {
                     id = eventId,
@@ -76,8 +76,8 @@ public sealed class PaymentBillingWebhookPostgresTests
                                 data = new[] { new
                                 {
                                     price = new { id = price }, quantity = 1,
-                                    current_period_start = now.AddDays(-2).ToUnixTimeSeconds(),
-                                    current_period_end = now.AddDays(28).ToUnixTimeSeconds()
+                                    current_period_start = now.AddDays(-2 + periodOffset).ToUnixTimeSeconds(),
+                                    current_period_end = now.AddDays(28 + periodOffset).ToUnixTimeSeconds()
                                 } }
                             }
                         }
@@ -99,6 +99,18 @@ public sealed class PaymentBillingWebhookPostgresTests
             Assert.Equal(0, state.IncludedRuns);
             Assert.Equal("active", state.Status);
             Assert.Equal(1, await db.StripeBillingEvents.CountAsync());
+            await db.TenantRunPlans.ExecuteUpdateAsync(s => s.SetProperty(x => x.UsedRuns, 10L)
+                .SetProperty(x => x.UsedAiRequests, 12L));
+            var upgrade = Event("evt_upgrade", "active", "price_standard", "sub_one");
+            await webhook.ApplyAsync(upgrade, SignedHeader(upgrade));
+            state = await db.TenantRunPlans.AsNoTracking().SingleAsync();
+            Assert.Equal(10, state.UsedRuns);
+            Assert.Equal(12, state.UsedAiRequests);
+            var renewal = Event("evt_renewal", "active", "price_standard", "sub_one", 30);
+            await webhook.ApplyAsync(renewal, SignedHeader(renewal));
+            state = await db.TenantRunPlans.AsNoTracking().SingleAsync();
+            Assert.Equal(0, state.UsedRuns);
+            Assert.Equal(0, state.UsedAiRequests);
 
             var unknown = Event("evt_unknown", "active", "price_untrusted", "sub_one");
             await Assert.ThrowsAsync<InvalidOperationException>(() =>

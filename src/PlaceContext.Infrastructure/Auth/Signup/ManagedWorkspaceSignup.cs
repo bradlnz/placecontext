@@ -122,6 +122,12 @@ public sealed class ManagedWorkspaceSignup(
                 TimeZoneId = "UTC",
                 CreatedAt = now
             });
+            db.CloudWorkspaces.Add(new CloudWorkspaceRow
+            {
+                TenantId = tenantId,
+                Plan = pending.Plan,
+                NextAttemptAt = now
+            });
             db.Users.Add(new UserRow
             {
                 Id = userId,

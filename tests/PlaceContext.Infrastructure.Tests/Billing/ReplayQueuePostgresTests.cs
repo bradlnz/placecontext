@@ -7,6 +7,8 @@ using PlaceContext.Infrastructure.Scheduling;
 using PlaceContext.Infrastructure.Tests.AgentWorkflows;
 using PlaceContext.TestSupport;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Billing;
+using Microsoft.Extensions.Options;
 
 namespace PlaceContext.Infrastructure.Tests.Billing;
 
@@ -59,6 +61,17 @@ public sealed class ReplayQueuePostgresTests
             var duplicate = await queue.EnqueueAsync(project, chain, "{\"retry\":true}",
                 "replay:one", replayOriginalRunId: original, replayFromStepIndex: 1);
             Assert.Equal(first.TrackingId, duplicate.TrackingId);
+            var exhausted = new DbJobChainSubmissionQueue(db, tenant, new CurrentUser(), new FakeDataEncryptor(), new Allowed(),
+                Options.Create(new RunBillingDeploymentOptions { ManagedHosting = true }), new ExhaustedAllowance());
+            Assert.Equal(first.TrackingId, (await exhausted.EnqueueAsync(project, chain, "{\"retry\":true}",
+                "replay:one", replayOriginalRunId: original, replayFromStepIndex: 1)).TrackingId);
+            await Assert.ThrowsAsync<TenantUsageLimitException>(() => exhausted.EnqueueAsync(project, chain, "{}", "new"));
+            await using (var transaction = await db.Database.BeginTransactionAsync())
+            {
+                await Assert.ThrowsAsync<TenantUsageLimitException>(() => exhausted.EnqueueAsync(project, chain, "{}", "external-transaction"));
+                await transaction.CommitAsync();
+            }
+            Assert.Equal(1L, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS \"Value\" FROM rpc_chain_submissions").SingleAsync());
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 queue.EnqueueAsync(project, chain, "{\"retry\":true}", "replay:one",
                     replayOriginalRunId: original, replayFromStepIndex: 2));

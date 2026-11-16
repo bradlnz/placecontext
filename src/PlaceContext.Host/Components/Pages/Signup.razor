@@ -109,17 +109,17 @@
                     <legend>Choose your managed plan</legend>
                     <label class="plan-option">
                         <input type="radio" name="plan" value="basic" checked="@(SelectedPlan != RunPlans.Standard)" />
-                        <span><strong>Basic Managed</strong><small>60 starts/min · 2 active executions</small></span>
+                        <span><strong>Basic Managed</strong><small>@Hosting.Value.BasicRunsPerPeriod.ToString("N0") runs/period · 2 active executions</small></span>
                         <b>$600/mo</b>
                     </label>
                     <label class="plan-option">
                         <input type="radio" name="plan" value="standard" checked="@(SelectedPlan == RunPlans.Standard)" />
-                        <span><strong>Standard Managed</strong><small>600 starts/min · 8 active executions</small></span>
+                        <span><strong>Standard Managed</strong><small>@Hosting.Value.StandardRunsPerPeriod.ToString("N0") runs/period · 8 active executions</small></span>
                         <b>$825/mo</b>
                     </label>
                 </fieldset>
                 <p class="signup-note">No payment is taken during registration. After email verification you'll
-                    sign in to your new workspace. Developer Edition is free and self-hosted.</p>
+                    sign in while we prepare your workspace. Activate a subscription to run workflows and jobs. Developer Edition is free and self-hosted.</p>
                 <button type="submit" class="dcbtn primary signup-button">Create workspace <span aria-hidden="true">→</span></button>
             </form>
         }

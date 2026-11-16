@@ -46,6 +46,7 @@ public sealed class ManagedWorkspaceSignupPostgresTests
             Assert.Equal(0, await db.Tenants.CountAsync());
             Assert.Equal(0, await db.Users.IgnoreQueryFilters().CountAsync());
             Assert.Equal(0, await db.Projects.IgnoreQueryFilters().CountAsync());
+            Assert.Empty(await db.CloudWorkspaces.IgnoreQueryFilters().ToListAsync());
 
             var pending = await db.PendingWorkspaceSignups.SingleAsync();
             Assert.NotEqual(input.Password, pending.PasswordHash);
@@ -58,6 +59,11 @@ public sealed class ManagedWorkspaceSignupPostgresTests
             var activation = await service.VerifyAsync(verificationToken);
             Assert.Equal("acme-ops", activation.Slug);
             Assert.NotEqual(verificationToken, activation.ExchangeCode);
+            var setup = await db.CloudWorkspaces.IgnoreQueryFilters().SingleAsync();
+            Assert.Equal("pending", setup.State);
+            Assert.Equal(RunPlans.Standard, setup.Plan);
+            Assert.Equal(0, setup.Attempts);
+            Assert.Empty(await db.TenantRunPlans.IgnoreQueryFilters().ToListAsync());
             Assert.Null(CurrentTenant.Current);
             var tenant = await db.Tenants.SingleAsync();
             Assert.Equal(input.WorkspaceName, tenant.Name);

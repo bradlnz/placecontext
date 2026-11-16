@@ -5,6 +5,8 @@ using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Scheduling;
 using PlaceContext.Infrastructure.Tests.AgentWorkflows;
 using PlaceContext.TestSupport;
+using PlaceContext.Application.Billing;
+using Microsoft.Extensions.Options;
 
 namespace PlaceContext.Infrastructure.Tests.Billing;
 
@@ -52,6 +54,10 @@ public sealed class ManagedJobSubmissionPostgresTests
             Assert.Equal(runId, receipt.RunId);
             var duplicate = await queue.EnqueueAsync(projectId, jobId, "{\"input\":42}", runId);
             Assert.Equal(receipt.TrackingId, duplicate.TrackingId);
+            var exhausted = new DbJobRunSubmissionQueue(db, tenant, encryptor,
+                Options.Create(new RunBillingDeploymentOptions { ManagedHosting = true }), new ExhaustedAllowance());
+            Assert.Equal(receipt.TrackingId, (await exhausted.EnqueueAsync(projectId, jobId, "{\"input\":42}", runId)).TrackingId);
+            await Assert.ThrowsAsync<TenantUsageLimitException>(() => exhausted.EnqueueAsync(projectId, jobId, "{}"));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 queue.EnqueueAsync(projectId, jobId, "{\"input\":43}", runId));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>

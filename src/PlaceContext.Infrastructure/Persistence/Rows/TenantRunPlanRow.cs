@@ -1,6 +1,6 @@
 namespace PlaceContext.Infrastructure.Persistence;
 
-/// <summary>Tenant subscription with unlimited usage. NextDispatchAt is a
+/// <summary>Tenant subscription usage. NextDispatchAt is a
 /// distributed, row-locked managed start-pacing cursor.</summary>
 public sealed class TenantRunPlanRow : ITenantOwned
 {
@@ -18,6 +18,7 @@ public sealed class TenantRunPlanRow : ITenantOwned
     {
         get; set;
     }
+    public long UsedAiRequests { get; set; }
     public DateTimeOffset PeriodStart
     {
         get; set;

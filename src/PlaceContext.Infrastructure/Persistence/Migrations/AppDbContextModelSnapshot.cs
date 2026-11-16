@@ -2206,6 +2206,19 @@ namespace PlaceContext.Infrastructure.Migrations
                     b.ToTable("tenants", (string)null);
                 });
 
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CloudWorkspaceRow", b =>
+                {
+                    b.Property<Guid>("TenantId").IsConcurrencyToken().HasColumnType("uuid");
+                    b.Property<string>("Plan").IsRequired().HasColumnType("text");
+                    b.Property<string>("State").IsRequired().HasColumnType("text");
+                    b.Property<int>("Attempts").HasColumnType("integer");
+                    b.Property<DateTimeOffset>("NextAttemptAt").HasColumnType("timestamp with time zone");
+                    b.Property<Guid?>("LeaseToken").HasColumnType("uuid");
+                    b.HasKey("TenantId");
+                    b.HasIndex("NextAttemptAt");
+                    b.ToTable("cloud_workspaces", (string)null);
+                });
+
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.TenantRunPlanRow", b =>
                 {
                     b.Property<Guid>("TenantId")
@@ -2241,6 +2254,8 @@ namespace PlaceContext.Infrastructure.Migrations
 
                     b.Property<string>("StripeSubscriptionId")
                         .HasColumnType("text");
+
+                    b.Property<long>("UsedAiRequests").HasColumnType("bigint");
 
                     b.Property<long>("UsedRuns")
                         .HasColumnType("bigint");
@@ -2543,6 +2558,15 @@ namespace PlaceContext.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("workflow_demo_shares", (string)null);
+                });
+
+            modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.CloudWorkspaceRow", b =>
+                {
+                    b.HasOne("PlaceContext.Infrastructure.Persistence.TenantRow", null)
+                        .WithOne()
+                        .HasForeignKey("PlaceContext.Infrastructure.Persistence.CloudWorkspaceRow", "TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PlaceContext.Infrastructure.Persistence.ArtifactShareTokenRow", b =>

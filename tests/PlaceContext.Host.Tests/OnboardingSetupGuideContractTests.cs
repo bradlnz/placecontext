@@ -3,7 +3,7 @@ namespace PlaceContext.Host.Tests;
 public sealed class OnboardingSetupGuideContractTests
 {
     [Fact]
-    public void First_login_setup_focuses_on_execution_and_leaves_plans_out_of_the_portal()
+    public void Self_hosted_setup_stays_manual_and_managed_signup_opens_cloud_setup()
     {
         var onboarding = Read("src/PlaceContext.Host/Components/Pages/Onboarding.razor");
         var cluster = Read("src/PlaceContext.Host/Components/Pages/Cluster.razor");
@@ -18,7 +18,7 @@ public sealed class OnboardingSetupGuideContractTests
         Assert.Contains("This guide does not move workloads", onboarding);
         Assert.Contains("@page \"/settings/cluster\"", cluster);
         Assert.Contains("destination == \"/\" ? \"/onboarding\"", auth);
-        Assert.Contains("/onboarding", signup);
+        Assert.Contains("Redirect(\"/cloud\")", signup);
     }
 
     private static string Read(string relativePath)

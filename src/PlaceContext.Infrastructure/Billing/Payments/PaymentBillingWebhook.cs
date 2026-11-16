@@ -191,6 +191,8 @@ public sealed class PaymentBillingWebhook(AppDbContext db, IOptions<PaymentBilli
                 "IncludedRuns" = EXCLUDED."IncludedRuns",
                 "UsedRuns" = CASE WHEN tenant_run_plans."PeriodStart" = EXCLUDED."PeriodStart"
                     THEN tenant_run_plans."UsedRuns" ELSE 0 END,
+                "UsedAiRequests" = CASE WHEN tenant_run_plans."PeriodStart" = EXCLUDED."PeriodStart"
+                    THEN tenant_run_plans."UsedAiRequests" ELSE 0 END,
                 "PeriodStart" = EXCLUDED."PeriodStart",
                 "PeriodEnd" = EXCLUDED."PeriodEnd",
                 "StripeCustomerId" = EXCLUDED."StripeCustomerId",

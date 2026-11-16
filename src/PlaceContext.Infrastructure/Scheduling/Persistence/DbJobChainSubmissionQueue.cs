@@ -72,8 +72,9 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         {
             throw new ArgumentException("Chain id is required.", nameof(chainId));
         }
-        if (_hosting?.Value.ManagedHosting == true
-                    && (_allowance is null || !(await _allowance.GetAsync(ct)).CanRun))
+        var usage = _hosting?.Value.ManagedHosting == true && _allowance is not null
+            ? await _allowance.GetAsync(ct) : null;
+        if (_hosting?.Value.ManagedHosting == true && usage?.SubscriptionActive != true)
         {
             throw new InvalidOperationException("A managed subscription must be active before queuing workflows.");
         }
@@ -158,9 +159,9 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
                     ("Id", "TenantId", "ProjectId", "ChainId", "ChainRunId", "IdempotencyKey", "QueueId",
                      "InputPayload", "StepPayloadOverrides", "RequestDigest", "ReplayOfRunId", "ReplayFromStepIndex", "SubmitterUserId", "SubmitterRole", "Status", "Attempts",
                      "SubmittedAt", "NextAttemptAt", "ExpiresAt", "ReceiptRetentionDays", "MessageTtlSeconds", "MaxAttempts", "RetryDelaySeconds")
-                VALUES
-                    (@id, @tenant, @project, @chain, @run, @key, @queue,
-                     @payload, @overrides, @digest, @original, @from, @user, @role, 'Queued', 0, now(), COALESCE(@available, now()), COALESCE(@available, now()) + make_interval(secs => @ttl), @retention, @ttl, @maxAttempts, @retryDelay)
+                SELECT @id, @tenant, @project, @chain, @run, @key, @queue,
+                     @payload, @overrides, @digest, @original, @from, @user, @role, 'Queued', 0, now(), COALESCE(@available, now()), COALESCE(@available, now()) + make_interval(secs => @ttl), @retention, @ttl, @maxAttempts, @retryDelay
+                WHERE @canStart
                 ON CONFLICT ("TenantId", "IdempotencyKey")
                     WHERE "IdempotencyKey" IS NOT NULL
                 DO NOTHING
@@ -177,6 +178,7 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
             LIMIT 1
             """;
         command.Parameters.AddWithValue("id", trackingId);
+        command.Parameters.AddWithValue("canStart", usage?.CanRun ?? true);
         command.Parameters.AddWithValue("tenant", _tenant.TenantId);
         command.Parameters.AddWithValue("project", projectId);
         command.Parameters.AddWithValue("chain", chainId);
@@ -201,6 +203,8 @@ public sealed class DbJobChainSubmissionQueue : IJobChainSubmissionQueue
         await using var reader = await command.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
         {
+            if (usage is { CanRun: false })
+                throw new TenantUsageLimitException("This workspace has reached its run limit. Change plans or wait for the next billing period.");
             throw new InvalidOperationException("The chain submission could not be persisted.");
         }
         var result = Read(reader);

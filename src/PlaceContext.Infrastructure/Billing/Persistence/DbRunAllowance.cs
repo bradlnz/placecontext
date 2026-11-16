@@ -8,8 +8,7 @@ using PlaceContext.Infrastructure.Persistence;
 
 namespace PlaceContext.Infrastructure.Billing;
 
-/// <summary>Atomic, unlimited per-tenant usage accounting and per-plan start pacing.
-/// Row locks coordinate the next run start across replicas; no run volume is blocked.</summary>
+/// <summary>Atomic tenant usage limits and start pacing across replicas.</summary>
 public sealed class DbRunAllowance(
     AppDbContext db, ICurrentTenant tenant, IClock clock,
     IOptions<RunBillingDeploymentOptions>? deployment = null,
@@ -19,6 +18,23 @@ public sealed class DbRunAllowance(
         => new(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
 
     private bool Hosted => deployment?.Value.ManagedHosting ?? false;
+
+    private (int? Runs, int? AiRequests) LimitsFor(string plan)
+    {
+        if (!Hosted || plan == RunPlans.Developer) return (null, null);
+        var config = deployment!.Value;
+        var limits = plan switch
+        {
+            RunPlans.Basic or "starter" => (config.BasicRunsPerPeriod, config.BasicAiRequestsPerPeriod),
+            RunPlans.Standard or "growth" or "business" => (config.StandardRunsPerPeriod, config.StandardAiRequestsPerPeriod),
+            RunPlans.Enterprise when stripe?.Value.ContractFor(tenant.TenantId) is { } contract
+                => (contract.RunsPerPeriod, contract.AiRequestsPerPeriod),
+            _ => throw new InvalidOperationException("Managed usage limits must be configured for this tenant.")
+        };
+        if (limits.Item1 <= 0 || limits.Item2 <= 0)
+            throw new InvalidOperationException("Managed usage limits must be positive.");
+        return limits;
+    }
 
     private int RateFor(string plan) => plan == RunPlans.Enterprise
         ? stripe?.Value.ContractFor(tenant.TenantId)?.MaxStartsPerMinute
@@ -40,8 +56,10 @@ public sealed class DbRunAllowance(
         var expiredFree = free && plan.PeriodEnd <= now;
         var status = free && Hosted ? "self_hosted_only" : plan.Status;
         int? startsPerMinute;
+        (int? Runs, int? AiRequests) limits = (null, null);
         try
         {
+            limits = LimitsFor(plan.Plan);
             var rate = RateFor(plan.Plan);
             startsPerMinute = rate == 0 ? null : rate;
         }
@@ -59,7 +77,30 @@ public sealed class DbRunAllowance(
         return new(plan.Plan, status, expiredFree ? 0 : plan.UsedRuns,
             expiredFree ? MonthStart(now) : plan.PeriodStart,
             expiredFree ? MonthStart(now).AddMonths(1) : plan.PeriodEnd,
-            startsPerMinute, !string.IsNullOrWhiteSpace(plan.StripeCustomerId));
+            startsPerMinute, !string.IsNullOrWhiteSpace(plan.StripeCustomerId),
+            limits.Runs, plan.UsedAiRequests, limits.AiRequests);
+    }
+
+    public async Task ReserveAiRequestAsync(CancellationToken ct = default)
+    {
+        if (!Hosted) return;
+        RequireTenant();
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var plan = await db.TenantRunPlans.FromSqlInterpolated(
+            $"""SELECT * FROM tenant_run_plans WHERE "TenantId" = {tenant.TenantId} FOR UPDATE""")
+            .SingleOrDefaultAsync(ct);
+        if (plan is null) throw new TenantUsageLimitException("An active Cloud subscription is required for AI requests.");
+        await db.Entry(plan).ReloadAsync(ct);
+        var now = clock.UtcNow;
+        if (plan.Plan == RunPlans.Developer || plan.Status is not ("active" or "trialing")
+            || now < plan.PeriodStart || now >= plan.PeriodEnd)
+            throw new TenantUsageLimitException("An active Cloud subscription is required for AI requests.");
+        var limit = LimitsFor(plan.Plan).AiRequests;
+        if (plan.UsedAiRequests >= limit)
+            throw new TenantUsageLimitException("This workspace has reached its AI request limit. Change plans or wait for the next billing period.");
+        checked { plan.UsedAiRequests++; }
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
     }
 
     public async Task ReserveAsync(Guid projectId, Guid executionId, string kind,
@@ -125,6 +166,9 @@ public sealed class DbRunAllowance(
                     return;
                 }
                 {
+                    var limit = LimitsFor(plan.Plan).Runs;
+                    if (limit is not null && plan.UsedRuns >= limit)
+                        throw new TenantUsageLimitException("This workspace has reached its run limit. Change plans or wait for the next billing period.");
                     var startsPerMinute = RateFor(plan.Plan);
                     if (startsPerMinute > 0)
                     {
@@ -139,7 +183,7 @@ public sealed class DbRunAllowance(
                         spaced = true;
                     }
 
-                    plan.IncludedRuns = RunPlans.Unlimited;
+                    plan.IncludedRuns = limit ?? RunPlans.Unlimited;
                     checked
                     {
                         plan.UsedRuns++;
@@ -176,7 +220,8 @@ public sealed class DbRunAllowance(
                                     ? TimeSpan.FromMinutes(1) : remaining, ct);
             }
             // A paid run that waited must not launch after its subscription lapses.
-            if (!(await GetAsync(ct)).CanRun)
+            // This run already owns a slot, including when it consumed the last available run.
+            if (!(await GetAsync(ct)).SubscriptionActive)
             {
                 throw new InvalidOperationException(
                                 "The subscription became inactive before this queued run could start.");

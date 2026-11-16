@@ -33,6 +33,7 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
     }
     public DbSet<PendingWorkspaceSignupRow> PendingWorkspaceSignups => Set<PendingWorkspaceSignupRow>();
     public DbSet<TenantRunPlanRow> TenantRunPlans => Set<TenantRunPlanRow>();
+    public DbSet<CloudWorkspaceRow> CloudWorkspaces => Set<CloudWorkspaceRow>();
     public DbSet<BillableRunRow> BillableRuns => Set<BillableRunRow>();
     public DbSet<PaymentBillingEventRow> StripeBillingEvents => Set<PaymentBillingEventRow>();
     public DbSet<ManagedOAuthConnectionRow> ManagedOAuthConnections => Set<ManagedOAuthConnectionRow>();
@@ -183,6 +184,14 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.HasIndex(x => x.Slug).HasDatabaseName("ix_pending_signup_slug");
         });
 
+        b.Entity<CloudWorkspaceRow>(e =>
+        {
+            e.ToTable("cloud_workspaces");
+            e.HasKey(x => x.TenantId);
+            e.HasOne<TenantRow>().WithOne().HasForeignKey<CloudWorkspaceRow>(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.NextAttemptAt);
+            e.HasQueryFilter(x => _tenant.IsResolved && _tenant.TenantId != Guid.Empty && x.TenantId == _tenant.TenantId);
+        });
         b.Entity<TenantRunPlanRow>(e =>
         {
             e.ToTable("tenant_run_plans");

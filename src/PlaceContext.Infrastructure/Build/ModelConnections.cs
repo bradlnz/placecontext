@@ -16,7 +16,8 @@ namespace PlaceContext.Infrastructure.Build;
 
 public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser user, ICurrentTenant tenant,
     IPermissionService permissions, IMembershipService members, IDataEncryptor encryption,
-    IHttpClientFactory clients, LocalCliModels? cli = null) : IModelConnections, IBuildModelGateway, IAgentModelGateway
+    IHttpClientFactory clients, LocalCliModels? cli = null,
+    Microsoft.Extensions.Options.IOptions<PlaceContext.Application.Billing.RunBillingDeploymentOptions>? hosting = null) : IModelConnections, IBuildModelGateway, IAgentModelGateway
 {
     private const string Purpose = "model.credentials.v1";
     private async Task CheckAsync(bool admin, CancellationToken ct)
@@ -31,7 +32,7 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
         }
     }
     private async Task<bool> CanUseLocalCliAsync(CancellationToken ct) =>
-        tenant.Slug == "default" && await members.IsDefaultAdminAsync(user.UserId, ct);
+        hosting?.Value.ManagedHosting != true && tenant.Slug == "default" && await members.IsDefaultAdminAsync(user.UserId, ct);
 
     private async Task CheckLocalCliAsync(CancellationToken ct)
     {

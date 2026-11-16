@@ -23,8 +23,14 @@ public sealed class ClusterTenantRuntime(
 
     public async Task<string> EnsureAsync(Guid tenantId, CancellationToken ct = default)
     {
-        var name = Namespace(tenantId);
         var plan = await GetDeploymentTierAsync(tenantId, ct);
+        return await PrepareAsync(tenantId, plan, ct);
+    }
+
+    // Only the trusted signup worker prepares resources without an execution entitlement.
+    internal async Task<string> PrepareAsync(Guid tenantId, string plan, CancellationToken ct)
+    {
+        var name = Namespace(tenantId);
         // Cache only the most recently reconciled tier. Upgrades/downgrades must
         // update the namespace quota instead of preserving a stale profile.
         if (cache.TryGetValue("tenant-runtime:" + name, out string? cached)

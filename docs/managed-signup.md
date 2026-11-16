@@ -14,10 +14,14 @@
   transaction, including the standard tenant access roles. A second, short-lived,
 one-use code signs in on the **tenant's own
   host**. No wildcard-domain auth cookies are required.
-- **First run**: new owners land at \`/onboarding\` (cluster setup). There is no
-  in-portal billing page — a managed deployment activates paid execution
-  entitlements out of band via Stripe checkout and its signed webhook before
-  hosted runs are allowed.
+- **Cloud setup**: verification also queues a durable provisioning record in the same transaction.
+  Owners land at `/cloud`, where setup progresses through Setting up, Ready or Setup failed.
+  The worker prepares the tenant's restricted Kubernetes namespace and plan resource quota
+  without launching workloads. Failures retry automatically up to five attempts with backoff;
+  workspace administrators can retry after that. Expired worker leases are recovered.
+- **Activation and usage**: the Cloud page provides Stripe checkout, subscription management,
+  and run/AI request usage. Only a signed subscription webhook enables execution;
+  signup, provisioning success and checkout redirects do not grant entitlements.
 - **Existing tenant**: email/password sign-in continues to support the existing
   provider-mandated 2FA flow, invited members and configured company SSO. Invalid
   credentials remain generic.
@@ -75,3 +79,46 @@ behavior, signup abuse controls, real Stripe Checkout/webhook and production
 TLS, DNS, monitoring and cleanup/retention of expired pending records.
 Public registration is a separate **launch toggle**; the code merge does not
 automatically enable it.
+
+## Cloud limits and provisioning
+
+The Cloud offering uses a shared platform and database with tenant-scoped data and
+separate Kubernetes execution namespaces. It does not create a dedicated application
+or database server for each customer. Cluster credentials, ingress/TLS and the shared
+platform are installed by the operator before public registration is enabled.
+
+The following operator settings apply only when `ManagedHosting=true`:
+
+```text
+PlaceContext__SaaS__BasicRunsPerPeriod=10000
+PlaceContext__SaaS__StandardRunsPerPeriod=100000
+PlaceContext__SaaS__BasicAiRequestsPerPeriod=5000
+PlaceContext__SaaS__StandardAiRequestsPerPeriod=50000
+```
+
+All limits must be positive. They are per tenant, per subscription billing period;
+configure monthly Stripe prices for monthly Basic and Standard allowances. Enterprise
+contracts use `RunsPerPeriod` and `AiRequestsPerPeriod` in the existing tenant-bound
+Stripe contract configuration (defaults 1,000,000 and 500,000 per contract period).
+Annual subscription periods therefore have annual allowances, not monthly resets.
+Self-hosted execution stays unlimited.
+
+Run reservations are atomic across replicas and share an idempotency ledger. Existing
+reservations remain valid when the last slot is used; new executions stop at the cap.
+Upgrades preserve usage within the period, and verified renewals reset the counters.
+AI HTTP attempts through the platform's model, browser-agent and TypeSafe clients are reserved before
+sending. This covers chat, agents, reviews and browser actions; failed attempts count.
+Model discovery GET requests do not count. Hosted tenants cannot use host CLI accounts.
+Cloud browser/question agents must use `PlaceContext:Qemu:Agent:Provider=chat-completions`;
+managed startup rejects host CLI providers. AI requests are not a dollar/token spending cap and do not meter arbitrary external
+API calls made by customer job code. Provider-side budgets remain necessary for those.
+
+Migration `20261117000000_CloudWorkspaces` adds the provisioning queue and AI counter.
+Provisioning retries reconcile existing resources without deleting customer data.
+The worker logs technical failure details; the portal only shows a generic setup failure.
+Provisioning does not activate a subscription or bypass runtime entitlement checks.
+
+Kubernetes namespace quotas apply to Kubernetes jobs. Host-local Docker build/run
+and browser VM execution retain their existing individual limits; they do not
+become Kubernetes-managed through this change. Provision suitable execution hosts
+and audit those runners before enabling them for public tenants.

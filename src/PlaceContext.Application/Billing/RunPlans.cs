@@ -1,7 +1,7 @@
 namespace PlaceContext.Application.Billing;
 
-/// <summary>Every edition has unlimited run starts. Paid plans differ by
-/// managed admission throughput; the rate is not a CPU/concurrency guarantee.</summary>
+/// <summary>Self-hosted execution is unlimited. Cloud usage limits are configured by the operator;
+/// start pacing and concurrency also vary by plan.</summary>
 public static class RunPlans
 {
     public const string Developer = "free";
@@ -30,17 +30,17 @@ public static class RunPlans
         new RunPlanTier(Basic, "Basic Managed", "$600 / month",
             "Managed workflows with a lower start rate; excess starts wait their turn.",
             "99.9% SLA target, subject to agreement", "Standard support", true,
-            BasicStartsPerMinute, new[] { "Unlimited workflow and job starts",
+            BasicStartsPerMinute, new[] { "Configurable run and AI request allowances",
                 "2 concurrent top-level executions", "Shared managed execution", "Usage history and billing controls" }),
         new RunPlanTier(Standard, "Standard Managed", "$825 / month",
             "Managed workflows with higher start throughput.",
             "99.9% SLA target, subject to agreement", "Standard support", true,
-            StandardStartsPerMinute, new[] { "Unlimited workflow and job starts",
+            StandardStartsPerMinute, new[] { "Configurable run and AI request allowances",
                 "8 concurrent top-level executions", "Higher managed start throughput", "Usage history and billing controls" }),
         new RunPlanTier(Enterprise, "Enterprise", "From $99,000 / year",
             "Dedicated or customer-hosted deployment options are scoped by contract.",
             "Up to 99.99% SLA, by contract", "Dedicated support / TAM by contract",
-            false, null, new[] { "Unlimited workflow and job starts",
+            false, null, new[] { "Contract-specific run and AI allowances",
                 "Contract-specific admission throughput", "Dedicated deployment options" })
     });
 

@@ -1,0 +1,117 @@
+@page "/cloud"
+@page "/settings/cloud"
+@layout SettingsLayout
+@using PlaceContext.Application.Access.Models
+@using PlaceContext.Application.Billing
+@attribute [Authorize(Policy = Permission.SettingsManage)]
+@inject CloudWorkspaceViewModel Vm
+@implements IAsyncDisposable
+
+<PageTitle>PlaceContext Cloud</PageTitle>
+<main class="cloud-workspace">
+    <header>
+        <div class="cloud-kicker">PLACECONTEXT CLOUD</div>
+        <h1>Your Cloud workspace</h1>
+        <p>We prepare and host your execution environment. Your plan sets this workspace's usage limits.</p>
+    </header>
+    @if (!Vm.Enabled)
+    {
+        <section class="dccard"><h2>Self-hosted workspace</h2><p>Cloud provisioning is available on managed installations.</p>
+            <a class="dcbtn" href="/onboarding">Set up your execution cluster</a></section>
+    }
+    else
+    {
+        @if (Vm.Error is not null)
+        {
+            <div class="cloud-notice" role="alert">@Vm.Error</div>
+        }
+        <section class="dccard" aria-live="polite">
+            <div class="cloud-heading"><h2>Workspace setup</h2><span class="cloud-status">@(Vm.Workspace is null && Vm.Usage is null ? "Loading…" : Vm.StateLabel)</span></div>
+            @if (Vm.Workspace is { State: "ready" })
+            {
+                <p>Your environment is ready. An active subscription enables workflow, job and AI execution.</p>
+                <a class="dcbtn primary" href="/">Open workspace</a>
+            }
+            else if (Vm.Workspace is { State: "failed" })
+            {
+                <p>@(Vm.CanRetry ? "Setup could not finish. You can retry safely; existing workspace data is preserved." : "Setup could not finish. We will retry automatically shortly.")</p>
+                @if (Vm.CanRetry) { <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="Vm.RetryAsync">Retry setup</button> }
+            }
+            else if (Vm.Workspace is not null)
+            {
+                <p>Preparing your isolated execution environment. This page updates automatically.</p>
+            }
+            else if (Vm.Usage is not null)
+            {
+                <p>Your existing workspace prepares execution resources when needed.</p>
+            }
+            <button class="dcbtn quiet" disabled="@Vm.Busy" @onclick="Vm.LoadAsync">Refresh status</button>
+        </section>
+        @if (Vm.Usage is { } usage)
+        {
+            <section class="dccard">
+                <div class="cloud-heading"><h2>Usage and subscription</h2><strong>@(usage.SubscriptionActive ? RunPlans.NameFor(usage.Plan) : "Subscription required")</strong></div>
+                @if (usage.SubscriptionActive)
+                {
+                    <p>Billing period: @usage.PeriodStart.ToString("d MMM yyyy") – @usage.PeriodEnd.ToString("d MMM yyyy") (UTC)</p>
+                    <div class="cloud-usage">
+                        <div><span>Workflow and job starts</span><strong>@usage.UsedRuns.ToString("N0") / @(usage.RunLimit?.ToString("N0") ?? "Unlimited")</strong></div>
+                        <div><span>AI requests</span><strong>@usage.UsedAiRequests.ToString("N0") / @(usage.AiRequestLimit?.ToString("N0") ?? "Unlimited")</strong></div>
+                    </div>
+                    @if (!usage.CanRun || usage.AiRequestLimit is { } limit && usage.UsedAiRequests >= limit)
+                    {
+                        <p class="cloud-notice" role="status">A usage limit has been reached. Change plans or wait for the next billing period to resume that activity.</p>
+                    }
+                }
+                else
+                {
+                    <p>Choose a subscription to enable execution. Payment confirmation can take a moment to arrive.</p>
+                    <div class="cloud-plans">
+                        @foreach (var tier in RunPlans.Tiers.Where(t => t.Code is RunPlans.Basic or RunPlans.Standard))
+                        {
+                            <article>
+                                <h3>@tier.Name</h3><p>@tier.PriceLabel</p>
+                                <p>@Vm.RunLimit(tier.Code).ToString("N0") runs and @Vm.AiLimit(tier.Code).ToString("N0") AI requests per billing period.</p>
+                                <p>@RunPlans.ConcurrentRuns(tier.Code) concurrent executions.</p>
+                                <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="() => Vm.CheckoutAsync(tier.Code)">Subscribe to @tier.Name</button>
+                            </article>
+                        }
+                    </div>
+                }
+                <p class="cloud-note">AI requests include chat, automated reviews and browser actions. Failed provider attempts count. This is a request allowance, not a dollar or token budget.</p>
+                @if (usage.HasBillingAccount)
+                {
+                    <button class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.ManageAsync">Manage subscription</button>
+                }
+            </section>
+        }
+    }
+</main>
+
+@code {
+    private readonly CancellationTokenSource _stop = new();
+    private Task? _poll;
+    protected override async Task OnInitializedAsync()
+    {
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+        await Vm.LoadAsync();
+        if (Vm.Enabled) _poll = PollAsync();
+    }
+    private async Task PollAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+                if (Vm.NeedsRefresh) await InvokeAsync(Vm.LoadAsync);
+        }
+        catch (OperationCanceledException) when (_stop.IsCancellationRequested) { }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        await _stop.CancelAsync();
+        if (_poll is not null) await _poll;
+        _stop.Dispose();
+        Vm.Detach();
+    }
+}

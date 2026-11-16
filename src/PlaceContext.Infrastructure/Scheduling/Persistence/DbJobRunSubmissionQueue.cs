@@ -29,8 +29,9 @@ public sealed class DbJobRunSubmissionQueue(
         {
             throw new ArgumentException("A nonempty project, job and run id are required.");
         }
-        if (hosting?.Value.ManagedHosting == true
-                    && (allowance is null || !(await allowance.GetAsync(ct)).CanRun))
+        var usage = hosting?.Value.ManagedHosting == true && allowance is not null
+            ? await allowance.GetAsync(ct) : null;
+        if (hosting?.Value.ManagedHosting == true && usage?.SubscriptionActive != true)
         {
             throw new InvalidOperationException("A managed subscription must be active before queuing jobs.");
         }
@@ -114,6 +115,8 @@ public sealed class DbJobRunSubmissionQueue(
                 throw new InvalidOperationException("The run id was previously submitted with different inputs.");
             }
         }
+        if (result.TrackingId == trackingId && usage is { CanRun: false })
+            throw new TenantUsageLimitException("This workspace has reached its run limit. Change plans or wait for the next billing period.");
         await tx.CommitAsync(ct);
         return result;
     }
