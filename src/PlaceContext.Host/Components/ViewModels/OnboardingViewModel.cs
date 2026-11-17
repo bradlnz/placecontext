@@ -18,6 +18,12 @@ public sealed class OnboardingViewModel(
     public ExecutionLocation? Location { get; private set; }
     public ClusterInfo? Cluster { get; private set; }
     public bool HasModelSetup { get; private set; }
+    public string? ModelError { get; private set; }
+    public string WorkspaceName => ui.CurrentProjectName ?? "Your workspace";
+    public string DashboardUrl => ui.CurrentProjectId is { } id ? $"/project/{id}/dashboard" : "/";
+    public string WorkflowsUrl => ui.CurrentProjectId is { } id ? PageRoutes.ProjectWorkflows(id) : DashboardUrl;
+    public string DataUrl => ui.CurrentProjectId is { } id ? PageRoutes.ProjectData(id) : DashboardUrl;
+    public bool HasReadyWorker => Cluster is { IsRealCluster: true } && Cluster.Nodes.Any(node => node.Ready && !node.IsControlPlane);
     public bool CanContinue => Location is not null;
     public bool IsCloud => Location == ExecutionLocation.Cloud;
     public bool IsLocal => Location == ExecutionLocation.Local;
@@ -44,28 +50,29 @@ public sealed class OnboardingViewModel(
         {
             return;
         }
-        ui.Set("Cluster setup", "choose where your jobs run");
+        ui.Set("Workspace setup", "get ready for your first workflow");
         Loading = true;
         Error = null;
         Cluster = null;
         HasModelSetup = false;
+        ModelError = null;
         NotifyStateChanged();
         try
         {
             Cluster = await service.GetClusterInfoAsync();
-            try
-            {
-                var models = await modelConnections.ListAsync();
-                HasModelSetup = models.Any(connection => connection.Enabled && connection.Models.Count > 0);
-            }
-            catch
-            {
-                HasModelSetup = false;
-            }
         }
         catch
         {
             Error = "Could not load the cluster. You can still choose a setup path and retry the connection check.";
+        }
+        try
+        {
+            var models = await modelConnections.ListAsync();
+            HasModelSetup = models.Any(connection => connection.Enabled && connection.Models.Count > 0);
+        }
+        catch
+        {
+            ModelError = "Could not check model connections. Retry the check or open model settings.";
         }
         finally
         {
@@ -90,16 +97,16 @@ public sealed class OnboardingViewModel(
         {
             return;
         }
-        Step = SetupGuideStep.Cluster;
+        if (Step < SetupGuideStep.Ready) Step++;
         NotifyStateChanged();
     }
 
     public void Back()
     {
-        Step = SetupGuideStep.Location;
+        if (Step > SetupGuideStep.Location) Step--;
         NotifyStateChanged();
     }
 
     public void OpenCluster() => navigation.NavigateTo(PageRoutes.ClusterSettings);
-    public void SkipGuide() => navigation.NavigateTo("/");
+    public void SkipGuide() => navigation.NavigateTo(DashboardUrl);
 }

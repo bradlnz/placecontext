@@ -4,4 +4,5 @@ public enum SetupGuideStep
 {
     Location,
     Cluster,
+    Ready,
 }

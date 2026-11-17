@@ -4,98 +4,97 @@
 @inject OnboardingViewModel Vm
 @implements IDisposable
 
-<PageTitle>PlaceContext — Cluster setup</PageTitle>
+<PageTitle>PlaceContext — Workspace setup</PageTitle>
 
 <main class="setup-guide">
     <header class="guide-head">
-        <div class="guide-kicker">WORKSPACE SETUP</div>
-        <h1>Set up your execution cluster</h1>
-        <p>Choose where jobs run, connect workers if needed, and check the cluster. This guide does not move workloads.</p>
+        <div class="guide-kicker">LET'S GET YOU STARTED</div>
+        <h1>Welcome to PlaceContext.</h1>
+        <p>Bring your data, tools and agents together.<br />Set up your workspace, then build your first workflow.</p>
     </header>
 
-    <ol class="guide-steps" aria-label="Setup progress">
-        <li class="@(Vm.Step == SetupGuideStep.Location ? "active" : "done")"><span>1</span>Execution location</li>
-        <li class="@(Vm.Step == SetupGuideStep.Cluster ? "active" : null)"><span>2</span>Cluster setup</li>
-    </ol>
+    <div class="guide-layout">
+        <aside class="guide-sidebar" aria-label="Setup progress">
+            <div class="workspace-label"><AppIcon Kind="grid" /><span>@Vm.WorkspaceName<small>Workspace created</small></span></div>
+            <ol class="guide-steps">
+                <li class="@(Vm.Step == SetupGuideStep.Location ? "active" : "done")" aria-current="@(Vm.Step == SetupGuideStep.Location ? "step" : null)"><span>01</span><div>Make it yours<small>Choose where you work</small></div></li>
+                <li class="@(Vm.Step == SetupGuideStep.Cluster ? "active" : Vm.Step > SetupGuideStep.Cluster ? "done" : null)" aria-current="@(Vm.Step == SetupGuideStep.Cluster ? "step" : null)"><span>02</span><div>Connect your workspace<small>Check execution and models</small></div></li>
+                <li class="@(Vm.Step == SetupGuideStep.Ready ? "active" : null)" aria-current="@(Vm.Step == SetupGuideStep.Ready ? "step" : null)"><span>03</span><div>Start building<small>Choose your first step</small></div></li>
+            </ol>
+            <p class="guide-sidebar-note">Your workspace, your pace.<br />You can return to setup from Cluster settings.</p>
+        </aside>
 
-    @if (Vm.Step == SetupGuideStep.Location)
-    {
-        <section class="dccard guide-card">
-            <div class="guide-section-head">
-                <div>
-                    <h2>Cloud or local?</h2>
-                    <p>Choose where the machines that run your jobs are hosted.</p>
+        <section class="guide-card" aria-labelledby="setup-step-title">
+            @if (Vm.Step == SetupGuideStep.Location)
+            {
+                <div class="guide-section-head">
+                    <div class="guide-kicker">STEP 01 / 03</div>
+                    <h2 id="setup-step-title">Where will your workflows run?</h2>
+                    <p>Choose a setup path for the machines you use. This guide does not move workloads.</p>
                 </div>
-            </div>
-            <div class="choice-list">
-                <button type="button" class="choice-row @(Vm.IsCloud ? "selected" : null)"
-                        aria-pressed="@Vm.IsCloud" @onclick="() => Vm.SelectLocation(ExecutionLocation.Cloud)">
-                    <span class="choice-radio" aria-hidden="true"></span>
-                        <span><strong>Cloud</strong><small>Use managed execution or cloud workers.</small></span>
-                </button>
-                <button type="button" class="choice-row @(Vm.IsLocal ? "selected" : null)"
-                        aria-pressed="@Vm.IsLocal" @onclick="() => Vm.SelectLocation(ExecutionLocation.Local)">
-                    <span class="choice-radio" aria-hidden="true"></span>
-                        <span><strong>Local</strong><small>Use your own computers, servers, or virtual machines.</small></span>
-                </button>
-            </div>
-            <div class="guide-actions">
-                <button class="dcbtn quiet" @onclick="Vm.SkipGuide">Set up later</button>
-                <button class="dcbtn primary" disabled="@(!Vm.CanContinue)" @onclick="Vm.Continue">Continue</button>
-            </div>
-        </section>
-    }
-    @if (Vm.Step == SetupGuideStep.Cluster)
-    {
-        <section class="dccard guide-card">
-            <div class="guide-section-head"><div><h2>@Vm.LocationLabel execution</h2>
-                <p>Check the current cluster or add a worker.</p></div></div>
-            @if (Vm.Loading)
-            {
-                <Skeleton Kind="list" Rows="2" />
+                <div class="choice-list" role="group" aria-label="Execution location">
+                    <button type="button" class="choice-row @(Vm.IsLocal ? "selected" : null)" aria-pressed="@Vm.IsLocal" @onclick="() => Vm.SelectLocation(ExecutionLocation.Local)">
+                        <span class="choice-icon"><AppIcon Kind="vm" /></span><strong>On my infrastructure</strong><small>Use this computer, your own servers or an existing local cluster.</small><span class="choice-check" aria-hidden="true">@(Vm.IsLocal ? "Selected ✓" : "Select local")</span>
+                    </button>
+                    <button type="button" class="choice-row @(Vm.IsCloud ? "selected" : null)" aria-pressed="@Vm.IsCloud" @onclick="() => Vm.SelectLocation(ExecutionLocation.Cloud)">
+                        <span class="choice-icon"><AppIcon Kind="share" /></span><strong>In the cloud</strong><small>Connect the cloud workers or Kubernetes cluster you manage.</small><span class="choice-check" aria-hidden="true">@(Vm.IsCloud ? "Selected ✓" : "Select cloud")</span>
+                    </button>
+                </div>
+                <div class="guide-note"><AppIcon Kind="check" /><p><strong>Your owner account is ready.</strong> Your default project is ready for data, agents and workflows.</p></div>
             }
-            @if (Vm.Error is not null)
+            else if (Vm.Step == SetupGuideStep.Cluster)
             {
-                <div class="guide-notice" role="alert">@Vm.Error</div>
-            }
-            @if (!Vm.Loading)
-            {
-                <div class="detected-box"><strong>Current cluster</strong><span>@Vm.ClusterSummary</span></div>
-                <button class="dcbtn" @onclick="Vm.LoadAsync">Refresh cluster</button>
-                @if (!Vm.HasModelSetup)
+                <div class="guide-section-head">
+                    <div class="guide-kicker">STEP 02 / 03</div>
+                    <h2 id="setup-step-title">Connect the pieces you need.</h2>
+                    <p>Check your execution environment and connect a model for agents and AI decisions. You can explore the workspace before configuring either.</p>
+                </div>
+                @if (Vm.Loading) { <div role="status" aria-label="Checking workspace connections"><Skeleton Kind="list" Rows="2" /></div> }
+                else
                 {
-                    <div class="guide-notice" role="status">
-                        <strong>Choose a model before running jobs</strong>
-                        <span>Add a provider connection and enable at least one model in Model settings.</span>
-                        <a class="dcbtn" href="/settings/models">Open model settings</a>
+                    <div class="connection-card">
+                        <div class="connection-heading"><span class="choice-icon"><AppIcon Kind="vm" /></span><div><h3>@Vm.LocationLabel execution</h3><span class="setup-status @(Vm.HasReadyWorker ? "ready" : null)">@(Vm.Error is not null ? "Check unavailable" : Vm.HasReadyWorker ? "Worker detected" : "Needs setup")</span></div></div>
+                        <p>@Vm.ClusterSummary</p>
+                        @if (Vm.Error is { } error) { <p class="guide-error" role="alert">@error</p> }
+                        <p class="connection-hint">A ready node confirms connectivity. Run a small workflow to verify execution.</p>
+                        <div class="connection-actions"><a class="dcbtn" href="/settings/cluster" target="_blank" rel="noopener">Open cluster settings ↗</a><a class="guide-link" href="@Vm.SetupUrl" target="_blank" rel="noopener">Installation guide ↗</a></div>
+                    </div>
+                    <div class="connection-card">
+                        <div class="connection-heading"><span class="choice-icon"><AppIcon Kind="message" /></span><div><h3>Models for your agents</h3><span class="setup-status @(Vm.HasModelSetup ? "ready" : null)">@(Vm.ModelError is not null ? "Check unavailable" : Vm.HasModelSetup ? "Model configured" : "Optional · not connected")</span></div></div>
+                        <p>Connect your preferred provider and enable a model. Credentials stay in your workspace settings.</p>
+                        @if (Vm.ModelError is { } modelError) { <p class="guide-error" role="alert">@modelError</p> }
+                        <a class="dcbtn" href="/settings/models" target="_blank" rel="noopener">Open model settings ↗</a>
                     </div>
                 }
+                <div class="refresh-row"><p>Settings open in a new tab. Return here to check your connections.</p><button type="button" class="dcbtn" disabled="@Vm.Loading" @onclick="Vm.LoadAsync">@(Vm.Loading ? "Checking…" : "Check again")</button></div>
             }
-            @if (Vm.IsLocal)
+            else
             {
-                <ol class="setup-checklist">
-                    <li>Open Cluster and use <strong>Add node</strong> to join a worker.</li>
-                    <li>Check that the worker is ready.</li>
-                    <li>Run a small job to verify execution.</li>
-                </ol>
+                <div class="guide-section-head">
+                    <div class="guide-kicker">STEP 03 / 03</div>
+                    <h2 id="setup-step-title">Make your first useful result.</h2>
+                    <p>Start with a workflow, connect some data or explore your dashboard. You can change your setup at any time.</p>
+                </div>
+                @if (!Vm.HasReadyWorker || !Vm.HasModelSetup)
+                { <p class="guide-note">@(!Vm.HasReadyWorker ? "Check your execution setup before running jobs. " : "")@(!Vm.HasModelSetup ? "Connect a model when you’re ready to use agents." : "")</p> }
+                <div class="starter-list">
+                    <a class="starter-card" href="@Vm.WorkflowsUrl"><span class="choice-icon"><AppIcon Kind="chain" /></span><div><strong>Build a workflow</strong><p>Bring steps, decisions and agents into one repeatable process.</p></div><span aria-hidden="true">→</span></a>
+                    <a class="starter-card" href="@Vm.DataUrl"><span class="choice-icon"><AppIcon Kind="database" /></span><div><strong>Bring your data</strong><p>Connect a source or add project data to work with.</p></div><span aria-hidden="true">→</span></a>
+                    <a class="starter-card" href="@Vm.DashboardUrl"><span class="choice-icon"><AppIcon Kind="grid" /></span><div><strong>Explore your dashboard</strong><p>Run workflows, ask questions and pin charts as your project grows.</p></div><span aria-hidden="true">→</span></a>
+                </div>
             }
-            @if (Vm.IsCloud)
-            {
-                <ol class="setup-checklist">
-                    <li>Use managed execution or join your cloud workers with <strong>Add node</strong>.</li>
-                    <li>Check that the workers are ready.</li>
-                    <li>Run a small job to verify execution.</li>
-                </ol>
-            }
-            <div class="guide-links">
-                <a class="dcbtn" href="@Vm.SetupUrl">Installation instructions</a>
-            </div>
-            <div class="guide-actions">
-                <button class="dcbtn quiet" @onclick="Vm.Back">Back</button>
-                <button class="dcbtn primary" @onclick="Vm.OpenCluster">Open cluster settings</button>
-            </div>
+            <footer class="guide-actions">
+                @if (Vm.Step == SetupGuideStep.Location)
+                { <button type="button" class="dcbtn" @onclick="Vm.SkipGuide">Set up later</button> }
+                else
+                { <button type="button" class="dcbtn" @onclick="Vm.Back">Back</button> }
+                @if (Vm.Step == SetupGuideStep.Ready)
+                { <a class="dcbtn primary" href="@Vm.DashboardUrl">Go to dashboard →</a> }
+                else
+                { <button type="button" class="dcbtn primary" disabled="@(!Vm.CanContinue || Vm.Loading)" @onclick="Vm.Continue">Continue →</button> }
+            </footer>
         </section>
-    }
+    </div>
 </main>
 
 @code {

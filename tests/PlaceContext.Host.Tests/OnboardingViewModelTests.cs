@@ -93,12 +93,75 @@ public sealed class OnboardingViewModelTests
         Assert.Equal("API tokens", vm.ActiveLabel);
     }
 
+    [Fact]
+    public async Task Setup_finishes_in_the_current_project_without_requiring_a_model()
+    {
+        var ui = new PortalUiState();
+        var project = Guid.NewGuid();
+        ui.SetProject(project, "First project");
+        var navigation = new Navigation();
+        var vm = new OnboardingViewModel(new PlaceContextService(new ClusterQueries(), null!, null!, null!),
+            navigation, ui, new ModelConnections());
+        await vm.LoadAsync();
+        vm.Back();
+        Assert.Equal(SetupGuideStep.Location, vm.Step);
+        vm.SelectLocation(ExecutionLocation.Local);
+        vm.Continue();
+        vm.Continue();
+        vm.Continue();
+        Assert.Equal(SetupGuideStep.Ready, vm.Step);
+        Assert.False(vm.HasModelSetup);
+        Assert.Equal("First project", vm.WorkspaceName);
+        Assert.Equal(PageRoutes.ProjectWorkflows(project), vm.WorkflowsUrl);
+        Assert.Equal(PageRoutes.ProjectData(project), vm.DataUrl);
+        vm.SkipGuide();
+        Assert.Equal($"/project/{project}/dashboard", navigation.Destination);
+        vm.Back();
+        Assert.Equal(SetupGuideStep.Cluster, vm.Step);
+    }
+
+    [Fact]
+    public async Task Model_checks_are_independent_of_cluster_failures_and_clear_stale_state()
+    {
+        var models = new ModelConnections
+        {
+            Connections = [new(Guid.NewGuid(), "Provider", "openai", "https://example.test", ["model"], true, true)]
+        };
+        var vm = new OnboardingViewModel(new PlaceContextService(new ClusterQueries { Fail = true }, null!, null!, null!),
+            new Navigation(), new PortalUiState(), models);
+        await vm.LoadAsync();
+        Assert.NotNull(vm.Error);
+        Assert.True(vm.HasModelSetup);
+        Assert.Null(vm.ModelError);
+        models.Fail = true;
+        await vm.LoadAsync();
+        Assert.False(vm.HasModelSetup);
+        Assert.NotNull(vm.ModelError);
+        Assert.False(vm.Loading);
+    }
+
+    [Theory]
+    [InlineData(false, true, false, false)]
+    [InlineData(true, true, true, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, true, false, true)]
+    public async Task Execution_status_requires_a_real_ready_worker(bool real, bool ready, bool controlPlane, bool expected)
+    {
+        var node = new ClusterNode("node", [], ready, "v1", "linux", "amd64", null, null, null, null, false, controlPlane);
+        var vm = Create(new ClusterQueries { Cluster = new(real, [node]) }, new Navigation());
+        await vm.LoadAsync();
+        Assert.Equal(expected, vm.HasReadyWorker);
+    }
+
     private static OnboardingViewModel Create(ClusterQueries queries, Navigation navigation) =>
         new(new PlaceContextService(queries, null!, null!, null!), navigation, new PortalUiState(), new ModelConnections());
 
     private sealed class ModelConnections : IModelConnections
     {
-        public Task<IReadOnlyList<ModelConnection>> ListAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ModelConnection>>([]);
+        public IReadOnlyList<ModelConnection> Connections { get; init; } = [];
+        public bool Fail { get; set; }
+        public Task<IReadOnlyList<ModelConnection>> ListAsync(CancellationToken ct = default) =>
+            Fail ? throw new InvalidOperationException("Provider unavailable") : Task.FromResult(Connections);
         public Task SaveAsync(SaveModelConnection connection, CancellationToken ct = default) => Task.CompletedTask;
         public Task DeleteAsync(Guid id, CancellationToken ct = default) => Task.CompletedTask;
         public Task<IReadOnlyList<string>> DiscoverAsync(Guid id, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<string>>([]);
