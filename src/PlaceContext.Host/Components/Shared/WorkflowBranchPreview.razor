@@ -13,6 +13,9 @@
             {
                 <div><AppIcon Kind="clock" /> Wait @wait.DurationSeconds seconds</div>
             }
+            <div class="@(stage.Gate is ConditionGateView ? "nested-paths" : null)">
+            <div class="nested-path">
+            @if (stage.Gate is ConditionGateView) { <div class="branch-condition">True</div> }
             @if (RunSteps is not null)
             {
                 @foreach (var step in RunSteps.GetValueOrDefault(path) ?? [])
@@ -25,6 +28,14 @@
             @if (stage.Action is { } action)
             {
                 <div class="branch-action"><AppIcon Kind="@ChainCanvasViewModel.StageIcon(stage)" /><span>@action.DisplayName</span></div>
+                @if (action is ParallelWorkflowsChainActionView parallel && Depth < 8)
+                {
+                    <WorkflowPaths Action="parallel" Workflows="Workflows" Depth="@(Depth + 1)" />
+                }
+                else if (action is SubWorkflowChainActionView child && Depth < 8 && Workflows.FirstOrDefault(workflow => workflow.Id == child.WorkflowId) is { } childWorkflow)
+                {
+                    <WorkflowBranchPreview Stages="childWorkflow.Stages" Workflows="Workflows" Depth="@(Depth + 1)" />
+                }
             }
             @foreach (var job in stage.Jobs)
             {
@@ -38,17 +49,28 @@
             {
                 <small><AppIcon Kind="parallel" /> Run together</small>
             }
-            @if ((stage.ElseBranch ?? (stage.Gate as ConditionGateView)?.ElseBranch) is { Count: > 0 } other)
+            </div>
+            @if (stage.Gate is ConditionGateView)
             {
-                <div class="branch-condition">If false</div>
-                <WorkflowBranchPreview Jobs="Jobs" OnOpenJob="OnOpenJob" OnEditCode="OnEditCode" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{path}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
+                <div class="nested-path">
+                    <div class="branch-condition">False</div>
+                    @if ((stage.ElseBranch ?? (stage.Gate as ConditionGateView)?.ElseBranch) is { Count: > 0 } other)
+                    {
+                        <WorkflowBranchPreview Jobs="Jobs" Workflows="Workflows" Depth="@(Depth + 1)" OnOpenJob="OnOpenJob" OnEditCode="OnEditCode" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{path}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
+                    }
+                    else { <small>Continue without running this step</small> }
+                </div>
             }
+            </div>
+            @if (stage.Gate is ConditionGateView) { <div class="nested-join"><AppIcon Kind="branch" /> Rejoin</div> }
         </li>
     }
 </ol>
 
 @code {
     [Parameter] public IReadOnlyList<JobView> Jobs { get; set; } = [];
+    [Parameter] public IReadOnlyList<JobChainView> Workflows { get; set; } = [];
+    [Parameter] public int Depth { get; set; }
     [Parameter] public EventCallback<Guid> OnOpenJob { get; set; }
     [Parameter] public EventCallback<JobView> OnEditCode { get; set; }
     [Parameter] public IReadOnlyDictionary<string, IReadOnlyList<ChainStepRunView>>? RunSteps { get; set; }

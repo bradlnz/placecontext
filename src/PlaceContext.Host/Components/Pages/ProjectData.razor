@@ -17,6 +17,7 @@
 @inject NavigationManager Navigation
 
 <PageTitle>PlaceContext — SQL Studio</PageTitle>
+<AssistantPageContext @key="(ProjectId, ApplicationDatabase)" ReadContext="AssistantContextAsync" Apply="ApplyAssistantQueryAsync" />
 
 <div class="page data-page sql-studio-page">
 
@@ -540,7 +541,50 @@
     </div>
 }
 
+
 @code {
+    private TableTab? _assistantTab;
+    private string? _assistantSql;
+
+    private async Task<string> AssistantContextAsync()
+    {
+        _assistantTab = ActiveTableTab;
+        _assistantSql = _assistantTab is null ? null : await Vm.GetSqlEditorValueAsync() ?? _assistantTab.Sql;
+        object schema = ApplicationDatabase ? Vm.ApplicationTables
+            : (await DataService.ListProjectTableSchemasAsync(ProjectId)).Take(100).ToArray();
+        return JsonSerializer.Serialize(new
+        {
+            ProjectId, database = ApplicationDatabase ? "PlaceContext database" : "Project database",
+            dialect = ApplicationDatabase ? "Restricted read-only SQL: SELECT, COUNT(*), WHERE, ORDER BY, LIMIT, OFFSET; no joins" : "PostgreSQL",
+            schema, activeTable = _assistantTab?.TableName, query = _assistantSql,
+            columns = _assistantTab?.Result?.Columns,
+            rows = _assistantTab?.Result?.Rows.Take(20).Select(row => row.Select(value => value is null ? null : value[..Math.Min(value.Length, 500)])),
+            limits = "At most 100 project table schemas and 20 displayed result rows; cell text capped at 500 characters. Results may be from an earlier query."
+        });
+    }
+
+    private async Task ApplyAssistantQueryAsync(string sql)
+    {
+        if (ActiveTableTab != _assistantTab || (ActiveTableTab is { } tab
+            && (tab.Running || (await Vm.GetSqlEditorValueAsync() ?? tab.Sql) != _assistantSql)))
+            throw new InvalidOperationException("The selected query changed since this request. Send a new message before applying the draft.");
+        if (ActiveTableTab is null)
+        {
+            var name = "Assistant query " + (_openTabs.Count + 1);
+            while (_openTabs.Any(t => t.TableName == name)) name += " new";
+            _openTabs.Add(new TableTab(name, sql, TableTabSource.SavedQuery));
+            _activeTableName = name;
+            await Vm.ShowSqlTabAsync(name, sql);
+        }
+        else
+        {
+            ActiveTableTab.Sql = sql;
+            await Vm.SetSqlEditorValueAsync(sql);
+        }
+        await PersistTabsAsync(captureActiveEditor: false);
+        StateHasChanged();
+    }
+
     [Parameter] public Guid ProjectId { get; set; }
     [SupplyParameterFromQuery(Name = "database")] public string? Database { get; set; }
     [SupplyParameterFromQuery(Name = "table")] public string? Table { get; set; }

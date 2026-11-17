@@ -27,6 +27,7 @@
                 Cron fires in <span class="tz">@Vm.TimeZoneId</span>.
             </div>
         </div>
+        <button type="button" class="dcbtn primary" aria-haspopup="dialog" disabled="@(Vm.Workflows is null)" @onclick="Vm.OpenAddSchedule"><AppIcon Kind="plus" /> Add schedule</button>
     </div>
 
     @if (Vm.Message is not null)
@@ -34,93 +35,10 @@
         <div class="message">@Vm.Message</div>
     }
 
-    @* ── Add trigger ──────────────────────────────────────────────────────────────────── *@
-    <div class="dccard add-bar">
-        <div class="dcfield field-name">
-            <label>Name</label>
-            <input class="dcinput" @bind="Vm.NewName" placeholder="nightly refresh" />
-        </div>
-        <div class="dcfield field-job">
-            <label for="schedule-workflow">Workflow</label>
-            <select id="schedule-workflow" class="dcinput" @bind="Vm.NewWorkflowId" disabled="@WorkflowId.HasValue">
-                <option value="@Guid.Empty">— pick a workflow —</option>
-                @foreach (var j in Vm.Workflows ?? Array.Empty<JobChainView>())
-                {
-                    <option value="@j.Id">@j.Name</option>
-                }
-            </select>
-        </div>
-        @if (Vm.NewKind == TriggerKind.Schedule)
-        {
-            @if (Vm.AdvancedCron)
-            {
-                <div class="dcfield field-cron">
-                    <label>Cron <span class="code code-hint">@Vm.TimeZoneId</span></label>
-                    <input class="dcinput sans" @bind="Vm.NewCron" placeholder="0 0 * * *" />
-                </div>
-            }
-            else
-            {
-                <div class="dcfield field-sm">
-                    <label>Every</label>
-                    <select class="dcinput" @bind="Vm.Frequency">
-                        <option value="@ScheduleFrequency.Day">day</option>
-                        <option value="@ScheduleFrequency.Weekday">weekday</option>
-                        <option value="@ScheduleFrequency.Week">week</option>
-                        <option value="@ScheduleFrequency.Month">month</option>
-                        <option value="@ScheduleFrequency.Hour">hour</option>
-                    </select>
-                </div>
-                @if (Vm.Frequency == ScheduleFrequency.Week)
-                {
-                    <div class="dcfield field-sm">
-                        <label>On</label>
-                        <select class="dcinput" @bind="Vm.Weekday">
-                            <option value="@((int)DayOfWeek.Monday)">Monday</option><option value="@((int)DayOfWeek.Tuesday)">Tuesday</option>
-                            <option value="@((int)DayOfWeek.Wednesday)">Wednesday</option><option value="@((int)DayOfWeek.Thursday)">Thursday</option>
-                            <option value="@((int)DayOfWeek.Friday)">Friday</option><option value="@((int)DayOfWeek.Saturday)">Saturday</option>
-                            <option value="@((int)DayOfWeek.Sunday)">Sunday</option>
-                        </select>
-                    </div>
-                }
-                @if (Vm.Frequency == ScheduleFrequency.Month)
-                {
-                    <div class="dcfield field-day">
-                        <label>Day</label>
-                        <input class="dcinput" type="number" min="1" max="28" @bind="Vm.Day" />
-                    </div>
-                }
-                @if (Vm.Frequency != ScheduleFrequency.Hour)
-                {
-                    <div class="dcfield field-sm">
-                        <label>At <span class="code code-hint">@Vm.TimeZoneId</span></label>
-                        <input class="dcinput" type="time" @bind="Vm.Time" />
-                    </div>
-                }
-            }
-            <button type="button" class="dcbtn cron-toggle"
-                    @onclick="Vm.ToggleAdvancedCron">
-                <AppIcon Kind="settings" /> @(Vm.AdvancedCron ? "Simple" : "Cron")
-            </button>
-        }
-        else
-        {
-            <div class="dcfield field-event">
-                <label>Event</label>
-                <select class="dcinput" @bind="Vm.NewEvent">
-                    @foreach (var e in Vm.EventTypes ?? Array.Empty<EventTypeView>())
-                    {
-                        <option value="@e.Name">@e.Name</option>
-                    }
-                </select>
-            </div>
-        }
-        <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="@(() => Vm.AddTriggerAsync(ProjectId))">＋ Add schedule</button>
-        @if (Vm.Error is not null)
-        {
-            <span class="err-text">@Vm.Error</span>
-        }
-    </div>
+    @if (!Vm.ShowAddSchedule && Vm.Error is not null)
+    {
+        <p class="err-text" role="alert">@Vm.Error</p>
+    }
 
     @* ── Trigger table ────────────────────────────────────────────────────────────────── *@
     <div class="dccard table-card">
@@ -135,7 +53,7 @@
             else if (Vm.Triggers.Count == 0)
             {
                 <div class="empty-note">
-                    No schedules yet — choose when this workflow should run above.
+                    No schedules yet — select Add schedule to choose when a workflow runs.
                 </div>
             }
             else
@@ -210,6 +128,112 @@
         </div>
     </div>
 </div>
+
+@if (Vm.ShowAddSchedule)
+{
+    <div class="dcmodal-overlay schedule-overlay" @onclick="Vm.CloseAddSchedule"
+         @onkeydown='@(e => { if (e.Key == "Escape") Vm.CloseAddSchedule(); })'>
+        <form class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="add-schedule-title"
+              @onclick:stopPropagation="true" @onsubmit="() => Vm.AddTriggerAsync(ProjectId)" @onsubmit:preventDefault="true">
+            <div class="dcmodal-head">
+                <div class="flex-min">
+                    <h3 id="add-schedule-title" class="title-14">Add schedule</h3>
+                    <p class="page-sub">Schedules run in @Vm.TimeZoneId.</p>
+                </div>
+                <button type="button" class="dcslide-x" aria-label="Close add schedule" disabled="@Vm.Busy" @onclick="Vm.CloseAddSchedule"><AppIcon Kind="close" /></button>
+            </div>
+            <div class="dcmodal-body">
+                <div class="dcfield">
+                    <label for="schedule-name">Name</label>
+                    <input id="schedule-name" class="dcinput" @bind="Vm.NewName" placeholder="nightly refresh" />
+                </div>
+                <div class="dcfield">
+                    <label for="schedule-workflow">Workflow</label>
+                    <select id="schedule-workflow" class="dcinput" @bind="Vm.NewWorkflowId" disabled="@WorkflowId.HasValue">
+                        <option value="@Guid.Empty">— pick a workflow —</option>
+                        @foreach (var j in Vm.Workflows ?? Array.Empty<JobChainView>())
+                        {
+                            <option value="@j.Id">@j.Name</option>
+                        }
+                    </select>
+                </div>
+                @if (Vm.NewKind == TriggerKind.Schedule)
+                {
+                    @if (Vm.AdvancedCron)
+                    {
+                        <div class="dcfield">
+                            <label for="schedule-cron">Cron <span class="code code-hint">@Vm.TimeZoneId</span></label>
+                            <input id="schedule-cron" class="dcinput sans" @bind="Vm.NewCron" placeholder="0 0 * * *" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="dcfield">
+                            <label for="schedule-frequency">Every</label>
+                            <select id="schedule-frequency" class="dcinput" @bind="Vm.Frequency">
+                                <option value="@ScheduleFrequency.Day">day</option>
+                                <option value="@ScheduleFrequency.Weekday">weekday</option>
+                                <option value="@ScheduleFrequency.Week">week</option>
+                                <option value="@ScheduleFrequency.Month">month</option>
+                                <option value="@ScheduleFrequency.Hour">hour</option>
+                            </select>
+                        </div>
+                        @if (Vm.Frequency == ScheduleFrequency.Week)
+                        {
+                            <div class="dcfield">
+                                <label for="schedule-weekday">On</label>
+                                <select id="schedule-weekday" class="dcinput" @bind="Vm.Weekday">
+                                    <option value="@((int)DayOfWeek.Monday)">Monday</option><option value="@((int)DayOfWeek.Tuesday)">Tuesday</option>
+                                    <option value="@((int)DayOfWeek.Wednesday)">Wednesday</option><option value="@((int)DayOfWeek.Thursday)">Thursday</option>
+                                    <option value="@((int)DayOfWeek.Friday)">Friday</option><option value="@((int)DayOfWeek.Saturday)">Saturday</option>
+                                    <option value="@((int)DayOfWeek.Sunday)">Sunday</option>
+                                </select>
+                            </div>
+                        }
+                        @if (Vm.Frequency == ScheduleFrequency.Month)
+                        {
+                            <div class="dcfield">
+                                <label for="schedule-day">Day</label>
+                                <input id="schedule-day" class="dcinput" type="number" min="1" max="28" @bind="Vm.Day" />
+                            </div>
+                        }
+                        @if (Vm.Frequency != ScheduleFrequency.Hour)
+                        {
+                            <div class="dcfield">
+                                <label for="schedule-time">At <span class="code code-hint">@Vm.TimeZoneId</span></label>
+                                <input id="schedule-time" class="dcinput" type="time" @bind="Vm.Time" />
+                            </div>
+                        }
+                    }
+                    <button type="button" class="dcbtn cron-toggle"
+                            @onclick="Vm.ToggleAdvancedCron">
+                        <AppIcon Kind="settings" /> @(Vm.AdvancedCron ? "Simple" : "Cron")
+                    </button>
+                }
+                else
+                {
+                    <div class="dcfield">
+                        <label for="schedule-event">Event</label>
+                        <select id="schedule-event" class="dcinput" @bind="Vm.NewEvent">
+                            @foreach (var e in Vm.EventTypes ?? Array.Empty<EventTypeView>())
+                            {
+                                <option value="@e.Name">@e.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+                @if (Vm.Error is not null)
+                {
+                    <p class="err-text" role="alert">@Vm.Error</p>
+                }
+            </div>
+            <div class="dcmodal-foot">
+                <button type="button" class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.CloseAddSchedule">Cancel</button>
+                <button type="submit" class="dcbtn primary" disabled="@Vm.Busy">@(Vm.Busy ? "Adding…" : "Add schedule")</button>
+            </div>
+        </form>
+    </div>
+}
 
 @code {
     [Parameter] public Guid ProjectId { get; set; }

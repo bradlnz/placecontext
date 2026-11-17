@@ -85,12 +85,12 @@
 .type-toggle.active {
     border-color: var(--brand);
     background: var(--brand);
-    color: #fff;
+    color: var(--brand-fg);
 }
 
 .type-toggle.active small {
-    background: rgba(255, 255, 255, .18);
-    color: #fff;
+    background: color-mix(in srgb, var(--brand-fg) 12%, transparent);
+    color: var(--brand-fg);
 }
 
 .type-config {

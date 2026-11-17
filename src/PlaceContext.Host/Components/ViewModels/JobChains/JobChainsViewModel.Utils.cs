@@ -11,6 +11,7 @@ public sealed partial class JobChainsViewModel
     public bool IsRunsView => EditorView.Equals("runs", StringComparison.OrdinalIgnoreCase);
     public bool IsSchedulesView => EditorView.Equals("schedules", StringComparison.OrdinalIgnoreCase);
     public bool IsCanvasView => EditorView.Equals("canvas", StringComparison.OrdinalIgnoreCase);
+    public bool IsDetailsView => EditorView.Equals("details", StringComparison.OrdinalIgnoreCase);
 
     public bool HasStageAction(int stageIndex) => EdStageActions.ContainsKey(stageIndex);
 

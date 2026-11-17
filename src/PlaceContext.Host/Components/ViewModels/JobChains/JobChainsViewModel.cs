@@ -13,7 +13,7 @@ using PlaceContext.Host.Components.ViewModels.Helpers;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed partial class JobChainsViewModel : PageViewModel
+public sealed partial class JobChainsViewModel : PageViewModel, IComponentViewModel
 {
     private readonly PlaceContextService _svc;
     private readonly OperationCenter _opCenter;
@@ -66,6 +66,7 @@ public sealed partial class JobChainsViewModel : PageViewModel
     }
     public string JobsRoute => PageRoutes.ProjectJobs(ProjectId);
     public string WorkflowsRoute => PageRoutes.ProjectWorkflows(ProjectId);
+    public bool Embedded { get; set; }
 
     public void NavigateToJobs() => _navigation.NavigateTo(JobsRoute);
 

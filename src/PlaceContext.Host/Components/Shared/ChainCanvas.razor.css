@@ -47,6 +47,11 @@
 .false-route { padding:14px; box-sizing:border-box }
 .false-route p { font-size:12px; color:var(--text-3); margin:0 }
 .false-route .canvas-button { margin-top:12px }
+.add-conditional-branch { justify-self:start; }
+.canvas-stage.pathways-stage { width:302px; border:0; background:transparent; box-shadow:none; overflow:visible; }
+.pathways-stage > .stage-head { border:0; background:transparent; }
+.pathways-stage > .step-policy { background:transparent; }
+.pathways-stage > .stage-paths { padding:0; }
 .route-join { position:absolute; right:0; top:100%; display:flex; align-items:center; gap:4px; color:var(--text-3); font-size:10px; margin-top:5px }
 .connector { display:flex; align-items:center; width:160px; flex:none }
 .connector-line { height:1px; flex:1; background:var(--border) }
@@ -145,14 +150,6 @@
 
 .stage-paths button.parallel-workflow-heading { padding:8px; }
 .parallel-workflow-heading .node-copy small { margin-top:3px; font-size:10px; }
-.parallel-workflow-branches { display:flex; flex-direction:column; border-top:1px solid var(--border); border-bottom:1px solid var(--border); }
-.parallel-workflow-branch { display:grid; grid-template-columns:auto minmax(0,1fr); gap:4px 6px; min-width:0; padding:8px; border:0; border-left:2px solid var(--brand-2); background:transparent; color:var(--text); text-align:left; cursor:pointer; }
-.parallel-workflow-branch:hover:not(:disabled) { background:var(--card-2); }
-.parallel-workflow-branch:disabled { opacity:1; cursor:default; }
-.parallel-workflow-branch .route-label { margin:0; font-size:9px; line-height:1.5; }
-.parallel-workflow-branch strong { grid-column:2; font-size:11px; line-height:1.4; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.parallel-workflow-branch + .parallel-workflow-branch { border-top: 1px solid var(--border); }
-.parallel-workflow-branch code { font-size:10px; line-height:1.4; overflow-wrap:anywhere; white-space:normal; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:var(--text-2); }
 
 .stage-caption { width:250px; max-width:100%; margin-bottom:12px; padding:10px 14px; color:var(--text); }
 .stage-caption strong { display:block; font-size:14px; line-height:1.4; font-weight:650; overflow-wrap:anywhere; }

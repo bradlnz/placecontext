@@ -14,6 +14,28 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class WorkflowConditionalPathTests
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Does this need review?")]
+    public void False_path_editor_opens_requested_branch_and_regular_editor_resets_to_true(string? question)
+    {
+        var vm = new JobChainsViewModel(new PlaceContextService(new RecordingDispatcher(), null!, null!, null!), null!, null!, new Navigation());
+        var fallback = Guid.NewGuid();
+        vm.NewChain();
+        vm.AddStage(Guid.NewGuid());
+        vm.EdStageGates[0] = new ConditionGate("eq:ready:true", [ChainStage.Of(fallback)], question);
+
+        vm.OpenGateEditor(0, falsePath: true);
+        Assert.True(vm.ShowGateEditor);
+        Assert.Equal("false", vm.GateEditorPath);
+        Assert.Equal(fallback, Assert.Single(Assert.Single(vm.GateEditorElseStages).JobIds));
+        Assert.Equal(question ?? "", vm.GateReviewQuestion);
+        vm.CancelGateEditor();
+        vm.OpenGateEditor(0);
+        Assert.Equal("true", vm.GateEditorPath);
+        Assert.Equal(fallback, Assert.Single(Assert.Single(vm.GateEditorElseStages).JobIds));
+    }
+
     [Fact]
     public void False_path_limits_stay_in_gate_draft_until_the_gate_is_saved()
     {
@@ -271,6 +293,43 @@ public sealed class WorkflowConditionalPathTests
         Assert.Equal(!readOnly && !running, html.Contains("Remove if gate from step 1"));
         Assert.Contains($">{(question is null ? "IF" : "Determine")}</span>", html);
         Assert.DoesNotContain(">Review</span>", html);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Canvas_shows_three_stacked_path_cards_with_nested_gates_and_edit_controls(bool readOnly)
+    {
+        var child = new JobChainView(Guid.NewGuid(), Guid.NewGuid(), "Branch actions", null,
+            [new([new(Guid.NewGuid(), "Approved action")], new ConditionGateView("eq:ready:true"),
+                [new([new(Guid.NewGuid(), "Fallback action")])])], DateTimeOffset.UtcNow);
+        var paths = new ParallelWorkflowsChainActionView([
+            new(child.Id, child.Name, "eq:kind:a"), new(child.Id, child.Name, "eq:kind:b"),
+            new(child.Id, child.Name, "eq:kind:c", WhenFalse: true)]);
+        await using var provider = new ServiceCollection().AddLogging().AddAuthorizationCore().AddTransient<ChainCanvasViewModel>().BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            var rendered = await renderer.RenderComponentAsync<ChainCanvas>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                ["Stages"] = new[] { new JobChainStageView([], Action: paths) },
+                ["Workflows"] = new[] { child },
+                ["ReadOnly"] = readOnly,
+                ["OnDeleteBranch"] = EventCallback.Factory.Create<(int, int)>(this, _ => { }),
+                ["OnEditBranchActions"] = EventCallback.Factory.Create<(int, int)>(this, _ => { })
+            }));
+            return rendered.ToHtmlString();
+        });
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(html, "class=\"path-lane\"").Count);
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(html, "class=\"path-card\"").Count);
+        Assert.Equal(readOnly ? 0 : 3, System.Text.RegularExpressions.Regex.Matches(html, "Edit actions").Count);
+        Assert.Equal(readOnly ? 0 : 3, System.Text.RegularExpressions.Regex.Matches(html, "aria-label=\"Delete branch").Count);
+        Assert.DoesNotContain("path-outcomes", html);
+        Assert.Contains("Approved action", html);
+        Assert.Contains("Fallback action", html);
+        Assert.Contains("nested-paths", html);
+        Assert.Contains("Join all matching branches", html);
+        Assert.Contains("eq:kind:c", html);
     }
 
     [Fact]

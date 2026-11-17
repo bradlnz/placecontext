@@ -103,6 +103,7 @@ window.placecontext = {
       '.table-modal-overlay',
       '.cluster-overlay',
       '.editor-backdrop',
+      '.workflow-code-window',
       '.dcslide',
       '.sidebar.open',
       '.side-panel',
@@ -131,6 +132,22 @@ window.placecontext = {
     let syncQueued = false;
     const openers = new WeakMap();
     const isolated = new Map();
+    let workflowHeader = null;
+    let workflowWorkspace = null;
+    const sizeWorkflowChat = () => {
+      workflowWorkspace?.style.setProperty('--workflow-header-height', `${workflowHeader.getBoundingClientRect().height}px`);
+    };
+    const workflowHeaderObserver = new ResizeObserver(sizeWorkflowChat);
+    const syncWorkflowHeader = (layer) => {
+      const header = layer?.matches('.workflow-editor, .workflow-canvas-overlay, .workflow-dialog-overlay, .workflow-code-window, .dcmodal-overlay:has(> .agent-workspace)')
+        ? layer.querySelector(':scope > .dcmodal > .dcmodal-head, :scope > .dcslide-head, :scope > .code-window-head') : null;
+      if (header === workflowHeader) return;
+      workflowHeaderObserver.disconnect();
+      workflowWorkspace?.style.removeProperty('--workflow-header-height');
+      workflowHeader = header;
+      workflowWorkspace = header?.closest('.assistant-workspace');
+      if (workflowWorkspace) { workflowHeaderObserver.observe(header); sizeWorkflowChat(); }
+    };
 
     const isVisible = (element) => {
       const style = window.getComputedStyle(element);
@@ -154,10 +171,15 @@ window.placecontext = {
       return layer.querySelector(dialogSelector) || layer;
     };
 
+    const assistantFor = (layer) => layer?.matches('.workflow-editor, .workflow-canvas-overlay, .workflow-dialog-overlay, .workflow-code-window, .dcmodal-overlay:has(> .agent-workspace)')
+      ? layer.closest('.assistant-workspace')?.querySelector(':scope > .context-assistant') : null;
+
+    const focusRoots = (dialog) => [dialog, dialog === activeDialog ? assistantFor(activeLayer) : null].filter(Boolean);
+    const containsFocus = (dialog, element) => focusRoots(dialog).some(root => root.contains(element));
     const focusablesIn = (dialog) =>
-      Array.from(dialog.querySelectorAll(focusableSelector)).filter(
+      focusRoots(dialog).flatMap(root => Array.from(root.querySelectorAll(focusableSelector))).filter(
         (element) =>
-          isVisible(element) && !element.closest('[aria-hidden="true"]') && !element.closest('[inert]'),
+          isVisible(element) && element.getClientRects().length > 0 && !element.closest('[aria-hidden="true"]') && !element.closest('[inert]'),
       );
 
     const focusFirst = (dialog, backwards = false) => {
@@ -197,7 +219,7 @@ window.placecontext = {
         tabIndex: dialog.getAttribute('tabindex'),
       };
       dialog.setAttribute('role', 'dialog');
-      dialog.setAttribute('aria-modal', 'true');
+      dialog.setAttribute('aria-modal', assistantFor(activeLayer) ? 'false' : 'true');
       if (!dialog.hasAttribute('tabindex')) {
         dialog.setAttribute('tabindex', '-1');
       }
@@ -213,6 +235,8 @@ window.placecontext = {
 
     const companionsFor = (layer) => {
       const companions = new Set();
+      const assistant = assistantFor(layer);
+      if (assistant) companions.add(assistant);
       const previous = layer.previousElementSibling;
       const next = layer.nextElementSibling;
       if (layer.matches('.dcslide') && previous?.matches('.dcslide-scrim')) {
@@ -254,6 +278,7 @@ window.placecontext = {
           const zIndex = Number.parseInt(window.getComputedStyle(layer).zIndex, 10) || 0;
           return !top || zIndex >= top.zIndex ? { layer, zIndex } : top;
         }, null)?.layer || null;
+      syncWorkflowHeader(nextLayer);
       const previousLayer = activeLayer;
       const restoreTarget = previousLayer && previousLayer !== nextLayer ? openers.get(previousLayer) : null;
       const previousLayerClosed =
@@ -283,11 +308,11 @@ window.placecontext = {
       isolateBackground(nextLayer);
 
       const restoreFocus = () => {
-        if (restoreTarget?.isConnected && nextDialog.contains(restoreTarget)) {
+        if (restoreTarget?.isConnected && containsFocus(nextDialog, restoreTarget)) {
           restoreTarget.focus({ preventScroll: true });
           return;
         }
-        if (!nextDialog.contains(document.activeElement)) {
+        if (!containsFocus(nextDialog, document.activeElement)) {
           focusFirst(nextDialog);
         }
       };
@@ -321,7 +346,7 @@ window.placecontext = {
         const current = document.activeElement;
         const first = focusables[0];
         const last = focusables.at(-1);
-        if (!activeDialog.contains(current)) {
+        if (!containsFocus(activeDialog, current)) {
           event.preventDefault();
           focusFirst(activeDialog, event.shiftKey);
           return;
@@ -340,7 +365,7 @@ window.placecontext = {
     );
 
     document.addEventListener('focusin', (event) => {
-      if (activeDialog && !activeDialog.contains(event.target)) {
+      if (activeDialog && !containsFocus(activeDialog, event.target)) {
         focusFirst(activeDialog);
       }
     });

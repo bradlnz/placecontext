@@ -89,7 +89,7 @@
                         <strong>@ChainCanvasViewModel.StageTitle(stage)</strong>
                         <p title="@Vm.StageDescription(stage)">@Vm.StageDescription(stage)</p>
                     </div>
-                    <div class="canvas-stage @(Vm.DragOverStage == stageIndex ? "drag-over" : "")"
+                    <div class="canvas-stage @(stage.Action is ParallelWorkflowsChainActionView ? "pathways-stage" : "") @(Vm.DragOverStage == stageIndex ? "drag-over" : "")"
                          @ondragover="@(e => DragOver(stageIndex))"
                          @ondragover:preventDefault="true"
                          @ondragleave="@(() => DragLeave(stageIndex))"
@@ -167,14 +167,13 @@
                             else if (stage.Action is ParallelWorkflowsChainActionView parallel)
                             {
                                 <button disabled="@ReadOnly" class="job-path parallel-workflow-heading" title="Edit parallel if gates" @onclick="@(() => OnEditParallelWorkflowAction.InvokeAsync(stageIndex))">
-                                    <span class="job-icon"><AppIcon Kind="parallel" /></span><span class="node-copy"><strong>Parallel if gates</strong><small>@parallel.Branches.Count branches · join all</small></span>
+                                    <span class="job-icon"><AppIcon Kind="parallel" /></span><span class="node-copy"><strong>Step pathways</strong><small>@parallel.Branches.Count branches · join all</small></span>
                                 </button>
-                                <div class="parallel-workflow-branches">
-                                    @foreach (var branch in parallel.Branches)
-                                    {
-                                        <button type="button" disabled="@ReadOnly" class="parallel-workflow-branch" title="@($"{branch.WorkflowName}: {branch.Condition}")" @onclick="@(() => OnEditParallelWorkflowAction.InvokeAsync(stageIndex))"><span class="route-label">IF</span><code>@branch.Condition</code><strong>@branch.WorkflowName</strong></button>
-                                    }
-                                </div>
+                                <WorkflowPaths Action="parallel" Workflows="Workflows"
+                                               OnAddBranch="@(!ReadOnly && OnAddBranch.HasDelegate ? EventCallback.Factory.Create(this, () => OnAddBranch.InvokeAsync(stageIndex)) : default)"
+                                               OnDeleteBranch="@(!ReadOnly && OnDeleteBranch.HasDelegate ? EventCallback.Factory.Create<int>(this, branch => OnDeleteBranch.InvokeAsync((stageIndex, branch))) : default)"
+                                               OnEditCondition="@(!ReadOnly && OnEditBranch.HasDelegate ? EventCallback.Factory.Create<int>(this, branch => OnEditBranch.InvokeAsync((stageIndex, branch))) : default)"
+                                               OnEditActions="@(!ReadOnly && OnEditBranchActions.HasDelegate ? EventCallback.Factory.Create<int>(this, branch => OnEditBranchActions.InvokeAsync((stageIndex, branch))) : default)" />
                                 <div class="node-output"><span>Join results</span><code>@parallel.OutputField</code></div>
                             }
                             else if (stage.Action is SubWorkflowChainActionView child)
@@ -271,6 +270,10 @@
                         {
                             <div class="wait-strip">Wait @wg.DurationSeconds.ToString("0.#") seconds</div>
                         }
+                        @if (RunSteps is null && !ReadOnly && OnAddPathways.HasDelegate)
+                        {
+                            <button class="add-path" @onclick="() => OnAddPathways.InvokeAsync(stageIndex)"><AppIcon Kind="split" /> Add pathways after step</button>
+                        }
                     </div>
                     </div>
                     @if (gate is ConditionGateView condition)
@@ -288,11 +291,15 @@
                                 }
                                 @if (RunSteps is null && !ReadOnly)
                                 {
-                                    <button class="dcbtn canvas-button" @onclick="@(() => OnEditGate.InvokeAsync((stageIndex, condition)))">Edit false path</button>
+                                    <button class="dcbtn canvas-button" @onclick="@(() => OnEditFalsePath.InvokeAsync(stageIndex))">Edit false path</button>
                                 }
                             </div>
                         </div>
                         <span class="route-join"><AppIcon Kind="branch" /> Rejoin</span>
+                        @if (RunSteps is null && !ReadOnly && OnAddBranch.HasDelegate && (CanAddBranch?.Invoke(stageIndex) ?? true))
+                        {
+                            <button class="dcbtn canvas-button add-conditional-branch" @onclick="() => OnAddBranch.InvokeAsync(stageIndex)"><AppIcon Kind="plus" /> Add branch</button>
+                        }
                     }
                     </div>
                 </div>
@@ -312,7 +319,7 @@
         <span><AppIcon Kind="agent" /> agent</span>
         <span><AppIcon Kind="split" /> condition</span>
         <span><AppIcon Kind="clock" /> delay</span>
-        <span class="legend-help">Parallel jobs run together. Conditions select the true or false path, then rejoin.</span>
+        <span class="legend-help">Each branch checks its condition. Matching branches run together, then rejoin.</span>
     </div>
 </div>
 
@@ -329,6 +336,14 @@
     [Parameter] public Dictionary<int, ChainGateView> Gates { get; set; } = new();
     [Parameter] public EventCallback<int> OnAddGate { get; set; }
     [Parameter] public EventCallback<(int StageIndex, ChainGateView Gate)> OnEditGate { get; set; }
+    [Parameter] public EventCallback<int> OnEditFalsePath { get; set; }
+    [Parameter] public IReadOnlyList<JobChainView> Workflows { get; set; } = [];
+    [Parameter] public EventCallback<int> OnAddBranch { get; set; }
+    [Parameter] public Func<int, bool>? CanAddBranch { get; set; }
+    [Parameter] public EventCallback<int> OnAddPathways { get; set; }
+    [Parameter] public EventCallback<(int StageIndex, int BranchIndex)> OnEditBranch { get; set; }
+    [Parameter] public EventCallback<(int StageIndex, int BranchIndex)> OnEditBranchActions { get; set; }
+    [Parameter] public EventCallback<(int StageIndex, int BranchIndex)> OnDeleteBranch { get; set; }
     [Parameter] public EventCallback<int> OnRemoveGate { get; set; }
     [Parameter] public EventCallback<int> OnEditEmailAction { get; set; }
     [Parameter] public EventCallback<int> OnEditSmsAction { get; set; }

@@ -573,6 +573,35 @@ public sealed class JobEditorViewModel : PageViewModel, IComponentViewModel, IAs
         return await _js.InvokeAsync<bool>("confirm", "Discard unsaved code changes?");
     }
 
+    private EditorFile? _assistantFile;
+    private string? _assistantSource;
+
+    public async Task<string> AssistantContextAsync()
+    {
+        await SyncActiveAsync();
+        _assistantFile = _files.ElementAtOrDefault(_active)
+            ?? throw new InvalidOperationException("Open a file before asking the assistant.");
+        _assistantSource = _assistantFile.Content;
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            ProjectId, JobId, RuntimeId, Entrypoint,
+            files = _files.Select(file => file.Path),
+            activeFile = _assistantFile.Path, code = _assistantSource
+        });
+    }
+
+    public async Task ApplyAssistantCodeAsync(string code)
+    {
+        if (Busy || !_monacoReady) throw new InvalidOperationException("Wait for the editor to be ready before applying this draft.");
+        await SyncActiveAsync();
+        if (_assistantFile is null || _files.ElementAtOrDefault(_active) != _assistantFile || _assistantFile.Content != _assistantSource)
+            throw new InvalidOperationException("The active file changed since this request. Send a new message to update the draft before applying it.");
+        await _js.InvokeVoidAsync("pcmonaco.setValue", EditorId, code, EditorLanguageCatalog.ForPath(_assistantFile.Path));
+        _assistantFile.Content = code;
+        _message = "Assistant draft applied. Review before deploying.";
+        NotifyStateChanged();
+    }
+
     private async Task SyncActiveAsync()
     {
         if (!_monacoReady || _files.Count == 0)

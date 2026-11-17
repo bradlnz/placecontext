@@ -27,6 +27,7 @@ else if (!Vm.IsCodeMap)
 }
 else
 {
+    <AssistantPageContext @key="JobId" Kind="code" ReadContext="Vm.AssistantContextAsync" Apply="Vm.ApplyAssistantCodeAsync" />
     <div class="page @(Embedded ? "embedded" : null)">
     @* ── Toolbar ─────────────────────────────────────────────────────────────────────────── *@
     <div class="toolbar">

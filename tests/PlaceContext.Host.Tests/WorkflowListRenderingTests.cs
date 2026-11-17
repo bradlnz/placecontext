@@ -92,7 +92,8 @@ public sealed class WorkflowListRenderingTests
                 foreach (var permission in new[] { Permission.ChainsManage, Permission.TriggersManage, Permission.ProjectsView })
                     options.AddPolicy(permission, policy => policy.RequireAuthenticatedUser());
             })
-            .AddSingleton(vm).AddSingleton<NavigationManager>(navigation).BuildServiceProvider();
+            .AddSingleton(vm).AddSingleton(new AssistantPageViewModel(new PortalUiState()))
+            .AddSingleton<NavigationManager>(navigation).BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         RenderFragment content = builder =>
         {

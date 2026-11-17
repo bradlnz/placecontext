@@ -1283,7 +1283,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
     }
 
     private sealed record ParallelWorkflowResult(Guid WorkflowId, string WorkflowName, string Condition, string Status,
-        Guid? RunId = null, System.Text.Json.Nodes.JsonNode? Output = null, string? Error = null);
+        Guid? RunId = null, System.Text.Json.Nodes.JsonNode? Output = null, string? Error = null, bool WhenFalse = false);
 
     private async Task<(string? Payload, ChainRunStatus Status)> ExecuteParallelWorkflowsAsync(
         ParallelWorkflowsChainAction action, ChainRun run, int index, string? payload, CancellationToken ct, StepExecutionPolicy? policy = null)
@@ -1304,7 +1304,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
             using var limit = new SemaphoreSlim(MaxConcurrentBranches);
             using var progressLock = new SemaphoreSlim(1);
             var results = action.Branches.Select(branch => new ParallelWorkflowResult(branch.WorkflowId, branch.WorkflowName, branch.Condition,
-                new ConditionGate(branch.Condition).Evaluate(payload).Proceed ? "Queued" : "Skipped")).ToArray();
+                new ConditionGate(branch.Condition).Evaluate(payload).Proceed != branch.WhenFalse ? "Queued" : "Skipped", WhenFalse: branch.WhenFalse)).ToArray();
             async Task PublishAsync(int branchIndex, ParallelWorkflowResult result) => await WithProgressLockAsync(progressLock, async () =>
             {
                 results[branchIndex] = result;
@@ -1325,7 +1325,7 @@ public sealed class RunJobChainHandler : ICommandHandler<RunJobChainCommand, Cha
                     var result = await WithStepPolicyAsync(policy, run, index, token => RunChildAsync(branch.WorkflowId, payload, dispatcher, token, ct), ct, progressLock, failed: result => result.Status == "Failed", retriesUsed: 0);
                     await PublishAsync(branchIndex, new(branch.WorkflowId, branch.WorkflowName, branch.Condition, result.Status, result.Id,
                         ParseWorkflowOutput(result.FinalOutput),
-                        result.Steps.FirstOrDefault(step => step.Status == "Failed")?.Error));
+                        result.Steps.FirstOrDefault(step => step.Status == "Failed")?.Error, branch.WhenFalse));
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                 catch (Exception ex) { await PublishAsync(branchIndex, branch with { Status = "Failed", Error = ShortError(ex.Message) }); }

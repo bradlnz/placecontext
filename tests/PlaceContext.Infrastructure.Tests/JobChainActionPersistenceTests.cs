@@ -65,13 +65,15 @@ public sealed class JobChainActionPersistenceTests
 
     }
 
-    [Fact]
-    public async Task Parallel_workflow_conditions_round_trip()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Parallel_workflow_conditions_round_trip(int branchCount)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
         var repository = new EfJobChainRepository(db);
-        var branches = new[] { new ConditionalWorkflowBranch(Guid.NewGuid(), "Writer", "eq:ready:true"), new ConditionalWorkflowBranch(Guid.NewGuid(), "Planner", "gte:score:0.9") };
+        var branches = new[] { new ConditionalWorkflowBranch(Guid.NewGuid(), "Writer", "eq:ready:true"), new ConditionalWorkflowBranch(Guid.NewGuid(), "Planner", "gte:score:0.9", WhenFalse: true) }.Take(branchCount).ToArray();
         var chain = JobChain.Create(Guid.NewGuid(), "Parent", null, [ChainStage.ForAction(new ParallelWorkflowsChainAction(branches, "joined"))], T0);
         await repository.AddAsync(chain); await db.SaveChangesAsync(); db.ChangeTracker.Clear();
         var loaded = Assert.IsType<ParallelWorkflowsChainAction>((await repository.GetByIdAsync(chain.Id))!.Stages[0].Action);

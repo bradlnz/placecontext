@@ -18,6 +18,14 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
     public ProjectAgentCatalog Catalog { get; private set; } = new();
     public DashboardSettings? Dashboard { get; private set; }
     public IEnumerable<DashboardAgentProfile> Agents => (Dashboard?.Agents ?? []).Concat(Catalog.Agents);
+    public Task<string> AssistantContextAsync() => Task.FromResult(System.Text.Json.JsonSerializer.Serialize(new
+    {
+        agents = Agents.Take(50).Select(agent => new { agent.Id, agent.Name, agent.ParentAgentId }),
+        selectedAgent = Agent,
+        activeTab = AgentTab,
+        workflows = Workflows.Take(50).Select(workflow => new { workflow.Id, workflow.Name }),
+        limits = "Up to 50 agents, 50 linked workflow summaries, and the selected agent configuration."
+    }));
     public IEnumerable<DashboardAgentProfile> RootAgents => Agents
         .Where(a => a.EffectiveParentAgentId is not { } parentId || !Agents.Any(parent => parent.Id == parentId))
         .OrderBy(a => a.Id != DashboardSettings.DefaultAgentId).ThenBy(a => a.Name);

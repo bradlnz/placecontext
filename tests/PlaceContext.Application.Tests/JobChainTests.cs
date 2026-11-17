@@ -17,6 +17,25 @@ namespace PlaceContext.Application.Tests;
 public class JobChainTests
 {
     [Fact]
+    public async Task A_single_remaining_conditional_branch_still_executes_and_joins()
+    {
+        var chains = new InMemoryJobChainRepository();
+        var child = JobChain.Create(ProjectId, "Remaining branch", null, [ChainStage.Of(Guid.NewGuid())], T0);
+        await chains.AddAsync(child);
+        var action = new ParallelWorkflowsChainAction([new(child.Id, child.Name, "eq:approved:false", WhenFalse: true)], "remaining");
+        var parent = JobChain.Create(ProjectId, "Parent", null, [ChainStage.ForAction(action)], T0);
+        await chains.AddAsync(parent);
+        var dispatcher = new ParallelChildDispatcher(child.Id, false);
+        dispatcher.Release.SetResult();
+        var handler = new RunJobChainHandler(chains, new InMemoryJobRepository(), new InMemoryChainRunRepository(), new RecordingUnitOfWork(), new FakeClock(T0),
+            new FakeJobRunner(new FakeRunDispatcher()), permissions: new FakePermissionService(true), dispatcher: dispatcher);
+        var result = await handler.HandleAsync(new(parent.Id, "{\"approved\":true}"));
+        Assert.Equal("Succeeded", result.Status);
+        Assert.Equal(1, dispatcher.Started);
+        Assert.Contains("remaining", result.FinalOutput);
+    }
+
+    [Fact]
     public async Task Safety_rejection_stops_job_and_parent_retries_and_remains_in_run_history()
     {
         var job = MakeJob("blocked"); var jobs = new InMemoryJobRepository(); await jobs.AddAsync(job);
@@ -106,16 +125,19 @@ public class JobChainTests
     }
 
     [Theory]
-    [InlineData(false, 3)]
-    [InlineData(true, 3)]
-    [InlineData(false, 6)]
-    public async Task Parallel_conditions_start_matching_children_together_and_join_in_branch_order(bool fail, int branchCount)
+    [InlineData(false, 3, false)]
+    [InlineData(true, 3, false)]
+    [InlineData(false, 6, false)]
+    [InlineData(false, 3, true)]
+    public async Task Parallel_conditions_start_matching_children_together_and_join_in_branch_order(bool fail, int branchCount, bool falseOutcome)
     {
         var chains = new InMemoryJobChainRepository();
         var children = Enumerable.Range(0, branchCount).Select(i => JobChain.Create(ProjectId, $"Child {i}", null, [ChainStage.Of(Guid.NewGuid())], T0)).ToArray();
         foreach (var child in children) await chains.AddAsync(child);
         var action = new ParallelWorkflowsChainAction(children.Select((child, i) => new ConditionalWorkflowBranch(child.Id, child.Name,
-            i == branchCount - 1 ? "eq:approved:false" : "all:[\"eq:approved:true\",\"gte:score:0.9\"]")).ToArray());
+            i == branchCount - 1 ? (falseOutcome ? "eq:approved:true" : "eq:approved:false")
+                : falseOutcome ? "any:[\"eq:approved:false\",\"lt:score:0.9\"]" : "all:[\"eq:approved:true\",\"gte:score:0.9\"]",
+            WhenFalse: falseOutcome)).ToArray());
         var next = MakeJob("join"); var jobs = new InMemoryJobRepository(); await jobs.AddAsync(next);
         var parent = JobChain.Create(ProjectId, "Parent", null, [ChainStage.ForAction(action), ChainStage.Of(next.Id)], T0);
         await chains.AddAsync(parent);
@@ -141,6 +163,7 @@ public class JobChainTests
         Assert.Equal(children[0].Id, output.RootElement[0].GetProperty("workflowId").GetGuid());
         Assert.Equal(children[1].Id, output.RootElement[1].GetProperty("workflowId").GetGuid());
         Assert.Equal("Skipped", output.RootElement[branchCount - 1].GetProperty("status").GetString());
+        Assert.Equal(falseOutcome, output.RootElement[0].GetProperty("whenFalse").GetBoolean());
         Assert.Contains("parallel_results", result.FinalOutput);
     }
 

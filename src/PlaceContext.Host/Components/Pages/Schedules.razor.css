@@ -6,7 +6,9 @@
 
 .page-head {
     display: flex;
-    align-items: baseline;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
     justify-content: space-between;
     margin-bottom: 18px;
 }
@@ -37,48 +39,11 @@
     color: var(--text-2);
 }
 
-.add-bar {
-    padding: 14px 16px;
-    margin-bottom: 16px;
-    display: flex;
-    gap: 10px;
-    align-items: flex-end;
-    flex-wrap: wrap;
+.schedule-overlay {
+    z-index: calc(80 + var(--workflow-editor-depth, 0) * 100);
 }
 
-.field-job {
-    min-width: 180px;
-}
-
-.field-name {
-    min-width: 160px;
-}
-
-.field-sm {
-    min-width: 110px;
-}
-
-.field-cron {
-    min-width: 170px;
-}
-
-.field-day {
-    min-width: 80px;
-}
-
-.field-event {
-    min-width: 150px;
-}
-
-.field-prompt {
-    min-width: 260px;
-    flex: 1;
-}
-
-.field-prompt textarea {
-    min-height: 64px;
-    resize: vertical;
-}
+.schedule-overlay .dcmodal-head h3 { margin: 0; }
 
 .code-hint {
     margin-left: 4px;

@@ -1,0 +1,18 @@
+@implements IDisposable
+@inject AssistantPageViewModel Context
+@inject NavigationManager Navigation
+
+@code {
+    [Parameter, EditorRequired] public Func<Task<string>> ReadContext { get; set; } = null!;
+    [Parameter] public Func<string, Task>? Apply { get; set; }
+    [Parameter] public Func<Task>? Refresh { get; set; }
+    [Parameter] public string? Kind { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        Context.Navigate(Navigation.ToBaseRelativePath(Navigation.Uri));
+        Context.Register(this, ReadContext, Apply, Refresh, Kind);
+    }
+
+    public void Dispose() => Context.Unregister(this);
+}

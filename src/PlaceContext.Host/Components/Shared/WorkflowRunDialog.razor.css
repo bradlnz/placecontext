@@ -1,4 +1,4 @@
-.run-modal { width:min(1440px, calc(100vw - 24px));  display:flex; flex-direction:column }
+.run-modal { width:100%;  display:flex; flex-direction:column }
 .flex-min { flex:1; min-width:0 }
 .title-14 { font-size:14px; font-weight:650 }
 .sub-115, .sub-note { font-size:11.5px; color:var(--text-3); line-height:1.5 }
@@ -12,8 +12,8 @@
 .run-input-field > .dcfield { min-width:0 }
 .run-input-field > .dcfield:nth-child(3) { grid-column:1 / -1 }
 .run-input-field > button { grid-column:3; grid-row:1; align-self:end; padding:6px }
-.workflow-run-overlay { align-items:center; justify-content:center; padding:12px; z-index:80 }
-.workflow-run-overlay > .dcmodal { height:auto; max-height:calc(100dvh - 32px); max-width:calc(100vw - 24px); border:1px solid var(--border-2); border-radius:10px; box-shadow:0 16px 60px #0005 }
+.workflow-run-overlay { padding:0; z-index:calc(80 + var(--workflow-editor-depth, 0) * 100) }
+.workflow-run-overlay > .dcmodal { height:100dvh; max-height:100dvh; max-width:none; border:0; border-radius:0; box-shadow:none }
 .workflow-run-overlay .dcmodal-head { align-items:flex-start; gap:12px; padding:18px 20px }
 .workflow-run-overlay .dcmodal-head .sub-115 { line-height:1.5; margin-top:6px }
 .workflow-run-overlay .dcmodal-body { overflow:auto; padding:20px }

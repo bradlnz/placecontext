@@ -84,7 +84,7 @@ public class BackupTests
         var parent = JobChain.Create(project.Id.Value, "Routing parent", null,
             [new ChainStage([], new ConditionGate("all:[\"true\",\"false\"]", [ChainStage.ForAction(new SubWorkflowChainAction(child.Id, child.Name))], question),
                 action: new SubWorkflowChainAction(child.Id, child.Name), executionPolicy: new(2, 5, 90)),
-             ChainStage.ForAction(new ParallelWorkflowsChainAction([new(child.Id, child.Name, "true"), new(child.Id, child.Name, "false")]))], T0);
+             ChainStage.ForAction(new ParallelWorkflowsChainAction([new(child.Id, child.Name, "true"), new(child.Id, child.Name, "false", WhenFalse: true)]))], T0);
         await source.Chains.AddAsync(parent);
         var manifest = await source.Exporter().HandleAsync(new ExportManifestQuery());
         manifest = manifest with { JobChains = manifest.JobChains.OrderByDescending(chain => chain.ChainId == parent.Id).ToArray() };
@@ -102,6 +102,7 @@ public class BackupTests
         Assert.Equal(question, gate.ReviewQuestion);
         if (question is null) Assert.False(gate.Evaluate("{}").Proceed);
         var parallel = Assert.IsType<ParallelWorkflowsChainAction>(workflows.Single(chain => chain.Name == parent.Name).Stages[1].Action);
+        Assert.True(parallel.Branches[1].WhenFalse);
         Assert.All(parallel.Branches, branch => Assert.Equal(restoredChild.Id, branch.WorkflowId));
     }
 

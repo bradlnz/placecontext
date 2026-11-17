@@ -29,3 +29,14 @@
 .build-chat :is(.user .message-text) { max-width: 85%; box-sizing: border-box; background: var(--chat-surface); padding: 12px 18px; border-radius: 24px; }
 .build-chat :is(.message-image) { max-width: min(260px, 100%); max-height: 240px; border-radius: 10px; margin: 10px 10px 0 0; }
 .build-chat :is(.tool-call,.tool-result) { border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; margin: 8px 0 18px; font-size: 11px; color: var(--text-3); }
+
+.build-chat .chat-composer { background: var(--chat-surface); border: 1px solid transparent; border-radius: 24px; padding: 18px 14px 10px; box-shadow: 0 2px 8px #0000000d; transition: border-color .15s, box-shadow .15s; }
+.build-chat .chat-composer:focus-within { border-color: var(--border-2); }
+.build-chat .chat-input { resize: vertical; display: block; width: 100%; box-sizing: border-box; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 64px; max-height: 200px; border: 0; background: transparent; color: var(--text); padding: 0 4px 12px; font: inherit; font-size: 15px; line-height: 1.65; outline: none; }
+.build-chat .composer-actions { justify-content: flex-end; gap: 12px; }
+.build-chat .send-button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: var(--text); color: var(--panel); cursor: pointer; transition: opacity .15s, transform .15s; }
+.build-chat .send-button:not(:disabled):hover { transform: translateY(-1px); }
+.build-chat .send-button:disabled { background: var(--text-3); color: var(--chat-surface); opacity: .5; }
+.build-chat .send-button svg { width: 20px; height: 20px; }
+.build-chat .stop-button span { width: 11px; height: 11px; background: currentColor; border-radius: 2px; }
+@media (max-width:720px) { .build-chat .chat-input { resize:none; } }

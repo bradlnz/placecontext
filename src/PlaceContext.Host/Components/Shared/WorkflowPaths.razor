@@ -1,0 +1,54 @@
+@using PlaceContext.Application.Dtos
+
+<div class="workflow-paths" role="group" aria-label="Conditional pathways">
+    @foreach (var (branch, index) in Action.Branches.Select((branch, index) => (branch, index)))
+    {
+        var branchIndex = index;
+        var workflow = Workflows.FirstOrDefault(candidate => candidate.Id == branch.WorkflowId);
+        <section class="path-lane" aria-label="@($"Branch {index + 1}: {branch.WorkflowName}")">
+            <div class="path-label">@(branch.WhenFalse ? "False" : "True") · Branch @(index + 1)</div>
+            <div class="path-caption">
+                <strong>@(workflow?.Name ?? branch.WorkflowName)</strong>
+                <p>Run when this branch's condition is @(branch.WhenFalse ? "false" : "true"). Otherwise, continue without running it.</p>
+            </div>
+            <div class="path-card">
+                <div class="path-head">
+                    <span class="path-number">@(index + 1)</span><AppIcon Kind="workflow" /><span>Actions</span>
+                    @if (OnDeleteBranch.HasDelegate)
+                    {
+                        <button type="button" class="path-delete" aria-label="@($"Delete branch {index + 1}")" title="Delete branch" @onclick="() => OnDeleteBranch.InvokeAsync(branchIndex)"><AppIcon Kind="close" /></button>
+                    }
+                </div>
+                <div class="path-actions">
+                    @if (workflow is not null && Depth < 8)
+                    {
+                        <WorkflowBranchPreview Stages="workflow.Stages" Workflows="Workflows" Depth="@(Depth + 1)" />
+                    }
+                    else { <strong>@branch.WorkflowName</strong> }
+                    @if (OnEditActions.HasDelegate)
+                    {
+                        <button type="button" class="dcbtn" @onclick="() => OnEditActions.InvokeAsync(branchIndex)"><AppIcon Kind="edit" /> Edit actions</button>
+                    }
+                </div>
+                <button type="button" class="path-condition" disabled="@(!OnEditCondition.HasDelegate)" title="@branch.Condition" @onclick="() => OnEditCondition.InvokeAsync(branchIndex)">
+                    <span>@(branch.WhenFalse ? "IF FALSE" : "IF TRUE")</span><code>@branch.Condition</code>
+                </button>
+            </div>
+        </section>
+    }
+    @if (OnAddBranch.HasDelegate)
+    {
+        <button type="button" class="dcbtn path-add" disabled="@(Action.Branches.Count >= 8)" @onclick="OnAddBranch"><AppIcon Kind="plus" /> Add branch</button>
+    }
+    <div class="path-join" title="Join all matching branches"><AppIcon Kind="branch" /> Rejoin</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ParallelWorkflowsChainActionView Action { get; set; } = default!;
+    [Parameter] public IReadOnlyList<JobChainView> Workflows { get; set; } = [];
+    [Parameter] public int Depth { get; set; }
+    [Parameter] public EventCallback<int> OnEditCondition { get; set; }
+    [Parameter] public EventCallback<int> OnEditActions { get; set; }
+    [Parameter] public EventCallback<int> OnDeleteBranch { get; set; }
+    [Parameter] public EventCallback OnAddBranch { get; set; }
+}

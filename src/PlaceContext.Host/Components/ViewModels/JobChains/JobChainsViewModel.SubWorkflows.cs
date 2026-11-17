@@ -20,6 +20,17 @@ public sealed partial class JobChainsViewModel
         NotifyStateChanged();
     }
     public void CloseSubWorkflowEditor() { ShowSubWorkflowEditor = false; NotifyStateChanged(); }
+    public async Task RefreshSubWorkflowAsync()
+    {
+        try
+        {
+            Chains = await _svc.ListJobChainsAsync(ProjectId);
+            Jobs = await _svc.ListJobsAsync(ProjectId);
+            SubWorkflowError = null;
+        }
+        catch (Exception ex) { SubWorkflowError = ex.Message; }
+        NotifyStateChanged();
+    }
     public void SaveSubWorkflowAction()
     {
         var workflow = SelectedSubWorkflow;

@@ -6,7 +6,7 @@ using PlaceContext.Domain.ValueObjects;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class SchedulesViewModel : PageViewModel
+public sealed class SchedulesViewModel : PageViewModel, IComponentViewModel
 {
     private static class Copy
     {
@@ -68,6 +68,22 @@ public sealed class SchedulesViewModel : PageViewModel
         get; private set;
     }
     public string TimeZoneId => _tenant.TimeZoneId;
+    public bool ShowAddSchedule { get; private set; }
+
+    public void OpenAddSchedule()
+    {
+        Error = null;
+        ShowAddSchedule = true;
+        NotifyStateChanged();
+    }
+
+    public void CloseAddSchedule()
+    {
+        if (Busy) return;
+        ShowAddSchedule = false;
+        Error = null;
+        NotifyStateChanged();
+    }
 
     public Guid NewWorkflowId
     {
@@ -184,6 +200,7 @@ public sealed class SchedulesViewModel : PageViewModel
 
     public async Task AddTriggerAsync(Guid projectId)
     {
+        if (Busy) return;
         Error = null;
         if (string.IsNullOrWhiteSpace(NewName))
         {
@@ -214,6 +231,7 @@ public sealed class SchedulesViewModel : PageViewModel
 
             await RefreshTriggersAsync(projectId);
             NewName = string.Empty;
+            ShowAddSchedule = false;
         }
         catch (Exception ex)
         {

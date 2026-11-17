@@ -15,13 +15,18 @@
 @using PlaceContext.Host.Components.ViewModels.Helpers
 @inject JobChainsViewModel Vm
 
-<PageTitle>PlaceContext — Workflows</PageTitle>
+@if (EditorDepth == 0)
+{
+    <PageTitle>PlaceContext — Workflows</PageTitle>
+}
+<div style="--workflow-editor-depth:@EditorDepth" @onclick:stopPropagation="true">
+<AssistantPageContext ReadContext="Vm.AssistantContextAsync" Refresh="Vm.RefreshAssistantCatalogueAsync" />
 
 @if (Vm.Loading)
 {
     <Skeleton Kind="list" Rows="5" Padded />
 }
-else
+else if (EditorDepth == 0)
 {
     <div class="chains-page">
         <WorkflowTabs ProjectId="ProjectId" Active="workflows" />
@@ -76,100 +81,27 @@ else
 }
 
 @* ── Chain slide-out: Details (edit) | Runs (pipeline history, live) ─────────────────────── *@
+@if (EditorDepth > 0 && !Vm.Loading && !Vm.ShowEditor)
+{
+    <div class="dcmodal-overlay workflow-dialog-overlay">
+        <div class="dcmodal" role="dialog" aria-modal="true" aria-label="Sub-workflow unavailable">
+            <div class="dcmodal-head"><div class="title-14">Sub-workflow</div><button class="dcslide-x" aria-label="Close" @onclick="CloseWorkflowAsync"><AppIcon Kind="close" /></button></div>
+            <div class="dcmodal-body"><p role="alert">@(Vm.Message ?? "This workflow is unavailable.")</p></div>
+        </div>
+    </div>
+}
 @if (Vm.ShowEditor)
 {
-    <div class="dcslide-scrim" @onclick="() => Vm.CloseEditor()"></div>
-    <div class="dcslide slide-640">
-        <div class="dcslide-head">
-            <div class="flex-min">
-                <div class="title-14">@(Vm.EditChainId.HasValue ? Vm.EdName : "New workflow")</div>
-                <div class="sub-115">
-                    Connect jobs, human decisions, and agent responses into one workflow.
-                </div>
-            </div>
-            @if (Vm.EditChainId.HasValue && Vm.Chains?.FirstOrDefault(c => c.Id == Vm.EditChainId) is { } runnable)
-            {
-                <button class="dcbtn primary mr-10" disabled="@Vm.IsRunningChain(runnable.Id)" @onclick="@(() => Vm.RunChainAsync(runnable))">
-                    <AppIcon Kind="play" /> @(Vm.IsRunningChain(runnable.Id) ? "running…" : "Run")
-                </button>
-            }
-            <button class="dcbtn" aria-haspopup="dialog" @onclick='() => Vm.SetEditorView("canvas")'><AppIcon Kind="data.graph" /> Canvas</button>
-            <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CloseEditor()"><AppIcon Kind="close" /></button>
-        </div>
-
-        <section class="workflow-readiness" aria-label="Workflow readiness checks">
-            <div class="workflow-readiness-head">
-                <div><strong>Pre-run checks</strong><small>Inspect referenced jobs, source configuration and human gates before saving.</small></div>
-                <button type="button" class="dcbtn btn-2-8" disabled="@Vm.Saving" @onclick="Vm.CheckReadiness"><AppIcon Kind="test" /> Check</button>
-            </div>
-            @if (Vm.Readiness is { } preflight)
-            {
-                <div class="workflow-readiness-summary @(preflight.Ready ? "ready" : "blocked")" role="status">
-                    <AppIcon Kind="@(preflight.Ready ? "check" : "warning")" />
-                    @(preflight.Ready ? "Definition checks passed" : $"{preflight.ErrorCount} issues need fixing")
-                    <span>@preflight.UniqueJobCount job(s) · @preflight.StageCount stages · @preflight.WarningCount warnings</span>
-                </div>
-                @if (preflight.Findings.Count > 0)
-                {
-                    <ul class="workflow-readiness-findings">
-                        @foreach (var issue in preflight.Findings.Take(12))
-                        {
-                            <li class="@issue.Severity"><strong>@issue.Title</strong><span>@issue.Detail</span></li>
-                        }
-                    </ul>
-                }
-                <small class="workflow-readiness-note">Definition checks do not validate live credentials, source data, or future external side effects. Test jobs before production use.</small>
-            }
-        </section>
-
-        @if (Vm.EditChainId.HasValue)
-        {
-            <div class="dctabs editor-tabs">
-                <button class="dctab @(Vm.IsDetailsTab ? "active" : "")" @onclick="Vm.ShowWorkflowDetails">Details</button>
-                <button class="dctab @(Vm.IsRunsTab ? "active" : "")" @onclick="Vm.ShowWorkflowRunsAsync">Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
-            </div>
-        }
-
-        @{
-            var previewStages = Vm.BuildCanvasStageViews();
-        <div class="dcslide-body editor-body">
-
-            <div class="field-row">
-                <div class="dcfield flex-1">
-                    <label>Name <span class="req">*</span></label>
-                    <input class="dcinput" @bind="Vm.EdName" placeholder="my-pipeline" />
-                </div>
-                <div class="dcfield flex-14">
-                    <label>Description</label>
-                    <input class="dcinput" @bind="Vm.EdDescription" placeholder="What does this workflow produce? (optional)" />
-                </div>
-            </div>
-
-            <div class="workflow-canvas-preview">
-                <div class="workflow-canvas-thumbnail" inert aria-hidden="true">
-                    <ChainCanvas Stages="previewStages"
-                                 Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())"
-                                 Gates="@Vm.BuildCanvasGates()"
-                                 ReadOnly="true" />
-                </div>
-                <button type="button" class="workflow-canvas-open" aria-haspopup="dialog"
-                        aria-label="@($"Open workflow canvas, {previewStages.Count} steps")"
-                        @onclick='() => Vm.SetEditorView("canvas")'>
-                    <span><AppIcon Kind="data.graph" /> Open workflow canvas</span>
-                </button>
-            </div>
-
-        </div>
-        }
-
-        @if (Vm.IsCanvasView || Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView || Vm.IsMarkupView)
+    <div class="dcslide-scrim workflow-editor-scrim" @onclick="CloseWorkflowAsync"></div>
+    <div class="dcslide slide-640 workflow-editor">
+        @if (Vm.ShowEditor)
         {
             <div class="dcmodal-overlay workflow-canvas-overlay">
-                <div class="dcmodal workflow-canvas-dialog @(Vm.ShowWorkflowAssistant ? "assistant-open" : null)" role="dialog" aria-modal="true" aria-label="Workflow canvas" @onclick:stopPropagation="true">
+                <div class="dcmodal workflow-canvas-dialog @(Vm.ShowWorkflowAssistant ? "assistant-open" : null)" role="dialog" aria-modal="false" aria-label="Workflow canvas" @onclick:stopPropagation="true">
                     <div class="dcmodal-head" inert="@Vm.ShowWorkflowAssistant">
                         <div class="flex-min">
                             <div class="title-14">@(string.IsNullOrWhiteSpace(Vm.EdName) ? "New workflow" : Vm.EdName) <span class="workflow-step-count">@Vm.EdStages.Count steps</span></div>
-                            <div class="sub-115">@(Vm.IsMarkupView ? "Edit and deploy this workflow as YAML." : Vm.IsCanvasView ? "Drag stages to reorder. Select a step to configure it." : Vm.IsSchedulesView ? "Choose when this workflow runs." : Vm.IsRunsView ? "Execution history, inputs, and job logs." : "Steps run in order. Jobs within a parallel stage run together.")</div>
+                            <div class="sub-115">@(Vm.IsDetailsView ? "Edit the workflow name, description and definition checks." : Vm.IsMarkupView ? "Edit and deploy this workflow as YAML." : Vm.IsCanvasView ? "Drag stages to reorder. Select a step to configure it." : Vm.IsSchedulesView ? "Choose when this workflow runs." : Vm.IsRunsView ? "Execution history, inputs, and job logs." : "Steps run in order. Jobs within a parallel stage run together.")</div>
                         </div>
                         <div class="workflow-canvas-actions">
                             @if (Vm.EditChainId.HasValue && Vm.Chains?.FirstOrDefault(chain => chain.Id == Vm.EditChainId) is { } canvasWorkflow)
@@ -179,34 +111,20 @@ else
                             @if (!Vm.IsMarkupView)
                             {
                             <button type="button" class="dcbtn" @onclick="() => Vm.OpenStageNodePicker(Vm.EdStages.Count)"><AppIcon Kind="plus" /> Add step</button>
-                            @if (Vm.EditChainId.HasValue)
-                            {
-                                <button type="button" class="dcbtn" title="Save the current canvas and open the workflow editor agent" disabled="@Vm.Saving" @onclick="Vm.OpenWorkflowAssistantAsync"><AppIcon Kind="agent" /> Edit with AI</button>
+                            <button type="button" class="dcbtn" disabled="@Vm.Saving" @onclick="SaveWorkflowAsync"><AppIcon Kind="save" /> @(Vm.Saving ? "Saving…" : "Save workflow")</button>
                             }
-                            <details class="workflow-menu">
-                                <summary>Workflow actions</summary>
-                                <div class="workflow-menu-items">
-                                    <button type="button" @onclick="ShowWorkflowDetailsAsync"><AppIcon Kind="edit" /> Details</button>
-                                    @if (Vm.EditChainId.HasValue)
-                                    {
-                                        <button type="button" @onclick="Vm.ShowWorkflowRunsAsync"><AppIcon Kind="logs" /> Runs</button>
-                                    }
-                                    <button type="button" disabled="@Vm.Saving" @onclick="SaveWorkflowAsync"><AppIcon Kind="save" /> @(Vm.Saving ? "Saving…" : "Save workflow")</button>
-
-                                </div>
-                            </details>
-                            }
-                            <button class="dcslide-x" aria-label="Close canvas" disabled="@Vm.Saving" @onclick="CloseWorkflowAsync"><AppIcon Kind="close" /></button>
                         </div>
+                        <button class="dcslide-x" aria-label="Close canvas" disabled="@Vm.Saving" @onclick="CloseWorkflowAsync"><AppIcon Kind="close" /></button>
                     </div>
                     <nav class="dctabs workflow-view-tabs" aria-label="Workflow view" inert="@(Vm.ShowWorkflowAssistant || Vm.Saving)">
-                        <button type="button" class="dctab @(Vm.IsCanvasView ? "active" : null)" aria-pressed="@Vm.IsCanvasView" @onclick='() => SetWorkflowViewAsync("canvas")'>Canvas</button>
+                        <button type="button" class="dctab @(Vm.IsDetailsView ? "active" : null)" aria-pressed="@(Vm.IsDetailsView ? "true" : "false")" @onclick="ShowWorkflowDetailsAsync">Details</button>
+                        <button type="button" class="dctab @(Vm.IsCanvasView ? "active" : null)" aria-pressed="@(Vm.IsCanvasView ? "true" : "false")" @onclick='() => SetWorkflowViewAsync("canvas")'>Canvas</button>
                         @if (Vm.EditChainId.HasValue)
                         {
-                            <button type="button" class="dctab @(Vm.IsMarkupView ? "active" : null)" aria-pressed="@Vm.IsMarkupView" @onclick='() => SetWorkflowViewAsync("markup")'>Markup</button>
-                            <button type="button" class="dctab @(Vm.IsRunsView ? "active" : null)" aria-pressed="@Vm.IsRunsView" @onclick='() => SetWorkflowViewAsync("runs")'>Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
+                            <button type="button" class="dctab @(Vm.IsMarkupView ? "active" : null)" aria-pressed="@(Vm.IsMarkupView ? "true" : "false")" @onclick='() => SetWorkflowViewAsync("markup")'>Markup</button>
+                            <button type="button" class="dctab @(Vm.IsRunsView ? "active" : null)" aria-pressed="@(Vm.IsRunsView ? "true" : "false")" @onclick='() => SetWorkflowViewAsync("runs")'>Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
                             <AuthorizeView Policy="@Permission.TriggersManage">
-                                <button type="button" class="dctab @(Vm.IsSchedulesView ? "active" : null)" aria-pressed="@Vm.IsSchedulesView" @onclick='() => SetWorkflowViewAsync("schedules")'>Schedules</button>
+                                <button type="button" class="dctab @(Vm.IsSchedulesView ? "active" : null)" aria-pressed="@(Vm.IsSchedulesView ? "true" : "false")" @onclick='() => SetWorkflowViewAsync("schedules")'>Schedules</button>
                             </AuthorizeView>
                         }
                     </nav>
@@ -218,8 +136,47 @@ else
                     {
                         <p class="workflow-canvas-error" role="alert">@canvasError</p>
                     }
-                    <div class="dcmodal-body @(Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView || Vm.IsMarkupView ? "workflow-list-body" : null)" inert="@Vm.ShowWorkflowAssistant">
-                        @if (Vm.IsMarkupView)
+                    <div class="dcmodal-body @(Vm.IsDetailsView || Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView || Vm.IsMarkupView ? "workflow-list-body" : null)" inert="@Vm.ShowWorkflowAssistant">
+                        @if (Vm.IsDetailsView)
+                        {
+                            <div class="field-row">
+                                <div class="dcfield flex-1">
+                                    <label for="workflow-name-@EditorDepth">Name <span class="req">*</span></label>
+                                    <input id="workflow-name-@EditorDepth" class="dcinput" @bind="Vm.EdName" placeholder="my-pipeline" />
+                                </div>
+                                <div class="dcfield flex-14">
+                                    <label for="workflow-description-@EditorDepth">Description</label>
+                                    <input id="workflow-description-@EditorDepth" class="dcinput" @bind="Vm.EdDescription" placeholder="What does this workflow produce? (optional)" />
+                                </div>
+                            </div>
+
+                            <section class="workflow-readiness" aria-label="Workflow readiness checks">
+                                <div class="workflow-readiness-head">
+                                    <div><strong>Pre-run checks</strong><small>Inspect referenced jobs, source configuration and human gates before saving.</small></div>
+                                    <button type="button" class="dcbtn btn-2-8" disabled="@Vm.Saving" @onclick="Vm.CheckReadiness"><AppIcon Kind="test" /> Check</button>
+                                </div>
+                                @if (Vm.Readiness is { } preflight)
+                                {
+                                    <div class="workflow-readiness-summary @(preflight.Ready ? "ready" : "blocked")" role="status">
+                                        <AppIcon Kind="@(preflight.Ready ? "check" : "warning")" />
+                                        @(preflight.Ready ? "Definition checks passed" : $"{preflight.ErrorCount} issues need fixing")
+                                        <span>@preflight.UniqueJobCount job(s) · @preflight.StageCount stages · @preflight.WarningCount warnings</span>
+                                    </div>
+                                    @if (preflight.Findings.Count > 0)
+                                    {
+                                        <ul class="workflow-readiness-findings">
+                                            @foreach (var issue in preflight.Findings.Take(12))
+                                            {
+                                                <li class="@issue.Severity"><strong>@issue.Title</strong><span>@issue.Detail</span></li>
+                                            }
+                                        </ul>
+                                    }
+                                    <small class="workflow-readiness-note">Definition checks do not validate live credentials, source data, or future external side effects. Test jobs before production use.</small>
+                                }
+                            </section>
+
+                        }
+                        else if (Vm.IsMarkupView)
                         {
                             <section class="workflow-markup" aria-label="Workflow YAML">
                                 <div class="markup-toolbar">
@@ -469,10 +426,16 @@ else
                         @if (Vm.IsCanvasView)
                         {
                         <ChainCanvas OnEditCode="OpenCodeAsync" Stages="Vm.BuildCanvasStageViews()"
+                                     Workflows="@(Vm.Chains ?? [])"
+                                     OnAddBranch="Vm.OpenStepBranches" CanAddBranch="Vm.CanBranchStep" OnAddPathways="Vm.OpenStepPathways"
+                                     OnEditBranch="@(pair => Vm.OpenParallelBranch(pair.StageIndex, pair.BranchIndex))"
+                                     OnEditBranchActions="OpenParallelBranchActions"
+                                     OnDeleteBranch="@(pair => Vm.DeleteWorkflowBranch(pair.StageIndex, pair.BranchIndex))"
                                      Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())"
                                      Gates="@Vm.BuildCanvasGates()"
                                      OnAddGate="@(stageIndex => Vm.OpenStageNodePicker(stageIndex))"
                                      OnEditGate="@(pair => Vm.OpenGateEditor(pair.StageIndex))"
+                                     OnEditFalsePath="@(index => Vm.OpenGateEditor(index, falsePath: true))"
                                      OnRemoveGate="Vm.RemoveGate"
                                      OnEditPolicy="Vm.OpenStepPolicy"
                                      OnEditEmailAction="@(stageIndex => Vm.OpenEmailActionEditor(stageIndex))"
@@ -543,7 +506,7 @@ else
                                                         }
                                                         else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is ParallelWorkflowsChainAction parallel)
                                                         {
-                                                            <button class="stage-job-chip" @onclick="@(() => Vm.OpenParallelWorkflowAction(stageIndex, true))"><span><strong>Parallel if gates</strong><small>@parallel.Branches.Count conditional workflows · join results</small></span><span class="list-configure">Edit</span></button>
+                                                            <button class="stage-job-chip" @onclick="@(() => Vm.OpenParallelWorkflowAction(stageIndex, true))"><span><strong>Step pathways</strong><small>@parallel.Branches.Count conditional workflows · join results</small></span><span class="list-configure">Edit</span></button>
                                                         }
                                                         else if (Vm.EdStageActions.GetValueOrDefault(stageIndex) is SubWorkflowChainAction child)
                                                         {
@@ -573,7 +536,7 @@ else
                                                     </div>
                                                     @if (stageGate is ConditionGate { ElseBranch: { Count: > 0 } other })
                                                     {
-                                                        <div class="list-false-path"><strong>When false</strong><WorkflowBranchPreview Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())" Stages="@other.Select(Vm.BuildStageView).ToList()" /><button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex))">Edit false path</button></div>
+                                                        <div class="list-false-path"><strong>When false</strong><WorkflowBranchPreview Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())" Stages="@other.Select(Vm.BuildStageView).ToList()" /><button class="dcbtn" @onclick="@(() => Vm.OpenGateEditor(stageIndex, falsePath: true))">Edit false path</button></div>
                                                     }
                                                     @if (!Vm.HasStageAction(stageIndex))
                                                     {
@@ -607,10 +570,11 @@ else
 
         @if (Vm.ShowEditor && Vm.IsRunsView && Vm.ExecutionStep is { } executionStep)
         {
-            <div class="dcmodal-overlay execution-overlay" @onclick="Vm.CloseExecutionStep"
+            <AssistantPageContext @key="(Vm.OpenRun?.Id, executionStep.Index)" Kind="observability" ReadContext="Vm.ExecutionAssistantContextAsync" />
+            <div class="dcmodal-overlay workflow-dialog-overlay execution-overlay" @onclick="Vm.CloseExecutionStep"
                  @onkeydown="@(e => { if (e.Key == "Escape") Vm.CloseExecutionStep(); })">
                 <div class="dcmodal execution-modal" role="dialog" aria-modal="true" aria-labelledby="execution-title" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle Icon="code" />
+                    <div class="dcmodal-head">
                         <div class="execution-heading">
                             <span class="workflow-eyebrow">Step @(executionStep.Index + 1) · Execution details</span>
                             <h3 id="execution-title">@executionStep.JobName</h3>
@@ -688,9 +652,9 @@ else
         @* ── Unified connector step picker ─────────────────────────────────────────────── *@
         @if (Vm.ShowStageNodePicker)
         {
-            <div class="dcmodal-overlay" @onclick="() => Vm.CloseStageNodePicker()">
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="() => Vm.CloseStageNodePicker()">
                 <div class="dcmodal pipeline-step-modal" role="dialog" aria-modal="true" aria-labelledby="pipeline-step-title" aria-describedby="pipeline-step-description" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle Icon="plus" />
+                    <div class="dcmodal-head">
                         <div>
                             <h3 id="pipeline-step-title">Add pipeline step</h3>
                             <p id="pipeline-step-description" class="sub-115">@(Vm.StageNodePickerIndex >= Vm.EdStages.Count ? "Choose what happens next in your workflow." : $"Choose a step to insert before stage {Vm.StageNodePickerIndex + 1}.")</p>
@@ -727,7 +691,7 @@ else
                         <section class="step-picker-section" aria-labelledby="step-picker-control">
                         <h4 id="step-picker-control">Data &amp; flow control</h4>
                         <div class="node-picker-grid">
-                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(ParallelWorkflowsChainAction.ActionType))"><span class="node-picker-icon"><AppIcon Kind="parallel" /></span><strong>Parallel if gates</strong><small>Run every matching sub-workflow, then join</small></button>
+                        <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(ParallelWorkflowsChainAction.ActionType))"><span class="node-picker-icon"><AppIcon Kind="parallel" /></span><strong>Step pathways</strong><small>Run every matching sub-workflow, then join</small></button>
                         <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(SubWorkflowChainAction.ActionType))"><span class="node-picker-icon"><AppIcon Kind="workflow" /></span><strong>Sub-workflow</strong><small>Run a reusable agent workflow</small></button>
                         <button class="node-picker-tile" @onclick="@(() => Vm.ChooseStageNode(QueryDataChainAction.ActionType))">
                             <span class="node-picker-icon" aria-hidden="true"><AppIcon Kind="data" /></span>
@@ -794,9 +758,10 @@ else
 
         @if (Vm.ShowContainerEditor)
         {
-            <div class="dcmodal-overlay" @onclick="Vm.CloseContainerEditor">
+            <AssistantPageContext Kind="infrastructure" ReadContext="Vm.ContainerAssistantContextAsync" />
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="Vm.CloseContainerEditor">
                 <div class="dcmodal qemu-modal" role="dialog" aria-modal="true" aria-labelledby="container-title" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                    <div class="dcmodal-head">
                         <div><span class="workflow-eyebrow">Workflow step</span><h3 id="container-title">@(Vm.ContainerBuild ? "Build container" : "Run container")</h3><p class="sub-note">@(Vm.ContainerBuild ? "Build an image for later workflow steps." : "Run an image in a disposable sandbox.")</p></div>
                         <button class="dcslide-x" aria-label="Close container settings" @onclick="Vm.CloseContainerEditor"><AppIcon Kind="close" /></button>
                     </div>
@@ -845,11 +810,12 @@ else
 
         @if (Vm.ShowQemuEditor)
         {
+            <AssistantPageContext Kind="infrastructure" ReadContext="ReadQemuAssistantContextAsync" />
             var imageAvailable = Vm.QemuEnvironment.Images.Any(image => image.Name == Vm.VirtualMachineImageProfile && image.Available);
             var environmentReady = Vm.QemuEnvironment.Enabled && Vm.QemuEnvironment.AgentReady && imageAvailable;
-            <div class="dcmodal-overlay" @onclick="Vm.CloseQemuEditor">
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="Vm.CloseQemuEditor">
                 <div class="dcmodal qemu-modal" role="dialog" aria-modal="true" aria-labelledby="qemu-editor-title" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                    <div class="dcmodal-head">
                         <span class="qemu-heading-icon"><AppIcon Kind="vm" /></span>
                         <div><span class="workflow-eyebrow">Workflow step</span><h3 id="qemu-editor-title">Browser workspace</h3><p class="sub-note">Give an agent a task in a secure, disposable desktop.</p></div>
                         <button class="dcslide-x" aria-label="Close browser workspace settings" @onclick="Vm.CloseQemuEditor"><AppIcon Kind="close" /></button>
@@ -926,9 +892,10 @@ else
 
         @if (Vm.ShowQemuRunModal && Vm.QemuReplayRun is { } runReplay)
         {
-            <div class="dcmodal-overlay" @onclick="Vm.CloseQemuEditor">
+            <AssistantPageContext @key="(runReplay.Id, Vm.QemuReplayStep)" Kind="observability" ReadContext="Vm.QemuReplayAssistantContextAsync" />
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="Vm.CloseQemuEditor">
                 <div class="dcmodal qemu-modal qemu-modal-replay qemu-run-modal" role="dialog" aria-modal="true" aria-labelledby="qemu-run-title" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                    <div class="dcmodal-head">
                         <span class="qemu-heading-icon"><AppIcon Kind="vm" /></span>
                         <div><span class="workflow-eyebrow">Workflow run</span><h3 id="qemu-run-title">Browser workspace</h3><p class="sub-note">Recorded activity and visual replay for this run.</p></div>
                         <button class="dcslide-x" aria-label="Close browser workspace replay" @onclick="Vm.CloseQemuEditor"><AppIcon Kind="close" /></button>
@@ -960,10 +927,10 @@ else
 
         @if (Vm.ShowParallelWorkflowEditor)
         {
-            <div class="dcmodal-overlay" @onclick="Vm.CloseParallelWorkflowEditor">
-                <div class="dcmodal parallel-workflow-modal workflow-conditions-modal" role="dialog" aria-modal="true" aria-label="Parallel if gates" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle /><div class="title-14">Parallel if gates</div><button class="dcslide-x" aria-label="Close" @onclick="Vm.CloseParallelWorkflowEditor"><AppIcon Kind="close" /></button></div>
-                    <div class="dcmodal-body">
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="Vm.CloseParallelWorkflowEditor">
+                <div class="dcmodal parallel-workflow-modal workflow-conditions-modal" role="dialog" aria-modal="true" aria-label="Step pathways" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head"><div class="title-14">Step pathways</div><button class="dcslide-x" disabled="@Vm.SavingParallelWorkflows" aria-label="Close" @onclick="Vm.CloseParallelWorkflowEditor"><AppIcon Kind="close" /></button></div>
+                    <fieldset class="dcmodal-body branch-editor-fields" disabled="@Vm.SavingParallelWorkflows">
                         <p class="sub-note">Each branch checks the same incoming payload. Every matching workflow runs, up to four at once. The next step waits for all matching branches. Results stay separate in branch order.</p>
                         <nav class="dctabs parallel-branch-tabs" aria-label="Parallel branches">
                             @foreach (var tabBranch in Vm.ParallelBranches)
@@ -975,27 +942,51 @@ else
                         {
                             <section class="parallel-branch" @key="branch">
                                 <h4>Branch @(Vm.ParallelBranches.IndexOf(branch) + 1)</h4>
-                                <div class="dcfield"><label for="parallel-workflow">Run workflow</label><select id="parallel-workflow" class="dcinput" @bind="branch.WorkflowId"><option value="">Choose a workflow</option>
+                                <div class="dcfield"><label for="parallel-workflow">Branch actions</label><select id="parallel-workflow" class="dcinput" @bind="branch.WorkflowId"><option value="">@(branch.DraftStages is null ? "Choose a workflow" : branch.DraftName + " (new)")</option>
                                     @foreach (var workflow in (Vm.Chains ?? []).Where(chain => chain.Id != Vm.EditChainId)) { <option value="@workflow.Id">@workflow.Name</option> }
                                 </select></div>
+                                <div class="branch-editor-actions">
+                                    <button type="button" class="dcbtn" @onclick="() => EditParallelBranch(branch, create: true)"><AppIcon Kind="plus" /> New branch workflow</button>
+                                    @if (Vm.ParallelBranchWorkflow(branch) is not null || branch.DraftStages is not null)
+                                    {
+                                        <button type="button" class="dcbtn" @onclick="() => EditParallelBranch(branch)"><AppIcon Kind="edit" /> Edit actions</button>
+                                    }
+                                </div>
+                                <p class="sub-note">A branch workflow can contain several jobs, actions and nested gates. Saved branch workflows are reusable. Keep waits and requests for human input in the parent workflow.</p>
+                                <div class="dcfield"><label for="parallel-outcome">Run this branch when</label><select id="parallel-outcome" class="dcinput" value="@(branch.WhenFalse ? "false" : "true")" @onchange='e => branch.WhenFalse = e.Value?.ToString() == "false"'><option value="true">Condition is true</option><option value="false">Condition is false</option></select></div>
                                 <div><WorkflowConditionsEditor Rows="branch.Conditions" @bind-Match="branch.Match" LoadFields="Vm.LoadParallelConditionFieldsAsync"
-                                    TrueLabel="@((Vm.Chains ?? []).FirstOrDefault(chain => chain.Id.ToString() == branch.WorkflowId)?.Name ?? "Run selected workflow")"
-                                    FalseLabel="Skip this branch" JoinLabel="Wait for matching branches, then continue" /></div>
-                                <button class="dcbtn btn-xs" disabled="@(Vm.ParallelBranches.Count <= 2)" @onclick="() => Vm.RemoveParallelBranch(branch)">Remove branch</button>
+                                    TrueLabel="@(branch.WhenFalse ? "Skip this branch" : "Run branch actions")"
+                                    FalseLabel="@(branch.WhenFalse ? "Run branch actions" : "Skip this branch")" JoinLabel="Wait for matching branches, then continue" /></div>
+                                @if (Vm.ParallelBranchWorkflow(branch) is { } branchWorkflow)
+                                {
+                                    <WorkflowBranchPreview Stages="branchWorkflow.Stages" />
+                                }
+                                else if (branch.DraftStages is { } draftStages)
+                                {
+                                    <WorkflowBranchPreview Stages="@(draftStages.Select(Vm.BuildStageView).ToArray())" />
+                                }
+                                <button class="dcbtn btn-xs" disabled="@(Vm.ParallelBranches.Count <= 1)" @onclick="() => Vm.RemoveParallelBranch(branch)">Remove branch</button>
                             </section>
                         }
                         <div><button class="dcbtn" disabled="@(Vm.ParallelBranches.Count >= 8)" @onclick="Vm.AddParallelBranch">Add parallel branch</button></div>
                         <div class="dcfield"><label for="parallel-output">Join output field</label><input id="parallel-output" class="dcinput" @bind="Vm.ParallelOutputField" /></div>
+                        <p class="sub-note">Following steps can read branch results from <code>@Vm.ParallelOutputField</code>.</p>
                         @if (Vm.ParallelWorkflowError is { } error) { <div role="alert">@error</div> }
-                    </div>
-                    <div class="dcmodal-foot"><button class="dcbtn" @onclick="Vm.CloseParallelWorkflowEditor">Cancel</button><button class="dcbtn primary" @onclick="Vm.SaveParallelWorkflowAction">Save step</button></div>
+                    </fieldset>
+                    <div class="dcmodal-foot"><button class="dcbtn" disabled="@Vm.SavingParallelWorkflows" @onclick="Vm.CloseParallelWorkflowEditor">Cancel</button><button class="dcbtn primary" disabled="@Vm.SavingParallelWorkflows" @onclick="Vm.SaveParallelWorkflowActionAsync">@(Vm.SavingParallelWorkflows ? "Saving…" : "Save step")</button></div>
                 </div>
+                @if (_editingParallelBranch is { } editingBranch)
+                {
+                    <JobChains @key="editingBranch" ProjectId="ProjectId" WorkflowRouteId="_parallelEditingWorkflowId"
+                               InitialName="_parallelInitialName" InitialStages="_parallelInitialStages" EditorDepth="@(EditorDepth + 1)"
+                               OnSaved="@(id => Vm.SelectSavedParallelWorkflowAsync(editingBranch, id))" OnClose="CloseParallelBranchAsync" />
+                }
             </div>
         }
 
         @if (Vm.PolicyStageIndex is { } policyIndex)
         {
-            <div class="dcmodal-overlay step-policy-overlay" @onclick="Vm.CloseStepPolicy">
+            <div class="dcmodal-overlay workflow-dialog-overlay step-policy-overlay" @onclick="Vm.CloseStepPolicy">
                 <div class="dcmodal run-modal" role="dialog" aria-modal="true" aria-label="Step retries and limits" @onclick:stopPropagation="true">
                     <div class="dcmodal-head"><div class="title-14">Retries and limits · @(Vm.PolicyIsFalsePath ? "False path step" : "Step") @(policyIndex + 1)</div><button class="dcslide-x" aria-label="Close" @onclick="Vm.CloseStepPolicy"><AppIcon Kind="close" /></button></div>
                     <div class="dcmodal-body">
@@ -1012,9 +1003,9 @@ else
 
         @if (Vm.ShowSubWorkflowEditor)
         {
-            <div class="dcmodal-overlay" @onclick="Vm.CloseSubWorkflowEditor">
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="Vm.CloseSubWorkflowEditor">
                 <div class="dcmodal sub-workflow-modal" role="dialog" aria-modal="true" aria-label="Run sub-workflow" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle /><div class="title-14">Run sub-workflow</div><button class="dcslide-x" aria-label="Close" @onclick="Vm.CloseSubWorkflowEditor"><AppIcon Kind="close" /></button></div>
+                    <div class="dcmodal-head"><div class="title-14">Run sub-workflow</div><button class="dcslide-x" aria-label="Close" @onclick="Vm.CloseSubWorkflowEditor"><AppIcon Kind="close" /></button></div>
                     <div class="dcmodal-body">
                         <div class="dcfield"><label for="sub-workflow">Workflow</label><select id="sub-workflow" class="dcinput" @bind="Vm.SubWorkflowId"><option value="">Choose a workflow</option>
                             @foreach (var workflow in (Vm.Chains ?? []).Where(chain => chain.Id != Vm.EditChainId))
@@ -1023,10 +1014,10 @@ else
                         <p class="sub-note">Passes the current payload to an automatic workflow and merges its result into the next step. Put waits and requests for human input in the parent workflow.</p>
                         @if (Vm.SelectedSubWorkflow is { } subWorkflow)
                         {
-                            <div><a class="dcbtn" href="@($"{Vm.WorkflowsRoute}/{subWorkflow.Id}/canvas")"
-                                    target="_blank" rel="noopener noreferrer" title="Edit workflow in a new tab">
-                                <AppIcon Kind="edit" /> Edit workflow <AppIcon Kind="external-link" />
-                            </a></div>
+                            <div><button type="button" class="dcbtn" aria-haspopup="dialog" @onclick="() => _editingSubWorkflowId = subWorkflow.Id">
+                                <AppIcon Kind="edit" /> Edit workflow
+                            </button></div>
+                            <p class="sub-note">Saving edits updates this reusable workflow for every workflow that calls it.</p>
                             <ChainCanvas @key="subWorkflow.Id" Stages="subWorkflow.Stages" Jobs="@(Vm.Jobs ?? Array.Empty<JobView>())" ReadOnly="true" />
                         }
                         else
@@ -1037,14 +1028,20 @@ else
                     </div>
                     <div class="dcmodal-foot"><button class="dcbtn" @onclick="Vm.CloseSubWorkflowEditor">Cancel</button><button class="dcbtn primary" @onclick="Vm.SaveSubWorkflowAction">Save step</button></div>
                 </div>
+                @if (_editingSubWorkflowId is { } editingWorkflowId)
+                {
+                    <JobChains @key="editingWorkflowId" ProjectId="ProjectId" WorkflowRouteId="editingWorkflowId"
+                               EditorDepth="@(EditorDepth + 1)" OnClose="CloseSubWorkflowCanvasAsync" />
+                }
             </div>
         }
 
         @if (Vm.ShowQueryDataEditor)
         {
-            <div class="dcmodal-overlay" @onclick="CloseQueryStudioAsync" @onkeydown='@(e => { if (e.Key == "Escape") _ = CloseQueryStudioAsync(); })'>
+            <AssistantPageContext @key="Vm.QueryStudioVersion" Kind="data" ReadContext="ReadQueryAssistantContextAsync" />
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="CloseQueryStudioAsync" @onkeydown='@(e => { if (e.Key == "Escape") _ = CloseQueryStudioAsync(); })'>
                 <div class="dcmodal query-studio-modal" role="dialog" aria-modal="true" aria-labelledby="query-data-title" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                    <div class="dcmodal-head">
                         <div>
                             <h3 id="query-data-title">Query data</h3>
                             <p class="sub-note">Read this project’s tables. Rows become the next step’s <code>@(Vm.QueryDataOutputField).rows</code>.</p>
@@ -1289,9 +1286,9 @@ else
         @if (Vm.ShowScoringEditor)
         {
             var criterion = CurrentScoreCriterion;
-            <div class="dcmodal-overlay" @onclick="Vm.CloseScoringEditor" @onkeydown='@(e => { if (e.Key == "Escape") Vm.CloseScoringEditor(); })'>
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="Vm.CloseScoringEditor" @onkeydown='@(e => { if (e.Key == "Escape") Vm.CloseScoringEditor(); })'>
                 <div class="dcmodal loop-modal agent-instructions-modal scoring-modal" role="dialog" aria-modal="true" aria-labelledby="score-title" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle /><h3 id="score-title">Scoring gate</h3>
+                    <div class="dcmodal-head"><h3 id="score-title">Scoring gate</h3>
                         <button class="dcslide-x" aria-label="Close scoring settings" @onclick="Vm.CloseScoringEditor"><AppIcon Kind="close" /></button>
                     </div>
                     <div class="dcmodal-body loop-editor-body">
@@ -1351,9 +1348,9 @@ else
 
         @if (Vm.ShowRepeatEditor)
         {
-            <div class="dcmodal-overlay" @onclick="Vm.CloseRepeatEditor">
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="Vm.CloseRepeatEditor">
                 <div class="dcmodal loop-modal" role="dialog" aria-modal="true" aria-labelledby="repeat-title" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle /><h3 id="repeat-title">Repeat flow</h3>
+                    <div class="dcmodal-head"><h3 id="repeat-title">Repeat flow</h3>
                         <button class="dcslide-x" aria-label="Close repeat settings" @onclick="Vm.CloseRepeatEditor"><AppIcon Kind="close" /></button>
                     </div>
                     <div class="dcmodal-body">
@@ -1369,9 +1366,10 @@ else
 
         @if (Vm.ShowLoopEditor)
         {
-            <div class="dcmodal-overlay" @onclick="Vm.CloseLoopEditor">
+            <AssistantPageContext Kind="@(Vm.LoopKind == LoopChainAction.HumanType ? "workflow" : "agents")" ReadContext="ReadLoopAssistantContextAsync" />
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="Vm.CloseLoopEditor">
                 <div class="dcmodal loop-modal agent-instructions-modal" role="dialog" aria-modal="true" aria-labelledby="loop-editor-title" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                    <div class="dcmodal-head">
                         <div>
                             <span class="workflow-eyebrow">Workflow step</span>
                             <h3 id="loop-editor-title">@(Vm.LoopKind == LoopChainAction.TaskType ? "Agent task" : Vm.LoopKind == LoopChainAction.HumanType ? "Human in the loop" : "Agent review")</h3>
@@ -1464,7 +1462,7 @@ else
         {
             <div class="dcmodal-overlay">
                 <div class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="human-confirm-title">
-                    <div class="dcmodal-head"><WorkflowDialogHandle /><h3 id="human-confirm-title">Confirm workflow response</h3>
+                    <div class="dcmodal-head"><h3 id="human-confirm-title">Confirm workflow response</h3>
                         <button class="dcslide-x" aria-label="Close confirmation" disabled="@Vm.Resuming" @onclick="Vm.CancelHumanAnswer"><AppIcon Kind="close" /></button>
                     </div>
                     <div class="dcmodal-body">
@@ -1483,9 +1481,9 @@ else
 
         @if (Vm.ShowGateEditor)
         {
-            <div class="dcmodal-overlay" @onclick="() => Vm.CancelGateEditor()">
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="() => Vm.CancelGateEditor()">
                 <div class="dcmodal gate-modal @(Vm.IsConditionGateEditor ? "workflow-conditions-modal" : null)" role="dialog" aria-modal="true" aria-label="Configure workflow step" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                    <div class="dcmodal-head">
                         <div class="title-14">@(Vm.IsAutomaticGateEditor ? "Determine" : Vm.IsConditionGateEditor ? "If gate" : "Wait / delay") · Stage @(Vm.GateEditorStageIndex + 1)</div>
                         <button aria-label="Close" class="dcslide-x" @onclick="() => Vm.CancelGateEditor()"><AppIcon Kind="close" /></button>
                     </div>
@@ -1587,9 +1585,9 @@ else
         @* ── Send SMS action editor ───────────────────────────────────────────────────── *@
         @if (Vm.ShowSmsActionEditor)
         {
-            <div class="dcmodal-overlay" @onclick="() => Vm.CancelSmsActionEditor()">
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="() => Vm.CancelSmsActionEditor()">
                 <div class="dcmodal gate-modal" role="dialog" aria-modal="true" aria-label="Configure workflow step" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                    <div class="dcmodal-head">
                         <div>
                             <div class="title-14">Send SMS</div>
                             <div class="sub-115">Uses the workspace Communications connection. Insert previous output with <code>{{path.to.value}}</code>.</div>
@@ -1623,9 +1621,9 @@ else
         @* ── Send Email action editor ──────────────────────────────────────────────────── *@
         @if (Vm.ShowEmailActionEditor)
         {
-            <div class="dcmodal-overlay" @onclick="() => Vm.CancelEmailActionEditor()">
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="() => Vm.CancelEmailActionEditor()">
                 <div class="dcmodal gate-modal email-action-modal" role="dialog" aria-modal="true" aria-label="Configure email step" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                    <div class="dcmodal-head">
                         <div>
                             <div class="title-14">Send email</div>
                             <div class="sub-115">Uses the workspace Communications connection. Insert previous output with <code>{{path.to.value}}</code>.</div>
@@ -1720,9 +1718,9 @@ else
 
         @if (_chainContextJson is not null)
         {
-            <div class="dcmodal-overlay" @onclick="CloseChainContextJson">
+            <div class="dcmodal-overlay workflow-dialog-overlay" @onclick="CloseChainContextJson">
                 <div class="dcmodal chain-json-modal" role="dialog" aria-modal="true" aria-label="Workflow context JSON" @onclick:stopPropagation="true">
-                    <div class="dcmodal-head"><WorkflowDialogHandle />
+                    <div class="dcmodal-head">
                         <div>
                             <div class="title-14">Workflow context JSON</div>
                             <div class="sub-115">Path: <code>@_chainContextJsonPath</code></div>
@@ -1736,23 +1734,11 @@ else
             </div>
         }
 
-        @if (Vm.IsDetailsTab)
-        {
-            <div class="dcslide-foot">
-                @if (Vm.EditorError is not null)
-                {
-                    <div class="editor-err">@Vm.EditorError</div>
-                }
-                <button class="dcbtn" @onclick="() => Vm.CloseEditor()">Cancel</button>
-                <button class="dcbtn primary" disabled="@Vm.Saving" @onclick="() => Vm.SaveChainAsync()">
-                    @(Vm.Saving ? "Saving…" : Vm.EditChainId.HasValue ? "Save workflow" : "Create workflow")
-                </button>
-            </div>
-        }
     </div>
 }
 
 <WorkflowRunDialog Vm="Vm" />
+</div>
 
 @code {
     private RenderFragment WorkflowBranch(IReadOnlyList<JobChainsViewModel.WorkflowCatalogueNode> nodes) => @<ul class="chain-rows">
@@ -1883,6 +1869,42 @@ else
     </ul>;
 
     [Parameter] public Guid ProjectId { get; set; }
+    [Parameter] public int EditorDepth { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Guid> OnSaved { get; set; }
+    [Parameter] public string? InitialName { get; set; }
+    [Parameter] public IReadOnlyList<ChainStage>? InitialStages { get; set; }
+    private Guid? _loadedEmbeddedWorkflowId;
+    private bool _embeddedLoaded;
+    private Guid? _editingSubWorkflowId;
+    private JobChainsViewModel.ParallelBranchEditor? _editingParallelBranch;
+    private Guid? _parallelEditingWorkflowId;
+    private string? _parallelInitialName;
+    private IReadOnlyList<ChainStage>? _parallelInitialStages;
+
+    private void EditParallelBranch(JobChainsViewModel.ParallelBranchEditor branch, bool create = false)
+    {
+        _parallelEditingWorkflowId = !create && Guid.TryParse(branch.WorkflowId, out var id) ? id : null;
+        _parallelInitialStages = create ? null : branch.DraftStages;
+        _parallelInitialName = !create && branch.DraftStages is not null ? branch.DraftName : $"{Vm.EdName} · Branch {Vm.ParallelBranches.IndexOf(branch) + 1}";
+        _editingParallelBranch = branch;
+    }
+    private void OpenParallelBranchActions((int StageIndex, int BranchIndex) path)
+    {
+        Vm.OpenParallelBranch(path.StageIndex, path.BranchIndex);
+        EditParallelBranch(Vm.ActiveParallelBranch!);
+    }
+    private async Task CloseParallelBranchAsync()
+    {
+        _editingParallelBranch = null;
+        await Vm.RefreshSubWorkflowAsync();
+    }
+
+    private async Task CloseSubWorkflowCanvasAsync()
+    {
+        _editingSubWorkflowId = null;
+        await Vm.RefreshSubWorkflowAsync();
+    }
     [Parameter] public Guid? WorkflowRouteId { get; set; }
     [Parameter] public string? WorkflowRouteView { get; set; }
     [Parameter] public Guid? WorkflowRouteRunId { get; set; }
@@ -1972,6 +1994,12 @@ else
         }
     }
 
+    private async Task<string> ReadQemuAssistantContextAsync()
+    {
+        await ReadQemuCommandAsync();
+        return await Vm.QemuAssistantContextAsync();
+    }
+
     private async Task SaveQemuActionAsync()
     {
         await ReadQemuCommandAsync();
@@ -1982,6 +2010,7 @@ else
     {
         await ReadQemuCommandAsync();
         await Vm.SaveQemuWorkflowAsync();
+        await CompleteWorkflowSaveAsync();
     }
 
     private async Task SaveLoopInstructionsAsync()
@@ -1993,6 +2022,19 @@ else
 
     private WorkflowQueryEditor? _queryEditor;
     private int _queryStudioVersion;
+
+    private async Task<string> ReadQueryAssistantContextAsync()
+    {
+        await ReadQueryEditorAsync();
+        return await Vm.QueryAssistantContextAsync();
+    }
+
+    private async Task<string> ReadLoopAssistantContextAsync()
+    {
+        if (_loopInstructionsEditor is not null)
+            Vm.LoopInstructions = await _loopInstructionsEditor.ReadAsync();
+        return await Vm.LoopAssistantContextAsync();
+    }
 
     private async Task ReloadQuerySchemaAsync() => await Vm.LoadQueryStudioAsync();
 
@@ -2095,6 +2137,7 @@ else
         if (await CloseCodeAsync())
         {
             Vm.CloseEditor();
+            await OnClose.InvokeAsync();
         }
     }
 
@@ -2102,6 +2145,7 @@ else
     {
         if (await CloseCodeAsync())
         {
+            if (Vm.IsMarkupView && _markupEditor is not null) Vm.MarkupText = await _markupEditor.ReadAsync();
             Vm.ShowWorkflowDetails();
         }
     }
@@ -2111,6 +2155,7 @@ else
         if (await CloseCodeAsync())
         {
             await Vm.SaveChainAsync();
+            await CompleteWorkflowSaveAsync();
         }
     }
 
@@ -2119,7 +2164,22 @@ else
 
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
 
-    protected override Task OnParametersSetAsync() => Vm.LoadPageAsync(ProjectId, WorkflowRouteId, WorkflowRouteRunId, WorkflowRouteView);
+    private async Task CompleteWorkflowSaveAsync()
+    {
+        if (Vm.ShowEditor) return;
+        if (Vm.EditChainId is { } id) await OnSaved.InvokeAsync(id);
+        await OnClose.InvokeAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Vm.Embedded = EditorDepth > 0;
+        if (Vm.Embedded && _embeddedLoaded && _loadedEmbeddedWorkflowId == WorkflowRouteId) return;
+        _embeddedLoaded = true;
+        _loadedEmbeddedWorkflowId = WorkflowRouteId;
+        await Vm.LoadPageAsync(ProjectId, WorkflowRouteId, WorkflowRouteRunId, WorkflowRouteView);
+        if (Vm.Embedded && WorkflowRouteId is null) Vm.NewChain(InitialName, InitialStages);
+    }
 
     public void Dispose()
     {

@@ -1,13 +1,13 @@
 namespace PlaceContext.Domain.ValueObjects;
 
-public sealed record ConditionalWorkflowBranch(Guid WorkflowId, string WorkflowName, string Condition);
+public sealed record ConditionalWorkflowBranch(Guid WorkflowId, string WorkflowName, string Condition, bool WhenFalse = false);
 
 public sealed class ParallelWorkflowsChainAction : ChainAction
 {
     public const string ActionType = "parallelWorkflows";
     public ParallelWorkflowsChainAction(IReadOnlyList<ConditionalWorkflowBranch> branches, string outputField = "parallel_results")
     {
-        if (branches is null || branches.Count is < 2 or > 8) throw new ArgumentException("Choose two to eight conditional workflow branches.");
+        if (branches is null || branches.Count is < 1 or > 8) throw new ArgumentException("Choose one to eight conditional workflow branches.");
         if (!ScoringGateChainAction.ValidField(outputField)) throw new ArgumentException("Choose a valid output field.");
         foreach (var branch in branches)
         {

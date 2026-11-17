@@ -192,6 +192,37 @@ public sealed partial class ObservabilityViewModel
         await QueryLogsAsync();
     }
 
+    private string? _assistantQuery;
+    public async Task<string> AssistantContextAsync()
+    {
+        _assistantQuery = _logEditorMounted ? await js.InvokeAsync<string>("pcmonaco.getValue", LogEditorId) : LogQueryText;
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            capturedAt = DateTimeOffset.UtcNow, Tab, LogsQueriedAt, LogRunCount, LogEventCount, LogMatchCount, LogSourcesTruncated,
+            limits = "Snapshot: at most 50 loaded runs, 30 workflow runs, 30 traces and 50 displayed log result rows. Result cells capped at 1000 characters.",
+            query = _assistantQuery, fields = LogQuery.Fields, jsonFields = LogJsonFields.Take(100),
+            runs = Reports?.Take(50).Select(r => new { r.JobName, r.ProjectName, r.Run.Id, r.Run.Status, r.Run.StartedAt, r.Run.FinishedAt, r.Run.AttemptNumber }),
+            workflows = ChainReports?.Take(30).Select(r => new { r.ProjectName, r.Run.Id, r.Run.Status }),
+            traces = LiveTraces?.Take(30).Select(t => new { t.RunId, t.JobName, t.Status, t.DurationMs }),
+            selectedRun = Open?.Run.Id,
+            columns = AnalyticsResult?.Columns,
+            rows = AnalyticsResult?.Rows.Take(50).Select(row => row.Values.ToDictionary(pair => pair.Key,
+                pair => LogAnalyticsRow.Format(pair.Value) is { } value ? value[..Math.Min(value.Length, 1000)] : ""))
+        });
+    }
+
+    public async Task ApplyAssistantQueryAsync(string query)
+    {
+        if (QueryingLogs) throw new InvalidOperationException("Wait for the current query to finish.");
+        var current = _logEditorMounted ? await js.InvokeAsync<string>("pcmonaco.getValue", LogEditorId) : LogQueryText;
+        if (current != _assistantQuery) throw new InvalidOperationException("The query changed since this request. Send a new message before applying the draft.");
+        if (query.Length > 4096) throw new InvalidOperationException("Log queries must be at most 4,096 characters.");
+        SelectTab(LogsTab);
+        LogQueryText = query;
+        if (_logEditorMounted) await js.InvokeVoidAsync("pcmonaco.setValue", LogEditorId, query, "logquery");
+        NotifyStateChanged();
+    }
+
     public async Task QueryLogsAsync()
     {
         if (QueryingLogs)

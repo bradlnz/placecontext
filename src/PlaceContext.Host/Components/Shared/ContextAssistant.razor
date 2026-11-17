@@ -1,0 +1,126 @@
+@using PlaceContext.Host.Components.ViewModels
+@implements IDisposable
+@inject ContextAssistantViewModel Vm
+@inject AssistantPageViewModel Context
+@inject NavigationManager Navigation
+
+<div class="assistant-workspace @(_visible ? "assistant-open" : null)">
+    <div class="assistant-main">@ChildContent</div>
+    <aside class="context-assistant build-chat" aria-label="@Context.Title">
+        <button type="button" class="dcbtn assistant-toggle" aria-label="@(_visible ? "Close assistant" : "Open assistant")" aria-expanded="@(_visible ? "true" : "false")" aria-controls="@Vm.Id" @onclick="ToggleAsync"><AppIcon Kind="@(_visible ? "close" : "message")" /><span>@(_visible ? "Close" : "Assistant")</span></button>
+        <div id="@Vm.Id" class="assistant-panel" hidden="@(!_visible)">
+            <header><h3>@Context.Title</h3><p>Automatically linked to <a href="@("/" + Context.Url)">this page</a>. Your questions include its current context.</p>@if (Context.Kind == "workflow-manager") { <p>Creates, updates and deletes workflows when you ask.</p> }</header>
+            <details class="assistant-model">
+                <summary>Model · @(string.IsNullOrEmpty(Vm.Model) ? "Choose a connection" : Vm.Model)</summary>
+                <label>Connection<select class="dcinput" value="@Vm.ConnectionId" disabled="@Vm.Busy" @onchange="e => Vm.SelectConnection(e.Value?.ToString())">@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select></label>
+                <label>Model<select class="dcinput" @bind="Vm.Model" disabled="@Vm.Busy">@foreach (var model in Vm.Models) { <option>@model</option> }</select></label>
+                <button type="button" class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.LoadAsync">Refresh models</button>
+            </details>
+            @if (Vm.Loaded && Vm.Connections.Count == 0)
+            {
+                <p class="assistant-note">No enabled models. Ask a workspace administrator to add a model connection in Settings.</p>
+            }
+            <div @ref="_messages" class="assistant-messages" role="log" aria-label="Assistant conversation" aria-live="polite" aria-busy="@Vm.Busy">
+                @if (Vm.Messages.Count == 0)
+                {
+                    <p>Ask about this page, plan your next step, or describe a change.</p>
+                    <button type="button" class="dcbtn assistant-starter" disabled="@(Vm.Busy || Vm.Draft.Length > 0)" @onclick="() => Vm.Draft = Context.StarterQuestion">@Context.StarterQuestion</button>
+                }
+                @foreach (var message in Vm.Messages)
+                {
+                    <article class="chat-message @message.Role">
+                        <strong>@(message.Role == "user" ? "You" : Context.Title)</strong>
+                        @if (message.Role == "assistant")
+                        {
+                            @foreach (var part in ContextAssistantViewModel.ReplyParts(message.Text, Context.Kind))
+                            {
+                                @if (part.Language is { } language)
+                                {
+                                    <section @key="part.Offset" class="assistant-code" aria-label="Generated code">
+                                        <div class="code-label"><span>@language</span><span>Draft</span></div>
+                                        <RunOutput Value="@part.Text" Language="@language" Label="Generated code or query" />
+                                    </section>
+                                }
+                                else { <div @key="part.Offset" class="message-markdown">@((MarkupString)BuildChatViewModel.FormatReply(part.Text))</div> }
+                            }
+                            @if (message.Answers.Count > 0)
+                            {
+                                <div class="assistant-answers" role="group" aria-label="Suggested answers">
+                                    @foreach (var answer in message.Answers)
+                                    {
+                                        <button type="button" class="dcbtn" disabled="@(!Vm.CanAnswer(message))" @onclick="() => Vm.AnswerAsync(message, answer, Context.Kind, Context.ReadAsync, Context.ProjectId, Context.Refresh)">@answer</button>
+                                    }
+                                </div>
+                                <small>Choose an answer or type your own below.</small>
+                            }
+                        }
+                        else { <p class="user-text">@message.Text</p> }
+                    </article>
+                }
+                @if (Vm.Busy)
+                {
+                    @if (!string.IsNullOrWhiteSpace(Vm.Draft))
+                    { <article class="chat-message user"><strong>You</strong><p class="user-text">@Vm.Draft</p></article> }
+                    <p role="status">Working…</p>
+                }
+            </div>
+            @if (Vm.Suggestion is not null && Context.Apply is not null)
+            { <div class="assistant-apply"><button type="button" class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.ApplyAsync(Context.Apply!)">Apply draft to editor</button><small>Replaces the selected file or query. Review the draft above.</small></div> }
+            @if (Vm.Error is not null) { <p class="assistant-error" role="alert">@Vm.Error</p> }
+            @if (Vm.Notice is not null) { <p class="assistant-note" role="status">@Vm.Notice</p> }
+            <footer class="assistant-compose">
+            <form class="chat-composer" @onsubmit="() => Vm.SendAsync(Context.Kind, Context.ReadAsync, Context.ProjectId, Context.Refresh)" @onsubmit:preventDefault>
+                <textarea id="@(Vm.Id + "-input")" class="chat-input" aria-label="Message assistant" rows="3" maxlength="16000" @bind="Vm.Draft" @bind:event="oninput" disabled="@Vm.Busy" placeholder="Ask a question or describe a change…"></textarea>
+                <div class="composer-actions">
+                    @if (Vm.Busy) { <button type="button" class="send-button stop-button" aria-label="Stop" title="Stop response" @onclick="Vm.Stop"><span></span></button> }
+                    else { <button type="submit" class="send-button" aria-label="Send" title="Send message" disabled="@(!Vm.CanSend)"><AppIcon Kind="arrow-up" /></button> }
+                </div>
+            </form>
+            <button type="button" class="dcbtn assistant-new-chat" disabled="@Vm.Busy" @onclick="Vm.Clear">New chat</button>
+            <small>Uses the current page when you send. Navigating starts a fresh chat with the relevant agent.</small>
+            </footer>
+        </div>
+    </aside>
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private bool _visible { get => Context.IsOpen; set => Context.IsOpen = value; }
+    private long _contextVersion;
+    private ElementReference _messages;
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync(_messages, _visible);
+
+    protected override void OnInitialized()
+    {
+        Vm.Attach(() => InvokeAsync(StateHasChanged));
+        Context.Navigate(Navigation.ToBaseRelativePath(Navigation.Uri));
+        _contextVersion = Context.Version;
+        Context.Attach(() => InvokeAsync(() =>
+        {
+            if (_contextVersion != Context.Version)
+            {
+                _contextVersion = Context.Version;
+                Vm.ResetContext();
+            }
+            StateHasChanged();
+        }));
+        Navigation.LocationChanged += LocationChanged;
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        if (_visible && !Vm.Loaded) await Vm.LoadAsync();
+    }
+    private void LocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) =>
+        Context.Navigate(Navigation.ToBaseRelativePath(args.Location));
+    private async Task ToggleAsync()
+    {
+        _visible = !_visible;
+        if (_visible && !Vm.Loaded) await Vm.LoadAsync();
+    }
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= LocationChanged;
+        Context.Detach();
+        Vm.Dispose();
+    }
+}

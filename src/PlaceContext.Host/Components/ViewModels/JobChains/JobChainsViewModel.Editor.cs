@@ -179,13 +179,15 @@ public sealed partial class JobChainsViewModel
     }
 
     // ── Editor ────────────────────────────────────────────────────────────────────────────────
-    public void NewChain()
+    public void NewChain() => NewChain(null, null);
+
+    public void NewChain(string? name, IReadOnlyList<ChainStage>? stages)
     {
         NavigateToWorkflow(null);
         _openedWorkflowUpdatedAt = null;
         Readiness = null;
         EditChainId = null;
-        EdName = "";
+        EdName = name ?? "";
         EdDescription = "";
         EdStages.Clear();
         EdAddJobId = "";
@@ -193,6 +195,15 @@ public sealed partial class JobChainsViewModel
         EdStageGates.Clear();
         EdStageActions.Clear();
         EdStagePolicies.Clear();
+        foreach (var stage in stages ?? [])
+        {
+            var index = EdStages.Count;
+            EdStages.Add(stage.JobIds.ToList());
+            EdStageGates[index] = stage.Gate is ConditionGate condition && stage.ElseBranch is not null
+                ? condition with { ElseBranch = stage.ElseBranch } : stage.Gate;
+            EdStageActions[index] = stage.Action;
+            EdStagePolicies[index] = stage.ExecutionPolicy;
+        }
         PolicyStageIndex = null;
         EditorError = null;
         EditorTab = "details";
@@ -310,6 +321,7 @@ public sealed partial class JobChainsViewModel
 
     private void NavigateToWorkflow(Guid? workflowId, Guid? runId = null, string? view = null)
     {
+        if (Embedded) return;
         var uri = WorkflowsRoute;
         if (workflowId is { } workflow)
         {
@@ -1050,10 +1062,10 @@ public sealed partial class JobChainsViewModel
     // ── Gate editing ──────────────────────────────────────────────────────────────────────────
 
     /// <summary>Open the gate editor for the stage after the gate at the given source index.</summary>
-    public void OpenGateEditor(int stageIndex)
+    public void OpenGateEditor(int stageIndex, bool falsePath = false)
     {
         GateEditorStageIndex = stageIndex;
-        GateEditorPath = "true";
+        GateEditorPath = falsePath ? "false" : "true";
         GateEditorError = null;
         GateReviewQuestion = "";
         GateEditorTrueJobId = "";
@@ -1284,7 +1296,7 @@ public sealed partial class JobChainsViewModel
                                 );
                     return;
                 }
-                await _svc.CreateJobChainAsync(
+                var created = await _svc.CreateJobChainAsync(
                                         ProjectId,
                                         EdName.Trim(),
                                         string.IsNullOrWhiteSpace(EdDescription) ? null : EdDescription.Trim(),
@@ -1294,12 +1306,15 @@ public sealed partial class JobChainsViewModel
                                         stageActions,
                                         stagePolicies: populatedStages.Select(item => EdStagePolicies.GetValueOrDefault(item.OriginalIndex)).ToList()
                                     );
+                EditChainId = created.Id;
+                _openedWorkflowUpdatedAt = created.UpdatedAt;
             }
+            var updating = EditChainId.HasValue;
             await SaveChainAsync();
             Chains = await _svc.ListJobChainsAsync(ProjectId);
             _openedWorkflowUpdatedAt = Chains.FirstOrDefault(chain => chain.Id == EditChainId)?.UpdatedAt;
             if (closeEditor) ShowEditor = false;
-            Message = EditChainId.HasValue
+            Message = updating
                 ? $"Workflow '{EdName.Trim()}' updated."
                 : $"Workflow '{EdName.Trim()}' created.";
         }

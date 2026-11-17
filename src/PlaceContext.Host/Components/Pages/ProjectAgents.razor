@@ -7,6 +7,7 @@
 @layout PlaceContext.Host.Components.Layout.ProjectLayout
 @inject ProjectAgentsViewModel Vm
 @implements IDisposable
+<AssistantPageContext ReadContext="Vm.AssistantContextAsync" />
 
 <PageTitle>PlaceContext — @(Vm.Agent is { Id: var agentId } selected ? agentId == DashboardSettings.DefaultAgentId ? "Master agent" : selected.Name : "Agents")</PageTitle>
 
@@ -63,7 +64,7 @@ else
 @if (Vm.EditorOpen && Vm.Agent is { } agent)
 {
     <div class="dcmodal-overlay">
-    <section class="dcmodal agent-workspace" role="dialog" aria-modal="true" aria-labelledby="agent-workspace-title" tabindex="-1" @onkeydown="OnKeyDown">
+    <section class="dcmodal agent-workspace" role="dialog" aria-modal="false" aria-labelledby="agent-workspace-title" tabindex="-1" @onkeydown="OnKeyDown">
         <div class="dcmodal-head">
             <div class="flex-min">
                 <div id="agent-workspace-title" class="title-14">@(agent.Id == DashboardSettings.DefaultAgentId ? "Master agent" : Vm.Existing ? agent.Name : "New agent")</div>

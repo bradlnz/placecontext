@@ -10,6 +10,7 @@
 
 
 <PageTitle>PlaceContext — Observability</PageTitle>
+<AssistantPageContext ReadContext="Vm.AssistantContextAsync" Apply="Vm.ApplyAssistantQueryAsync" />
 
 @if (Vm.Loading)
 {
@@ -317,6 +318,7 @@ else
         }
     </div>
 }
+
 
 @code {
     [SupplyParameterFromQuery(Name = "tab")] public string? PageTab { get; set; }
