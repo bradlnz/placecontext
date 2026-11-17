@@ -5,6 +5,7 @@
     background:var(--card);
     overflow:hidden;
     min-width:0;
+    container-type:inline-size;
     box-shadow:0 8px 30px rgba(0,0,0,.04);
 }
 .preview-canvas .job-path:disabled { opacity: 1; cursor: default; }
@@ -17,11 +18,10 @@
 .canvas-hint { margin-top:2px; font-size:10.5px; color:var(--text-3) }
 .canvas-add-stage { display:flex; align-items:center; gap:7px }
 .canvas-select { min-width:148px; max-width:210px; height:31px; padding:0 28px 0 9px; border:1px solid var(--border); border-radius:7px; background:var(--bg); color:var(--text-2); font:11px var(--font-sans) }
-.canvas-button { height:31px; padding:0 11px; border:0; border-radius:7px; font:600 11px var(--font-sans); cursor:pointer }
-.canvas-button.primary { color:var(--brand-fg); background:var(--brand); border:1px solid var(--brand) }
+.canvas-button { min-height:28px; padding:4px 8px }
 .canvas-button:disabled, .picker-confirm:disabled { opacity:.45; cursor:not-allowed }
 .canvas-viewport {
-    overflow-x:scroll;
+    overflow-x:auto;
     overflow-y:auto;
     height:min(480px, 50dvh);
     background-color:color-mix(in srgb, var(--canvas-accent) 3%, var(--bg));
@@ -32,12 +32,13 @@
 .canvas-pipeline { display:flex; align-items:center; min-width:max-content; min-height:480px; padding:44px 30px }
 .start-node, .finish-node { display:flex; align-items:center; gap:7px; padding:8px 12px; border-radius:999px; background:var(--card); border:1px solid var(--border); color:var(--text-2); font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; box-shadow:0 5px 18px rgba(0,0,0,.1) }
 .flow-group { display:flex; align-items:center }
-.stage-routes { display:grid; gap:22px; position:relative }
+.stage-routes { display:grid; grid-template-columns:minmax(0, 1fr); gap:22px; position:relative }
+.stage-route { min-width:0 }
 .run-canvas .stage-head, .run-canvas .gate-node { cursor:default }
 .run-canvas .gate-node:hover { box-shadow:none }
 .run-canvas .canvas-viewport { height:auto; overflow-y:hidden; overscroll-behavior-y:auto }
 .run-canvas .canvas-pipeline { min-height:360px }
-.conditional-routes { padding:0 24px; border-left:2px solid var(--brand-2); border-right:2px solid var(--brand-2); border-radius:16px }
+.conditional-routes { padding:12px 24px; border-left:2px solid var(--brand-2); border-right:2px solid var(--brand-2); border-radius:16px }
 .conditional-routes .stage-route { position:relative }
 .conditional-routes .stage-route::before, .conditional-routes .stage-route::after { content:""; position:absolute; top:50%; width:24px; border-top:2px solid var(--brand-2) }
 .conditional-routes .stage-route::before { right:100% }
@@ -45,26 +46,26 @@
 .route-label { margin:0 0 5px; color:var(--brand-2); font-size:11px; font-weight:700 }
 .false-route { padding:14px; box-sizing:border-box }
 .false-route p { font-size:12px; color:var(--text-3); margin:0 }
-.false-route .canvas-button { margin-top:12px; background:var(--card-2); color:var(--text) }
+.false-route .canvas-button { margin-top:12px }
 .route-join { position:absolute; right:0; top:100%; display:flex; align-items:center; gap:4px; color:var(--text-3); font-size:10px; margin-top:5px }
-.connector { display:flex; align-items:center; width:92px }
+.connector { display:flex; align-items:center; width:160px; flex:none }
 .connector-line { height:1px; flex:1; background:var(--border) }
 .connector-arrow { display:flex; flex:none; color:var(--text-3) }
-.gate-node { flex:0 0 38px; width:38px; height:38px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; border-radius:10px; cursor:pointer; transition:transform .15s, box-shadow .15s, border-color .15s; box-shadow:0 3px 12px rgba(0,0,0,.09) }
+.gate-node { flex:0 0 56px; width:56px; height:56px; padding:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; border-radius:10px; cursor:pointer; transition:transform .15s, box-shadow .15s, border-color .15s; box-shadow:0 3px 12px rgba(0,0,0,.09) }
 .gate-node:hover { transform:translateY(-2px); box-shadow:0 7px 17px rgba(0,0,0,.14) }
 .gate-none { background:var(--card); border:1px dashed var(--text-3); color:var(--text-3) }
 .gate-none:hover { border-color:var(--brand-2); color:var(--brand-2) }
 .gate-wait { background:var(--warn-bg); border:1px solid color-mix(in srgb, var(--warn) 60%, var(--border)); color:var(--warn) }
-.gate-condition { transform:rotate(45deg); border-radius:7px; background:var(--brand-bg); border:1px solid var(--brand-2); color:var(--brand-2) }
+.gate-condition { position:relative; z-index:1; transform:rotate(45deg); border-radius:7px; background:linear-gradient(var(--brand-bg), var(--brand-bg)), var(--bg); border:1px solid var(--brand-2); color:var(--brand-2) }
 .gate-condition:hover { transform:rotate(45deg) translate(-2px, -2px) }
 .gate-condition > * { transform:rotate(-45deg) }
 .gate-icon { font-size:14px; line-height:1 }
 .gate-content { display:flex; flex-direction:column; align-items:center; gap:2px }
-.gate-controls { position:relative; display:flex; flex:0 0 38px; width:38px; height:38px }
+.gate-controls { position:relative; display:flex; flex:0 0 56px; width:56px; height:56px }
 .gate-remove { position:absolute; top:-22px; right:-20px; display:flex; align-items:center; justify-content:center; width:24px; height:24px; padding:0; border:1px solid var(--border); border-radius:50%; background:var(--card); color:var(--text-3); cursor:pointer }
 .gate-remove:hover { color:var(--bad); border-color:var(--bad) }
 .gate-remove:focus-visible { outline:2px solid var(--brand-2); outline-offset:2px }
-.gate-label { font-size:7px; line-height:1; font-weight:800; letter-spacing:.05em }
+.gate-label { font-size:8px; line-height:1; font-weight:800; letter-spacing:.05em; white-space:nowrap }
 .canvas-stage { --stage-accent:var(--canvas-accent); width:250px; flex:none; border:1px solid var(--border); border-top:3px solid var(--stage-accent); border-radius:12px; background:var(--card); box-shadow:0 4px 16px rgba(0,0,0,.06); transition:border-color .15s, box-shadow .15s, transform .15s; overflow:hidden }
 .canvas-stage:has(.human-path) { --stage-accent:var(--warn) }
 .canvas-stage:has(.parallel-workflow-heading) { --stage-accent:#9a86d8 }
@@ -107,14 +108,13 @@
 .plus-ring { width:17px; height:17px; display:inline-flex; align-items:center; justify-content:center; border-radius:50%; background:var(--card-2); font-size:13px }
 .path-picker { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:4px; padding:4px 10px 10px }
 .path-picker .canvas-select { min-width:0; width:100%; height:29px }
-.picker-confirm, .picker-cancel { height:29px; padding:0 8px; border:1px solid var(--border); border-radius:6px; background:var(--card-2); color:var(--text-2); font:600 10px var(--font-sans); cursor:pointer }
-.picker-confirm { border-color:var(--brand); background:var(--brand); color:var(--brand-fg) }
-.condition-strip, .wait-strip { display:flex; align-items:center; gap:5px; min-height:25px; padding:0 10px; border-top:1px solid var(--border); font-size:8.5px; overflow:hidden }
+.picker-confirm, .picker-cancel { min-height:28px; padding:4px 8px; font-size:10px }
+.condition-strip, .wait-strip { display:flex; align-items:center; gap:8px; min-height:25px; padding:8px 12px; border-top:1px solid var(--border); font-size:8.5px; overflow:hidden }
 .condition-strip { color:var(--brand-2); background:var(--brand-bg) }
-.condition-strip span { font-weight:900 }
+.condition-strip span { flex:none; font-weight:900 }
 .condition-strip code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:inherit; font-size:8.5px }
 .wait-strip { color:var(--warn); background:var(--warn-bg); font-weight:700 }
-.finish-connector { width:58px; display:flex; align-items:center; color:var(--text-3) }
+.finish-connector { width:96px; flex:none; display:flex; align-items:center; color:var(--text-3) }
 .finish-connector > span:first-child { height:1px; flex:1; background:var(--border) }
 .empty-canvas { width:280px; min-height:190px; margin-left:32px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; border:1px dashed var(--border); border-radius:12px; background:var(--card); color:var(--text-3); font-size:11px }
 .empty-icon { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:var(--card); color:var(--brand-2); font-size:18px }
@@ -122,22 +122,25 @@
 .canvas-legend > span { display:flex; align-items:center; gap:5px }
 .legend-help { margin-left:auto }
 
-@media (max-width: 720px) {
+@container (max-width: 800px) {
     .canvas-toolbar { align-items:flex-start; flex-direction:column }
     .canvas-add-stage { width:100% }
     .canvas-add-stage .canvas-select { flex:1; min-width:0 }
     .canvas-viewport, .canvas-pipeline { min-height:315px }
     .canvas-pipeline { min-width:0; flex-direction:column; padding:22px 12px }
     .flow-group { flex-direction:column; width:100% }
-    .connector { flex-direction:column; width:38px; height:66px }
+    .stage-routes { width:100%; max-width:352px; min-width:0 }
+    .stage-routes .stage-caption { width:100% }
+    .connector { flex-direction:column; width:56px; height:112px }
     .connector-line { width:1px; height:auto }
     .connector-arrow { transform:rotate(90deg) }
-    .canvas-stage { width:100%; max-width:300px }
-    .finish-connector { flex-direction:column; height:40px; width:1px }
+    .canvas-stage { width:100%; min-width:0 }
+    .finish-connector { flex-direction:column; height:64px; width:1px }
     .finish-connector > span:first-child { width:1px }
     .empty-canvas { width:100%; margin:20px 0 }
     .legend-help { display:none }
-    .canvas-legend { flex-wrap:wrap; gap:10px; padding:10px 15px }
+    .canvas-legend { overflow-x:auto; gap:12px; padding:8px 12px }
+    .canvas-legend > span { flex:none; white-space:nowrap }
 }
 
 .stage-paths button.parallel-workflow-heading { padding:8px; }

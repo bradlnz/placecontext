@@ -1092,7 +1092,7 @@ public sealed partial class JobChainsViewModel
         GateEditorError = null;
         if (IsAutomaticGateEditor && (string.IsNullOrWhiteSpace(GateReviewQuestion) || GateReviewQuestion.Length > 4000))
         {
-            GateEditorError = "Enter a Review question of up to 4,000 characters.";
+            GateEditorError = "Enter a Determine question of up to 4,000 characters.";
             NotifyStateChanged();
             return;
         }

@@ -53,9 +53,7 @@ public sealed class MenuConfigService : IMenuConfigService
         new("artifacts", "Artifacts", "link", "/artifacts", Permission.ArtifactsView, "file", null, null),
         new("observability", "Observability", "link", "/observability", Permission.JobsView, "pulse", null, null),
         new("cluster", "Cluster", "link", "/cluster", Permission.SettingsManage, "box", "Infrastructure", null),
-        new("wiki", "Wiki", "link", "/wiki", null, "ledger", "Help", null),
         new("settings", "Settings", "link", "/settings/branding", Permission.SettingsManage, "key", null, null),
-        new("about", "About", "link", "/about", null, "grid", "Help", null),
     };
 
     internal sealed record CatalogItem(
@@ -207,7 +205,6 @@ public sealed class MenuConfigService : IMenuConfigService
                 {
                     "Infrastructure" => "box",
                     "Data & storage" => "data",
-                    "Help" => "ledger",
                     _ => item.Icon,
                 };
                 result.Add(new(id, item.Section, "group", null, icon, null, item.Order));

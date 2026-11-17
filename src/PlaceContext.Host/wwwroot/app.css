@@ -1,13 +1,13 @@
 :root {
-    --font-sans:'Inter','Helvetica Neue',Arial,sans-serif;
+    --font-sans:Arial,Helvetica,sans-serif;
 }
 #dcshell {
-    --bg:var(--tenant-bg,#000000); --panel:var(--tenant-panel,#0d1013); --card:var(--tenant-panel,#0d1013); --card-2:#151a1f; --hover:#1b232b;
+    --bg:var(--tenant-bg,#000000); --panel:var(--tenant-panel,#0b0b0b); --card:var(--tenant-panel,#0b0b0b); --card-2:#141414; --hover:#1c1c1c;
     --bg-tilt:#000000;
-    --border:#202830; --border-2:#34414c;
-    --text:var(--tenant-text,#f4f7f5); --text-2:#c5cec9; --text-3:#8b9991; --text-4:#68756e;
-    --brand:var(--tenant-accent,#c4c4c4); --brand-2:var(--tenant-accent,#e0e0e0); --brand-bg:rgba(255,255,255,0.08); --brand-fg:#171717;
-    --button-bg:#151a1f; --button-hover:#1b232b; --button-border:#34414c; --button-text:#f4f7f5;
+    --border:#303030; --border-2:#414141;
+    --text:var(--tenant-text,#f5f5f5); --text-2:#d2d2d2; --text-3:#b1b1b1; --text-4:#888888;
+    --brand:var(--tenant-accent,#ffffff); --brand-2:var(--tenant-accent,#dddddd); --brand-bg:rgba(255,255,255,0.08); --brand-fg:#000000;
+    --button-bg:transparent; --button-hover:#ffffff; --button-hover-text:#000000; --button-border:#ffffff90; --button-text:#ffffff;
     --good:#b5b5b5; --good-bg:rgba(255,255,255,0.08);
     --running:#4caf78; --running-bg:rgba(76,175,120,0.12);
     --success:#63d991; --success-bg:rgba(99,217,145,0.12);
@@ -23,7 +23,7 @@ html[data-pc-theme="light"] #dcshell, html:not([data-pc-theme]) #dcshell[data-th
     --border:#e5e7eb; --border-2:#cdd2da;
     --text:#202532; --text-2:#4d5666; --text-3:#626c7c; --text-4:#737d8c;
     --brand:var(--tenant-accent,#404040); --brand-2:var(--tenant-accent,#262626); --brand-bg:#f0f0f0; --brand-fg:#ffffff;
-    --button-bg:#ffffff; --button-hover:#f3f4f6; --button-border:#d5d9e0; --button-text:#202532;
+    --button-bg:transparent; --button-hover:#202532; --button-hover-text:#ffffff; --button-border:#20253290; --button-text:#202532;
     --good:#525252; --good-bg:rgba(0,0,0,0.06);
     --running:#187746; --running-bg:rgba(24,119,70,0.10);
     --success:#208247; --success-bg:rgba(32,130,71,0.10);
@@ -111,16 +111,14 @@ button, a, [role="button"] { touch-action: manipulation; }
 .dcnav .bar { position:absolute; left:-12px; top:9px; bottom:9px; width:2.5px; border-radius:2px; background:var(--brand); opacity:0; }
 .dcnav.active .bar { opacity:1; }
 .dcbtn { appearance:none; background:var(--button-bg); color:var(--button-text);
-    border:1px solid var(--button-border); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:12.5px; font-family:inherit; font-weight:550;
-    letter-spacing:0; transition:background .14s ease, border-color .14s ease, box-shadow .14s ease; box-shadow:0 1px 2px rgba(0,0,0,.04); }
-.dcbtn:hover { background:var(--button-hover); border-color:var(--border-2); color:var(--button-text); }
+    border:1px solid var(--button-border); border-radius:0; padding:6px 10px; cursor:pointer; font-size:11px; font-family:inherit; font-weight:600;
+    letter-spacing:.055em; text-transform:uppercase; line-height:1.3; transition:background .15s, color .15s; }
+#dcshell .dcbtn:hover:not(:disabled) { background:var(--button-hover); color:var(--button-hover-text); }
 .dcbtn:active { transform:translateY(0); }
 .dcbtn:focus-visible { outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--brand) 24%, transparent); }
 .dcbtn[disabled], .dcbtn[disabled]:hover { transform:none; filter:none; cursor:not-allowed; opacity:0.65; }
-.dcbtn.primary { background:var(--brand); border-color:var(--brand); color:var(--brand-fg); }
-.dcbtn.primary:hover { border-color:var(--brand-2); color:var(--brand-fg); background:var(--brand-2); }
-.dcbtn.danger { background:var(--bad); border-color:var(--bad); color:#fff; font-weight:550; }
-.dcbtn.danger:hover { filter:brightness(1.04); }
+.dcbtn.danger { border-color:var(--bad); color:var(--bad); }
+#dcshell .dcbtn.danger:hover:not(:disabled) { background:var(--bad); color:#fff; }
 .dccard { background:var(--card); border:1px solid var(--border); border-radius:3px; }
 .dclink { background:none; border:none; color:var(--text-2); padding:0; cursor:pointer; font-size:inherit; font-family:inherit; font-weight:500; text-decoration:underline; text-decoration-color:transparent; transition:text-decoration-color .12s; }
 .dclink:hover { text-decoration-color:currentColor; }
@@ -223,14 +221,14 @@ textarea.dcinput { line-height:1.55; }
 
 /* Console colours follow the shared accent palette. */
 #dcshell {
-    --ch-bg:#000000;
-    --ch-panel:#0d1013;
-    --ch-panel-2:#151a1f;
-    --ch-border:#202830;
-    --ch-border-2:#34414c;
-    --ch-text:#f4f7f5;
-    --ch-text-2:#c5cec9;
-    --ch-text-3:#8b9991;
+    --ch-bg:var(--bg);
+    --ch-panel:var(--panel);
+    --ch-panel-2:var(--card-2);
+    --ch-border:var(--border);
+    --ch-border-2:var(--border-2);
+    --ch-text:var(--text);
+    --ch-text-2:var(--text-2);
+    --ch-text-3:var(--text-3);
     --ch-yellow:var(--brand);
     --ch-yellow-hover:var(--brand-2);
     --ch-run-shadow:0 1px 0 rgba(0,0,0,.35);
@@ -276,9 +274,6 @@ body {
     background:transparent;
     box-shadow:inset 0 -2px 0 var(--brand);
 }
-.dcbtn { border-radius:6px; }
-.dcbtn.primary { border-radius:6px; }
-.dcbtn.danger { border-radius:6px; }
 .dcslide { border-radius:0; }
 .dcmodal { border-radius:0; }
 

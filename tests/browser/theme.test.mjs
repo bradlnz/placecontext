@@ -15,6 +15,16 @@ for (const stored of [null, 'dark', 'light', 'invalid', 'unavailable']) {
         };
         let saved = stored;
         const window = { matchMedia: () => ({ addEventListener() {} }) };
+        const expected = stored === 'light' ? 'light' : 'dark';
+        const bootstrap = readFileSync(new URL('../../src/PlaceContext.Host/Components/App.razor', import.meta.url), 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+        runInNewContext(bootstrap, {
+            document,
+            localStorage: { getItem() {
+                if (stored === 'unavailable') throw new Error('Storage disabled');
+                return saved;
+            } },
+        });
+        assert.equal(document.documentElement.dataset.pcTheme, expected);
         runInNewContext(readFileSync(new URL('../../src/PlaceContext.Host/wwwroot/placecontext.js', import.meta.url), 'utf8'), {
             window, document,
             Element: class {},
@@ -27,7 +37,6 @@ for (const stored of [null, 'dark', 'light', 'invalid', 'unavailable']) {
                 setItem(key, value) { saved = value; },
             },
         });
-        const expected = stored === 'dark' ? 'dark' : 'light';
         assert.equal(window.placecontext.initTheme(), expected);
         assert.equal(shell.dataset.theme, expected);
         assert.equal(document.documentElement.dataset.pcTheme, expected);

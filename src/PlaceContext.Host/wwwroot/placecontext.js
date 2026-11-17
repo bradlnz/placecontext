@@ -1,14 +1,14 @@
 // PlaceContext portal: theme persistence + animated meters (bars/rings).
 window.placecontext = {
   initTheme() {
-    let t = 'light';
+    let t = 'dark';
     try {
-      t = localStorage.getItem('placecontext-theme') || 'light';
+      t = localStorage.getItem('placecontext-theme') || 'dark';
     } catch (e) {}
     return this.applyTheme(t);
   },
   applyTheme(t) {
-    t = t === 'dark' ? 'dark' : 'light';
+    t = t === 'light' ? 'light' : 'dark';
     const sh = document.getElementById('dcshell');
     if (sh) {
       sh.dataset.theme = t;
@@ -24,7 +24,7 @@ window.placecontext = {
     return t;
   },
   toggleTheme() {
-    const cur = document.getElementById('dcshell')?.dataset.theme || 'light';
+    const cur = document.getElementById('dcshell')?.dataset.theme || 'dark';
     return this.applyTheme(cur === 'dark' ? 'light' : 'dark');
   },
   beginSetup(form) {

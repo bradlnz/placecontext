@@ -5,6 +5,7 @@ namespace PlaceContext.Application.Build;
 public interface IBuildChatStore
 {
     Task<IReadOnlyList<BuildConversationSummary>> ListAsync(Guid projectId, CancellationToken ct = default);
+    Task<IReadOnlyList<BuildConversationSummary>> ListAgentSessionsAsync(Guid projectId, Guid agentId, CancellationToken ct = default);
     Task<BuildConversation> LoadAsync(Guid projectId, Guid id, CancellationToken ct = default);
     Task QueueAsync(BuildConversation conversation, JsonObject message, CancellationToken ct = default);
     Task RequestStopAsync(Guid projectId, Guid id, CancellationToken ct = default);

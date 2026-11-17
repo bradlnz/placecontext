@@ -6,6 +6,7 @@ using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Build;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Mcp;
+using PlaceContext.Host.Workflows;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
@@ -17,6 +18,11 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
     public ProjectAgentCatalog Catalog { get; private set; } = new();
     public DashboardSettings? Dashboard { get; private set; }
     public IEnumerable<DashboardAgentProfile> Agents => (Dashboard?.Agents ?? []).Concat(Catalog.Agents);
+    public IEnumerable<DashboardAgentProfile> RootAgents => Agents
+        .Where(a => a.EffectiveParentAgentId is not { } parentId || !Agents.Any(parent => parent.Id == parentId))
+        .OrderBy(a => a.Id != DashboardSettings.DefaultAgentId).ThenBy(a => a.Name);
+    public IEnumerable<DashboardAgentProfile> ChildAgents(Guid parentId) => Agents
+        .Where(a => a.EffectiveParentAgentId == parentId).OrderBy(a => a.Name);
     public IEnumerable<DashboardAgentProfile> ParentAgents => (EditingPrivateAgent ? Dashboard?.Agents ?? [] : Catalog.Agents)
         .Where(a => a.Id != Agent?.Id && a.Id != DashboardSettings.DefaultAgentId);
     public bool EditingPrivateAgent { get; private set; }
@@ -31,6 +37,12 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
     public bool Busy { get; private set; }
     public bool CanManage { get; private set; }
     public string AgentTab { get; set; } = "Overview";
+    public string MarkupText { get; set; } = "";
+    public int MarkupRevision { get; private set; }
+    public IReadOnlyList<BuildConversationSummary> Sessions { get; private set; } = [];
+    public bool ActivityLoading { get; private set; }
+    public string? ActivityError { get; private set; }
+    private int _activityRequest;
     public Guid? ConfirmDeleteId { get; set; }
     public bool EditorOpen => Agent is not null;
     public string? Error { get; private set; }
@@ -93,6 +105,7 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
         Agent.TableAccess ??= Agent.EffectiveTableAccess;
         Agent.SourceAccess ??= Agent.EffectiveSourceAccess;
         Agent.ArtifactAccess ??= Agent.EffectiveArtifactAccess;
+        ReloadMarkup();
     }
 
     public void Close()
@@ -103,6 +116,50 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
         AgentTab = "Overview";
         EditingPrivateAgent = false;
         Error = null;
+        Sessions = [];
+        ActivityError = null;
+        ActivityLoading = false;
+        _activityRequest++;
+    }
+
+    public void ReloadMarkup()
+    {
+        if (Agent is null) return;
+        MarkupText = AgentMarkup.Write(Agent);
+        MarkupRevision++;
+    }
+
+    public bool ApplyMarkup(string yaml)
+    {
+        if (!CanEdit || Busy || Agent is null) return false;
+        MarkupText = yaml;
+        Error = null;
+        try
+        {
+            var updated = AgentMarkup.Read(yaml, Agent.Id);
+            if (!CanViewWorkflows && !updated.WorkflowIds.SequenceEqual(Agent.WorkflowIds))
+                throw new UnauthorizedAccessException("Workflow access is required to change links.");
+            Agent = updated;
+            return true;
+        }
+        catch (Exception ex) { Error = ex.Message; return false; }
+    }
+
+    public async Task LoadActivityAsync()
+    {
+        if (Agent is null || dashboardStore is null) return;
+        var request = ++_activityRequest;
+        var projectId = ProjectId;
+        var agentId = Agent.Id;
+        ActivityLoading = true;
+        ActivityError = null;
+        try
+        {
+            var sessions = await dashboardStore.ListAgentSessionsAsync(projectId, agentId);
+            if (request == _activityRequest) Sessions = sessions;
+        }
+        catch (Exception ex) { if (request == _activityRequest) ActivityError = ex.Message; }
+        finally { if (request == _activityRequest) ActivityLoading = false; }
     }
 
     public void OpenAgent(Guid id) => navigation?.NavigateTo($"/project/{ProjectId}/agents/{id}");
@@ -123,8 +180,16 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
 
     public async Task SaveAgentAsync(string instructions, string? section)
     {
+        var id = Agent?.Id;
+        var tab = AgentTab;
         await SaveAsync(instructions);
-        if (Error is null && !EditorOpen && section is not null) navigation?.NavigateTo($"/project/{ProjectId}/agents");
+        if (Error is null && !EditorOpen && Agents.FirstOrDefault(a => a.Id == id) is { } saved)
+        {
+            EditAgent(saved);
+            AgentTab = tab;
+            if (section == "new") OpenAgent(saved.Id);
+            else if (tab == "Observability") await LoadActivityAsync();
+        }
     }
 
     public void SelectConnection(string? value)

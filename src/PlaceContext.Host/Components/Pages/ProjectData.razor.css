@@ -1232,30 +1232,6 @@
     color: var(--ch-text-3);
 }
 
-.data-page .data-head-actions .dcbtn {
-    background: var(--ch-panel-2);
-    border-color: var(--ch-border);
-    color: var(--ch-text);
-    border-radius: 3px;
-    box-shadow: none;
-    font-weight: 600;
-}
-
-.data-page .data-head-actions .dcbtn:hover {
-    background: var(--ch-border);
-    border-color: var(--ch-border-2);
-}
-
-.data-page .data-head-actions .dcbtn.primary {
-    background: var(--ch-panel-2);
-    border-color: var(--ch-border);
-    color: var(--ch-text);
-}
-
-.data-page .data-head-actions .dcbtn.primary:hover {
-    background: var(--ch-border);
-}
-
 .data-page .data-summary {
     background: var(--ch-panel);
     border-color: var(--ch-border);
@@ -1406,26 +1382,6 @@
     margin-top: 4px;
 }
 
-.data-page .table-actions .dcbtn {
-    background: transparent;
-    border-color: var(--ch-border);
-    color: var(--ch-text-2);
-    border-radius: 3px;
-    box-shadow: none;
-    font-weight: 500;
-}
-
-.data-page .table-actions .dcbtn:hover {
-    background: var(--ch-panel-2);
-    color: var(--ch-text);
-}
-
-.data-page .table-actions .dcbtn.danger {
-    background: transparent;
-    border-color: var(--bad);
-    color: var(--bad);
-}
-
 .data-page .flex-min.dccard.table-workspace {
     background: var(--ch-bg);
     border: none;
@@ -1517,31 +1473,8 @@
     border-bottom: 1px solid var(--ch-border);
 }
 
-.data-page .run-bar .dcbtn {
-    background: var(--ch-panel-2);
-    border-color: var(--ch-border);
-    color: var(--ch-text);
-    border-radius: 3px;
-    box-shadow: none;
-    font-weight: 600;
-}
-
-.data-page .run-bar .dcbtn:hover {
-    background: var(--ch-border);
-}
-
 .data-page .run-bar .dcbtn.primary {
-    background: var(--button-bg);
-    border-color: var(--button-border);
-    color: var(--button-text);
-    box-shadow: var(--ch-run-shadow);
-    font-weight: 700;
     padding: 6px 16px;
-}
-
-.data-page .run-bar .dcbtn.primary:hover {
-    background: var(--button-hover);
-    border-color: #5a5a5a;
 }
 
 .data-page .run-bar .dcbtn.primary:disabled {
@@ -1789,8 +1722,9 @@
     box-shadow: var(--ch-run-shadow);
 }
 
-.studio-new-table:hover {
+.studio-new-table:hover:not(:disabled) {
     background: var(--button-hover);
+    color: var(--button-hover-text);
     border-color: #5a5a5a;
 }
 
@@ -2069,8 +2003,9 @@
     flex: none;
 }
 
-.studio-run:hover {
+.studio-run:hover:not(:disabled) {
     background: var(--button-hover);
+    color: var(--button-hover-text);
     border-color: #5a5a5a;
 }
 

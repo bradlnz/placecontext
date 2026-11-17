@@ -15,6 +15,9 @@ public sealed class WorkflowFirstNavigationTests
         Assert.DoesNotContain("build.library", ids);
         Assert.DoesNotContain("dashboards", ids);
         Assert.DoesNotContain("monitor", ids);
+        Assert.DoesNotContain("wiki", ids);
+        Assert.DoesNotContain("about", ids);
+        Assert.DoesNotContain(layout.Workspace, item => item.Section == "Help");
         Assert.True(Array.IndexOf(ids, "chains") < Array.IndexOf(ids, "jobs"));
         Assert.Null(Assert.Single(layout.Workspace, item => item.Id == "chains").Section);
         Assert.DoesNotContain(layout.Workspace, item => item.Section == "Automation");

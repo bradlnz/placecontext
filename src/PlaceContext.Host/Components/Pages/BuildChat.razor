@@ -554,8 +554,11 @@
     {
         if (firstRender)
         {
-            await Vm.InitializeBrowserAsync();
-            _ = RefreshChartsAsync(_chartRefresh.Token);
+            var ct = _chartRefresh.Token;
+            try { await Vm.InitializeBrowserAsync(); }
+            catch (JSDisconnectedException) when (ct.IsCancellationRequested) { return; }
+            if (ct.IsCancellationRequested) return;
+            _ = RefreshChartsAsync(ct);
         }
         if (_focusComposer && Vm.ChatOpen)
         {

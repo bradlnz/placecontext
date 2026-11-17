@@ -5,6 +5,12 @@
 .run-step-title { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; overflow-wrap:anywhere }
 .run-step-status, .run-step-detail { color:var(--text-3); font-size:11px; overflow-wrap:anywhere }
 .run-step-detail { margin-top:5px }
+.retry-indicator { display:flex; align-items:center; gap:6px; width:fit-content; margin-top:8px; padding:4px 7px; border:1px solid var(--border-2); border-radius:4px; color:var(--text-2); font-size:11px; font-weight:600 }
+.run-step[data-retrying="true"] { outline:2px solid var(--warn); outline-offset:2px }
+.run-step[data-retrying="true"] .retry-indicator { color:var(--warn); background:var(--warn-bg); border-color:var(--warn) }
+.run-step[data-retrying="true"][data-status="Running"] .retry-indicator ::deep svg { animation:retry-spin 2s linear infinite }
+@keyframes retry-spin { to { transform:rotate(360deg) } }
+@media (prefers-reduced-motion:reduce) { .retry-indicator ::deep svg { animation:none !important } }
 .run-step[data-status="Running"] { box-shadow:0 0 0 2px var(--running-bg) }
 .run-step[data-status="Running"] .run-step-status { color:var(--running) }
 .run-step[data-status="Succeeded"] .run-step-status { color:var(--success) }

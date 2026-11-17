@@ -44,6 +44,24 @@ public sealed class DbBuildChatStore(IServiceScopeFactory scopes, ICurrentUser u
         var rows = await Owned(db, projectId).AsNoTracking().OrderByDescending(x => x.UpdatedAt).Take(100).Select(x => new { x.Id, x.Title, x.UpdatedAt, x.Status }).ToListAsync(ct);
         return rows.Select(row => new BuildConversationSummary(row.Id, encryption.Unprotect(row.Title, Purpose), row.UpdatedAt, row.Status)).ToList();
     }
+    public async Task<IReadOnlyList<BuildConversationSummary>> ListAgentSessionsAsync(Guid projectId, Guid agentId, CancellationToken ct = default)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await CheckAsync(db, projectId, ct);
+        // Agent identity is encrypted in the session; inspect the same recent window as session history.
+        var rows = await Owned(db, projectId).AsNoTracking().OrderByDescending(x => x.UpdatedAt).Take(100).ToListAsync(ct);
+        return rows.Where(row =>
+            {
+                using var content = JsonDocument.Parse(encryption.Unprotect(row.Content, Purpose));
+                if (!content.RootElement.TryGetProperty("AgentId", out var value) || value.ValueKind == JsonValueKind.Null)
+                    return agentId == DashboardSettings.DefaultAgentId;
+                return value.ValueKind == JsonValueKind.String && value.TryGetGuid(out var id)
+                    && (id == Guid.Empty ? DashboardSettings.DefaultAgentId : id) == agentId;
+            })
+            .Select(row => new BuildConversationSummary(row.Id, encryption.Unprotect(row.Title, Purpose), row.UpdatedAt, row.Status)).ToArray();
+    }
+
     public async Task<BuildConversation> LoadAsync(Guid projectId, Guid id, CancellationToken ct = default)
     {
         await using var scope = scopes.CreateAsyncScope();

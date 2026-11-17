@@ -9,7 +9,7 @@ public sealed class ChainPipelineResponsiveContractTests
         var chainsStyles = ReadHostSource("Components/Pages/JobChains.razor.css");
         const string breakpoint = "@media (max-width: 950px)";
 
-        var responsivePipeline = pipelineStyles.Split("@media", 2)[1];
+        var responsivePipeline = pipelineStyles.Split("@container", 2)[1];
         var responsiveChains = chainsStyles.Split(breakpoint, 2)[1];
 
         Assert.Contains("flex-direction:column", responsivePipeline);

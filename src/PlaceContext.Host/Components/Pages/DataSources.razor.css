@@ -23,8 +23,7 @@
 .source-page .compact { padding: 6px 10px; font-size: 11px; }
 .source-page .dccard { border-radius: 8px; overflow: hidden; }
 .source-page small { color: var(--text-3); font-size: 11px; line-height: 1.5; font-weight: 400; }
-.source-page a { color: var(--text-2); }
-.source-page a.dcbtn.primary { color: var(--brand-fg); text-decoration: none; }
+.source-page a:not(.dcbtn) { color: var(--text-2); }
 
 .source-message { display: flex; align-items: center; gap: 9px; padding: 12px 16px; margin: 0; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
 .source-message.error { color: var(--bad); background: var(--bad-bg); }

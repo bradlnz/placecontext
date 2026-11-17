@@ -1,6 +1,6 @@
 @inject ChainPipelineViewModel Vm
 
-<div class="run-step" data-status="@Step.Status" style="border-color:@Vm.Border(Step.Status); background:@Vm.Background(Step.Status)">
+<div class="run-step" data-status="@Step.Status" data-retrying="@(Step.RetryCount > 0 && Step.Status is "Pending" or "Running" ? "true" : null)" style="border-color:@Vm.Border(Step.Status); background:@Vm.Background(Step.Status)">
     <button class="run-step-link" disabled="@(!OnStepClick.HasDelegate || (!Vm.HasRun(Step) && !InspectActions))" @onclick="@(() => OnStepClick.InvokeAsync(Step))"
             aria-label="@($"{Step.JobName}: {Vm.Summary(Step)}")">
         <span class="run-step-title" style="color:@Vm.Color(Step.Status)"><AppIcon Kind="@Vm.Icon(Step.Status)" /> @Step.JobName</span>
@@ -20,7 +20,7 @@
     }
     @if (Step.RetryCount > 0)
     {
-        <div class="run-step-detail">@Step.RetryCount @(Step.RetryCount == 1 ? "retry" : "retries")</div>
+        <div class="retry-indicator" role="status"><AppIcon Kind="refresh" /><span>@(Step.Status == "Pending" ? $"Retry {Step.RetryCount} queued" : Step.Status == "Running" ? $"Retrying · attempt {Step.RetryCount + 1}" : $"Retried {Step.RetryCount} {(Step.RetryCount == 1 ? "time" : "times")}")</span></div>
     }
     @if (OnStepCancel.HasDelegate && Vm.CanCancel(Step))
     {

@@ -13,14 +13,14 @@
         @if (RunSteps is null && !ReadOnly)
         {
         <div class="canvas-add-stage">
-            <button class="canvas-button primary" @onclick="@(() => OnAddGate.InvokeAsync(Vm.Stages.Count))">
+            <button class="dcbtn canvas-button primary" @onclick="@(() => OnAddGate.InvokeAsync(Vm.Stages.Count))">
                 <span><AppIcon Kind="plus" /></span> Add step
             </button>
         </div>
         }
     </div>
 
-    <div class="canvas-viewport" tabindex="0" role="region" aria-label="Workflow canvas. Scroll horizontally to see all steps.">
+    <div class="canvas-viewport" tabindex="0" role="region" aria-label="Workflow canvas. Scroll to see all steps.">
         <div class="canvas-pipeline">
             <div class="start-node">
                 <AppIcon Kind="play" />
@@ -33,7 +33,7 @@
                     <span class="empty-icon"><AppIcon Kind="plus" /></span>
                     <strong>Your workflow starts here</strong>
                     <span>Add a job, a human, or an agent step.</span>
-                    @if (!ReadOnly) { <button class="canvas-button primary" @onclick="@(() => OnAddGate.InvokeAsync(0))"><AppIcon Kind="plus" /> Add first step</button> }
+                    @if (!ReadOnly) { <button class="dcbtn canvas-button primary" @onclick="@(() => OnAddGate.InvokeAsync(0))"><AppIcon Kind="plus" /> Add first step</button> }
                 </div>
             }
 
@@ -247,9 +247,9 @@
                                         <option value="@job.Id">@job.Name</option>
                                     }
                                 </select>
-                                <button class="picker-confirm" disabled="@(!Vm.IsPathEnabled)"
+                                <button class="dcbtn picker-confirm" disabled="@(!Vm.IsPathEnabled)"
                                         @onclick="@(() => ConfirmPathAsync(stageIndex))">Add</button>
-                                <button aria-label="Close" class="picker-cancel" @onclick="ClosePathPicker"><AppIcon Kind="close" /></button>
+                                <button aria-label="Close" class="dcbtn picker-cancel" @onclick="ClosePathPicker"><AppIcon Kind="close" /></button>
                             </div>
                         }
                         else if (RunSteps is null && !ReadOnly && stage.Action is null)
@@ -263,7 +263,7 @@
                         @if (gate is ConditionGateView cg)
                         {
                             <div class="condition-strip" title="@(cg.ReviewQuestion ?? cg.Expression)">
-                                <span>@(cg.ReviewQuestion is null ? "IF" : "Review")</span>
+                                <span>@(cg.ReviewQuestion is null ? "IF" : "Determine")</span>
                                 <code>@(cg.ReviewQuestion ?? cg.Expression)</code>
                             </div>
                         }
@@ -288,7 +288,7 @@
                                 }
                                 @if (RunSteps is null && !ReadOnly)
                                 {
-                                    <button class="canvas-button" @onclick="@(() => OnEditGate.InvokeAsync((stageIndex, condition)))">Edit false path</button>
+                                    <button class="dcbtn canvas-button" @onclick="@(() => OnEditGate.InvokeAsync((stageIndex, condition)))">Edit false path</button>
                                 }
                             </div>
                         </div>

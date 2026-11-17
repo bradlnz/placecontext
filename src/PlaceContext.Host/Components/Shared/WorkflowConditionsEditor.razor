@@ -15,7 +15,7 @@
 <button type="button" class="dcbtn btn-xs" disabled="@(Rows.Count >= 32)" @onclick="Add">Add condition</button>
 </div>
 }
-<p class="field-hint">Select @(Automatic ? "Review" : "a condition") on the canvas to edit it in the side pane.</p>
+<p class="field-hint">Select @(Automatic ? "Determine" : "a condition") on the canvas to edit it in the side pane.</p>
 <div class="condition-workspace @(_paneOpen ? "pane-open" : null)">
 <div class="condition-canvas" role="region" aria-label="Condition logic canvas">
     <div class="logic-flow">
@@ -24,9 +24,9 @@
         @if (Automatic)
         {
             <button type="button" class="logic-node ai-review-node @(_paneOpen ? "selected" : "")"
-                    aria-label="Edit Review" aria-controls="@(_matchId + "-inspector")"
+                    aria-label="Edit Determine" aria-controls="@(_matchId + "-inspector")"
                     aria-expanded="@(_paneOpen ? "true" : "false")" @onclick="() => _paneOpen = true">
-                <small>AI DECISION</small><strong>Review</strong>
+                <small>AI DECISION</small><strong>Determine</strong>
                 <span>@(string.IsNullOrWhiteSpace(ReviewQuestion) ? "Describe when to take the True path" : ReviewQuestion)</span>
             </button>
         }
@@ -53,7 +53,7 @@
         </div>
         }
         <div class="logic-connector" aria-hidden="true">↓</div>
-        <div class="logic-decision">@(Automatic ? "Does Review answer Yes?" : Match == "any" ? "Any condition true?" : "All conditions true?")</div>
+        <div class="logic-decision">@(Automatic ? "Does Determine answer Yes?" : Match == "any" ? "Any condition true?" : "All conditions true?")</div>
         <div class="logic-outcomes">
             <div class="logic-outcome true-path"><small>TRUE ↓</small><strong>@TrueLabel</strong></div>
             <div class="logic-outcome false-path"><small>FALSE ↓</small><strong>@FalseLabel</strong></div>
@@ -63,7 +63,7 @@
     </div>
 </div>
 <aside id="@(_matchId + "-inspector")" class="condition-inspector" role="region" aria-label="Condition editor" hidden="@(!_paneOpen)">
-<header class="condition-edit-heading"><strong>@(Automatic ? "Review" : $"Edit condition {Rows.IndexOf(SelectedRow) + 1}")</strong><button type="button" class="dcslide-x" aria-label="Close condition editor" @onclick="() => _paneOpen = false"><AppIcon Kind="close" /></button></header>
+<header class="condition-edit-heading"><strong>@(Automatic ? "Determine" : $"Edit condition {Rows.IndexOf(SelectedRow) + 1}")</strong><button type="button" class="dcslide-x" aria-label="Close condition editor" @onclick="() => _paneOpen = false"><AppIcon Kind="close" /></button></header>
 @if (Automatic)
 {
     <div class="dcfield">
@@ -72,7 +72,7 @@
                   value="@ReviewQuestion" @oninput="e => ReviewQuestionChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)"
                   placeholder="Does this question need technical support rather than a billing response?"></textarea>
         <p class="field-hint">Ask a Yes/No question about the incoming data. Yes selects the True path; No selects the False path.</p>
-        <p class="field-hint">Uses your configured AI Review service. A Yes probability of 50% or higher selects True. Review errors fail the step.</p>
+        <p class="field-hint">Uses your configured AI Review service. A Yes probability of 50% or higher selects True. Evaluation errors fail the step.</p>
     </div>
 }
 else

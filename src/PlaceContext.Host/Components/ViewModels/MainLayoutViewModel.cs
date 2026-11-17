@@ -85,11 +85,7 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     }
 
     public TenantBranding Brand { get; private set; } = new();
-    public string Theme { get; private set; } = ThemeNames.Light;
-    public bool SwitcherOpen
-    {
-        get; private set;
-    }
+    public string Theme { get; private set; } = ThemeNames.Dark;
     public bool NavOpen
     {
         get; private set;
@@ -271,8 +267,6 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
         }
     }
 
-    public void ToggleSwitcher() => SwitcherOpen = !SwitcherOpen;
-
     public void CloseNavigation() => NavOpen = false;
 
     public void ToggleNavigation()
@@ -287,20 +281,12 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
 
     public void OpenNavigation() => _ = InvokeOnDispatcherAsync(() => NavOpen = true);
 
-    public async Task SwitchProjectAsync(ProjectSummaryView project)
+    public async Task SwitchProjectAsync(string? value)
     {
-        SwitcherOpen = false;
+        if (!Guid.TryParse(value, out var id) || _projects.FirstOrDefault(p => p.Id == id) is not { } project) return;
         _ui.SetProject(project.Id, project.Name);
         await ReloadMenuAsync();
-        var destination =
-            _menu
-                .FirstOrDefault(item =>
-                    item.Href?.Contains($"{Routes.Project}{project.Id}", StringComparison.Ordinal)
-                    == true
-                )
-                ?.Href
-            ?? $"{Routes.Project}{project.Id}{Routes.Jobs}";
-        _navigation.NavigateTo(destination);
+        _navigation.NavigateTo($"{Routes.Project}{project.Id}/dashboard");
     }
 
     public void OpenSearch()
@@ -589,9 +575,9 @@ public sealed class MainLayoutViewModel : PageViewModel, IDisposable
     }
 
     private static string NormalizeTheme(string? theme) =>
-        string.Equals(theme, ThemeNames.Dark, StringComparison.OrdinalIgnoreCase)
-            ? ThemeNames.Dark
-            : ThemeNames.Light;
+        string.Equals(theme, ThemeNames.Light, StringComparison.OrdinalIgnoreCase)
+            ? ThemeNames.Light
+            : ThemeNames.Dark;
 
     private async Task<TResult> InScopeAsync<TService, TResult>(
         Func<TService, Task<TResult>> operation

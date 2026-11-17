@@ -1,6 +1,7 @@
 using PlaceContext.Application.Access;
 using PlaceContext.Application.Access.Models;
 using PlaceContext.Application.Artifacts;
+using PlaceContext.Application.Build;
 using PlaceContext.Application.Cqrs;
 using PlaceContext.Application.DataEntities;
 using PlaceContext.Application.Dtos;
@@ -19,6 +20,10 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
     private readonly IContentIndexer? _contentIndex;
     private readonly ISearchDataGateway? _openSearch;
     private readonly IPermissionService? _permissions;
+    private readonly IJobChainRepository? _workflows;
+    private readonly IJobRepository? _jobs;
+    private readonly IProjectAgentStore? _agents;
+    private readonly IBuildChatStore? _dashboard;
 
     public SearchHandler(
         IProjectRepository projects, IActivityLogRepository ledgers,
@@ -28,7 +33,11 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         IEntityTagStore? tagIndex = null,
         IContentIndexer? contentIndex = null,
         ISearchDataGateway? openSearch = null,
-        IPermissionService? permissions = null)
+        IPermissionService? permissions = null,
+        IJobChainRepository? workflows = null,
+        IJobRepository? jobs = null,
+        IProjectAgentStore? agents = null,
+        IBuildChatStore? dashboard = null)
     {
         _projects = projects;
         _ledgers = ledgers;
@@ -38,6 +47,10 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         _contentIndex = contentIndex;
         _openSearch = openSearch;
         _permissions = permissions;
+        _workflows = workflows;
+        _jobs = jobs;
+        _agents = agents;
+        _dashboard = dashboard;
     }
 
     public async Task<SearchResultsView> HandleAsync(SearchQuery query, CancellationToken ct = default)
@@ -50,6 +63,33 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
         bool Match(string? s) => s is not null && s.Contains(term, StringComparison.OrdinalIgnoreCase);
 
         var hits = new List<SearchHit>();
+        var projects = await _projects.ListAsync(ct);
+        var canViewWorkflows = _permissions is not null && await _permissions.HasAsync(Permission.ChainsManage, ct);
+        var canViewJobs = _permissions is not null && await _permissions.HasAsync(Permission.JobsView, ct);
+        var canViewAgents = _permissions is not null && await _permissions.HasAsync(Permission.ProjectsView, ct);
+        foreach (var project in projects.Where(p => query.ProjectId is null || p.Id.Value == query.ProjectId))
+        {
+            var projectId = project.Id.Value;
+            var projectName = project.Name.Value;
+            if (canViewWorkflows && _workflows is not null)
+                foreach (var workflow in (await _workflows.ListForProjectAsync(projectId, ct))
+                    .Where(w => Match(w.Name) || Match(w.Description)).Take(8))
+                    hits.Add(new SearchHit("workflow", projectId, workflow.Name, projectName,
+                        $"/project/{projectId}/workflows/{workflow.Id}"));
+            if (canViewJobs && _jobs is not null)
+                foreach (var job in (await _jobs.ListForProjectAsync(projectId, ct))
+                    .Where(j => Match(j.Name) || Match(j.Description)).Take(8))
+                    hits.Add(new SearchHit("job", projectId, job.Name, projectName,
+                        $"/project/{projectId}/jobs?job={job.Id}"));
+            if (canViewAgents)
+            {
+                var shared = _agents is null ? [] : (await _agents.GetAsync(projectId, ct)).Agents;
+                var personal = _dashboard is null ? [] : (await _dashboard.GetSettingsAsync(projectId, ct)).Agents;
+                foreach (var agent in shared.Concat(personal).Where(a => Match(a.DisplayName)).Take(8))
+                    hits.Add(new SearchHit("agent", projectId, agent.DisplayName, projectName,
+                        $"/project/{projectId}/agents/{agent.Id}"));
+            }
+        }
 
         // One bounded OpenSearch request for the active project. Keep it best-effort so a missing
         // connection cannot break workspace search, and permission-check it independently so users
@@ -108,7 +148,7 @@ public sealed class SearchHandler : IQueryHandler<SearchQuery, SearchResultsView
             }
         }
 
-        foreach (var p in await _projects.ListAsync(ct))
+        foreach (var p in projects)
         {
             var url = $"/project/{p.Id.Value}";
             var name = p.Name.Value;

@@ -269,6 +269,8 @@ public sealed class WorkflowConditionalPathTests
             return result.ToHtmlString();
         });
         Assert.Equal(!readOnly && !running, html.Contains("Remove if gate from step 1"));
+        Assert.Contains($">{(question is null ? "IF" : "Determine")}</span>", html);
+        Assert.DoesNotContain(">Review</span>", html);
     }
 
     [Fact]

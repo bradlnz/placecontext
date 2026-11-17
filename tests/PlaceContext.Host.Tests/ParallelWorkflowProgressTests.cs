@@ -11,6 +11,20 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class ParallelWorkflowProgressTests
 {
+    [Theory]
+    [InlineData("Pending", "Retry 2 queued", true)]
+    [InlineData("Running", "Retrying · attempt 3", true)]
+    [InlineData("Succeeded", "Retried 2 times", false)]
+    [InlineData("Failed", "Retried 2 times", false)]
+    public async Task Retry_badge_distinguishes_waiting_active_and_finished_attempts(string status, string label, bool active)
+    {
+        var step = new ChainStepRunView(0, 0, 0, Guid.NewGuid(), "Retry job", null, status, null, null, RetryCount: 2);
+        var html = System.Net.WebUtility.HtmlDecode(await RenderAsync<WorkflowRunStep>(new() { ["Step"] = step }));
+        Assert.Contains(label, html);
+        Assert.Equal(active, html.Contains("data-retrying=\"true\""));
+        var first = await RenderAsync<WorkflowRunStep>(new() { ["Step"] = step with { RetryCount = 0 } });
+        Assert.DoesNotContain("retry-indicator", first);
+    }
     [Fact]
     public async Task Canvas_shows_live_branch_statuses_without_needing_to_open_the_step()
     {

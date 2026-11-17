@@ -12,6 +12,38 @@ namespace PlaceContext.Application.Tests;
 
 public class SearchTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Workflow_and_job_search_is_project_scoped_permission_checked_and_deep_linked(bool allowed)
+    {
+        var projects = new InMemoryProjectRepository();
+        var project = Project.Discover(ProjectPath.From("/workspace/current"), ProjectName.From("Current"), T0);
+        var other = Project.Discover(ProjectPath.From("/workspace/other"), ProjectName.From("Other"), T0);
+        await projects.AddAsync(project);
+        await projects.AddAsync(other);
+        var jobs = new InMemoryJobRepository();
+        var workflows = new InMemoryJobChainRepository();
+        foreach (var p in new[] { project, other })
+        {
+            var job = Job.Create(p.Id.Value, "Invoice import", "Billing ingestion", new MapSpec("img", ["{}"], new Dictionary<string, string>()),
+                null, 1, ExitCodePolicy.Default, T0);
+            await jobs.AddAsync(job);
+            await workflows.AddAsync(JobChain.Create(p.Id.Value, "Invoice workflow", "Billing process", new[] { job.Id }, T0));
+        }
+        var permissions = new FakePermissionService(false, allowed ? [Permission.ChainsManage, Permission.JobsView] : []);
+        var handler = new SearchHandler(projects, new InMemoryActivityLogRepository(), new InMemoryDecisionRepository(),
+            permissions: permissions, workflows: workflows, jobs: jobs);
+        var results = await handler.HandleAsync(new SearchQuery("  billing  ", ProjectId: project.Id.Value));
+        if (!allowed) { Assert.Empty(results.Hits); return; }
+        Assert.Equal(2, results.Hits.Count);
+        Assert.All(results.Hits, h => Assert.Equal(project.Id.Value, h.ProjectId));
+        Assert.Contains(results.Hits, h => h.Kind == "workflow" && h.Url.Contains("/workflows/"));
+        Assert.Contains(results.Hits, h => h.Kind == "job" && h.Url.Contains("/jobs?job="));
+        var all = await handler.HandleAsync(new SearchQuery("invoice"));
+        Assert.Equal(4, all.Hits.Count);
+    }
+
     private static readonly DateTimeOffset T0 = new(2026, 6, 24, 12, 0, 0, TimeSpan.Zero);
 
     private static async Task<SearchHandler> SeedAsync(
@@ -235,10 +267,15 @@ public class SearchTests
     private sealed class FakePermissionService : IPermissionService
     {
         private readonly bool _hasDataRead;
-        public FakePermissionService(bool hasDataRead) => _hasDataRead = hasDataRead;
+        private readonly IReadOnlySet<string> _additional;
+        public FakePermissionService(bool hasDataRead, params string[] additional)
+        {
+            _hasDataRead = hasDataRead;
+            _additional = additional.ToHashSet();
+        }
 
         public Task<bool> HasAsync(string permission, CancellationToken ct = default)
-            => Task.FromResult(permission == Permission.DataRead && _hasDataRead);
+            => Task.FromResult(permission == Permission.DataRead && _hasDataRead || _additional.Contains(permission));
 
         public Task<IReadOnlySet<string>> GetEffectivePermissionsAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlySet<string>>(_hasDataRead

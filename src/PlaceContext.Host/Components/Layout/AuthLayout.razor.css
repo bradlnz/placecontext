@@ -4,7 +4,7 @@
     --text: #202531; --text-2: #505967; --text-3: #616b79; --text-4: #687281;
     --border: #e4e7ec; --border-2: #cbd1da;
     --brand: #1b2029; --brand-2: #333b48; --brand-fg: #fff; --brand-bg: #eef2f8;
-    --button-bg: #fff; --button-hover: #f5f7fa; --button-border: #cbd1da; --button-text: #202531;
+    --button-bg: #fff; --button-hover: #f5f7fa; --button-hover-text: #202531; --button-border: #cbd1da; --button-text: #202531;
     --bad: #b42318; --bad-bg: #fff3f2;
     color-scheme: light;
     min-height: 100vh;

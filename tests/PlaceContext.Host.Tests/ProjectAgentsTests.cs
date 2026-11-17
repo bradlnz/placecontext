@@ -15,6 +15,87 @@ namespace PlaceContext.Host.Tests;
 
 public sealed partial class BuildChatTests
 {
+    [Fact]
+    public async Task Agent_catalogue_groups_children_under_their_parent()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var parent = new DashboardAgentProfile { Name = "Supervisor" };
+        var child = new DashboardAgentProfile { Name = "Analyst", ParentAgentId = parent.Id };
+        var sibling = new DashboardAgentProfile { Name = "Writer", ParentAgentId = parent.Id };
+        var grandchild = new DashboardAgentProfile { Name = "Researcher", ParentAgentId = child.Id };
+        var store = ProjectStore(f);
+        await store.SaveAsync(f.ProjectId, new() { Agents = [sibling, grandchild, child, parent] });
+        var vm = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store);
+        await vm.LoadAsync(f.ProjectId);
+        Assert.Equal(DashboardSettings.DefaultAgentId, Assert.Single(vm.RootAgents).Id);
+        Assert.Contains(vm.ChildAgents(DashboardSettings.DefaultAgentId), a => a.Id == parent.Id);
+        Assert.Equal(new[] { child.Id, sibling.Id }, vm.ChildAgents(parent.Id).Select(a => a.Id));
+        Assert.Equal(grandchild.Id, Assert.Single(vm.ChildAgents(child.Id)).Id);
+        Assert.Empty(vm.ChildAgents(grandchild.Id));
+
+        var withoutDashboard = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new());
+        await withoutDashboard.LoadAsync(f.ProjectId);
+        Assert.Equal(parent.Id, Assert.Single(withoutDashboard.RootAgents).Id);
+    }
+
+    [Fact]
+    public async Task Agent_workspace_saves_yaml_without_closing_and_rejects_invalid_drafts()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var profile = new DashboardAgentProfile { Name = "Reviewer" };
+        var store = ProjectStore(f);
+        await store.SaveAsync(f.ProjectId, new() { Agents = [profile] });
+        var vm = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store);
+        await vm.LoadPageAsync(f.ProjectId, profile.Id.ToString());
+        vm.AgentTab = "Markup";
+        var yaml = vm.MarkupText.Replace("name: Reviewer", "name: Analyst");
+        Assert.True(vm.ApplyMarkup(yaml));
+        await vm.SaveAgentAsync("Updated instructions", profile.Id.ToString());
+        Assert.Null(vm.Error);
+        Assert.True(vm.EditorOpen);
+        Assert.Equal("Markup", vm.AgentTab);
+        Assert.Equal("Analyst", vm.Agent!.Name);
+        Assert.Equal("Updated instructions", (await store.GetAsync(f.ProjectId)).Agents.Single().Instructions);
+        Assert.False(vm.ApplyMarkup(yaml + "\nunknown: value"));
+        Assert.Equal("Analyst", vm.Agent.Name);
+        f.Permissions.Denied = Permission.ProjectsManage;
+        await vm.LoadPageAsync(f.ProjectId, profile.Id.ToString());
+        Assert.False(vm.ApplyMarkup(yaml));
+    }
+
+    [Fact]
+    public async Task Agent_observability_only_includes_the_current_users_selected_agent()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var agentId = Guid.NewGuid();
+        foreach (var id in new Guid?[] { null, agentId, Guid.NewGuid() })
+        {
+            var session = new BuildConversation { ProjectId = f.ProjectId, AgentId = id, ConnectionId = f.ConnectionId, Model = "test" };
+            await f.Store.QueueAsync(session, new JsonObject { ["role"] = "user", ["content"] = "Test session" });
+        }
+        using (var scope = f.Provider.CreateScope())
+        {
+            var encryption = scope.ServiceProvider.GetRequiredService<IDataEncryptor>();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.BuildConversations.Add(new()
+            {
+                Id = Guid.NewGuid(), UserId = f.User.UserId, ProjectId = f.ProjectId,
+                Content = encryption.Protect("""{"AgentId":"legacy-invalid"}""", DbBuildChatStore.Purpose),
+                Title = encryption.Protect("Legacy session", DbBuildChatStore.Purpose), UpdatedAt = DateTimeOffset.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+        Assert.Single(await f.Store.ListAgentSessionsAsync(f.ProjectId, agentId));
+        Assert.Single(await f.Store.ListAgentSessionsAsync(f.ProjectId, DashboardSettings.DefaultAgentId));
+        f.User.UserId = Guid.NewGuid();
+        Assert.Empty(await f.Store.ListAgentSessionsAsync(f.ProjectId, agentId));
+        f.Permissions.Denied = Permission.ProjectsView;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => f.Store.ListAgentSessionsAsync(f.ProjectId, agentId));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

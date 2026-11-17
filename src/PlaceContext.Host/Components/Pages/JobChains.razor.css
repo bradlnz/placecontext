@@ -457,8 +457,14 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .run-card { transition:border-color .15s ease, background .15s ease, transform .15s ease; }
 .run-card:hover { border-color:var(--border-2); background:color-mix(in srgb, var(--brand-2) 4%, var(--card)); transform:translateY(-1px); }
 @media (max-width:700px) {
-    .workflow-canvas-dialog .dcmodal-head { flex-wrap:wrap; gap:10px }
-    .workflow-canvas-actions { flex-wrap:wrap; gap:8px; width:100%; justify-content:flex-end }
+    .workflow-canvas-dialog .dcmodal-head { flex-wrap:wrap; gap:10px; padding:12px }
+    .workflow-canvas-dialog .dcmodal-head > .flex-min { flex-basis:100%; overflow-wrap:anywhere }
+    .workflow-canvas-dialog .dcmodal-body { padding:8px }
+    .workflow-canvas-actions { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)) 44px; gap:6px; width:100% }
+    .workflow-canvas-actions > .dcbtn { min-width:0; min-height:40px }
+    .workflow-canvas-actions > .dcslide-x { grid-column:3; grid-row:1 / span 2; align-self:start; margin:0 }
+    .workflow-canvas-actions .workflow-menu summary { padding:10px 6px; text-align:center }
+    .workflow-view-tabs { padding-inline:8px }
     .list-stage-head { gap:6px; flex-wrap:wrap }
     .list-stage-actions .dcbtn, .stage-job-chip .dcbtn { min-width:40px; min-height:40px }
     .stage-branch-row { flex-wrap:wrap }

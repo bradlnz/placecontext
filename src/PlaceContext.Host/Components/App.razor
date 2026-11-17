@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <style>
-        html, body { margin:0; min-height:100%; background:#fff; color-scheme:light; }
-        html[data-pc-theme="dark"], html[data-pc-theme="dark"] body { background:#000; color-scheme:dark; }
+        html, body { margin:0; min-height:100%; background:#000; color-scheme:dark; }
+        html[data-pc-theme="light"], html[data-pc-theme="light"] body { background:#fff; color-scheme:light; }
     </style>
     <script>
         (() => {
-            let theme = 'light';
-            try { theme = localStorage.getItem('placecontext-theme') === 'dark' ? 'dark' : 'light'; } catch { }
+            let theme = 'dark';
+            try { theme = localStorage.getItem('placecontext-theme') === 'light' ? 'light' : 'dark'; } catch { }
             document.documentElement.dataset.pcTheme = theme;
         })();
     </script>
@@ -19,11 +19,6 @@
     <title>PlaceContext — Data workflow engine</title>
     <meta name="description" content="PlaceContext is a data workflow engine. Ingest, transform, validate, and deliver data with workflows that run locally or in the cloud." />
     <link rel="icon" type="image/svg+xml" href="@Assets["favicon.svg"]" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
-          rel="stylesheet" media="print" onload="this.media='all'" />
-    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" /></noscript>
     @* Blazor scoped-CSS bundle: per-component <Name>.razor.css files compile into this. Component
        classes resolve --var() values from the #dcshell ancestor's cascade below. *@
     <link rel="stylesheet" href="@Assets["PlaceContext.Host.styles.css"]" />
