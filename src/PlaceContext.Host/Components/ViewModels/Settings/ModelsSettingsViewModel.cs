@@ -138,6 +138,8 @@ public sealed class ModelsSettingsViewModel(IModelConnections connections, Porta
         Connections = await connections.ListAsync();
         HasApiKey = Connections.Single(x => x.Id == Id).HasApiKey;
         var models = await connections.DiscoverAsync(Id);
+        if (models.Count == 0)
+            throw new InvalidOperationException("No models were discovered. Existing model IDs were kept. Check the provider address, installed models and sign-in, then retry.");
         Models = string.Join('\n', models);
         Notice = $"Connection saved. Found {models.Count} models. Keep the models you want available, then save.";
     });

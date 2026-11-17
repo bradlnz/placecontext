@@ -153,7 +153,13 @@ public sealed class ModelConnections(IServiceScopeFactory scopes, ICurrentUser u
         if (LocalCliModels.Supports(row.Protocol))
         {
             await CheckLocalCliAsync(ct);
-            return cli is null ? [] : await cli.DiscoverAsync(row.Protocol, ct) ?? [];
+            var command = row.Protocol == "codex" ? "codex" : "claude";
+            var models = cli is null ? null : await cli.DiscoverAsync(row.Protocol, ct);
+            if (models is null)
+                throw new InvalidOperationException($"{command} is not installed in the PlaceContext app environment. Docker and Kubernetes installations cannot discover CLIs on your desktop. Install the CLI in the app environment and sign in as the app user, or configure a provider API connection.");
+            if (models.Length == 0)
+                throw new InvalidOperationException($"{command} returned no available models. Check {(command == "codex" ? "codex login status" : "claude auth status")} as the account running PlaceContext. Desktop sign-ins are not shared with app containers.");
+            return models;
         }
         var body = await SendAsync(row, "models", null, ct);
         return (body["data"] as JsonArray ?? throw new InvalidOperationException("This provider does not support model discovery. Enter model IDs manually."))

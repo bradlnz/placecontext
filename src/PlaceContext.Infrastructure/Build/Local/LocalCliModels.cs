@@ -29,7 +29,7 @@ public sealed class LocalCliModels : IAsyncDisposable
             throw new ArgumentException("Unsupported local CLI.");
         }
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(8));
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
             // Check the actual executable before invoking it; absence is different from a signed-out CLI.
@@ -57,11 +57,11 @@ public sealed class LocalCliModels : IAsyncDisposable
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return [];
+            throw new InvalidOperationException("Local model discovery timed out after 30 seconds. Check that the CLI starts and can reach its provider from the PlaceContext app environment, then retry.");
         }
         catch (Exception ex) when (ex is InvalidOperationException or JsonException or IOException)
         {
-            return [];
+            throw new InvalidOperationException($"Could not discover {Executable(protocol)} models. Check the CLI installation and sign-in as the account running PlaceContext. {ex.Message}", ex);
         }
     }
 

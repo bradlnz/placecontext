@@ -12,7 +12,7 @@
     @if (Vm.Connections.Count == 0 && !Vm.Editing) { <div class="dccard empty"><AppIcon Kind="agent" /><h3>Bring your models</h3><p>Add a provider API key or connect a local server. Your credentials stay encrypted on the server.</p><button class="dcbtn" @onclick="Vm.Add">Add your first connection</button></div> }
     @foreach (var connection in Vm.Connections)
     {
-        <article class="dccard connection"><div><h3>@connection.Name <small>@(connection.Enabled ? "Enabled" : "Disabled")</small></h3><p>@connection.BaseUrl</p><small>@connection.Models.Count models · @(connection.SetupHint ?? (connection.HasApiKey ? "API key saved" : "No API key"))</small></div><div><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.Edit(connection)">Edit</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.Deleting = connection.Id">Delete</button></div></article>
+        <article class="dccard connection"><div><h3>@connection.Name <small>@(connection.Enabled ? "Enabled" : "Disabled")</small></h3><p>@connection.BaseUrl</p><small>@connection.Models.Count models · @(connection.SetupHint ?? (connection.HasApiKey ? "API key saved" : "No API key"))</small></div><div class="actions"><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.Edit(connection)">Edit</button><button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.Deleting = connection.Id">Delete</button></div></article>
     }
     @if (Vm.Editing)
     {
@@ -21,7 +21,7 @@
             <div class="dcfield"><label for="model-preset">Provider preset</label><select id="model-preset" class="dcinput" disabled="@Vm.Busy" @onchange="e => Vm.Preset(e.Value?.ToString() ?? string.Empty)"><option value="">Choose a preset</option>@foreach (var preset in ModelsSettingsViewModel.Presets) { <option>@preset.Name</option> }</select></div>
             <div class="dcfield"><label for="model-name">Connection name</label><input id="model-name" class="dcinput" maxlength="100" @bind="Vm.Name" disabled="@Vm.Busy" /></div>
             @if (Vm.IsLocalCli)
-            { <p>Uses the installed CLI and its existing sign-in on the app host. Sign in with <code>@Vm.LoginCommand</code>, then discover models. Host CLI accounts are available only to the default workspace administrator.</p> }
+            { <p>Uses the CLI installed in the PlaceContext app environment. Install it and run <code>@Vm.LoginCommand</code> as the app user, then discover models. Docker and Kubernetes containers cannot use your desktop CLI installation or sign-in. CLI accounts are available only to the default workspace administrator.</p> }
             else
             {
             <div class="dcfield"><label for="model-protocol">API protocol</label><select id="model-protocol" class="dcinput" @bind="Vm.Protocol" disabled="@Vm.Busy"><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic Messages</option></select></div>

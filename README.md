@@ -81,6 +81,11 @@ the script exits without restarting it.
 
 Both paths serve the portal at **http://localhost:7700**. The MCP endpoint is `/mcp` and the
 management API is under `/api/v1`. Configure model providers in **Settings → Models**.
+Codex and Claude Code connections require the CLI to be installed and signed in as the user
+running PlaceContext. The release containers do not include these CLIs or inherit your desktop
+sign-in; use a provider API connection or prepare an app image with the required CLI and account.
+For Ollama and LM Studio, the endpoint must be reachable from the app container; `localhost`
+inside a container refers to that container, not your desktop.
 Running the source host does not provision a Kubernetes worker cluster, an object store or a
 browser VM image; configure those capabilities before running workflows that require them.
 
