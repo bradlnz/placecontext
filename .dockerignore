@@ -11,6 +11,7 @@ dist
 **/node_modules
 **/target
 **/.claude
+.agents/skills
 **/tests/**/bin
 **/tests/**/obj
 deploy/placecontext-local.tar

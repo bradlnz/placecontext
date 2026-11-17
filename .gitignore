@@ -17,6 +17,7 @@ __pycache__/
 *.key
 graphify-out/
 .claude/settings.local.json
+/.agents/skills/
 
 # Licensor activation signing key (secret — never commit)
 tools/activation-signing-key.pem
