@@ -8,6 +8,22 @@ namespace PlaceContext.Host.Components.ViewModels;
 
 public sealed partial class BuildChatViewModel
 {
+    private readonly DashboardLayout _jobRunTiles = new()
+    {
+        Actions = [],
+        HiddenTiles = ["workflow", "chat", "chart"],
+        Charts =
+        [
+            new(new ChartSpec("bar", "Job run status", ["Running", "Queued", "Failed (24h)", "Succeeded (24h)"],
+                [new("Runs", [0, 0, 0, 0])]).ToJson(), "Current running and queued jobs; failed and succeeded jobs in the last 24 hours.") { Live = true },
+            new(new ChartSpec("pie", "Job outcomes (24 hours)", ["Failed (24h)", "Succeeded (24h)"],
+                [new("Runs", [0, 0])]).ToJson(), "Failed and succeeded jobs in the last 24 hours.") { Live = true }
+        ]
+    };
+    public DashboardLayout DisplayedTiles => HasSelectedModel ? Tiles : _jobRunTiles;
+    public string AddModelHref => Connections.Any(connection => connection.Models.Count > 0)
+        ? $"/project/{Conversation.ProjectId}/dashboard/settings/agent" : "/settings/models";
+
     public sealed record DashboardChartResult(ChartSpec? Spec, DateTimeOffset? UpdatedAt, string? Error = null);
     public Dictionary<Guid, DashboardChartResult> DashboardChartResults { get; } = [];
     public bool ChartsRefreshing { get; private set; }
@@ -107,13 +123,13 @@ public sealed partial class BuildChatViewModel
 
     public async Task RefreshDashboardChartsAsync(CancellationToken ct = default)
     {
-        if (ChartsRefreshing || ChartQuerySaving || Tiles.Charts.Count == 0) return;
+        if (ChartsRefreshing || ChartQuerySaving || DisplayedTiles.Charts.Count == 0) return;
         ChartsRefreshing = true;
         var version = _chartVersion;
         var projectId = Conversation.ProjectId;
         try
         {
-            foreach (var chart in Tiles.Charts.Where(c => !Tiles.HiddenTiles.Contains(c.Id.ToString())).ToArray())
+            foreach (var chart in DisplayedTiles.Charts.Where(c => !DisplayedTiles.HiddenTiles.Contains(c.Id.ToString())).ToArray())
             {
                 ct.ThrowIfCancellationRequested();
                 DashboardChartResult result;
@@ -123,6 +139,9 @@ public sealed partial class BuildChatViewModel
                     var definition = ChartSpec.TryParse(chart.ChartJson)!;
                     var spec = await DashboardChartData.ReadAsync(service, permissions, projectId,
                         definition.Title ?? "Chart", definition.Type, chart.Sql, ct);
+                    if (chart == _jobRunTiles.Charts[1] && spec is not null)
+                        spec = spec with { Labels = spec.Labels.Skip(2).ToArray(),
+                            Series = [new("Runs", spec.Series[0].Values.Skip(2).ToArray())] };
                     result = new(spec, DateTimeOffset.UtcNow);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -133,7 +152,7 @@ public sealed partial class BuildChatViewModel
                         : "Recreate this chart with a live data source to see current values.");
                 }
                 if (version != _chartVersion || ct.IsCancellationRequested) return;
-                if (!Tiles.Charts.Contains(chart)) continue;
+                if (!DisplayedTiles.Charts.Contains(chart)) continue;
                 DashboardChartResults[chart.Id] = result;
                 if (ExpandedDashboardChartId == chart.Id && result.Spec is { } current)
                     PreviewChart = new(current, chart.Source, chart.Live, chart.Sql);

@@ -224,3 +224,8 @@ pre { overflow: auto; max-height: 320px; white-space: pre-wrap; overflow-wrap: a
 .dashboard-dragging .dashboard-actions { padding-bottom:236px; }
 
 .dashboard-tile.tile-resizing { box-sizing:border-box; z-index:2; box-shadow:0 0 0 2px var(--brand); }
+
+.dashboard-model-prompt { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.dashboard-model-prompt h2 { margin:0; font-size:20px; }
+.chat-welcome .dashboard-model-prompt p { margin:6px 0 0; }
+.dashboard-model-prompt .dcbtn { flex:none; }

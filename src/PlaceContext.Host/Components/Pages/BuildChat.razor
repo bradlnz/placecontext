@@ -63,27 +63,37 @@
                     <div class="chat-welcome">
                         @if (!Vm.ChatOpen)
                         {
+                            @if (!Vm.HasSelectedModel)
+                            {
+                                <div class="dashboard-model-prompt">
+                                    <div><h2>Job activity</h2><p>Add a model to ask questions and customize your dashboard with the assistant.</p></div>
+                                    <a class="dcbtn primary" href="@Vm.AddModelHref"><AppIcon Kind="plus" /> Add a model</a>
+                                </div>
+                            }
                             <p class="dashboard-layout-status" role="status" aria-live="polite"></p>
                             <div class="dashboard-actions" @key="(Vm.Conversation.AgentId ?? DashboardSettings.DefaultAgentId)" aria-label="Dashboard tiles">
                             @foreach (var key in Vm.DashboardTileKeys)
                             {
-                                var action = Vm.Tiles.TileAction(key);
-                                var chart = Vm.Tiles.Charts.FirstOrDefault(c => c.Id.ToString() == key);
+                                var action = Vm.DisplayedTiles.TileAction(key);
+                                var chart = Vm.DisplayedTiles.Charts.FirstOrDefault(c => c.Id.ToString() == key);
                                 var chartResult = chart is null ? null : Vm.DashboardChartResults.GetValueOrDefault(chart.Id);
                                 var title = action?.Title ?? (chart is null ? null : PlaceContext.Application.Features.ChartSpec.TryParse(chart.ChartJson)?.Title) ?? (key == "workflow" ? "Run a workflow" : key == "chat" ? "Ask a question" : key == "chart" ? "Add chart" : "Chart");
-                                var layoutDisabled = Vm.Locked || Vm.AgentLoading || Vm.AgentOpen;
-                                <article class="dashboard-tile tile-@Vm.Tiles.TileSize(key) @(Vm.Tiles.TileRowStarts.Contains(key) ? "tile-row-start" : "") @(chart is not null ? "dashboard-chart" : "")" @key="key" data-tile="@key" data-tile-size="@Vm.Tiles.TileSize(key)" data-tile-column="@Vm.Tiles.TilePositions.GetValueOrDefault(key)?.Column" data-tile-row="@Vm.Tiles.TilePositions.GetValueOrDefault(key)?.Row"
+                                var layoutDisabled = !Vm.HasSelectedModel || Vm.Locked || Vm.AgentLoading || Vm.AgentOpen;
+                                <article class="dashboard-tile tile-@Vm.DisplayedTiles.TileSize(key) @(Vm.DisplayedTiles.TileRowStarts.Contains(key) ? "tile-row-start" : "") @(chart is not null ? "dashboard-chart" : "")" @key="key" data-tile="@key" data-tile-size="@Vm.DisplayedTiles.TileSize(key)" data-tile-column="@Vm.DisplayedTiles.TilePositions.GetValueOrDefault(key)?.Column" data-tile-row="@Vm.DisplayedTiles.TilePositions.GetValueOrDefault(key)?.Row"
                                          data-move-enabled="@(!layoutDisabled ? "true" : "false")">
+                                    @if (Vm.HasSelectedModel)
+                                    {
                                         <div class="dashboard-move" aria-label="@($"Move {title}")">
                                             <button type="button" class="dashboard-drag-handle" disabled="@layoutDisabled" aria-label="@($"Move {title}")" title="Drag to rearrange · arrow keys also work">⠿ Move</button>
                                             @if (action is not null)
                                             { <button type="button" class="chat-icon-button" disabled="@layoutDisabled" aria-label="@($"Edit {title}")" title="Edit tile" @onclick="() => Vm.EditDashboardTile(key)"><AppIcon Kind="edit" /></button> }
                                             <button type="button" class="chat-icon-button" disabled="@layoutDisabled" aria-label="@($"Remove {title} from dashboard")" title="Remove tile" @onclick="() => Vm.RemoveDashboardTileAsync(key)"><AppIcon Kind="trash" /></button>
                                         </div>
-                                    <button type="button" class="dashboard-resize" aria-label="@($"Resize {title}")" aria-description="@($"Current size: {Vm.Tiles.TileSize(key)}. Drag to resize or use the arrow keys.")" title="Drag to resize · arrow keys also work" disabled="@layoutDisabled"><span aria-hidden="true">↘</span></button>
+                                    <button type="button" class="dashboard-resize" aria-label="@($"Resize {title}")" aria-description="@($"Current size: {Vm.DisplayedTiles.TileSize(key)}. Drag to resize or use the arrow keys.")" title="Drag to resize · arrow keys also work" disabled="@layoutDisabled"><span aria-hidden="true">↘</span></button>
+                                    }
                                     @if (chart is not null)
                                     {
-                                        <div class="dashboard-chart-heading"><h2>@title</h2><button class="chat-icon-button" aria-label="@(chart.Sql is null ? $"Use SQL for {title}" : $"Edit query for {title}")" title="@(chart.Sql is null ? "This chart uses built-in counts. Switch to a SQL query." : "Edit the saved SQL query")" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="() => Vm.EditChartQueryAsync(chart)"><AppIcon Kind="edit" /></button><button class="chat-icon-button" aria-label="@($"Expand {title}")" disabled="@(chartResult?.Spec is null)" @onclick="() => Vm.OpenDashboardChart(chart)"><AppIcon Kind="external-link" /></button></div>
+                                        <div class="dashboard-chart-heading"><h2>@title</h2>@if (Vm.HasSelectedModel) { <button class="chat-icon-button" aria-label="@(chart.Sql is null ? $"Use SQL for {title}" : $"Edit query for {title}")" title="@(chart.Sql is null ? "This chart uses built-in counts. Switch to a SQL query." : "Edit the saved SQL query")" disabled="@(Vm.Locked || Vm.AgentLoading)" @onclick="() => Vm.EditChartQueryAsync(chart)"><AppIcon Kind="edit" /></button> }<button class="chat-icon-button" aria-label="@($"Expand {title}")" disabled="@(chartResult?.Spec is null)" @onclick="() => Vm.OpenDashboardChart(chart)"><AppIcon Kind="external-link" /></button></div>
                                         <small class="dashboard-chart-date">Live · refreshes every 10 seconds @if (chartResult?.UpdatedAt is { } updated) { <span>· Updated @Vm.Presentation.DateTime(updated)</span> }</small>
                                         <div class="dashboard-chart-content">
                                             @if (chartResult?.Error is { } chartError) { <p role="status">@chartError</p> }
@@ -284,7 +294,7 @@
                 else if (Vm.PreviewChart is { } previewChart)
                 {
                     <div class="preview-content preview-chart">
-                        <button class="dcbtn" disabled="@(Vm.Locked || Vm.AgentLoading || !previewChart.Live || Vm.IsChartPinned(previewChart) || Vm.Tiles.Charts.Count >= 8)" @onclick="() => Vm.PinDashboardChartAsync(previewChart)">@(Vm.IsChartPinned(previewChart) ? "Pinned to dashboard" : "Pin to dashboard")</button>
+                        <button class="dcbtn" disabled="@(!Vm.HasSelectedModel || Vm.Locked || Vm.AgentLoading || !previewChart.Live || Vm.IsChartPinned(previewChart) || Vm.Tiles.Charts.Count >= 8)" @onclick="() => Vm.PinDashboardChartAsync(previewChart)">@(Vm.IsChartPinned(previewChart) ? "Pinned to dashboard" : "Pin to dashboard")</button>
                         @if (!previewChart.Live) { <p class="hint">Ask for a live chart to pin current data to your dashboard.</p> }
                         @if (Vm.Tiles.Charts.Count >= 8 && !Vm.IsChartPinned(previewChart)) { <p>The dashboard supports up to 8 pinned charts.</p> }
                         @if (Vm.ExpandedDashboardChartId is { } expanded && Vm.DashboardChartResults.GetValueOrDefault(expanded) is { } liveResult)

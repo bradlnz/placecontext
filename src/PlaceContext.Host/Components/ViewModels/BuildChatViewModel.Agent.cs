@@ -17,7 +17,7 @@ public sealed partial class BuildChatViewModel
     public IReadOnlyList<DashboardAgentProfile> ProjectAgents { get; private set; } = [];
     public IEnumerable<DashboardAgentProfile> DashboardAgents => AvailableAgents;
     public DashboardLayout Tiles => Dashboard.ForAgent(Conversation.AgentId);
-    public IEnumerable<string> DashboardTileKeys => Tiles.OrderedTiles().Where(key => key is not ("chat" or "chart"));
+    public IEnumerable<string> DashboardTileKeys => DisplayedTiles.OrderedTiles().Where(key => key is not ("chat" or "chart"));
     public DashboardLayout DraftTiles => AgentDraft.ForAgent(Conversation.AgentId);
     public IEnumerable<DashboardAgentProfile> AvailableAgents => Dashboard.Agents.Concat(ProjectAgents);
     public DashboardSettings AgentDraft { get; private set; } = new();
@@ -147,12 +147,12 @@ public sealed partial class BuildChatViewModel
         CloseTileEditor();
         Conversation.AgentId = id;
         ResetDashboardCharts();
-        _ = RefreshDashboardChartsAsync();
         if (id == DashboardSettings.DefaultAgentId && DashboardAgents.First(a => a.Id == id).ConnectionId == Guid.Empty)
         {
             SelectDefaultModel();
         }
         ApplyAgentModel();
+        _ = RefreshDashboardChartsAsync();
         AgentOpen = false;
         if (WorkflowPickerOpen)
         {

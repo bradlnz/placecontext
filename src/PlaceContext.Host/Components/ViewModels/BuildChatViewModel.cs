@@ -104,7 +104,8 @@ public sealed partial class BuildChatViewModel(IBuildChatStore store, IModelConn
     {
         get; private set;
     }
-    public bool CanStartChat => !Locked && !Listening && Conversation.ConnectionId != Guid.Empty && Models.Contains(Conversation.Model);
+    public bool HasSelectedModel => Conversation.ConnectionId != Guid.Empty && Models.Contains(Conversation.Model);
+    public bool CanStartChat => !Locked && !Listening && HasSelectedModel;
     public bool CanSend => CanStartChat && Draft.Trim().Length > 0;
     private IDisposable? _conversationSubscription;
     private readonly SemaphoreSlim _updateGate = new(1, 1);
