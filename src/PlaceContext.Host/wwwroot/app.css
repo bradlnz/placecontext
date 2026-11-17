@@ -1,5 +1,7 @@
 :root {
     --font-sans:Arial,Helvetica,sans-serif;
+    font-family:var(--font-sans);
+    font-synthesis:none;
 }
 #dcshell {
     --bg:var(--tenant-bg,#000000); --panel:var(--tenant-panel,#0b0b0b); --card:var(--tenant-panel,#0b0b0b); --card-2:#141414; --hover:#1c1c1c;
@@ -36,7 +38,7 @@ html[data-pc-theme="light"] #dcshell, html:not([data-pc-theme]) #dcshell[data-th
 html, body { margin:0; padding:0; height:100%; }
 html.pc-focus-layer-open, html.pc-focus-layer-open body { overflow:hidden; overscroll-behavior:none; }
 body { font-family:var(--font-sans); background:#fff; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
-#dcshell { font-family:var(--font-sans); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:-0.015em; background:var(--bg-tilt); min-height:100vh; border-radius:0; }
+#dcshell { font-family:var(--font-sans); color:var(--text); font-variant-numeric:tabular-nums; letter-spacing:normal; background:var(--bg-tilt); min-height:100vh; border-radius:0; }
 #dcshell:not(.auth-shell) :where(h1, h2, h3, .section-title) { font-weight:500; letter-spacing:-0.035em; }
 #dcshell:not(.auth-shell) h1 { font-weight:400; }
 a { color:inherit; text-decoration:none; }
