@@ -2570,11 +2570,13 @@ namespace PlaceContext.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("TwoFactorCodeFailedAttempts")
+                        .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
                     b.Property<string>("TwoFactorCodeHash")
+                        .IsConcurrencyToken()
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("TwoFactorCodeLastSentAt")

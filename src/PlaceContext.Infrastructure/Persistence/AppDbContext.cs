@@ -334,7 +334,8 @@ public sealed class AppDbContext : DbContext, IUnitOfWork, IDataProtectionKeyCon
             e.Property(x => x.IsExternalAdmin).HasDefaultValue(false);
             e.Property(x => x.TwoFactorEnabled).HasDefaultValue(false);
             e.Property(x => x.TwoFactorChannel).HasDefaultValue("email");
-            e.Property(x => x.TwoFactorCodeFailedAttempts).HasDefaultValue(0);
+            e.Property(x => x.TwoFactorCodeHash).IsConcurrencyToken();
+            e.Property(x => x.TwoFactorCodeFailedAttempts).HasDefaultValue(0).IsConcurrencyToken();
         });
 
         b.Entity<InviteRow>(e =>

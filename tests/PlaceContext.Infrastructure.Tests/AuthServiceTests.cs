@@ -305,17 +305,56 @@ public class AuthServiceTests
         Assert.False(await auth.IsTwoFactorEnabledAsync(user.Id));
     }
 
+    [Theory]
+    [InlineData("active")]
+    [InlineData("exhausted")]
+    [InlineData("consumed")]
+    public async Task Email_two_factor_resend_cooldown_survives_challenge_clearing(string challengeState)
+    {
+        var email = new FakeCommunicationSender();
+        var (auth, db) = NewService(communications: email);
+        var user = await auth.CreateFirstAdminAsync(
+            "owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
+        await auth.IssueTwoFactorCodeAsync(user!.Id);
+        if (challengeState == "exhausted")
+        {
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                Assert.False(await auth.VerifyTwoFactorCodeAsync(user.Id, ""));
+            }
+        }
+        else if (challengeState == "consumed")
+        {
+            Assert.True(await auth.VerifyTwoFactorCodeAsync(user.Id, Code(email.AuthenticationEmails[0].Body)));
+        }
+
+        db.ChangeTracker.Clear();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => auth.IssueTwoFactorCodeAsync(user.Id));
+        Assert.Equal("Wait one minute before requesting another code.", error.Message);
+        Assert.Single(email.AuthenticationEmails);
+
+        var row = await db.Users.SingleAsync(item => item.Id == user.Id);
+        row.TwoFactorCodeLastSentAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        await auth.IssueTwoFactorCodeAsync(user.Id);
+        Assert.Equal(2, email.AuthenticationEmails.Count);
+        Assert.True(await auth.VerifyTwoFactorCodeAsync(user.Id, Code(email.AuthenticationEmails[^1].Body)));
+    }
+
     [Fact]
     public async Task Email_two_factor_disable_requires_a_fresh_emailed_code()
     {
         var email = new FakeCommunicationSender();
-        var (auth, _) = NewService(communications: email);
+        var (auth, db) = NewService(communications: email);
         var user = await auth.CreateFirstAdminAsync(
             "owner@example.com", "Owner", "Zx7!qLmP4#vRw2");
         await auth.IssueTwoFactorCodeAsync(user!.Id);
         var setupCode = Code(email.AuthenticationEmails[^1].Body);
         Assert.True(await auth.ConfirmTwoFactorSetupAsync(user.Id, setupCode));
 
+        (await db.Users.SingleAsync(item => item.Id == user.Id)).TwoFactorCodeLastSentAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        await db.SaveChangesAsync();
         await auth.IssueTwoFactorCodeAsync(user.Id);
         var disableCode = Code(email.AuthenticationEmails[^1].Body);
         Assert.False(await auth.DisableTwoFactorAsync(user.Id, Wrong(disableCode)));

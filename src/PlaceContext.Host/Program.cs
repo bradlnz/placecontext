@@ -119,6 +119,7 @@ builder.Services.Configure<CoreApiOptions>(builder.Configuration.GetSection("Pla
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy<string, LoginRateLimitPolicy>("login");
     options.AddPolicy("public-ingestion", context =>
     {
         // Valid webhook credentials receive independent limits. Invalid/credential-less traffic is

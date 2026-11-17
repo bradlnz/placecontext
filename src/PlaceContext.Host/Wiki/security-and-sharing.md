@@ -13,6 +13,17 @@ Read-only Viewers can browse permitted projects, jobs, data, and artifacts. Memb
 work and manage artifacts. Administrators and Owners have broader workspace controls. Custom roles
 and individual overrides may differ, so ask an administrator if your access looks wrong.
 
+## Sign-in protection
+
+Password sign-in is limited to ten requests per minute from the same network peer on each server.
+If sign-in returns **429 Too Many Requests**, wait a minute before trying again. People using the
+same proxy can share this limit.
+
+An MFA verification code can be used once and allows up to five attempts, including simultaneous
+submissions. Request a new code after the attempt limit is reached; opening another tab does not
+reset the limit. Wait at least one minute between code requests, even if the previous code was
+used or its attempts were exhausted.
+
 ## Information protected while stored
 
 The project **Vault** encrypts secrets such as API credentials. Jobs receive a secret only while

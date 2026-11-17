@@ -275,8 +275,7 @@ public sealed class AuthService : IAuthService
             throw new InvalidOperationException("User not found.");
         }
         var now = DateTimeOffset.UtcNow;
-        if (row.TwoFactorCodeHash is not null
-            && row.TwoFactorCodeLastSentAt is { } sentAt
+        if (row.TwoFactorCodeLastSentAt is { } sentAt
             && sentAt > now.AddMinutes(-1))
         {
             throw new InvalidOperationException("Wait one minute before requesting another code.");
@@ -419,86 +418,89 @@ public sealed class AuthService : IAuthService
         return flagged.FirstOrDefault() ?? "email";
     }
 
-    public async Task<bool> ConfirmTwoFactorSetupAsync(
+    public Task<bool> ConfirmTwoFactorSetupAsync(
         Guid userId, string code, CancellationToken ct = default)
-    {
-        var row = await VerifyChallengeAsync(userId, code, requireEnabled: false, ct);
-        if (row is null)
-        {
-            return false;
-        }
-        row.TwoFactorEnabled = true;
-        row.TotpSecret = null;
-        row.RecoveryCodesJson = null;
-        ClearChallenge(row);
-        await _db.SaveChangesAsync(ct);
-        return true;
-    }
+        => VerifyChallengeAsync(userId, code, enabled: true, ct);
 
-    public async Task<bool> VerifyTwoFactorCodeAsync(
+    public Task<bool> VerifyTwoFactorCodeAsync(
         Guid userId, string code, CancellationToken ct = default)
-    {
         // 2FA is org-wide mandatory now (driven by flagged providers, not the legacy per-user flag),
         // so login verification only checks the challenge itself.
-        var row = await VerifyChallengeAsync(userId, code, requireEnabled: false, ct);
-        if (row is null)
-        {
-            return false;
-        }
-        ClearChallenge(row);
-        await _db.SaveChangesAsync(ct);
-        return true;
-    }
+        => VerifyChallengeAsync(userId, code, enabled: null, ct);
 
-    public async Task<bool> DisableTwoFactorAsync(Guid userId, string currentCode, CancellationToken ct = default)
-    {
-        var row = await VerifyChallengeAsync(userId, currentCode, requireEnabled: true, ct);
-        if (row is null)
-        {
-            return false;
-        }
-        row.TwoFactorEnabled = false;
-        row.TotpSecret = null;
-        row.RecoveryCodesJson = null;
-        ClearChallenge(row);
-        await _db.SaveChangesAsync(ct);
-        return true;
-    }
+    public Task<bool> DisableTwoFactorAsync(Guid userId, string currentCode, CancellationToken ct = default)
+        => VerifyChallengeAsync(userId, currentCode, enabled: false, ct);
 
-    private async Task<UserRow?> VerifyChallengeAsync(
+    private async Task<bool> VerifyChallengeAsync(
         Guid userId,
         string code,
-        bool requireEnabled,
+        bool? enabled,
         CancellationToken ct)
     {
         var row = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
-        if (row is null || requireEnabled && !row.TwoFactorEnabled
-            || string.IsNullOrWhiteSpace(row.TwoFactorCodeHash)
-            || row.TwoFactorCodeExpiresAt is null)
+        if (row is null || string.IsNullOrWhiteSpace(row.TwoFactorCodeHash))
         {
-            return null;
+            return false;
         }
-        if (row.TwoFactorCodeExpiresAt <= DateTimeOffset.UtcNow)
+        var hash = row.TwoFactorCodeHash;
+        // Reserve a try before hashing: concurrent requests must share the same five-try budget.
+        while (true)
         {
-            ClearChallenge(row);
-            await _db.SaveChangesAsync(ct);
-            return null;
+            if (row.TwoFactorCodeHash != hash || row.TwoFactorCodeExpiresAt is null
+                || row.TwoFactorCodeExpiresAt <= DateTimeOffset.UtcNow
+                || row.TwoFactorCodeFailedAttempts >= 5 || enabled == false && !row.TwoFactorEnabled)
+            {
+                return false;
+            }
+            row.TwoFactorCodeFailedAttempts++;
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+                break;
+            }
+            catch (DbUpdateConcurrencyException ex) when (ex.Entries.Count == 1 && ReferenceEquals(ex.Entries[0].Entity, row))
+            {
+                await _db.Entry(row).ReloadAsync(ct);
+                if (_db.Entry(row).State == EntityState.Detached)
+                {
+                    return false;
+                }
+            }
         }
 
         var normalized = (code ?? string.Empty).Trim();
-        if (normalized.Length != 6 || !normalized.All(char.IsDigit)
-            || !PasswordHasher.Verify(normalized, row.TwoFactorCodeHash))
+        var valid = normalized.Length == 6 && normalized.All(char.IsDigit)
+            && PasswordHasher.Verify(normalized, hash);
+        if (!valid && row.TwoFactorCodeFailedAttempts < 5)
         {
-            row.TwoFactorCodeFailedAttempts++;
-            if (row.TwoFactorCodeFailedAttempts >= 5)
-            {
-                ClearChallenge(row);
-            }
-            await _db.SaveChangesAsync(ct);
-            return null;
+            return false;
         }
-
-        return row;
+        // Consume only this challenge; a resend or another successful verifier must win exactly once.
+        while (row.TwoFactorCodeHash == hash)
+        {
+            valid &= row.TwoFactorCodeExpiresAt > DateTimeOffset.UtcNow;
+            if (valid && enabled.HasValue)
+            {
+                row.TwoFactorEnabled = enabled.Value;
+                row.TotpSecret = null;
+                row.RecoveryCodesJson = null;
+            }
+            ClearChallenge(row);
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+                return valid;
+            }
+            catch (DbUpdateConcurrencyException ex) when (ex.Entries.Count == 1 && ReferenceEquals(ex.Entries[0].Entity, row))
+            {
+                await _db.Entry(row).ReloadAsync(ct);
+                if (_db.Entry(row).State == EntityState.Detached)
+                {
+                    return false;
+                }
+            }
+        }
+        return false;
     }
 
     private static void ClearChallenge(UserRow row)

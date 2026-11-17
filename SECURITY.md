@@ -22,6 +22,23 @@ of the report.
 
 ## Security update deployment
 
+Backup HTTP imports require an antiforgery token; the portal's Backup page continues to import
+through its authenticated circuit. Direct cookie-authenticated clients must submit the matching
+`RequestVerificationToken` header and antiforgery cookie.
+
+MFA verification reserves one of five attempts before checking a code and uses database concurrency
+checks to consume it once, including concurrent requests on different replicas. These checks use
+existing columns and require no database schema change. Restart all application replicas when deploying
+this update so older verification code cannot bypass the checks.
+The one-minute code resend cooldown remains in force after a code is consumed or its attempts
+are exhausted.
+
+Password login accepts at most ten requests per minute per peer IP on each application replica,
+returning HTTP 429 before password verification when exhausted. ASP.NET manages and expires the
+limiter partitions; the former unbounded email failure counters are removed. Clients behind the same
+proxy share its peer-IP budget. Public deployments should enforce a shared limit at their trusted
+ingress, especially when running multiple replicas; arbitrary forwarded IP headers are not trusted.
+
 The portal now uses the `placecontext_auth_v2` cookie. Deploying this update signs existing users
 out; they must sign in again. Requests and interactive events recheck workspace membership and
 refresh the user's role. Pending MFA logins expire after ten minutes and are bound to the browser

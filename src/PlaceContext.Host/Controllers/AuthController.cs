@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PlaceContext.Application.Auth;
 using PlaceContext.Application.Membership;
 using Microsoft.AspNetCore.DataProtection;
@@ -270,10 +271,10 @@ public sealed class AuthController : ControllerBase
     public sealed record SetupCliRequest(string Email, string? DisplayName, string Password, string? ConfirmPassword);
 
     // Password login. Always shows the same generic error on failure (unknown email, wrong password, or a
-    // member with no password set) so a response can't be used to enumerate accounts, and applies a small
-    // fixed delay on failure (see LoginThrottle) so a naive brute-force loop can't run at line rate.
+    // member with no password set) so a response can't be used to enumerate accounts.
     [HttpPost("/auth/login")]
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     public async Task<IActionResult> Login([FromForm] string email, [FromForm] string password, [FromForm] string? returnUrl)
     {
         if (_config.GetValue<bool>("PlaceContext:SaaS:ManagedHosting")
@@ -288,11 +289,8 @@ public sealed class AuthController : ControllerBase
         var user = await _auth.ValidateCredentialsAsync(email ?? "", password ?? "", HttpContext.RequestAborted);
         if (user is null)
         {
-            await LoginThrottle.PenalizeAsync(email ?? "");
             return Redirect(BuildLoginErrorUrl("Invalid email or password.", returnUrl, email));
         }
-
-        LoginThrottle.Clear(email ?? "");
 
         if (await _auth.IsTwoFactorRequiredAsync(HttpContext.RequestAborted))
         {

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlaceContext.Application.Backup;
@@ -44,8 +45,12 @@ public sealed class BackupController : ControllerBase
     }
 
     [HttpPost("import")]
-    public async Task<IActionResult> Import()
+    public async Task<IActionResult> Import([FromServices] IAntiforgery antiforgery)
     {
+        if (!await antiforgery.IsRequestValidAsync(HttpContext))
+        {
+            return BadRequest();
+        }
         BackupManifest manifest;
         try
         {
