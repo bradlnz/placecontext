@@ -22,15 +22,21 @@
 .suite-caret { color:var(--brand-2) !important }
 .suite-result { flex:none }
 
-.chain-rows { display:flex; flex-direction:column }
+.chain-rows { display:flex; flex-direction:column; list-style:none; margin:0; padding:0 }
+.chain-rows .chain-rows { margin-left:25px }
+.chain-rows li { position:relative; min-width:0 }
+.chain-rows .chain-rows > li::before { content:""; position:absolute; left:0; top:0; bottom:0; border-left:1px solid var(--border-2) }
+.chain-rows .chain-rows > li:last-child::before { bottom:auto; height:25px }
+.chain-rows .chain-rows > li::after { content:""; position:absolute; left:0; top:25px; width:14px; border-top:1px solid var(--border-2); pointer-events:none }
 .chain-row { display:grid; grid-template-columns:28px minmax(0, 1fr) auto; gap:10px; align-items:start; padding:13px 14px; border-bottom:1px solid var(--border); cursor:pointer }
-.chain-row:last-child { border-bottom:0 }
+.chain-copy { min-width:0 }
 .chain-row:hover { background:color-mix(in srgb, var(--card-2) 45%, transparent) }
 .chain-row.running { background:color-mix(in srgb, var(--running) 4%, transparent) }
 .status-icon { width:22px; height:22px; display:grid; place-items:center; border:1px solid var(--border-2); border-radius:50%; color:var(--brand-2); font-size:13px; font-weight:700 }
 .status-icon.is-running { color:var(--running); border-color:color-mix(in srgb, var(--running) 60%, var(--border)); background:color-mix(in srgb, var(--running) 9%, transparent) }
 .chain-title { min-height:22px; display:flex; align-items:center; flex-wrap:wrap; gap:7px }
-.chain-title strong { font-size:13px; font-weight:580 }
+.chain-name { padding:0; border:0; background:transparent; color:var(--text); font:inherit; font-size:13px; font-weight:580; text-align:left; overflow-wrap:anywhere; cursor:pointer }
+.chain-name:focus-visible { outline:2px solid var(--brand); outline-offset:3px }
 .chain-chip { padding:2px 7px; border:1px solid var(--border); border-radius:99px; color:var(--text-3); font-size:9.5px; text-transform:lowercase }
 .chain-chip.brand-chip { color:var(--brand-2) }
 .chain-chip.action-chip { color:var(--good) }
@@ -90,7 +96,6 @@
 .chain-context-cell .chain-context-value { font-size:10.8px; color:var(--text-2); font-family:var(--font-mono); }
 .chain-context-cell code { display:inline-block; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .chain-context-preview { display:inline-block; margin-left:8px; color:var(--text-3); font-size:10.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:min(52vw, 410px); }
-.chain-json-modal { width:min(840px, 100vw); }
 .chain-json-body { min-height:0; }
 .chain-json-body .json-pre { margin:0; max-height:68vh; }
 .output-waiting { min-height:78px; display:flex; align-items:center; justify-content:center; gap:7px; border:1px dashed var(--border); border-radius:8px; background:var(--bg); color:var(--text-3); font:10.5px var(--font-mono) }
@@ -123,7 +128,6 @@
 .job-log-selector select { width:auto; max-width:100%; min-width:220px }
 .loop-instructions { white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; line-height:1.7; color:var(--text-2) }
 .loop-chip { color:var(--brand-2); border:1px solid var(--border) }
-.loop-modal { width:min(580px, 100vw) }
 .loop-modal h3 { margin:6px 0 0; font-size:19px }
 .loop-modal .dcmodal-body { display:flex; flex-direction:column; gap:20px }
 .loop-modal textarea { resize:vertical; min-height:120px }
@@ -136,7 +140,6 @@
 .gate-tag-wait { background:var(--card); border:1px solid var(--border); color:var(--text-2) }
 .gate-tag-condition { background:#fef9e7; border:1px solid #f0d060; color:#7a5c00 }
 .gate-remove { font-size:11px; margin-left:2px }
-.gate-modal { width:440px }
 .workflow-conditions-modal .dcmodal-body, .sub-workflow-modal .dcmodal-body { gap:20px; padding:22px }
 .workflow-conditions-modal .sub-note, .sub-workflow-modal .sub-note { margin:0; line-height:1.6 }
 .parallel-branch-tabs { margin:0; overflow-x:auto; flex-shrink:0 }
@@ -159,7 +162,7 @@
 .btn-2-8 { padding:2px 8px }
 .btn-2-8-del { padding:2px 8px }
 .editor-err { color:var(--bad); font-size:12px; flex:1 }
-.run-modal { width:640px;  display:flex; flex-direction:column }
+.run-modal {  display:flex; flex-direction:column }
 .step-policy-overlay { z-index:70 }
 .modal-body-scroll { overflow-y:auto }
 .prompt-step { margin-bottom:14px }
@@ -186,6 +189,7 @@
     .summary-strip { grid-template-columns:repeat(4, 1fr); gap:5px; }
     .summary-count { flex-direction:column; gap:0; }
     .chain-row { grid-template-columns:26px minmax(0, 1fr); padding:12px 10px; }
+    .chain-rows .chain-rows { margin-left:14px; }
     .chain-actions { grid-column:2; justify-content:flex-start; margin-top:6px; }
     .chain-detail { flex-direction:column; align-items:flex-start; gap:2px; }
     .chain-detail > span:first-child { max-width:100%; }
@@ -204,7 +208,7 @@
     gap: 8px;
 }
 
-.pipeline-step-modal { width:min(800px, 100vw); display:flex; flex-direction:column; }
+.pipeline-step-modal { display:flex; flex-direction:column; }
 .pipeline-step-body { min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:22px; padding:20px; }
 .step-picker-section h4 { display:flex; align-items:center; gap:8px; margin:0 0 10px; color:var(--text-2); font-size:12px; font-weight:600; }
 .step-picker-section h4 span { padding:2px 7px; border-radius:10px; background:var(--card-2); color:var(--text-3); font-size:10px; }
@@ -259,7 +263,7 @@
 .node-picker-tile strong, .job-picker-tile strong { color: var(--text); font-size: 12px; line-height:1.4; overflow-wrap:anywhere; }
 .node-picker-tile small, .job-picker-tile small { color: var(--text-3); font-size: 11px; line-height:1.5; overflow-wrap:anywhere; }
 
-.email-action-modal { width:min(720px, 100vw);  display:flex; flex-direction:column; }
+.email-action-modal {  display:flex; flex-direction:column; }
 .email-action-modal .dcmodal-body { overflow-y:auto; }
 .email-json-panel { margin-bottom:14px; border:1px solid var(--border); border-radius:9px; background:var(--card-2); overflow:hidden; }
 .email-json-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:10px 12px; border-bottom:1px solid var(--border); }
@@ -290,9 +294,7 @@
 .human-decision-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-top:16px; }
 .human-decision-actions .dcbtn { min-width:90px; min-height:40px; justify-content:center; }
 
-.qemu-modal { width:min(620px, 100vw) }
-.qemu-modal-replay { width:min(1120px, 100vw) }
-.qemu-run-modal { width:min(1400px, calc(100vw - 32px)); height:min(900px, calc(100dvh - 32px)) }
+.qemu-run-modal { height:min(900px, calc(100dvh - 32px)) }
 .qemu-run-modal .dcmodal-body { overflow:hidden; gap:12px }
 .qemu-run-modal ::deep .qemu-replay, .qemu-run-modal ::deep .desktop-panel { flex:1; min-height:0; max-width:none; margin:0 }
 .qemu-run-modal ::deep .qemu-replay { display:flex; flex-direction:column }
@@ -377,7 +379,7 @@
 
 /* Keep workflow dialogs floating above the canvas instead of docking as side panes. */
 .dcmodal-overlay:not(.workflow-canvas-overlay) { align-items:center; justify-content:center; padding:16px; }
-.dcmodal-overlay:not(.workflow-canvas-overlay) > .dcmodal { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); height:auto; max-height:calc(100dvh - 32px); max-width:calc(100vw - 32px); border:1px solid var(--border-2); border-radius:10px; box-shadow:0 16px 60px #0005; }
+.dcmodal-overlay:not(.workflow-canvas-overlay) > .dcmodal { width:min(1440px, calc(100vw - 24px)); position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); height:auto; max-height:calc(100dvh - 32px); max-width:calc(100vw - 24px); border:1px solid var(--border-2); border-radius:10px; box-shadow:0 16px 60px #0005; }
 
 /* The editor canvas fills the screen; step choices remain in its Add step menu. */
 .workflow-canvas-overlay { z-index:45; padding:0 }
@@ -473,7 +475,7 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 
 .execution-overlay { z-index:70 }
 .dcmodal-overlay > .execution-modal {
-    width:min(1080px, calc(100vw - 32px)); height:min(760px, calc(100dvh - 48px));
+    height:min(760px, calc(100dvh - 48px));
     display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--border-2); border-radius:14px; box-shadow:0 24px 80px #0007; background:var(--panel); color:var(--text);
     font-family:var(--font-sans);
 }
@@ -535,7 +537,7 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 
 
 .loop-settings { display:flex; flex-direction:column; gap:20px; min-width:0 }
-.dcmodal-overlay > .agent-instructions-modal { width:min(1280px, calc(100vw - 32px)); height:min(820px, calc(100dvh - 32px)); display:flex; flex-direction:column }
+.dcmodal-overlay > .agent-instructions-modal { height:min(820px, calc(100dvh - 32px)); display:flex; flex-direction:column }
 .agent-instructions-modal .loop-editor-body { display:grid; grid-template-columns:300px minmax(0, 1fr); flex:1; min-height:0; padding:0; gap:0; overflow:hidden }
 .agent-instructions-modal .loop-settings { padding:20px; overflow:auto; border-right:1px solid var(--border) }
 .loop-instructions-pane { display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden }
@@ -554,9 +556,7 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 
 /* ── Workflow query studio ──────────────────────────────────────────────────────────────── */
 .dcmodal-overlay:not(.workflow-canvas-overlay) > .query-studio-modal {
-    width:min(1440px, calc(100vw - 24px));
     height:min(900px, calc(100dvh - 24px));
-    max-width:calc(100vw - 24px);
     max-height:calc(100dvh - 24px);
 }
 .query-studio-modal .dcmodal-head { align-items:center }
@@ -638,7 +638,8 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
     .query-studio-output > span { margin-left:0 }
 }
 @media (max-width:700px) {
-    .dcmodal-overlay:not(.workflow-canvas-overlay) > .query-studio-modal { width:100vw; height:100dvh; max-width:100vw; max-height:100dvh; border-radius:0 }
+    .dcmodal-overlay:not(.workflow-canvas-overlay) > .dcmodal { width:100vw; max-width:100vw; border-radius:0 }
+    .dcmodal-overlay:not(.workflow-canvas-overlay) > .query-studio-modal { height:100dvh; max-height:100dvh }
     .query-studio-toolbar, .query-studio-output, .query-studio-tabs, .query-studio-pane { padding-left:10px; padding-right:10px }
 }
 
@@ -652,7 +653,6 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .markup-editor { flex:1; min-height:360px; border:1px solid var(--border); overflow:hidden; border-radius:8px; }
 .markup-notice { margin:0; font-size:12px; color:var(--good); }
 .workflow-canvas-dialog .dcmodal-body:has(> .workflow-markup) { display:flex; }
-.dcmodal-overlay > .workflow-conditions-modal, .dcmodal-overlay > .sub-workflow-modal { width:960px }
 .sub-workflow-modal ::deep .chain-canvas { flex:none }
 .sub-workflow-modal ::deep .canvas-viewport { height:auto; overflow-y:hidden; overscroll-behavior-y:auto }
 .sub-workflow-modal ::deep .canvas-pipeline { min-height:0 }

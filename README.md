@@ -5,7 +5,8 @@
 <h1 align="center">PlaceContext</h1>
 
 <p align="center">
-  Open-source workflow orchestration, project data and agent execution.<br>
+  <strong>Critical work. Connected by context.</strong><br>
+  Open-source data, stateless functions and agentic workflows.<br>
   .NET 10 · Blazor · PostgreSQL · Kubernetes · S3-compatible storage
 </p>
 
@@ -14,16 +15,35 @@
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-404040?style=flat-square"></a>
 </p>
 
-PlaceContext is a self-hosted platform for workflows that combine stateless jobs, containers,
-AI agents, conditional gates and human input. Workflows accept JSON from API calls, queues or
-schedules and persist step status, logs, structured outputs and generated artifacts.
+Run workflows with agents in the loop. Bring together your data, tools and code, and turn each run into
+useful results, reports and files.
 
-The web host exposes a Blazor UI, a management API and an MCP endpoint. PostgreSQL stores platform
-state and project data; Kubernetes executes isolated job workloads; S3-compatible storage holds
-artifacts when configured. AI features use configured external model providers.
+Use your own infrastructure, models and tools. Follow each run from its incoming request to its
+recorded output, with logs, retries and approval decisions available for inspection.
 
-[Get started](#get-started) · [Architecture](#architecture) ·
-[Workflow execution](#workflow-execution) · [Documentation](#documentation)
+[Website](https://placecontext.io) · [Get started](#get-started) ·
+[Workflow execution](#workflow-execution) · [Architecture](#architecture) · [Documentation](#documentation)
+
+## From input to useful output
+
+```mermaid
+flowchart LR
+    A[Website input or API] --> B[Queue]
+    B --> D[Workflow]
+    C[Schedule] --> D
+    D --> E[Project data]
+    D --> F[Reports and artifacts]
+```
+
+| Capability | What you can do |
+| --- | --- |
+| **Built-in data platform** | Connect sources, clean and map output into project tables, query with SQL and build charts. |
+| **Stateless functions** | Run focused code and container jobs with explicit inputs, isolated execution and recorded outputs. |
+| **Agents and decisions** | Give agents focused responsibilities, inspect evidence with Determine gates, and pause for human input. |
+| **Composable workflows** | Combine sequential stages, parallel branches and reusable sub-workflows in the canvas or YAML markup. |
+| **Inputs and scheduling** | Accept website submissions through your backend, queue work and schedule recurring runs. |
+| **Data and artifacts** | Retain structured results and generated files; preview, download and share artifacts. |
+| **Observability** | Follow workflow and job history, inspect logs and traces, and see failures and retries. |
 
 ## Get started
 
@@ -68,27 +88,12 @@ For production, use an existing Kubernetes cluster with external PostgreSQL, HTT
 storage, TLS and a digest-pinned image. Follow the [production deployment guide](deploy/release/README.md#production-on-kubernetes).
 For source development and checks, see [Contributing](CONTRIBUTING.md#development-setup).
 
-## Architecture
-
-| Component | Responsibility |
-| --- | --- |
-| `src/PlaceContext.Domain` | Entities, value objects, business rules and repository contracts. |
-| `src/PlaceContext.Application` | Commands, queries, workflow orchestration and infrastructure interfaces. |
-| `src/PlaceContext.Infrastructure` | EF Core persistence, queues, model clients, workload runners and storage adapters. |
-| `src/PlaceContext.Host` | ASP.NET Core host, Blazor UI, management API, MCP and authentication endpoints. |
-| `src/PlaceContext.DesktopAgent` | Guest agent for browser/desktop automation. |
-| `tests` | Layer-specific tests, browser checks and deployment checks. |
-| `deploy` | Release installers, Kubernetes resources and VM setup. |
-
-Dependencies point inward: Application depends on Domain; Infrastructure implements their
-contracts; Host composes the runtime. Tenant and project authorization applies at application
-and persistence boundaries. See [repository conventions](CONTRIBUTING.md#design-boundaries).
-
 ## Workflow execution
 
-- Compose sequential stages, parallel branches and sub-workflows in the visual editor or through APIs.
+- Compose sequential stages, parallel branches and sub-workflows in the visual editor, YAML markup or through APIs.
+- Browse sub-workflows beneath their callers in the workflow hierarchy; open a row to edit or inspect it.
 - Run stateless jobs with explicit inputs, runtime configuration, timeouts and recorded outputs.
-- Use conditions and AI Review gates to select paths; human input steps pause for a response.
+- Use conditions and **Determine** gates to select True or False paths; human input steps pause for a response.
 - Trigger runs from API requests, queues or schedules. Queue receipts link intake to execution history.
 - Inspect per-step status, logs, retries, structured output and artifacts from the run views.
 
@@ -98,10 +103,8 @@ idempotent where required.
 
 ## Jev reviews
 
-Learn more on the [PlaceContext website](https://placecontext.io).
-
 Connect **Jev** to evaluate workflow evidence against explicit questions and scoring criteria.
-Use the recorded results for deterministic review rules: a Review gate selects a path from a
+Use the recorded results for deterministic review rules: a Determine gate selects a path from a
 confidence threshold, and scoring gates apply configured weights and minimum scores. The rules
 are deterministic; the underlying model assessment is probabilistic and does not guarantee correctness.
 Jev also checks proposed browser actions against live desktop frames.
@@ -119,17 +122,20 @@ Jev-dependent steps require this key; ordinary conditions and human input steps 
 
 ## Inside the platform
 
-![Website Enquiry workflow with validation, triage, AI review, conditional actions and parallel handoffs](docs/images/enquiry-workflow.png)
+![Earlier Website Enquiry canvas with validation, triage, AI review, conditional actions and parallel handoffs](docs/images/enquiry-workflow.png)
 
-**Website input → queue → validate → triage → AI review → Review gate → assign → verify → output.**
+**Website input → queue → validate → triage → routing review → Determine → assign → verify → parallel handoffs → output.**
 
 The Website Enquiry example routes a question to the right person. Stateless code validates the
-input, agents query team data and review the recommendation, and conditional steps control the
-browser assignment. The workflow checks the saved result before preparing parallel handoffs.
+input. The Triage and Routing Review sub-workflows query team data and independently assess the
+recommendation. Determine evaluates the evidence; ordinary conditions check the recorded results
+before browser assignment. The workflow queries and verifies the saved assignment, then runs matching
+Handoff and Follow-up sub-workflows in parallel and joins their results.
 
 The screenshot shows the local platform with fictional Northstar enquiry data, captured on
-16 November 2026. The definition has changed since the recorded successful run on 15 November;
-that earlier run does not validate later edits.
+16 November 2026, with the earlier gate labels. The current interface calls the decision gate
+**Determine**. The definition has changed since the recorded successful run on 15 November; that
+earlier run does not validate later edits.
 
 [Workflow reference](src/PlaceContext.Host/Wiki/jobs-and-artifacts.md#workflows)
 
@@ -139,9 +145,9 @@ Connect sources, query project tables with SQL, and pass named results between w
 Clean and validate output, map accepted fields into tables, and turn the stored records into
 analytics and charts.
 
-Jobs are **stateless, Lambda-like functions**. Each invocation takes explicit input, runs focused
-code or a container in isolation, and returns a recorded result. Persistent state belongs in project
-data and artifact storage, rather than a previous invocation's memory or working files.
+Jobs are **stateless, Lambda-like functions**: explicit input → focused code or a container → recorded
+output. Data maps select the accepted output's row path and map named fields into table columns,
+retaining run provenance alongside the records.
 
 [Data platform, mappings and analytics](src/PlaceContext.Host/Wiki/project-data.md) ·
 [Stateless jobs](src/PlaceContext.Host/Wiki/jobs-and-artifacts.md)
@@ -152,6 +158,10 @@ Give each agent a focused responsibility: triage, research, review or handoff. T
 supplies project context and tools, runs model and tool calls, and records outputs for subsequent
 steps. Choose the models and instructions each task needs.
 
+The Agents catalogue shows the parent/child hierarchy. Each agent has a workspace for its overview,
+instructions, linked workflows, observability, YAML markup, data access and connected tools.
+The YAML includes `parentAgentId`, so the reporting relationship is visible in configuration.
+
 Create and operate workflows through chat, the visual editor, APIs or connected MCP clients.
 Use sequential stages, parallel work and sub-workflows to compose a larger process.
 
@@ -160,7 +170,7 @@ Use sequential stages, parallel work and sub-workflows to compose a larger proce
 ## Agents, people, and decisions
 
 AI review can gather SQL evidence and run validation code before recording an assessment.
-**Review** asks a Yes/No question about the evidence and chooses a path. Conditions evaluate
+**Determine** asks a Yes/No question about the evidence and chooses a True or False path. Conditions evaluate
 recorded results; human checkpoints pause for a person's answer or approval.
 
 Configure both paths and gate protected actions explicitly. Retries handle execution failures
@@ -198,18 +208,52 @@ provides durable evidence.
 
 [Explore observability](docs/platform-reference.md#execution-and-operations)
 
+## Connect workers and distribute jobs
+
+Add eligible machines as workers and schedule container jobs across local machines, Linux VMs or
+cloud infrastructure. Placement follows available capacity and configured node selectors. Use
+**Infrastructure → Cluster → Add node** to obtain the join instructions for your environment.
+
+The local installer provides a single-host evaluation cluster. Production deployments use an
+existing Kubernetes cluster with appropriate worker isolation, persistent storage and backups.
+
+[Clusters and nodes](src/PlaceContext.Host/Wiki/cluster-and-nodes.md) ·
+[Worker networking](src/PlaceContext.Host/Wiki/worker-networking.md) ·
+[Production deployment](deploy/release/README.md#production-on-kubernetes)
+
 ## What you can build
 
 | Use case | Example workflow | Returned data or artifacts |
 | --- | --- | --- |
-| **Website enquiries** | Validate a request, triage it, review the routing and verify assignment. | Routing data and a verified handoff. |
-| **Retail product data** | Normalize fields, validate records and map accepted products into tables. | Clean product records for SQL analytics. |
-| **Research and reporting** | Gather sources, check evidence and prepare a report. | Structured findings and a report. |
-| **Software delivery** | Run checks, review changes and prepare a handoff for sign-off. | Test results and review evidence. |
-| **Logistics exceptions** | Classify a shipment exception, review evidence and prepare the next action. | Shipment exception data and a handoff PDF. |
-| **Insurance intake** | Validate intake data, assess completeness and route for human review. | Intake records and an evidence PDF. |
+| **Software & SaaS** | Validate a billing enquiry, review routing, assign it and verify the saved result. | Assignment data and verification evidence. |
+| **Manufacturing** | Reconcile production logs and prepare the next shift's handoff. | Production totals and a shift-handoff PDF. |
+| **Retail & e-commerce** | Normalize supplier fields, validate products and map accepted data into tables. | Clean product records and validation results. |
+| **IT & managed services** | Check a client change and request sign-off before proceeding. | Client change data and an evidence artifact. |
+| **Site reliability engineering** | Gather alerts, logs and changes, check service signals and request on-call approval. | Incident evidence and a recovery plan. |
+| **Logistics & supply chain** | Normalize carrier events and prepare an exception handoff. | Shipment exception data and a handoff PDF. |
+| **Insurance** | Validate claim intake, assess completeness and prepare a case file for review. | Claim intake data and an evidence-pack PDF. |
 
 Industry examples are illustrative patterns. The Website Enquiry walkthrough uses fictional demo data.
+
+## Architecture
+
+| Component | Responsibility |
+| --- | --- |
+| `src/PlaceContext.Domain` | Entities, value objects, business rules and repository contracts. |
+| `src/PlaceContext.Application` | Commands, queries, workflow orchestration and infrastructure interfaces. |
+| `src/PlaceContext.Infrastructure` | EF Core persistence, queues, model clients, workload runners and storage adapters. |
+| `src/PlaceContext.Host` | ASP.NET Core host, Blazor UI, management API, MCP and authentication endpoints. |
+| `src/PlaceContext.DesktopAgent` | Guest agent for browser/desktop automation. |
+| `tests` | Layer-specific tests, browser checks and deployment checks. |
+| `deploy` | Release installers, Kubernetes resources and VM setup. |
+
+The host exposes the Blazor UI, management API and MCP endpoint. PostgreSQL stores platform state
+and project data; Kubernetes executes isolated jobs; configured S3-compatible storage retains
+artifacts. AI features use configured model providers.
+
+Dependencies point inward: Application depends on Domain; Infrastructure implements their
+contracts; Host composes the runtime. Tenant and project authorization applies at application
+and persistence boundaries. See [repository conventions](CONTRIBUTING.md#design-boundaries).
 
 ## Documentation
 
@@ -224,13 +268,17 @@ Industry examples are illustrative patterns. The Website Enquiry walkthrough use
 | Configure decisions and execution | [Platform reference](docs/platform-reference.md) |
 | Check data quality | [Data contracts and readiness checks](docs/job-data-saas-foundation.md) |
 | Integrate with other systems | [Management API](docs/management-api.md) · [Terraform](terraform/README.md) |
+| Add workers | [Clusters and nodes](src/PlaceContext.Host/Wiki/cluster-and-nodes.md) · [Worker networking](src/PlaceContext.Host/Wiki/worker-networking.md) |
 | Manage access | [Security and sharing](src/PlaceContext.Host/Wiki/security-and-sharing.md) · [SSO](src/PlaceContext.Host/Wiki/sso-and-oauth.md) |
 
 ## Open source and paid support
 
-PlaceContext is licensed under the [MIT License](LICENSE). Run it on your infrastructure with
-your chosen models. Paid support covers deployment, workflow design and operational help, scoped
-to your team. [Discuss support](https://github.com/bradlnz/placecontext/issues).
+The **Developer** offering is free, [MIT-licensed software](LICENSE) that you run on your own
+infrastructure with your chosen models, data and tools. You cover infrastructure and model usage.
+
+**Enterprise** support is scoped to your team: deployment planning and setup, workflow and
+integration guidance, and operational support for your environment.
+[Explore support](https://placecontext.io/#support) · [Discuss support](https://placecontext.io/#contact).
 
 You retain ownership of your data, job definitions, runs and artifacts.
 © Bradley Lietz / CTRL SIGNAL SOFTWARE PTY LTD.

@@ -31,11 +31,25 @@ using PlaceContext.Infrastructure.Persistence;
 using PlaceContext.Infrastructure.Security;
 using PlaceContext.Infrastructure.Tenancy;
 using PlaceContext.Application.Access;
+using PlaceContext.Application.Workload;
 
 namespace PlaceContext.Host.Tests;
 
 public sealed partial class BuildChatTests
 {
+    private static IServiceCollection PageServices(BuildChatViewModel vm) =>
+        new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>()
+            .AddTransient(_ => new ExecutionApprovalViewModel(new NoExecutionApprovals(), new Permissions()));
+
+    private sealed class NoExecutionApprovals : IExecutionApprovals
+    {
+        public Task<IReadOnlyList<ExecutionApproval>> ListAsync(Guid projectId, IReadOnlyList<Guid> runIds, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<ExecutionApproval>>([]);
+        public Task<bool> RequestAsync(Guid projectId, Guid runId, string warning, string evidence, CancellationToken ct) =>
+            throw new NotSupportedException();
+        public Task DecideAsync(Guid id, bool approve, CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
     [Fact]
     public async Task Editing_a_message_preserves_the_original_and_queues_a_separate_conversation()
     {
@@ -1536,7 +1550,7 @@ public sealed partial class BuildChatTests
         await fixture.SeedAsync();
         var vm = new BuildChatViewModel(fixture.Store, fixture.Connections,
             fixture.Provider.GetRequiredService<BuildChatAgent>(), new PortalUiState(), new NoJs(), fixture.Service, fixture.Permissions);
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>();
+        var services = PageServices(vm).AddTransient<RunOutputViewModel>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         async Task<string> RenderAsync() => await renderer.Dispatcher.InvokeAsync(async () =>
@@ -1616,7 +1630,7 @@ public sealed partial class BuildChatTests
         await fixture.SeedAsync();
         var vm = new BuildChatViewModel(fixture.Store, fixture.Connections,
             fixture.Provider.GetRequiredService<BuildChatAgent>(), new PortalUiState(), new NoJs(), fixture.Service, fixture.Permissions);
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>();
+        var services = PageServices(vm).AddTransient<RunOutputViewModel>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async () =>
@@ -1776,7 +1790,7 @@ public sealed partial class BuildChatTests
             ["tool_calls"] = JsonNode.Parse("""[{"id":"inspect","function":{"name":"list_jobs","arguments":"{}"}}]""")
         });
         vm.Conversation.Messages.Add(new JsonObject { ["role"] = "tool", ["content"] = "{\"jobs\":[{\"name\":\"Example\"}]}" });
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>();
+        var services = PageServices(vm).AddTransient<RunOutputViewModel>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
@@ -2282,7 +2296,7 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
-    public async Task Completed_workflow_opens_its_pdf_in_workspace_and_checks_artifact_access()
+    public async Task Completed_workflow_lists_its_pdf_and_checks_artifact_access()
     {
         await using var fixture = new Fixture();
         await fixture.SeedAsync();
@@ -2305,10 +2319,13 @@ public sealed partial class BuildChatTests
         var reader = new ArtifactReader(new EfRunArtifactLinkRepository(db), null!);
         var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), fixture.Permissions, artifacts: reader);
         await vm.LoadAsync(fixture.ProjectId, runId: run.Id);
+        Assert.Null(vm.PreviewArtifact);
+        Assert.Equal(file.Id, Assert.Single(vm.PreviewRunArtifacts).Id);
+        await vm.OpenArtifactAsync(file.Id, file.RunId);
         Assert.Equal(file.Id, vm.PreviewArtifact?.Id);
         Assert.Equal(run, vm.PreviewRun);
         Assert.Null(vm.ArtifactPreviewError);
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>();
+        var services = PageServices(vm).AddTransient<RunOutputViewModel>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
@@ -2362,7 +2379,7 @@ public sealed partial class BuildChatTests
         Assert.Contains("\"summary\": \"ok\"", vm.PreviewArtifactJson);
         Assert.Contains("\n", vm.PreviewArtifactJson);
         var outputs = new List<RunOutputViewModel>();
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient(_ =>
+        var services = PageServices(vm).AddTransient(_ =>
         {
             var output = new RunOutputViewModel(new NoJs());
             outputs.Add(output);
@@ -2409,7 +2426,7 @@ public sealed partial class BuildChatTests
         Assert.Equal(workflow, vm.PreviewWorkflow);
         Assert.Equal("Review", vm.PreviewItem!.Name);
         Assert.Equal("Keep my question", vm.Draft);
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>().AddTransient<ChainCanvasViewModel>();
+        var services = PageServices(vm).AddTransient<RunOutputViewModel>().AddTransient<ChainCanvasViewModel>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
@@ -2474,7 +2491,7 @@ public sealed partial class BuildChatTests
         var proxy = (DelayedChatStore)store;
         proxy.Inner = fixture.Store;
         var vm = new BuildChatViewModel(store, fixture.Connections, null!, new PortalUiState(), new NoJs(), fixture.Service, fixture.Permissions);
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>();
+        var services = PageServices(vm).AddTransient<RunOutputViewModel>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         await renderer.Dispatcher.InvokeAsync(async () =>
@@ -2593,7 +2610,7 @@ public sealed partial class BuildChatTests
         var preview = Assert.IsType<BuildChatViewModel.ChartPreview>(vm.ResultChart(message));
         vm.OpenChart(preview);
         Assert.True(vm.WorkspaceOpen);
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient<RunOutputViewModel>();
+        var services = PageServices(vm).AddTransient<RunOutputViewModel>();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
         var html = await renderer.Dispatcher.InvokeAsync(async () =>
@@ -2771,7 +2788,7 @@ public sealed partial class BuildChatTests
         await vm.SelectPreviewStepAsync(dispatcher.Run.Steps[0]);
         Assert.Equal("{\"first_result\":1}", vm.PreviewStep!.Output);
         var outputs = new List<RunOutputViewModel>();
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>().AddTransient(_ =>
+        var services = PageServices(vm).AddTransient(_ =>
         {
             var output = new RunOutputViewModel(new NoJs());
             outputs.Add(output);

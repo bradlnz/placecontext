@@ -28,7 +28,7 @@ public sealed partial class BuildChatTests
         var vm = new BuildChatViewModel(f.Store, f.Connections, null!, new(), new NoJs(), new(dispatcher, null!, null!, null!), f.Permissions, submissions: queue);
         await vm.LoadAsync(f.ProjectId, runId: run.Id);
         Assert.Equal(request, vm.HumanInputRequest);
-        var services = new ServiceCollection().AddLogging().AddSingleton(vm).AddSingleton<IJSRuntime, NoJs>()
+        var services = PageServices(vm)
             .AddTransient(_ => new RunOutputViewModel(new NoJs()));
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());

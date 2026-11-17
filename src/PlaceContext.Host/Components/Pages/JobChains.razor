@@ -69,124 +69,7 @@ else
                     <span class="suite-result">@Vm.Chains.Sum(chain => chain.Stages.Count) stages</span>
                 </header>
 
-                <div class="chain-rows">
-                    @foreach (var chain in Vm.Chains)
-                    {
-                        var isRunning = Vm.IsRunningChain(chain.Id);
-                        var parallelStages = chain.Stages.Count(stage => stage.IsParallel);
-                        var actionStages = chain.Stages.Count(stage => stage.Action is not null);
-                        <article class="chain-row @(isRunning ? "running" : null)" @onclick="@(() => Vm.OpenChainEditorAsync(chain))">
-                            <div class="status-icon @(isRunning ? "is-running" : null)" aria-label="@Vm.ChainStatusAria(isRunning)">
-                                @if (isRunning)
-                                {
-                                    <span class="spinner"></span>
-                                }
-                                else
-                                {
-                                    <span><AppIcon Kind="chain" /></span>
-                                }
-                            </div>
-                            <div class="chain-copy">
-                                <div class="chain-title">
-                                    <strong>@chain.Name</strong>
-                                    <span class="chain-chip">@chain.Stages.Count stage@(chain.Stages.Count == 1 ? "" : "s")</span>
-                                    <span class="chain-chip">@chain.Steps.Count job step@(chain.Steps.Count == 1 ? "" : "s")</span>
-                                    @if (parallelStages > 0)
-                                    {
-                                        <span class="chain-chip brand-chip">@parallelStages parallel</span>
-                                    }
-                                    @if (actionStages > 0)
-                                    {
-                                        <span class="chain-chip action-chip">@actionStages delivery action@(actionStages == 1 ? "" : "s")</span>
-                                    }
-                                </div>
-                                <div class="chain-detail">
-                                    <span>@(string.IsNullOrWhiteSpace(chain.Description) ? "No description" : chain.Description)</span>
-                                    <span class="chain-facts">updated @Vm.Presentation.Date(chain.UpdatedAt)</span>
-                                </div>
-                                <div class="step-chips">
-                                    @foreach (var (stage, i) in chain.Stages.Select((s, i) => (s, i)))
-                                    {
-                                        if (i > 0)
-                                        {
-                                            <span class="chip-arrow"><AppIcon Kind="arrow-right" /></span>
-                                        }
-                                        @if (stage.Action is SendEmailChainActionView emailAction)
-                                        {
-                                            <span class="step-chip" style="color:var(--brand-2)"><AppIcon Kind="mail" /> Send email · @emailAction.Recipient</span>
-                                        }
-                                        else if (stage.Action is SendSmsChainActionView smsAction)
-                                        {
-                                            <span class="step-chip" style="color:var(--brand-2)"><AppIcon Kind="message" /> Send SMS · @smsAction.Recipient</span>
-                                        }
-                                        else if (stage.Action is LoopChainActionView loopAction)
-                                        {
-                                            <span class="step-chip loop-chip">@loopAction.DisplayName</span>
-                                        }
-                                        else if (stage.Action is QueryDataChainActionView queryAction)
-                                        {
-                                            <span class="step-chip">Query data · @queryAction.OutputField</span>
-                                        }
-                                        else if (stage.Action is ScoringGateChainActionView scoreAction)
-                                        {
-                                            <span class="step-chip">Scoring gate · ≥ @scoreAction.PassScore/100</span>
-                                        }
-                                        else if (stage.Action is RepeatFlowChainActionView repeatAction)
-                                        {
-                                            <span class="step-chip">Repeat flow · @repeatAction.MaxAttempts attempts</span>
-                                        }
-                                        else if (stage.Action is ContainerBuildChainActionView or ContainerRunChainActionView)
-                                        {
-                                            <span class="step-chip">@stage.Action.DisplayName</span>
-                                        }
-                                        else if (stage.Action is VirtualMachineChainActionView vmAction)
-                                        {
-                                            <span class="step-chip"><AppIcon Kind="vm" /> Browser workspace · @vmAction.ImageProfile</span>
-                                        }
-                                        else if (stage.IsParallel)
-                                        {
-                                            <span class="stage-group" title="parallel fan-out — all run at once">
-                                                @foreach (var (job, j) in stage.Jobs.Select((s, j) => (s, j)))
-                                                {
-                                                    if (j > 0)
-                                                    {
-                                                        <span class="chip-plus"><AppIcon Kind="plus" /></span>
-                                                    }
-                                                    <span class="step-chip" style="color:@Vm.JobChipColor(job.JobName)">@job.JobName</span>
-                                                }
-                                            </span>
-                                        }
-                                        else if (stage.Action is { } action)
-                                        {
-                                            <span class="step-chip">@action.DisplayName</span>
-                                        }
-                                        else if (stage.Jobs.FirstOrDefault() is { } job)
-                                        {
-                                            <span class="step-chip" style="color:@Vm.JobChipColor(job.JobName)">@job.JobName</span>
-                                        }
-                                    }
-                                </div>
-                            </div>
-                            <div class="chain-actions">
-                                @if (Vm.ConfirmDeleteId == chain.Id)
-                                {
-                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteChainAsync(chain.Id))">Delete</button>
-                                    <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = null)">Keep</button>
-                                }
-                                else
-                                {
-                                    <button class="icon-action run-action" title="Run workflow" aria-label="Run @chain.Name"
-                                            disabled="@isRunning" @onclick:stopPropagation="true"
-                                            @onclick="@(() => Vm.RunChainAsync(chain))"><AppIcon Kind="play" /></button>
-                                    <button class="icon-action" title="Edit workflow" aria-label="Edit @chain.Name"
-                                            @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenChainEditorAsync(chain))"><AppIcon Kind="edit" /></button>
-                                    <button class="icon-action" title="Delete workflow" aria-label="Delete @chain.Name"
-                                            @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = chain.Id)"><AppIcon Kind="trash" /></button>
-                                }
-                            </div>
-                        </article>
-                    }
-                </div>
+                @WorkflowBranch(Vm.WorkflowHierarchy)
             </section>
         }
     </div>
@@ -1872,6 +1755,133 @@ else
 <WorkflowRunDialog Vm="Vm" />
 
 @code {
+    private RenderFragment WorkflowBranch(IReadOnlyList<JobChainsViewModel.WorkflowCatalogueNode> nodes) => @<ul class="chain-rows">
+        @foreach (var node in nodes)
+        {
+            var chain = node.Workflow;
+            var isRunning = Vm.IsRunningChain(chain.Id);
+            var parallelStages = chain.Stages.Count(stage => stage.IsParallel);
+            var actionStages = chain.Stages.Count(stage => stage.Action is not null);
+            <li @key="chain.Id">
+                <article class="chain-row @(isRunning ? "running" : null)" data-workflow-id="@chain.Id" @onclick="@(() => Vm.OpenChainEditorAsync(chain))">
+                    <div class="status-icon @(isRunning ? "is-running" : null)" aria-label="@Vm.ChainStatusAria(isRunning)">
+                        @if (isRunning)
+                        {
+                            <span class="spinner"></span>
+                        }
+                        else
+                        {
+                            <span><AppIcon Kind="chain" /></span>
+                        }
+                    </div>
+                    <div class="chain-copy">
+                        <div class="chain-title">
+                            <button class="chain-name" type="button" aria-label="Open @chain.Name">@chain.Name</button>
+                            @if (node.IsReference) { <span class="chain-chip" title="This workflow is expanded elsewhere in the hierarchy">Linked workflow</span> }
+                            <span class="chain-chip">@chain.Stages.Count stage@(chain.Stages.Count == 1 ? "" : "s")</span>
+                            <span class="chain-chip">@chain.Steps.Count job step@(chain.Steps.Count == 1 ? "" : "s")</span>
+                            @if (parallelStages > 0)
+                            {
+                                <span class="chain-chip brand-chip">@parallelStages parallel</span>
+                            }
+                            @if (actionStages > 0)
+                            {
+                                <span class="chain-chip action-chip">@actionStages delivery action@(actionStages == 1 ? "" : "s")</span>
+                            }
+                        </div>
+                        <div class="chain-detail">
+                            <span>@(string.IsNullOrWhiteSpace(chain.Description) ? "No description" : chain.Description)</span>
+                            <span class="chain-facts">updated @Vm.Presentation.Date(chain.UpdatedAt)</span>
+                        </div>
+                        <div class="step-chips">
+                            @foreach (var (stage, i) in chain.Stages.Select((s, i) => (s, i)))
+                            {
+                                if (i > 0)
+                                {
+                                    <span class="chip-arrow"><AppIcon Kind="arrow-right" /></span>
+                                }
+                                @if (stage.Action is SendEmailChainActionView emailAction)
+                                {
+                                    <span class="step-chip" style="color:var(--brand-2)"><AppIcon Kind="mail" /> Send email · @emailAction.Recipient</span>
+                                }
+                                else if (stage.Action is SendSmsChainActionView smsAction)
+                                {
+                                    <span class="step-chip" style="color:var(--brand-2)"><AppIcon Kind="message" /> Send SMS · @smsAction.Recipient</span>
+                                }
+                                else if (stage.Action is LoopChainActionView loopAction)
+                                {
+                                    <span class="step-chip loop-chip">@loopAction.DisplayName</span>
+                                }
+                                else if (stage.Action is QueryDataChainActionView queryAction)
+                                {
+                                    <span class="step-chip">Query data · @queryAction.OutputField</span>
+                                }
+                                else if (stage.Action is ScoringGateChainActionView scoreAction)
+                                {
+                                    <span class="step-chip">Scoring gate · ≥ @scoreAction.PassScore/100</span>
+                                }
+                                else if (stage.Action is RepeatFlowChainActionView repeatAction)
+                                {
+                                    <span class="step-chip">Repeat flow · @repeatAction.MaxAttempts attempts</span>
+                                }
+                                else if (stage.Action is ContainerBuildChainActionView or ContainerRunChainActionView)
+                                {
+                                    <span class="step-chip">@stage.Action.DisplayName</span>
+                                }
+                                else if (stage.Action is VirtualMachineChainActionView vmAction)
+                                {
+                                    <span class="step-chip"><AppIcon Kind="vm" /> Browser workspace · @vmAction.ImageProfile</span>
+                                }
+                                else if (stage.IsParallel)
+                                {
+                                    <span class="stage-group" title="parallel fan-out — all run at once">
+                                        @foreach (var (job, j) in stage.Jobs.Select((s, j) => (s, j)))
+                                        {
+                                            if (j > 0)
+                                            {
+                                                <span class="chip-plus"><AppIcon Kind="plus" /></span>
+                                            }
+                                            <span class="step-chip" style="color:@Vm.JobChipColor(job.JobName)">@job.JobName</span>
+                                        }
+                                    </span>
+                                }
+                                else if (stage.Action is { } action)
+                                {
+                                    <span class="step-chip">@action.DisplayName</span>
+                                }
+                                else if (stage.Jobs.FirstOrDefault() is { } job)
+                                {
+                                    <span class="step-chip" style="color:@Vm.JobChipColor(job.JobName)">@job.JobName</span>
+                                }
+                            }
+                        </div>
+                    </div>
+                    <div class="chain-actions">
+                        @if (Vm.ConfirmDeleteId == chain.Id)
+                        {
+                            <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.DeleteChainAsync(chain.Id))">Delete</button>
+                            <button class="dcbtn" @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = null)">Keep</button>
+                        }
+                        else
+                        {
+                            <button class="icon-action run-action" title="Run workflow" aria-label="Run @chain.Name"
+                                    disabled="@isRunning" @onclick:stopPropagation="true"
+                                    @onclick="@(() => Vm.RunChainAsync(chain))"><AppIcon Kind="play" /></button>
+                            <button class="icon-action" title="Edit workflow" aria-label="Edit @chain.Name"
+                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.OpenChainEditorAsync(chain))"><AppIcon Kind="edit" /></button>
+                            <button class="icon-action" title="Delete workflow" aria-label="Delete @chain.Name"
+                                    @onclick:stopPropagation="true" @onclick="@(() => Vm.ConfirmDeleteId = chain.Id)"><AppIcon Kind="trash" /></button>
+                        }
+                    </div>
+                </article>
+                @if (node.Children.Count > 0)
+                {
+                    @WorkflowBranch(node.Children)
+                }
+            </li>
+        }
+    </ul>;
+
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public Guid? WorkflowRouteId { get; set; }
     [Parameter] public string? WorkflowRouteView { get; set; }
