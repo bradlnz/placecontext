@@ -65,7 +65,7 @@
                         {
                             <p class="dashboard-layout-status" role="status" aria-live="polite"></p>
                             <div class="dashboard-actions" @key="(Vm.Conversation.AgentId ?? DashboardSettings.DefaultAgentId)" aria-label="Dashboard tiles">
-                            @foreach (var key in Vm.Tiles.OrderedTiles())
+                            @foreach (var key in Vm.DashboardTileKeys)
                             {
                                 var action = Vm.Tiles.TileAction(key);
                                 var chart = Vm.Tiles.Charts.FirstOrDefault(c => c.Id.ToString() == key);

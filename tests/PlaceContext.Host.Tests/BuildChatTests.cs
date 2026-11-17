@@ -677,6 +677,35 @@ public sealed partial class BuildChatTests
     }
 
     [Fact]
+    public async Task Dashboard_drag_saves_positions_for_rendered_tiles_without_requiring_composer_shortcuts()
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var settings = new DashboardSettings { TileOrder = ["chat", "workflow", "chart"] };
+        settings.TileSizes["chat"] = "wide";
+        settings.TilePositions["chat"] = new(4, 6);
+        await fixture.Store.SaveSettingsAsync(fixture.ProjectId, settings);
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await vm.LoadAsync(fixture.ProjectId);
+        var visible = vm.Tiles.OrderedTiles().Where(key => key is not ("chat" or "chart")).ToArray();
+        var moved = visible[^1];
+        var expected = new[] { moved }.Concat(visible.Where(key => key != moved)).ToArray();
+        var positions = expected.Select((key, index) => (key, cell: new DashboardTilePosition(index + 1, 1)))
+            .ToDictionary(item => item.key, item => item.cell);
+
+        Assert.True(await vm.MoveDashboardTileAsync(moved, 0, column: 1, row: 1, positions: positions));
+        var saved = await fixture.Store.GetSettingsAsync(fixture.ProjectId);
+        Assert.Equal(expected, saved.OrderedTiles().Where(key => key is not ("chat" or "chart")));
+        foreach (var (key, cell) in positions) Assert.Equal(cell, saved.TilePositions[key]);
+        Assert.Equal("wide", saved.TileSize("chat"));
+        Assert.Equal(new DashboardTilePosition(4, 6), saved.TilePositions["chat"]);
+
+        positions.Remove(visible[0]);
+        Assert.False(await vm.MoveDashboardTileAsync(moved, 1, column: 2, row: 1, positions: positions));
+        await vm.DisposePageAsync();
+    }
+
+    [Fact]
     public async Task Dashboard_reorder_keeps_the_saved_layout_when_persistence_fails()
     {
         await using var fixture = new Fixture();
@@ -1572,9 +1601,9 @@ public sealed partial class BuildChatTests
         Assert.DoesNotContain("Arrange tiles", html);
         Assert.DoesNotContain("aria-label=\"Agent settings\"", html);
         Assert.Contains("Job statistics", html);
-        Assert.Contains("Ask a question", html);
+        Assert.DoesNotContain("data-tile=\"chat\"", html);
         Assert.DoesNotContain("Customize dashboard", html);
-        Assert.Contains("Add chart", html);
+        Assert.DoesNotContain("data-tile=\"chart\"", html);
         Assert.DoesNotContain("thinking-dots", html);
         Assert.DoesNotContain("dashboard-arrange-hint", html);
         Assert.Contains("class=\"chat-entry\" hidden", html);

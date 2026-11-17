@@ -125,10 +125,10 @@
         <h3>Dashboard tiles</h3>
         <p class="hint">Edit what your tiles say and do here, then save your dashboard. Move and resize tiles directly on the dashboard. Removed tiles can be restored here.</p>
         <p>Run a workflow opens the picker immediately, without waiting for AI. It only lists workflows the selected agent can run. Custom tiles send a visible request to chat. The agent can ask follow-up questions before acting.</p>
-        @if (Vm.DraftTiles.HiddenTiles.Count > 0)
+        @if (Vm.DraftTiles.HiddenTiles.Any(key => key is not ("chat" or "chart")))
         {
             <h4>Removed tiles</h4>
-            @foreach (var key in Vm.DraftTiles.HiddenTiles.ToArray())
+            @foreach (var key in Vm.DraftTiles.HiddenTiles.Where(key => key is not ("chat" or "chart")).ToArray())
             {
                 var title = Vm.DraftTiles.TileAction(key)?.Title
                     ?? (Vm.DraftTiles.Charts.FirstOrDefault(c => c.Id.ToString() == key) is { } chart ? PlaceContext.Application.Features.ChartSpec.TryParse(chart.ChartJson)?.Title : null)

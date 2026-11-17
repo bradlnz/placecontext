@@ -17,6 +17,7 @@ public sealed partial class BuildChatViewModel
     public IReadOnlyList<DashboardAgentProfile> ProjectAgents { get; private set; } = [];
     public IEnumerable<DashboardAgentProfile> DashboardAgents => AvailableAgents;
     public DashboardLayout Tiles => Dashboard.ForAgent(Conversation.AgentId);
+    public IEnumerable<string> DashboardTileKeys => Tiles.OrderedTiles().Where(key => key is not ("chat" or "chart"));
     public DashboardLayout DraftTiles => AgentDraft.ForAgent(Conversation.AgentId);
     public IEnumerable<DashboardAgentProfile> AvailableAgents => Dashboard.Agents.Concat(ProjectAgents);
     public DashboardSettings AgentDraft { get; private set; } = new();
@@ -269,7 +270,8 @@ public sealed partial class BuildChatViewModel
     {
         if (Locked || AgentLoading || AgentOpen || (column is null) != (row is null)
             || column is < 1 or > 32 || row is < 1 or > 100) return false;
-        var order = Tiles.OrderedTiles().ToList();
+        // Browser positions and indices cover only the tiles rendered on the dashboard.
+        var order = (positions is null ? Tiles.OrderedTiles() : DashboardTileKeys).ToList();
         if (positions is not null && (positions.Count != order.Count || positions.Keys.Except(order).Any())) return false;
         var index = order.IndexOf(key);
         if (index < 0 || position < 0 || position >= order.Count || index == position && column is null && !newRow && !Tiles.TileRowStarts.Contains(key)) return false;
