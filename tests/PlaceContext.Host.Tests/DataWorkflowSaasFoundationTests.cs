@@ -10,7 +10,7 @@ public sealed class DataWorkflowSaasFoundationTests
         var root = HostRoot();
         var razor = File.ReadAllText(Path.Combine(root, "Components/Pages/JobChains.razor"));
         var editor = File.ReadAllText(Path.Combine(root, "Components/ViewModels/JobChains/JobChainsViewModel.Editor.cs"));
-        Assert.Contains("Pre-run checks", razor);
+        Assert.Contains("Definition checks", razor);
         Assert.Contains("Vm.CheckReadiness", razor);
         Assert.Contains("WorkflowReadiness.Evaluate", editor);
         Assert.Contains("expectedUpdatedAt: _openedWorkflowUpdatedAt", editor);

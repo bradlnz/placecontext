@@ -30,12 +30,18 @@ def main():
     now = datetime.now(timezone.utc)
     common = dict(TenantId=tenant, ProjectId=ids["project"])
     code = Path(__file__).with_name("job.py").read_text()
+    intake_parameters = [
+        dict(Name="request_id", Label="Request ID", Required=True, Type="uuid"),
+        dict(Name="demo", Label="Demo mode (must be enabled)", Required=True, Type="checkbox"),
+        dict(Name="email", Label="Email (use @example.test)", Required=True, Type="text"),
+        dict(Name="question", Label="Question (10–2000 characters)", Required=True, Type="text"),
+    ]
     jobs = []
     for operation, name in [("validate", "Validate website enquiry"), ("guard", "Check routing and review"), ("receipt", "Verify saved assignment")]:
         jobs.append(dict(Id=ids[operation], **common, Name=name, Description="Fictional enquiry demo. No external messages.",
             MapSourceKind="code", MapRuntimeId="python", MapSource=code, MapFilesJson=[{"Path":"main.py","Content":code}],
             MapEntrypoint="main.py", InputPayloadsJson=["{}"], MapEnvJson={"DEMO_OPERATION":operation},
-            SuccessCodesJson=[0], PartialCodesJson=[], ConcurrencyLimit=1, ParametersJson=[], PostJobActionsJson=[],
+            SuccessCodesJson=[0], PartialCodesJson=[], ConcurrencyLimit=1, ParametersJson=intake_parameters if operation == "validate" else [], PostJobActionsJson=[],
             ReturnType="Json", AllowNetworkEgress=False, AllowApiInvocation=False, TimeoutSeconds=60,
             RetryCount=0, RetryDelaySeconds=0, McpConnectionIdsJson=[], CreatedAt=now, UpdatedAt=now))
     def action(value):

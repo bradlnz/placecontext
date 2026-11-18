@@ -139,21 +139,32 @@ else if (EditorDepth == 0)
                     <div class="dcmodal-body @(Vm.IsDetailsView || Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView || Vm.IsMarkupView ? "workflow-list-body" : null)" inert="@Vm.ShowWorkflowAssistant">
                         @if (Vm.IsDetailsView)
                         {
-                            <div class="field-row">
-                                <div class="dcfield flex-1">
-                                    <label for="workflow-name-@EditorDepth">Name <span class="req">*</span></label>
-                                    <input id="workflow-name-@EditorDepth" class="dcinput" @bind="Vm.EdName" placeholder="my-pipeline" />
-                                </div>
-                                <div class="dcfield flex-14">
-                                    <label for="workflow-description-@EditorDepth">Description</label>
-                                    <input id="workflow-description-@EditorDepth" class="dcinput" @bind="Vm.EdDescription" placeholder="What does this workflow produce? (optional)" />
-                                </div>
-                            </div>
-
+                            <div class="workflow-details">
+                                <header class="workflow-details-heading">
+                                    <span class="workflow-eyebrow">Overview</span>
+                                    <h2>Workflow details</h2>
+                                    <p>Describe the workflow and review its definition before running.</p>
+                                </header>
+                                <div class="workflow-details-grid">
+                                    <section class="workflow-details-card" aria-labelledby="workflow-general-@EditorDepth">
+                                        <div class="workflow-details-card-heading">
+                                            <h3 id="workflow-general-@EditorDepth">General</h3>
+                                            <p>A clear name and description help your team find and understand this workflow.</p>
+                                        </div>
+                                        <div class="dcfield">
+                                            <label for="workflow-name-@EditorDepth">Name <span class="req">*</span></label>
+                                            <input id="workflow-name-@EditorDepth" class="dcinput" @bind="Vm.EdName" aria-required="true" placeholder="Name your workflow" />
+                                        </div>
+                                        <div class="dcfield">
+                                            <label for="workflow-description-@EditorDepth">Description <span class="workflow-field-optional">Optional</span></label>
+                                            <textarea id="workflow-description-@EditorDepth" class="dcinput" rows="6" @bind="Vm.EdDescription" placeholder="What does this workflow do, and when should it run?"></textarea>
+                                        </div>
+                                        <p class="workflow-details-save-note">Changes are applied with Save workflow.</p>
+                                    </section>
                             <section class="workflow-readiness" aria-label="Workflow readiness checks">
                                 <div class="workflow-readiness-head">
-                                    <div><strong>Pre-run checks</strong><small>Inspect referenced jobs, source configuration and human gates before saving.</small></div>
-                                    <button type="button" class="dcbtn btn-2-8" disabled="@Vm.Saving" @onclick="Vm.CheckReadiness"><AppIcon Kind="test" /> Check</button>
+                                    <div><h3>Definition checks</h3><p>Review jobs, source configuration and human gates.</p></div>
+                                    <button type="button" class="dcbtn" disabled="@Vm.Saving" @onclick="Vm.CheckReadiness"><AppIcon Kind="test" /> Check</button>
                                 </div>
                                 @if (Vm.Readiness is { } preflight)
                                 {
@@ -165,16 +176,25 @@ else if (EditorDepth == 0)
                                     @if (preflight.Findings.Count > 0)
                                     {
                                         <ul class="workflow-readiness-findings">
-                                            @foreach (var issue in preflight.Findings.Take(12))
+                                            @foreach (var issue in preflight.Findings)
                                             {
                                                 <li class="@issue.Severity"><strong>@issue.Title</strong><span>@issue.Detail</span></li>
                                             }
                                         </ul>
                                     }
-                                    <small class="workflow-readiness-note">Definition checks do not validate live credentials, source data, or future external side effects. Test jobs before production use.</small>
+                                    <small class="workflow-readiness-note">Checks cover the workflow definition. Live connections and job execution are tested separately.</small>
+                                }
+                                else
+                                {
+                                    <div class="workflow-readiness-empty">
+                                        <AppIcon Kind="test" />
+                                        <strong>Ready to check</strong>
+                                        <p>Check the current definition to see any issues before saving.</p>
+                                    </div>
                                 }
                             </section>
-
+                                </div>
+                            </div>
                         }
                         else if (Vm.IsMarkupView)
                         {

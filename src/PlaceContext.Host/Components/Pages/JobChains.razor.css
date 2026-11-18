@@ -359,23 +359,42 @@
 .workflow-input-banner .dcbtn { flex:none; }
 @media (max-width:600px) { .workflow-input-banner { flex-wrap:wrap; }.workflow-input-banner .dcbtn { margin-left:35px; } }
 
-/* Authoring readiness lives beside the real workflow editor, not in a separate dashboard. */
-.workflow-readiness { margin:10px 14px; border:1px solid var(--border); border-radius:10px; padding:12px; background:var(--card); display:grid; gap:9px; }
-.workflow-readiness-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.workflow-readiness-head > div { display:grid; gap:3px; }
-.workflow-readiness-head strong { font-size:12px; }
-.workflow-readiness-head small { font-size:10.5px; line-height:1.5; color:var(--text-3); }
-.workflow-readiness-summary { display:flex; align-items:center; flex-wrap:wrap; gap:6px; font-size:11.5px; font-weight:600; }
+.workflow-details { width:100%; max-width:1120px; margin:0 auto; padding:28px 16px 40px; }
+.workflow-details-heading { margin-bottom:26px; }
+.workflow-details-heading h2 { margin:8px 0; font-size:26px; font-weight:600; letter-spacing:-.5px; }
+.workflow-details-heading p { margin:0; color:var(--text-3); font-size:13px; line-height:1.6; }
+.workflow-details-grid { display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(0, 1fr); align-items:start; gap:24px; }
+.workflow-details-card, .workflow-readiness { min-width:0; margin:0; padding:24px; border:1px solid var(--border); border-radius:10px; background:var(--card); display:grid; gap:22px; }
+.workflow-details-card h3, .workflow-readiness h3 { margin:0; font-size:15px; font-weight:600; }
+.workflow-details-card-heading p, .workflow-readiness-head p { margin:7px 0 0; color:var(--text-3); font-size:12px; line-height:1.6; }
+.workflow-details-card .dcfield { gap:9px; }
+.workflow-details-card .dcinput { width:100%; padding:11px 12px; font-size:13px; line-height:1.6; }
+.workflow-details-card textarea { min-height:150px; resize:vertical; }
+.workflow-field-optional { margin-left:6px; color:var(--text-3); font-size:11px; font-weight:400; }
+.workflow-details-save-note { margin:0; padding-top:18px; border-top:1px solid var(--border); font-size:11px; color:var(--text-3); }
+.workflow-readiness-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.workflow-readiness-head .dcbtn { flex:none; }
+.workflow-readiness-empty { display:flex; align-items:center; flex-direction:column; padding:28px 12px; border:1px dashed var(--border-2); border-radius:7px; text-align:center; }
+.workflow-readiness-empty ::deep svg { width:24px; height:24px; margin-bottom:14px; color:var(--text-3); }
+.workflow-readiness-empty strong { font-size:13px; font-weight:500; }
+.workflow-readiness-empty p { max-width:250px; margin:7px 0 0; color:var(--text-3); font-size:12px; line-height:1.6; }
+.workflow-readiness-summary { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:13px; border:1px solid var(--border); border-radius:7px; font-size:12px; font-weight:600; }
 .workflow-readiness-summary.ready { color:var(--good); }
 .workflow-readiness-summary.blocked { color:var(--bad); }
-.workflow-readiness-summary span { font-size:10px; font-weight:400; color:var(--text-3); }
+.workflow-readiness-summary span { flex-basis:100%; font-size:11px; font-weight:400; color:var(--text-3); }
 .workflow-readiness-summary ::deep svg { width:14px; height:14px; }
-.workflow-readiness-findings { max-height:170px; overflow-y:auto; margin:0; padding:0; list-style:none; display:grid; gap:7px; }
-.workflow-readiness-findings li { display:grid; gap:3px; padding:7px 9px; border:1px solid var(--border); border-radius:7px; font-size:11px; }
+.workflow-readiness-findings { margin:0; padding:0; list-style:none; display:grid; gap:10px; }
+.workflow-readiness-findings li { min-width:0; display:grid; gap:6px; padding:12px; border:1px solid var(--border); border-radius:7px; font-size:12px; overflow-wrap:anywhere; }
 .workflow-readiness-findings li.error { border-left:3px solid var(--bad); }
 .workflow-readiness-findings li.warning { border-left:3px solid var(--warn); }
 .workflow-readiness-findings li.info { border-left:3px solid var(--brand-2); }
-.workflow-readiness-findings li span, .workflow-readiness-note { color:var(--text-3); font-size:10.5px; line-height:1.5; }
+.workflow-readiness-findings li span, .workflow-readiness-note { color:var(--text-3); font-size:11px; line-height:1.65; }
+@media (max-width:800px) {
+    .workflow-details { padding:18px 4px 28px; }
+    .workflow-details-heading h2 { font-size:22px; }
+    .workflow-details-grid { grid-template-columns:minmax(0, 1fr); gap:16px; }
+    .workflow-details-card, .workflow-readiness { padding:18px; }
+}
 
 /* Workflow editors use the full viewport, with their own scrolling content. */
 .dcmodal-overlay:not(.workflow-canvas-overlay) { padding:0; }
@@ -632,8 +651,8 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 .sub-workflow-modal ::deep .canvas-pipeline { min-height:0 }
 
 /* Keep nested workflow editors and their step dialogs above their callers. */
-.workflow-editor-scrim { z-index:calc(40 + var(--workflow-editor-depth, 0) * 100) }
-.workflow-editor { z-index:calc(41 + var(--workflow-editor-depth, 0) * 100) }
+.workflow-editor-scrim { z-index:calc(45 + var(--workflow-editor-depth, 0) * 100) }
+.workflow-editor { z-index:calc(46 + var(--workflow-editor-depth, 0) * 100) }
 .workflow-canvas-overlay { z-index:calc(45 + var(--workflow-editor-depth, 0) * 100) }
 .workflow-dialog-overlay { z-index:calc(50 + var(--workflow-editor-depth, 0) * 100) }
 .step-policy-overlay, .execution-overlay { z-index:calc(70 + var(--workflow-editor-depth, 0) * 100) }

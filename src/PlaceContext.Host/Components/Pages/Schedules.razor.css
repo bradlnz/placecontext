@@ -54,10 +54,8 @@
 }
 
 .cron-toggle {
-    padding: 4px 10px;
-    font-size: 11px;
-    align-self: flex-end;
-    margin-bottom: 2px;
+    margin-right: auto;
+    flex-shrink: 0;
 }
 
 .err-text {

@@ -205,10 +205,6 @@
                             </div>
                         }
                     }
-                    <button type="button" class="dcbtn cron-toggle"
-                            @onclick="Vm.ToggleAdvancedCron">
-                        <AppIcon Kind="settings" /> @(Vm.AdvancedCron ? "Simple" : "Cron")
-                    </button>
                 }
                 else
                 {
@@ -228,6 +224,13 @@
                 }
             </div>
             <div class="dcmodal-foot">
+                @if (Vm.NewKind == TriggerKind.Schedule)
+                {
+                    <button type="button" class="dcbtn cron-toggle" aria-pressed="@Vm.AdvancedCron" disabled="@Vm.Busy"
+                            @onclick="Vm.ToggleAdvancedCron">
+                        <AppIcon Kind="settings" /> @(Vm.AdvancedCron ? "Simple" : "Cron")
+                    </button>
+                }
                 <button type="button" class="dcbtn" disabled="@Vm.Busy" @onclick="Vm.CloseAddSchedule">Cancel</button>
                 <button type="submit" class="dcbtn primary" disabled="@Vm.Busy">@(Vm.Busy ? "Adding…" : "Add schedule")</button>
             </div>

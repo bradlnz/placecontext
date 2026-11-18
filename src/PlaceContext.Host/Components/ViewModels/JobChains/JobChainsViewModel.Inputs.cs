@@ -12,12 +12,13 @@ public sealed partial class JobChainsViewModel
         public string Name { get; set; } = "";
         public string Type { get; set; } = "text";
         public string Value { get; set; } = "";
-        public JobParameterDto Parameter => new(Name, string.IsNullOrWhiteSpace(Name) ? "Input value" : Name, Required: false, Type: Type);
+        public JobParameterDto? Definition { get; init; }
+        public JobParameterDto Parameter => Definition ?? new(Name, string.IsNullOrWhiteSpace(Name) ? "Input value" : Name, Required: false, Type: Type);
     }
 
     public List<RunInputField> RunInputFields { get; } = [];
     public void AddRunInputField() { RunInputFields.Add(new()); NotifyStateChanged(); }
-    public void RemoveRunInputField(RunInputField field) { RunInputFields.Remove(field); NotifyStateChanged(); }
+    public void RemoveRunInputField(RunInputField field) { if (field.Definition is null) RunInputFields.Remove(field); NotifyStateChanged(); }
     public void GenerateRunInputDefault(RunInputField field)
     {
         if (string.IsNullOrWhiteSpace(field.Value)) field.Value = RunInputDefaults.Generate(field.Parameter);

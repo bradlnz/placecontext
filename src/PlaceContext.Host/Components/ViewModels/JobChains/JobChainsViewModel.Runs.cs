@@ -280,13 +280,17 @@ public sealed partial class JobChainsViewModel
     public Task RunChainAsync(JobChainView chain, IReadOnlyList<JobView>? jobs = null)
     {
         Message = null;
-        var plan = ChainParameterPromptPlan.Build(chain, jobs ?? Jobs ?? Array.Empty<JobView>());
+        ChainParameterPromptPlan plan;
+        try { plan = ChainParameterPromptPlan.Build(chain, jobs ?? Jobs ?? Array.Empty<JobView>(), Chains); }
+        catch (ArgumentException ex) { Message = ex.Message; NotifyStateChanged(); return Task.CompletedTask; }
         RunPromptChain = chain;
         RunPromptSteps.Clear();
         RunPromptSteps.AddRange(plan.Steps);
         _runPrompt.Reset(plan.Defaults);
         RunInputFields.Clear();
-        if (RunPromptSteps.Count == 0) RunInputFields.Add(new());
+        RunInputFields.AddRange(plan.Inputs.Select(input => new RunInputField
+        { Name = input.Parameter.Name, Type = input.Parameter.Type, Value = input.Value, Definition = input.Parameter }));
+        if (RunPromptSteps.Count == 0 && RunInputFields.Count == 0) RunInputFields.Add(new());
         RunAttachment = "";
         NotifyStateChanged();
         return Task.CompletedTask;

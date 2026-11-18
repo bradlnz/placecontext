@@ -42,19 +42,19 @@
                 }
                 <div class="prompt-step">
                     <div class="prompt-step-head"><strong>@(Vm.RunPromptSteps.Count > 0 ? "Additional input (optional)" : "Workflow input")</strong></div>
-                    @if (Vm.RunPromptSteps.Count == 0)
+                    @if (Vm.RunPromptSteps.Count == 0 && !Vm.RunInputFields.Any(field => field.Definition is not null))
                     {
                         <p class="sub-note">No input fields are defined. Add the fields this workflow expects, or leave them empty if it creates its own input.</p>
                     }
                     @foreach (var field in Vm.RunInputFields)
                     {
                         <div class="run-input-field" @key="field">
-                            <div class="dcfield"><label>Field name</label><input class="dcinput" aria-label="Input field name" placeholder="question or request_id" @bind="field.Name" @bind:after="() => Vm.GenerateRunInputDefault(field)" /></div>
-                            <div class="dcfield"><label>Type</label><select class="dcinput" aria-label="Input field type" @bind="field.Type" @bind:after="() => Vm.GenerateRunInputDefault(field)">
+                            <div class="dcfield"><label>Field name</label><input class="dcinput" aria-label="Input field name" placeholder="question or request_id" readonly="@(field.Definition is not null)" @bind="field.Name" @bind:after="() => Vm.GenerateRunInputDefault(field)" /></div>
+                            <div class="dcfield"><label>Type</label><select class="dcinput" aria-label="Input field type" disabled="@(field.Definition is not null)" @bind="field.Type" @bind:after="() => Vm.GenerateRunInputDefault(field)">
                                 <option value="text">Text</option><option value="uuid">UUID</option><option value="integer">Integer</option><option value="number">Number</option><option value="checkbox">Boolean</option><option value="date">Date</option><option value="datetime-local">Date and time</option><option value="json">JSON</option>
                             </select></div>
-                            <div class="dcfield"><label>Value</label><ParamInput Parameter="field.Parameter" ProjectId="@Vm.ProjectId" @bind-Value="field.Value" /></div>
-                            <button type="button" class="dcbtn" aria-label="@($"Remove input field {Vm.RunInputFields.IndexOf(field) + 1}")" @onclick="() => Vm.RemoveRunInputField(field)"><AppIcon Kind="close" /></button>
+                            <div class="dcfield"><label>@(field.Parameter.Label ?? "Value") @if (field.Parameter.Required) { <span class="req">*</span> }</label><ParamInput Parameter="field.Parameter" ProjectId="@Vm.ProjectId" @bind-Value="field.Value" /></div>
+                            <button type="button" class="dcbtn" aria-label="@($"Remove input field {Vm.RunInputFields.IndexOf(field) + 1}")" disabled="@(field.Definition is not null)" @onclick="() => Vm.RemoveRunInputField(field)"><AppIcon Kind="close" /></button>
                         </div>
                     }
                     <button type="button" class="dcbtn" @onclick="Vm.AddRunInputField"><AppIcon Kind="plus" /> Add input field</button>

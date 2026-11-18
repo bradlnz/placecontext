@@ -8,6 +8,27 @@ namespace PlaceContext.Host.Tests;
 
 public sealed class WorkflowRunInputTests
 {
+    [Fact]
+    public async Task Discovered_required_workflow_fields_validate_and_submit_as_initial_input()
+    {
+        var queue = new Queue();
+        var vm = new JobChainsViewModel(null!, null!, null!, new Navigation(), submissions: queue);
+        await vm.RunChainAsync(Workflow());
+        vm.RunInputFields.Clear();
+        var field = new JobChainsViewModel.RunInputField { Name = "question", Definition = new("question", "Question") };
+        vm.RunInputFields.Add(field);
+        vm.RemoveRunInputField(field);
+        Assert.Single(vm.RunInputFields);
+        await vm.SubmitRunPromptAsync();
+        Assert.NotNull(vm.RunPromptError);
+        Assert.Equal(0, queue.Count);
+        field.Value = "Help me sign in";
+        await vm.SubmitRunPromptAsync();
+        Assert.Equal(1, queue.Count);
+        using var data = JsonDocument.Parse(queue.Payload!);
+        Assert.Equal(field.Value, data.RootElement.GetProperty("question").GetString());
+    }
+
     internal static JobView InputJob(Guid projectId, bool declared) => new(
         Guid.NewGuid(), projectId, "Question", null, "code", null, "node", "", "index.js", [], 1,
         ["""{"question":"Example question","count":3,"enabled":false}"""], new Dictionary<string, string>(),

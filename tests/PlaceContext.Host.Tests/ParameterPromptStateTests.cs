@@ -7,6 +7,42 @@ namespace PlaceContext.Host.Tests;
 public sealed class ParameterPromptStateTests
 {
     [Fact]
+    public void Workflow_inputs_follow_nested_entry_branches_without_prompting_for_downstream_outputs()
+    {
+        var job = Job("Intake", new("request_id", Type: "uuid"), new("question"))
+            with { InputPayloads = ["{\"question\":\"Example\"}"] };
+        var later = Job("Later", new JobParameterDto("generated_output"));
+        var child = new JobChainView(Guid.NewGuid(), job.ProjectId, "Child", null,
+            [new([new(job.Id, job.Name)]), new([new(later.Id, later.Name)])], DateTimeOffset.UtcNow);
+        var nested = child with { Id = Guid.NewGuid(), Stages = [new([], Action: new SubWorkflowChainActionView(child.Id, child.Name))] };
+        var root = child with { Id = Guid.NewGuid(), Stages = [new([], Action: new ParallelWorkflowsChainActionView(
+            [new(nested.Id, nested.Name, "true"), new(child.Id, child.Name, "false", WhenFalse: true)]))] };
+        var plan = ChainParameterPromptPlan.Build(root, [job, later], [root, nested, child]);
+        Assert.Empty(plan.Steps);
+        Assert.Equal(new[] { "request_id", "question" }, plan.Inputs.Select(input => input.Parameter.Name));
+        Assert.True(Guid.TryParse(plan.Inputs[0].Value, out _));
+        Assert.Equal("Example", plan.Inputs[1].Value);
+        Assert.All(plan.Inputs, input => Assert.True(input.Parameter.Required));
+        Assert.Empty(ChainParameterPromptPlan.Build(root, [job], [child with { ProjectId = Guid.NewGuid() }]).Inputs);
+        var cycle = child with { Stages = [new([], Action: new SubWorkflowChainActionView(root.Id, root.Name))] };
+        Assert.Empty(ChainParameterPromptPlan.Build(root, [job], [root, nested, cycle]).Inputs);
+    }
+
+    [Fact]
+    public void Workflow_inputs_reject_conflicting_types_across_entry_branches()
+    {
+        var text = Job("Text", new JobParameterDto("value", Type: "text"));
+        var number = Job("Number", new JobParameterDto("value", Type: "integer"));
+        var first = new JobChainView(Guid.NewGuid(), text.ProjectId, "First", null,
+            [new([new(text.Id, text.Name)])], DateTimeOffset.UtcNow);
+        var second = first with { Id = Guid.NewGuid(), Stages = [new([new(number.Id, number.Name)])] };
+        var root = first with { Id = Guid.NewGuid(), Stages = [new([], Action: new ParallelWorkflowsChainActionView(
+            [new(first.Id, first.Name, "true"), new(second.Id, second.Name, "true")]))] };
+        var error = Assert.Throws<ArgumentException>(() => ChainParameterPromptPlan.Build(root, [text, number], [first, second]));
+        Assert.Contains("different types for input 'value'", error.Message);
+    }
+
+    [Fact]
     public void Workflow_form_infers_first_step_examples_and_preserves_structured_and_typed_values()
     {
         var job = Job("Input") with { InputPayloads = ["""{"request_id":"c6b8fef6-36b4-43db-a7b6-806873e05db5","count":12,"enabled":false,"data":{"name":"Ada"},"items":[1,2],"optional":null}"""] };
