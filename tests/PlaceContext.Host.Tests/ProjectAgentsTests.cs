@@ -685,6 +685,55 @@ public sealed partial class BuildChatTests
         Assert.Null(conversation.Error);
     }
 
+    [Theory]
+    [InlineData("disabled")]
+    [InlineData("deleted")]
+    [InlineData("model removed")]
+    public async Task Unavailable_agent_models_do_not_block_other_saves_but_new_assignments_are_rejected(string unavailable)
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var store = ProjectStore(f);
+        var first = new DashboardAgentProfile { Name = "Reviewer", ConnectionId = f.ConnectionId, Model = "test" };
+        var second = new DashboardAgentProfile { Name = "Writer", ConnectionId = f.ConnectionId, Model = "test" };
+        await store.SaveAsync(f.ProjectId, new() { Agents = [first, second] });
+        using (var scope = f.Provider.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var connection = await db.ModelConnections.SingleAsync();
+            if (unavailable == "disabled") connection.Enabled = false;
+            else if (unavailable == "deleted") db.ModelConnections.Remove(connection);
+            else connection.ModelsJson = "[]";
+            await db.SaveChangesAsync();
+        }
+
+        var vm = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store);
+        await vm.LoadPageAsync(f.ProjectId, first.Id.ToString());
+        vm.SelectConnection(Guid.Empty.ToString());
+        await vm.SaveAgentAsync("Use the runner's model.", first.Id.ToString());
+        Assert.Null(vm.Error);
+        var saved = await store.GetAsync(f.ProjectId);
+        Assert.Equal(Guid.Empty, saved.Agents.Single(a => a.Id == first.Id).ConnectionId);
+        Assert.Equal(f.ConnectionId, saved.Agents.Single(a => a.Id == second.Id).ConnectionId);
+
+        await vm.LoadPageAsync(f.ProjectId, second.Id.ToString());
+        await vm.SaveAgentAsync("Updated instructions with unchanged model.", second.Id.ToString());
+        Assert.Null(vm.Error);
+        saved = await store.GetAsync(f.ProjectId);
+        Assert.Equal("Updated instructions with unchanged model.", saved.Agents.Single(a => a.Id == second.Id).Instructions);
+
+        var added = new DashboardAgentProfile { Name = "New agent", ConnectionId = f.ConnectionId, Model = "test" };
+        saved.Agents.Add(added);
+        var error = await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(f.ProjectId, saved));
+        Assert.Contains("New agent", error.Message);
+        saved.Agents.Remove(added);
+        saved.Agents.Single(a => a.Id == first.Id).ConnectionId = f.ConnectionId;
+        saved.Agents.Single(a => a.Id == first.Id).Model = "test";
+        error = await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(f.ProjectId, saved));
+        Assert.Contains("Reviewer", error.Message);
+        Assert.Equal(Guid.Empty, (await store.GetAsync(f.ProjectId)).Agents.Single(a => a.Id == first.Id).ConnectionId);
+    }
+
     [Fact]
     public async Task Deleting_an_agent_removes_only_that_agent_and_keeps_the_master()
     {

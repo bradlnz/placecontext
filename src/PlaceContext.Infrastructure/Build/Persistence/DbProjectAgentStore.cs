@@ -54,8 +54,14 @@ public sealed class DbProjectAgentStore(IServiceScopeFactory scopes, ICurrentUse
         if (await db.McpConnections.CountAsync(c => c.ProjectId == projectId && c.Enabled && assigned.Contains(c.Id), ct) != assigned.Length)
             throw new ArgumentException("Assign only enabled MCP connections from this project. Remove unavailable connections before saving.");
         var connections = await models.ListAsync(ct);
-        if (catalog.Agents.Any(a => a.ConnectionId != Guid.Empty && !connections.Any(c => c.Id == a.ConnectionId && c.Enabled && c.Models.Contains(a.Model))))
-            throw new ArgumentException("Select an available model or use the runner's default model.");
+        // A disabled or removed model must not block unrelated agent edits.
+        foreach (var agent in catalog.Agents.Where(a => a.ConnectionId != Guid.Empty))
+        {
+            var prior = previous.Agents.FirstOrDefault(a => a.Id == agent.Id);
+            if (prior?.ConnectionId == agent.ConnectionId && prior.Model == agent.Model) continue;
+            if (!connections.Any(c => c.Id == agent.ConnectionId && c.Enabled && c.Models.Contains(agent.Model)))
+                throw new ArgumentException($"Select an available model for '{agent.Name}' or use the runner's default model.");
+        }
         row.AgentSettings = encryption.Protect(JsonSerializer.Serialize(catalog), Purpose);
         row.AgentSettingsVersion++;
         try { await db.SaveChangesAsync(ct); }
