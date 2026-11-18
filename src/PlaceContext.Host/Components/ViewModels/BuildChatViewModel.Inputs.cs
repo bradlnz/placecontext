@@ -17,6 +17,21 @@ public sealed partial class BuildChatViewModel
     public bool? HumanAnswer { get; private set; }
     public string? HumanInputError { get; private set; }
     public string? HumanInputNotice { get; private set; }
+    private Guid? _dismissedHumanInputId;
+    public bool ShowHumanInput => HumanInputRequest is { } request && request.Id != _dismissedHumanInputId;
+
+    public void OpenHumanInput()
+    {
+        _dismissedHumanInputId = null;
+        NotifyStateChanged();
+    }
+
+    public void CloseHumanInput()
+    {
+        if (SubmittingHumanInput) return;
+        _dismissedHumanInputId = HumanInputRequest?.Id;
+        NotifyStateChanged();
+    }
 
     private void SyncHumanInput()
     {

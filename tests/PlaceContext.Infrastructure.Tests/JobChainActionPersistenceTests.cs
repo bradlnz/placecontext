@@ -282,7 +282,7 @@ public sealed class JobChainActionPersistenceTests
     }
 
     [Fact]
-    public async Task Legacy_agent_step_without_provider_still_waits_for_external_input()
+    public async Task Agent_review_without_provider_uses_background_execution()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options, new FakeCurrentTenant(Guid.NewGuid()));
@@ -299,7 +299,7 @@ public sealed class JobChainActionPersistenceTests
         await db.SaveChangesAsync();
         db.ChangeTracker.Clear();
         var loaded = await new EfJobChainRepository(db).GetByIdAsync(row.Id);
-        Assert.Equal(LoopChainAction.ExternalAgent, Assert.IsType<LoopChainAction>(loaded!.Stages[0].Action).AgentProvider);
+        Assert.Equal(LoopChainAction.AutomaticAgent, Assert.IsType<LoopChainAction>(loaded!.Stages[0].Action).AgentProvider);
     }
 
     [Fact]

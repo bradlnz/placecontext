@@ -14,6 +14,25 @@ namespace PlaceContext.Host.Tests;
 public sealed class WorkflowMarkupTests
 {
     [Fact]
+    public void Agent_review_without_a_provider_defaults_to_background_execution()
+    {
+        var id = Guid.NewGuid();
+        var document = WorkflowMarkup.Read($"""
+            version: 1
+            workflowId: {id}
+            name: Review
+            stages:
+            - jobIds: []
+              review:
+                type: agentInput
+                instructions: Check the evidence
+                responseField: review
+            """, id);
+        var review = Assert.IsType<LoopChainAction>(Assert.Single(document.Stages).ToStage().Action);
+        Assert.Equal(LoopChainAction.AutomaticAgent, review.AgentProvider);
+    }
+
+    [Fact]
     public void Yaml_round_trip_preserves_actions_settings_conditions_and_nested_branches()
     {
         var vm = Editor(new Store());

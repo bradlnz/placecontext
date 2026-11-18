@@ -24,7 +24,7 @@ public sealed class ModelChainQuestionGeneratorTests
         using var api = new VirtualMachinePromptAgentTests.ModelApi();
         var generator = new ModelChainQuestionGenerator(api, Options.Create(new VirtualMachineEnvironmentOptions()));
         await Assert.ThrowsAsync<InvalidOperationException>(() => generator.GenerateAsync(
-            new(LoopChainAction.AgentType, "Verify the output", "review"), "{}", default));
+            new(LoopChainAction.AgentType, "Verify the output", "review", agentProvider: LoopChainAction.ExternalAgent), "{}", default));
         Assert.Empty(api.Requests);
     }
 
@@ -38,7 +38,7 @@ public sealed class ModelChainQuestionGeneratorTests
             question = "Is the reported total of 42 correct?"
         }));
         var generator = new ModelChainQuestionGenerator(api, Options.Create(VirtualMachinePromptAgentTests.OptionsForAgent()));
-        var question = await generator.GenerateAsync(new(kind, "Validate the total", "review", responseType), "{\"total\":42}", default);
+        var question = await generator.GenerateAsync(new(kind, "Validate the total", "review", responseType, LoopChainAction.ExternalAgent), "{\"total\":42}", default);
         Assert.Equal(kind == LoopChainAction.AgentType
             ? "Validate the total\n\nReview question: Is the reported total of 42 correct?"
             : "Is the reported total of 42 correct?", question);

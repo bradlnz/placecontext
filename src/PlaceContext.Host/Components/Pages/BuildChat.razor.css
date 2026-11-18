@@ -102,8 +102,6 @@ button:focus-visible,select:focus-visible { outline: 2px solid var(--brand); out
 @container (max-width: 899px) {
     .workspace-preview-open .chat-content { display: none; }
     .workspace-preview-open .build-workspace { visibility: visible; opacity: 1; }
-    .human-input-pending .chat-content { display:flex; }
-    .human-input-pending .build-workspace { display:none; }
 }
 .dashboard-chart-expanded .chat-content,.dashboard-chart-expanded .build-divider { display:none; }
 .dashboard-chart-expanded .build-workspace { visibility:visible; opacity:1; }
@@ -229,3 +227,7 @@ pre { overflow: auto; max-height: 320px; white-space: pre-wrap; overflow-wrap: a
 .dashboard-model-prompt h2 { margin:0; font-size:20px; }
 .chat-welcome .dashboard-model-prompt p { margin:6px 0 0; }
 .dashboard-model-prompt .dcbtn { flex:none; }
+
+.dcmodal-overlay.workflow-human-input-overlay { align-items:center; justify-content:center; padding:16px; }
+.dcmodal-overlay.workflow-human-input-overlay > .dcmodal { width:640px; max-width:100%; height:auto; max-height:calc(100dvh - 32px); border:1px solid var(--border-2); border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,.4); }
+.workflow-human-input-overlay .chat-human-input { margin:0; padding:0; border:0; background:none; }

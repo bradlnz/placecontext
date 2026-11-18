@@ -2,12 +2,52 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Components;
 using PlaceContext.Application.Dtos;
 using PlaceContext.Application.Jobs;
+using PlaceContext.Domain.ValueObjects;
 using PlaceContext.Host.Components.ViewModels;
 
 namespace PlaceContext.Host.Tests;
 
 public sealed class WorkflowRunInputTests
 {
+    [Theory]
+    [InlineData(LoopChainAction.TextResponse)]
+    [InlineData(LoopChainAction.YesNoResponse)]
+    public async Task Human_request_opens_a_modal_and_keeps_its_draft_when_dismissed(string responseType)
+    {
+        var vm = new JobChainsViewModel(null!, null!, null!, new Navigation());
+        var project = Guid.NewGuid();
+        vm.Initialize(project);
+        var request = new ChainInputRequest(Guid.NewGuid(), [new(0, "Review", [new("answer")])],
+            Kind: LoopChainAction.HumanType, ResponseType: responseType);
+        var run = new ChainRunView(Guid.NewGuid(), Guid.NewGuid(), "Review", "AwaitingInput", [], null, DateTimeOffset.UtcNow, null)
+            { ProjectId = project, InputRequest = request };
+        try
+        {
+            await vm.OpenChainRunAsync(run);
+            Assert.True(vm.ShowHumanInput);
+            _ = vm.GetResumeArg(0, "answer");
+            vm.SetResumeArg(0, "answer", "Review draft");
+            vm.CloseHumanInput();
+            Assert.False(vm.ShowHumanInput);
+            await vm.OpenChainRunAsync(run);
+            Assert.False(vm.ShowHumanInput);
+            vm.OpenHumanInput();
+            Assert.True(vm.ShowHumanInput);
+            Assert.Equal("Review draft", vm.GetResumeArg(0, "answer"));
+            Assert.Equal("AwaitingInput", vm.OpenRun!.Status);
+            vm.CloseHumanInput();
+            await vm.OpenChainRunAsync(run with { InputRequest = request with { Id = Guid.NewGuid() } });
+            Assert.True(vm.ShowHumanInput);
+            await vm.OpenChainRunAsync(run with { InputRequest = request with { SubmittedValues = "{}" } });
+            Assert.False(vm.ShowHumanInput);
+            await vm.OpenChainRunAsync(run with { InputRequest = request with { Kind = LoopChainAction.AgentType } });
+            Assert.False(vm.ShowHumanInput);
+            await vm.OpenChainRunAsync(run with { Status = "Succeeded" });
+            Assert.False(vm.ShowHumanInput);
+        }
+        finally { vm.DetachEvents(); }
+    }
+
     [Fact]
     public async Task Discovered_required_workflow_fields_validate_and_submit_as_initial_input()
     {

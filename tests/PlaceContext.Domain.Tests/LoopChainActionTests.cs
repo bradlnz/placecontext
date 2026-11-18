@@ -13,12 +13,15 @@ public class LoopChainActionTests
         Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.HumanType, "Review", "result", agentProvider: LoopChainAction.AutomaticAgent, connectionId: connection, model: "test"));
         Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.TaskType, "Build", "result", connectionId: connection, model: "test"));
         Assert.Equal("test", new LoopChainAction(LoopChainAction.TaskType, "Build", "result", agentProvider: LoopChainAction.AutomaticAgent, connectionId: connection, model: "test").Model);
+        Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.AgentType, "Review", "result", connectionId: connection));
+        Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.AgentType, "Review", "result", model: "test"));
     }
 
     [Fact]
-    public void Jev_is_an_explicit_agent_choice_and_existing_steps_remain_external()
+    public void Reviews_default_to_automatic_and_handoffs_are_explicit()
     {
-        Assert.Equal(LoopChainAction.ExternalAgent, new LoopChainAction(LoopChainAction.AgentType, "Review", "answer").AgentProvider);
+        Assert.Equal(LoopChainAction.AutomaticAgent, new LoopChainAction(LoopChainAction.AgentType, "Review", "answer").AgentProvider);
+        Assert.Equal(LoopChainAction.ExternalAgent, new LoopChainAction(LoopChainAction.AgentType, "Review", "answer", agentProvider: LoopChainAction.ExternalAgent).AgentProvider);
         var jev = new LoopChainAction(LoopChainAction.AgentType, "Review", "answer", agentProvider: LoopChainAction.JevAgent);
         Assert.Equal(LoopChainAction.JevAgent, jev.AgentProvider);
         Assert.Throws<ArgumentException>(() => new LoopChainAction(LoopChainAction.HumanType, "Review", "answer", agentProvider: LoopChainAction.JevAgent));

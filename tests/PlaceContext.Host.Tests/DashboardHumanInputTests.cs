@@ -35,6 +35,8 @@ public sealed partial class BuildChatTests
         var html = await renderer.Dispatcher.InvokeAsync(async () => (await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.BuildChat>(
             ParameterView.FromDictionary(new Dictionary<string, object?> { ["ProjectId"] = f.ProjectId, ["RunId"] = run.Id }))).ToHtmlString());
         Assert.Contains("Workflow question", html);
+        Assert.Contains("workflow-human-input-overlay", html);
+        Assert.Contains("role=\"dialog\" aria-modal=\"true\"", html);
         Assert.Contains(request.Instructions!, html);
         Assert.DoesNotContain("Respond in the run view", html);
         await vm.SubmitHumanInputAsync(request.Id);
@@ -69,15 +71,22 @@ public sealed partial class BuildChatTests
         Assert.NotNull(vm.HumanInputError);
         Assert.Empty(queue.Responses);
         vm.SetHumanInput(1, "notes", "Add the source links.");
+        Assert.True(vm.ShowHumanInput);
+        vm.CloseHumanInput();
         await vm.RefreshPreviewRunAsync();
+        Assert.False(vm.ShowHumanInput);
+        vm.OpenHumanInput();
+        Assert.True(vm.ShowHumanInput);
         Assert.Equal("Add the source links.", vm.GetHumanInput(1, "notes"));
         f.Permissions.Denied = Permission.JobsRun;
         await vm.SubmitHumanInputAsync(request.Id);
         Assert.Empty(queue.Responses);
         f.Permissions.Denied = null;
         var next = request with { Id = Guid.NewGuid() };
+        vm.CloseHumanInput();
         dispatcher.Run = run with { InputRequest = next };
         await vm.RefreshPreviewRunAsync();
+        Assert.True(vm.ShowHumanInput);
         Assert.Empty(vm.GetHumanInput(1, "notes"));
         await vm.SubmitHumanInputAsync(request.Id);
         Assert.Empty(queue.Responses);

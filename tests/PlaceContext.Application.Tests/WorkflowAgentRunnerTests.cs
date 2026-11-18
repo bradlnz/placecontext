@@ -45,7 +45,8 @@ public sealed class WorkflowAgentRunnerTests
         var runner = new WorkflowAgentRunner(model, new Connections(true), null!, new Permissions(true), null!,
             projectAgents: new Agents(new() { Agents = [parent, child] }));
         var action = new LoopChainAction(kind, "Check the evidence", "review", agentProvider: LoopChainAction.AutomaticAgent,
-            connectionId: Connection, model: "test-model", agentId: child.Id);
+            connectionId: kind == LoopChainAction.TaskType ? Connection : null,
+            model: kind == LoopChainAction.TaskType ? "test-model" : null, agentId: child.Id);
         var result = await runner.RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, action, "{\"evidence\":42}", default);
         Assert.Equal(kind == LoopChainAction.TaskType ? 2 : 1, model.Approvals.Count);
         Assert.All(model.Approvals, approval =>
@@ -63,8 +64,23 @@ public sealed class WorkflowAgentRunnerTests
             Assert.Contains("Approve sub-agent result", model.Approvals[1].Prompt);
             Assert.Contains("Proposed result", model.Approvals[1].Evidence);
         }
-        if (kind == LoopChainAction.AgentType) { Assert.Null(model.Messages); Assert.True(result["approved"]!.GetValue<bool>()); }
+        if (kind == LoopChainAction.AgentType)
+        {
+            Assert.Null(model.Messages);
+            Assert.True(result["approved"]!.GetValue<bool>());
+        }
         else Assert.True(result["done"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Default_review_without_a_configured_model_fails_with_setup_guidance()
+    {
+        var model = new Gateway();
+        var action = new LoopChainAction(LoopChainAction.AgentType, "Check the evidence", "review");
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Runner(model)
+            .RunAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 0, action, "{}", default));
+        Assert.Contains("Configure the reviewing agent's model", error.Message);
+        Assert.Empty(model.Approvals);
     }
 
     [Theory]

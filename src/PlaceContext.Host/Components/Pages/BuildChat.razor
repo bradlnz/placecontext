@@ -9,7 +9,7 @@
 @using PlaceContext.Application.Build
 
 <PageTitle>PlaceContext — Dashboard</PageTitle>
-<div id="@Vm.ViewId" class="build-chat @(Vm.ShowHistory ? "history-open" : "") @(Vm.WorkspaceVisible ? "conversation-active" : "") @(Vm.WorkspaceOpen ? "workspace-preview-open" : "") @(Vm.ExpandedDashboardChartId is not null ? "dashboard-chart-expanded" : "") @(Vm.HumanInputRequest is not null ? "human-input-pending" : "")">
+<div id="@Vm.ViewId" class="build-chat @(Vm.ShowHistory ? "history-open" : "") @(Vm.WorkspaceVisible ? "conversation-active" : "") @(Vm.WorkspaceOpen ? "workspace-preview-open" : "") @(Vm.ExpandedDashboardChartId is not null ? "dashboard-chart-expanded" : "")">
     @if (Vm.ShowHistory)
     {
         <aside id="@(Vm.ViewId + "-build-history")" class="chat-history" aria-label="Sessions">
@@ -172,41 +172,12 @@
                         </article>
                     }
                 }
-                @if (Vm.HumanInputRequest is { } humanInput)
+                @if (Vm.HumanInputRequest is not null)
                 {
-                    <section class="chat-human-input" aria-label="Workflow question" @key="humanInput.Id">
-                        <div class="message-author"><span><AppIcon Kind="human" /></span><strong>Workflow needs your response</strong></div>
-                        <p class="answer-hint">@Vm.PreviewRun?.ChainName · Workflow paused</p>
-                        <div class="message-text message-markdown">@((MarkupString)BuildChatViewModel.FormatReply(humanInput.Instructions ?? "Review the workflow and respond to continue."))</div>
-                        @if (Vm.PreviewRun?.FinalOutput is { Length: > 0 } context)
-                        { <details class="tool-result"><summary>Review workflow context</summary><RunOutput Value="@Vm.Presentation.Json(context)" Label="Workflow review context" /></details> }
-                        @if (humanInput.ResponseType == PlaceContext.Domain.ValueObjects.LoopChainAction.YesNoResponse)
-                        {
-                            <p class="answer-hint">A No answer follows the workflow’s configured No branch.</p>
-                            <div class="suggested-answers" role="group" aria-label="Answer workflow question">
-                                <button type="button" class="dcbtn" aria-pressed="@(Vm.HumanAnswer == true)" disabled="@(Vm.SubmittingHumanInput || !Vm.CanRespondToWorkflow)" @onclick="() => Vm.SelectHumanAnswer(humanInput.Id, true)">Yes</button>
-                                <button type="button" class="dcbtn" aria-pressed="@(Vm.HumanAnswer == false)" disabled="@(Vm.SubmittingHumanInput || !Vm.CanRespondToWorkflow)" @onclick="() => Vm.SelectHumanAnswer(humanInput.Id, false)">No</button>
-                            </div>
-                            @if (Vm.HumanAnswer is { } answer)
-                            {
-                                <div class="human-input-actions"><button type="button" class="dcbtn primary" disabled="@Vm.SubmittingHumanInput" @onclick="() => Vm.SubmitHumanInputAsync(humanInput.Id)">@(Vm.SubmittingHumanInput ? "Submitting…" : answer ? "Confirm Yes" : "Confirm No")</button><button type="button" class="dcbtn" disabled="@Vm.SubmittingHumanInput" @onclick="() => Vm.SelectHumanAnswer(humanInput.Id, null)">Cancel</button></div>
-                            }
-                        }
-                        else
-                        {
-                            @foreach (var step in humanInput.Steps)
-                            {
-                                @foreach (var field in step.Parameters)
-                                {
-                                    var fieldId = $"{Vm.ViewId}-human-{step.Index}-{field.Name}";
-                                    <div class="dcfield"><label for="@fieldId">@(field.Label ?? "Your response") @(field.Required ? "*" : "")</label><textarea id="@fieldId" class="dcinput" rows="4" required="@field.Required" disabled="@(Vm.SubmittingHumanInput || !Vm.CanRespondToWorkflow)" value="@Vm.GetHumanInput(step.Index, field.Name)" @oninput="@(e => Vm.SetHumanInput(step.Index, field.Name, e.Value?.ToString() ?? ""))"></textarea></div>
-                                }
-                            }
-                            <button type="button" class="dcbtn primary" disabled="@(Vm.SubmittingHumanInput || !Vm.CanRespondToWorkflow)" @onclick="() => Vm.SubmitHumanInputAsync(humanInput.Id)">@(Vm.SubmittingHumanInput ? "Submitting…" : "Submit and continue")</button>
-                        }
-                        @if (!Vm.CanRespondToWorkflow) { <p class="answer-hint">You need permission to run workflows to respond.</p> }
-                        @if (Vm.HumanInputError is { } inputError) { <p class="error-notice" role="alert">@inputError</p> }
-                    </section>
+                    <div class="chat-human-input" role="status">
+                        <p>Workflow needs your response</p>
+                        <button class="dcbtn primary" @onclick="Vm.OpenHumanInput">Review and respond</button>
+                    </div>
                 }
                 @if (Vm.HumanInputNotice is { } inputNotice) { <p class="chat-notice" role="status">@inputNotice</p> }
                 @if (Vm.Busy || Vm.Submitting)
@@ -516,6 +487,54 @@
 {
     <WorkflowRunDialog Vm="runPrompt" />
 }
+@if (Vm.ShowHumanInput && Vm.HumanInputRequest is { } humanInput)
+{
+    <div class="dcmodal-overlay workflow-human-input-overlay" @onclick="Vm.CloseHumanInput"
+         @onkeydown='@(e => { if (e.Key == "Escape") Vm.CloseHumanInput(); })'>
+        <div class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="@(Vm.ViewId + "-human-input-title")" @onclick:stopPropagation="true">
+            <div class="dcmodal-head">
+                <h3 id="@(Vm.ViewId + "-human-input-title")">Human in the loop</h3>
+                <button class="dcslide-x" aria-label="Close human review" disabled="@Vm.SubmittingHumanInput" @onclick="Vm.CloseHumanInput"><AppIcon Kind="close" /></button>
+            </div>
+            <div class="dcmodal-body">
+                <section class="chat-human-input" aria-label="Workflow question" @key="humanInput.Id">
+                    <div class="message-author"><span><AppIcon Kind="human" /></span><strong>Workflow needs your response</strong></div>
+                    <p class="answer-hint">@Vm.PreviewRun?.ChainName · Workflow paused</p>
+                    <div class="message-text message-markdown">@((MarkupString)BuildChatViewModel.FormatReply(humanInput.Instructions ?? "Review the workflow and respond to continue."))</div>
+                    @if (Vm.PreviewRun?.FinalOutput is { Length: > 0 } context)
+                    { <details class="tool-result"><summary>Review workflow context</summary><RunOutput Value="@Vm.Presentation.Json(context)" Label="Workflow review context" /></details> }
+                    @if (humanInput.ResponseType == PlaceContext.Domain.ValueObjects.LoopChainAction.YesNoResponse)
+                    {
+                        <p class="answer-hint">A No answer follows the workflow’s configured No branch.</p>
+                        <div class="suggested-answers" role="group" aria-label="Answer workflow question">
+                            <button type="button" class="dcbtn" aria-pressed="@(Vm.HumanAnswer == true)" disabled="@(Vm.SubmittingHumanInput || !Vm.CanRespondToWorkflow)" @onclick="() => Vm.SelectHumanAnswer(humanInput.Id, true)">Yes</button>
+                            <button type="button" class="dcbtn" aria-pressed="@(Vm.HumanAnswer == false)" disabled="@(Vm.SubmittingHumanInput || !Vm.CanRespondToWorkflow)" @onclick="() => Vm.SelectHumanAnswer(humanInput.Id, false)">No</button>
+                        </div>
+                        @if (Vm.HumanAnswer is { } answer)
+                        {
+                            <div class="human-input-actions"><button type="button" class="dcbtn primary" disabled="@Vm.SubmittingHumanInput" @onclick="() => Vm.SubmitHumanInputAsync(humanInput.Id)">@(Vm.SubmittingHumanInput ? "Submitting…" : answer ? "Confirm Yes" : "Confirm No")</button><button type="button" class="dcbtn" disabled="@Vm.SubmittingHumanInput" @onclick="() => Vm.SelectHumanAnswer(humanInput.Id, null)">Cancel</button></div>
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var step in humanInput.Steps)
+                        {
+                            @foreach (var field in step.Parameters)
+                            {
+                                var fieldId = $"{Vm.ViewId}-human-{step.Index}-{field.Name}";
+                                <div class="dcfield"><label for="@fieldId">@(field.Label ?? "Your response") @(field.Required ? "*" : "")</label><textarea id="@fieldId" class="dcinput" rows="4" required="@field.Required" disabled="@(Vm.SubmittingHumanInput || !Vm.CanRespondToWorkflow)" value="@Vm.GetHumanInput(step.Index, field.Name)" @oninput="@(e => Vm.SetHumanInput(step.Index, field.Name, e.Value?.ToString() ?? ""))"></textarea></div>
+                            }
+                        }
+                        <button type="button" class="dcbtn primary" disabled="@(Vm.SubmittingHumanInput || !Vm.CanRespondToWorkflow)" @onclick="() => Vm.SubmitHumanInputAsync(humanInput.Id)">@(Vm.SubmittingHumanInput ? "Submitting…" : "Submit and continue")</button>
+                    }
+                    @if (!Vm.CanRespondToWorkflow) { <p class="answer-hint">You need permission to run workflows to respond.</p> }
+                    @if (Vm.HumanInputError is { } inputError) { <p class="error-notice" role="alert">@inputError</p> }
+                </section>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public Guid ProjectId { get; set; }
     [Parameter] public Guid? RunId { get; set; }

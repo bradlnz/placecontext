@@ -13,8 +13,9 @@ public sealed class LoopChainAction : ChainAction
     public const string AutomaticAgent = "automatic";
 
     public LoopChainAction(string type, string instructions, string responseField, string responseType = TextResponse,
-        string agentProvider = ExternalAgent, Guid? connectionId = null, string? model = null, Guid? agentId = null)
+        string? agentProvider = null, Guid? connectionId = null, string? model = null, Guid? agentId = null)
     {
+        agentProvider ??= type == AgentType ? AutomaticAgent : ExternalAgent;
         if (type is not (HumanType or AgentType or TaskType))
         {
             throw new ArgumentException("Choose a human or agent step.", nameof(type));
@@ -39,8 +40,8 @@ public sealed class LoopChainAction : ChainAction
         {
             throw new ArgumentException("Response field must start with a letter and contain only letters, numbers or underscores (up to 80 characters).", nameof(responseField));
         }
-        if (agentProvider == AutomaticAgent && (connectionId is null || connectionId == Guid.Empty
-            || string.IsNullOrWhiteSpace(model) || model.Length > 200))
+        if (agentProvider == AutomaticAgent && (type != AgentType || connectionId is not null || model is not null)
+            && (connectionId is null || connectionId == Guid.Empty || string.IsNullOrWhiteSpace(model) || model.Length > 200))
             throw new ArgumentException("Choose a model connection and model for automatic execution.");
         if (agentId == Guid.Empty) throw new ArgumentException("Choose an agent from this project.");
         if (agentProvider != AutomaticAgent && (connectionId is not null || model is not null || agentId is not null))

@@ -45,6 +45,13 @@ public sealed class WorkflowAgentRunner(IBuildModelGateway model, IModelConnecti
         if (action.Type == LoopChainAction.AgentType)
         {
             var approver = parent ?? settings.Agents.Single(a => a.Id == DashboardSettings.DefaultAgentId);
+            if (approver.ConnectionId != Guid.Empty)
+            {
+                connectionId = approver.ConnectionId;
+                modelName = approver.Model;
+            }
+            if (connectionId is null || connectionId == Guid.Empty || string.IsNullOrWhiteSpace(modelName))
+                throw new InvalidOperationException("Configure the reviewing agent's model or choose a fallback model in the Agent review step.");
             using var approvalDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
             approvalDeadline.CancelAfter(BuildExecutionLimits.Turn);
             report?.Invoke(new(DateTimeOffset.UtcNow, "approval_requested", $"Asking {approver.DisplayName} to approve the workflow step"));

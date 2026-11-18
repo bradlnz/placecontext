@@ -148,6 +148,24 @@ public sealed partial class JobChainsViewModel
     public static bool NeedsHumanInput(ChainRunView run) =>
         run.Status == "AwaitingInput" && run.InputRequest is { Kind: LoopChainAction.HumanType };
 
+    private Guid? _dismissedHumanInputId;
+    public bool ShowHumanInput => OpenRun is { } run && NeedsHumanInput(run)
+        && run.InputRequest is { SubmittedValues: null } request
+        && request.Id != _dismissedHumanInputId && !CanResumeAgentAutomatically;
+
+    public void OpenHumanInput()
+    {
+        _dismissedHumanInputId = null;
+        NotifyStateChanged();
+    }
+
+    public void CloseHumanInput()
+    {
+        if (Resuming) return;
+        _dismissedHumanInputId = OpenRun?.InputRequest?.Id;
+        NotifyStateChanged();
+    }
+
     public void RequestHumanAnswer(bool answer)
     {
         if (Resuming || _submissions is null || OpenRun is not { } run || !NeedsHumanInput(run)

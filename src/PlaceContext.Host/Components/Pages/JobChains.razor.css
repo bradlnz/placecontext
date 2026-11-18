@@ -405,6 +405,9 @@
 /* Workflow editors use the full viewport, with their own scrolling content. */
 .dcmodal-overlay:not(.workflow-canvas-overlay) { padding:0; }
 .dcmodal-overlay:not(.workflow-canvas-overlay) > .dcmodal { width:100%; max-width:none; height:100dvh; max-height:100dvh; border:0; border-radius:0; box-shadow:none; }
+.dcmodal-overlay.workflow-human-input-overlay { align-items:center; justify-content:center; padding:16px; }
+.dcmodal-overlay.workflow-human-input-overlay > .dcmodal { width:640px; max-width:100%; height:auto; max-height:calc(100dvh - 32px); border:1px solid var(--border-2); border-radius:12px; box-shadow:0 24px 80px rgba(0,0,0,.4); }
+.workflow-human-input-overlay .workflow-input { padding:0; border:0; background:none; }
 
 /* The editor canvas fills the screen; step choices remain in its Add step menu. */
 .workflow-canvas-overlay { z-index:45; padding:0 }

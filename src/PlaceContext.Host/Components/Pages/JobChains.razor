@@ -301,72 +301,17 @@ else if (EditorDepth == 0)
 
                                     @if (Vm.OpenRun.InputRequest is { } inputRequest)
                                     {
-                                        <section class="workflow-input" aria-label="Required workflow inputs">
-                                            @if (Vm.CanResumeAgentAutomatically)
-                                            {
-                                                <h3>Ready for automatic execution</h3>
-                                                <p>This step now has an automatic agent configured. Continue this run using the saved model and instructions.</p>
-                                                <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="Vm.ResumeAgentAutomaticallyAsync">Run agent automatically</button>
-                                                @if (Vm.ResumeError is not null) { <p role="alert">@Vm.ResumeError</p> }
-                                            }
-                                            else
-                                            {
-                                            <span class="workflow-eyebrow">Workflow paused</span>
-                                            <h3>@(inputRequest.Kind == LoopChainAction.HumanType ? inputRequest.Instructions ?? "Your response is needed" : inputRequest.Kind is LoopChainAction.AgentType or LoopChainAction.TaskType ? "Waiting for an agent response" : "Input required")</h3>
-                                            @if (inputRequest.Instructions is not null)
-                                            {
-                                                @if (inputRequest.Kind != LoopChainAction.HumanType) { <p class="loop-instructions">@inputRequest.Instructions</p> }
-                                                <p class="sub-note">Review the accumulated context below, then submit a response to continue.</p>
-                                            }
-                                            else
-                                            {
-                                                <p>Complete the required fields to continue from this stage.</p>
-                                            }
-                                            @if (inputRequest.ResponseType == LoopChainAction.YesNoResponse)
-                                            {
-                                                <p class="sub-note">Review the evidence and downstream steps before responding. A No answer follows the configured No branch; it does not automatically cancel execution.</p>
-                                            }
-                                            else
-                                            {
-                                            @foreach (var step in inputRequest.Steps)
-                                            {
-                                                <h4>@step.JobName</h4>
-                                                @foreach (var field in step.Parameters)
-                                                {
-                                                    <div class="dcfield">
-                                                        @if (inputRequest.Kind is LoopChainAction.HumanType or LoopChainAction.AgentType or LoopChainAction.TaskType)
-                                                        {
-                                                            <label for="loop-response">Response <span class="req">*</span></label>
-                                                            <textarea id="loop-response" class="dcinput" rows="5" required
-                                                                      value="@Vm.GetResumeArg(step.Index, field.Name)"
-                                                                      @oninput="@(e => Vm.SetResumeArg(step.Index, field.Name, e.Value?.ToString() ?? ""))"></textarea>
-                                                            <span class="sub-note">Saved as <code>@field.Name</code> for the next steps.</span>
-                                                        }
-                                                        else
-                                                        {
-                                                        <label>@(field.Label ?? field.Name) @(field.Required ? "*" : "")</label>
-                                                        <ParamInput Parameter="field" ProjectId="@ProjectId" Value="@Vm.GetResumeArg(step.Index, field.Name)"
-                                                                    ValueChanged="@(value => Vm.SetResumeArg(step.Index, field.Name, value))" />
-                                                        }
-                                                    </div>
-                                                }
-                                            }
-                                            }
-                                            @if (Vm.ResumeError is not null) { <p role="alert">@Vm.ResumeError</p> }
-                                            @if (inputRequest.ResponseType == LoopChainAction.YesNoResponse)
-                                            {
-                                                <div class="human-decision-actions" aria-label="Answer the question">
-                                                    <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="() => Vm.RequestHumanAnswer(true)"><AppIcon Kind="check" /> Yes</button>
-                                                    <button class="dcbtn" disabled="@Vm.Resuming" @onclick="() => Vm.RequestHumanAnswer(false)"><AppIcon Kind="close" /> No</button>
-                                                    @if (Vm.Resuming) { <span role="status">Resuming…</span> }
-                                                </div>
-                                            }
-                                            else
-                                            {
-                                                <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="Vm.ResumeWithInputsAsync">@(Vm.Resuming ? "Resuming…" : "Submit and continue")</button>
-                                            }
-                                            }
-                                        </section>
+                                        @if (JobChainsViewModel.NeedsHumanInput(Vm.OpenRun) && !Vm.CanResumeAgentAutomatically)
+                                        {
+                                            <div class="workflow-input-banner" role="status">
+                                                <div><strong>Your response is needed</strong><p>Review the request to continue this workflow.</p></div>
+                                                <button class="dcbtn primary" @onclick="Vm.OpenHumanInput">Review and respond</button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            @WorkflowInput(inputRequest)
+                                        }
                                     }
 
                                     <div class="running-steps-panel">
@@ -1491,9 +1436,32 @@ else if (EditorDepth == 0)
             </div>
         }
 
+        @if (Vm.ShowHumanInput && !Vm.HumanConfirmationCurrent && Vm.OpenRun?.InputRequest is { } humanRequest)
+        {
+            <div class="dcmodal-overlay workflow-human-input-overlay" @onclick="Vm.CloseHumanInput"
+                 @onkeydown='@(e => { if (e.Key == "Escape") Vm.CloseHumanInput(); })'>
+                <div class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="human-input-title" @onclick:stopPropagation="true">
+                    <div class="dcmodal-head">
+                        <h3 id="human-input-title">Human in the loop</h3>
+                        <button class="dcslide-x" aria-label="Close human review" disabled="@Vm.Resuming" @onclick="Vm.CloseHumanInput"><AppIcon Kind="close" /></button>
+                    </div>
+                    <div class="dcmodal-body">
+                        @WorkflowInput(humanRequest)
+                        @if (Vm.OpenRun.FinalOutput is { } evidence)
+                        {
+                            <details class="chain-context-panel">
+                                <summary>Accumulated workflow context</summary>
+                                <RunOutput Value="@evidence" />
+                            </details>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
         @if (Vm.HumanConfirmationCurrent && Vm.PendingHumanAnswer is { } requestedAnswer)
         {
-            <div class="dcmodal-overlay">
+            <div class="dcmodal-overlay workflow-human-input-overlay" @onkeydown='@(e => { if (e.Key == "Escape") Vm.CancelHumanAnswer(); })'>
                 <div class="dcmodal" role="dialog" aria-modal="true" aria-labelledby="human-confirm-title">
                     <div class="dcmodal-head"><h3 id="human-confirm-title">Confirm workflow response</h3>
                         <button class="dcslide-x" aria-label="Close confirmation" disabled="@Vm.Resuming" @onclick="Vm.CancelHumanAnswer"><AppIcon Kind="close" /></button>
@@ -1774,6 +1742,73 @@ else if (EditorDepth == 0)
 </div>
 
 @code {
+    private RenderFragment WorkflowInput(ChainInputRequest inputRequest) => @<section class="workflow-input" aria-label="Required workflow inputs">
+        @if (Vm.CanResumeAgentAutomatically)
+        {
+            <h3>Ready for automatic execution</h3>
+            <p>This step now has an automatic agent configured. Continue this run using the saved model and instructions.</p>
+            <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="Vm.ResumeAgentAutomaticallyAsync">Run agent automatically</button>
+            @if (Vm.ResumeError is not null) { <p role="alert">@Vm.ResumeError</p> }
+        }
+        else
+        {
+        <span class="workflow-eyebrow">Workflow paused</span>
+        <h3>@(inputRequest.Kind == LoopChainAction.HumanType ? inputRequest.Instructions ?? "Your response is needed" : inputRequest.Kind is LoopChainAction.AgentType or LoopChainAction.TaskType ? "Waiting for an agent response" : "Input required")</h3>
+        @if (inputRequest.Instructions is not null)
+        {
+            @if (inputRequest.Kind != LoopChainAction.HumanType) { <p class="loop-instructions">@inputRequest.Instructions</p> }
+            <p class="sub-note">Review the accumulated context below, then submit a response to continue.</p>
+        }
+        else
+        {
+            <p>Complete the required fields to continue from this stage.</p>
+        }
+        @if (inputRequest.ResponseType == LoopChainAction.YesNoResponse)
+        {
+            <p class="sub-note">Review the evidence and downstream steps before responding. A No answer follows the configured No branch; it does not automatically cancel execution.</p>
+        }
+        else
+        {
+        @foreach (var step in inputRequest.Steps)
+        {
+            <h4>@step.JobName</h4>
+            @foreach (var field in step.Parameters)
+            {
+                <div class="dcfield">
+                    @if (inputRequest.Kind is LoopChainAction.HumanType or LoopChainAction.AgentType or LoopChainAction.TaskType)
+                    {
+                        <label for="loop-response">Response <span class="req">*</span></label>
+                        <textarea id="loop-response" class="dcinput" rows="5" required
+                                  value="@Vm.GetResumeArg(step.Index, field.Name)"
+                                  @oninput="@(e => Vm.SetResumeArg(step.Index, field.Name, e.Value?.ToString() ?? ""))"></textarea>
+                        <span class="sub-note">Saved as <code>@field.Name</code> for the next steps.</span>
+                    }
+                    else
+                    {
+                    <label>@(field.Label ?? field.Name) @(field.Required ? "*" : "")</label>
+                    <ParamInput Parameter="field" ProjectId="@ProjectId" Value="@Vm.GetResumeArg(step.Index, field.Name)"
+                                ValueChanged="@(value => Vm.SetResumeArg(step.Index, field.Name, value))" />
+                    }
+                </div>
+            }
+        }
+        }
+        @if (Vm.ResumeError is not null) { <p role="alert">@Vm.ResumeError</p> }
+        @if (inputRequest.ResponseType == LoopChainAction.YesNoResponse)
+        {
+            <div class="human-decision-actions" aria-label="Answer the question">
+                <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="() => Vm.RequestHumanAnswer(true)"><AppIcon Kind="check" /> Yes</button>
+                <button class="dcbtn" disabled="@Vm.Resuming" @onclick="() => Vm.RequestHumanAnswer(false)"><AppIcon Kind="close" /> No</button>
+                @if (Vm.Resuming) { <span role="status">Resuming…</span> }
+            </div>
+        }
+        else
+        {
+            <button class="dcbtn primary" disabled="@Vm.Resuming" @onclick="Vm.ResumeWithInputsAsync">@(Vm.Resuming ? "Resuming…" : "Submit and continue")</button>
+        }
+        }
+    </section>;
+
     private RenderFragment WorkflowBranch(IReadOnlyList<JobChainsViewModel.WorkflowCatalogueNode> nodes) => @<ul class="chain-rows">
         @foreach (var node in nodes)
         {

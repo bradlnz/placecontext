@@ -237,7 +237,7 @@ public sealed class EfJobChainRepository : IJobChainRepository
                 element.GetProperty("instructions").GetString() ?? "",
                 element.GetProperty("responseField").GetString() ?? "",
                 element.TryGetProperty("responseType", out var responseType) ? responseType.GetString() ?? LoopChainAction.TextResponse : LoopChainAction.TextResponse,
-                element.TryGetProperty("agentProvider", out var agentProvider) ? agentProvider.GetString() ?? LoopChainAction.ExternalAgent : LoopChainAction.ExternalAgent,
+                element.TryGetProperty("agentProvider", out var agentProvider) ? agentProvider.GetString() : null,
                 element.TryGetProperty("connectionId", out var connection) && connection.ValueKind == JsonValueKind.String ? connection.GetGuid() : null,
                 element.TryGetProperty("model", out var model) && model.ValueKind == JsonValueKind.String ? model.GetString() : null,
                 element.TryGetProperty("agentId", out var agentId) && agentId.ValueKind == JsonValueKind.String ? agentId.GetGuid() : null),

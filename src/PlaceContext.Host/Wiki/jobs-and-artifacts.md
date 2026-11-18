@@ -284,6 +284,8 @@ Each reconciliation sweep logs how many records it repaired and queues it retrie
 Both default to **Automatic**. An automatic review asks the selected agent's parent for approval, or the
 master agent if no agent is selected. Rejection stops the workflow. The reviewer uses its saved model;
 the step's fallback model is used when the reviewer has no model connection.
+Agent reviews also default to automatic execution when YAML or workflow tools omit `agentProvider`.
+Set `agentProvider: external` explicitly only when a connected agent will submit the response.
 
 For an automatic task, choose a saved agent or an enabled model connection and model from
 **Settings → Models**. The runner can inspect, author, run, and check project jobs, subject to
@@ -299,6 +301,8 @@ Choose **External agent** to wait for a connected agent's written response inste
 instructions are preserved exactly, while an external **Agent review** step adds a generated review
 question. **AI evidence check** is available on Agent review and records a probability rather than
 running a general-purpose agent. Human approval remains a separate step.
+Human review requests open in a modal in workflow runs and agent chat. Closing the modal keeps the
+workflow paused and preserves your draft; **Review and respond** opens it again.
 
 **Scoring gate** evaluates an evidence field against weighted criteria and minimum confidence. It stores
 `passed`, the score and criterion breakdown, blockers, model, evaluation time, and an evidence SHA-256.

@@ -1366,8 +1366,8 @@ public class JobChainTests
         var chain = JobChain.Create(ProjectId, "review", null, new[]
         {
             ChainStage.Of(first.Id),
-            ChainStage.ForAction(new LoopChainAction(kind, "Review the draft", "review", responseType)),
-            ChainStage.ForAction(new LoopChainAction(kind, "Review it again", "review", responseType)),
+            ChainStage.ForAction(new LoopChainAction(kind, "Review the draft", "review", responseType, LoopChainAction.ExternalAgent)),
+            ChainStage.ForAction(new LoopChainAction(kind, "Review it again", "review", responseType, LoopChainAction.ExternalAgent)),
             ChainStage.Of(last.Id),
         }, T0);
         await chains.AddAsync(chain);
@@ -1830,17 +1830,19 @@ public class JobChainTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Automatic_agent_continues_with_structured_output_or_fails_without_pausing(bool fail)
+    [InlineData(LoopChainAction.TaskType, false)]
+    [InlineData(LoopChainAction.TaskType, true)]
+    [InlineData(LoopChainAction.AgentType, false)]
+    [InlineData(LoopChainAction.AgentType, true)]
+    public async Task Automatic_agent_continues_with_structured_output_or_fails_without_pausing(string kind, bool fail)
     {
         var chains = new InMemoryJobChainRepository();
         var jobs = new InMemoryJobRepository();
         var next = MakeJob("after-agent");
         await jobs.AddAsync(next);
         var chain = JobChain.Create(ProjectId, "automatic", null,
-            [ChainStage.ForAction(new LoopChainAction(LoopChainAction.TaskType, "Build", "result",
-                agentProvider: LoopChainAction.AutomaticAgent, connectionId: Guid.NewGuid(), model: "test")),
+            [ChainStage.ForAction(new LoopChainAction(kind, "Build", "result",
+                agentProvider: kind == LoopChainAction.TaskType ? LoopChainAction.AutomaticAgent : null, connectionId: Guid.NewGuid(), model: "test")),
              ChainStage.Of(next.Id)], T0);
         await chains.AddAsync(chain);
         var runs = new InMemoryChainRunRepository();
