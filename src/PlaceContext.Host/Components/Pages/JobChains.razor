@@ -37,7 +37,7 @@ else if (EditorDepth == 0)
             </div>
             <div class="head-actions">
                 <a class="dcbtn" href="/observability?tab=workflows"><AppIcon Kind="pulse" /> Execution details</a>
-                <button class="dcbtn primary" @onclick="() => Vm.NewChain()"><AppIcon Kind="plus" /> New workflow</button>
+                <a class="dcbtn primary" href="/project/@ProjectId/dashboard?task=new-workflow"><AppIcon Kind="plus" /> New workflow</a>
             </div>
         </header>
 
@@ -52,7 +52,7 @@ else if (EditorDepth == 0)
                 <div class="empty-icon"><AppIcon Kind="chain" /></div>
                 <strong>No workflows yet</strong>
                 <span>Link reusable jobs into a pipeline, then run the whole workflow with one action.</span>
-                <button class="dcbtn primary" @onclick="() => Vm.NewChain()">Create first workflow</button>
+                <a class="dcbtn primary" href="/project/@ProjectId/dashboard?task=new-workflow">Create first workflow</a>
             </div>
         }
         else

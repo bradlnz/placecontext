@@ -543,7 +543,7 @@
     [Parameter, SupplyParameterFromQuery(Name = "agent")] public Guid? AgentId { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "task")] public string? TaskHint { get; set; }
     [Parameter, SupplyParameterFromQuery(Name = "source")] public Guid? SourceHint { get; set; }
-    private (Guid, string?, Guid?)? _appliedSourceHint;
+    private (Guid, string?, Guid?)? _appliedTaskHint;
     private ChatComposer _composer = null!;
     private bool _focusComposer;
     private WorkflowQueryEditor? _chartQueryEditor;
@@ -571,12 +571,22 @@
         if (AgentId is { } selectedAgent && ConversationId is null && !Vm.ChatOpen)
             Vm.SelectAgent(selectedAgent.ToString());
         var hint = (ProjectId, TaskHint, SourceHint);
-        if (TaskHint == "sources" && _appliedSourceHint != hint)
+        if (_appliedTaskHint != hint)
         {
-            _appliedSourceHint = hint;
-            Vm.ApplyTaskHint(SourceHint is { } source
-                ? $"Help me choose and build a data pipeline for source {source}. Inspect its metadata and existing workflows, then ask what processing and retrieval outcome I need."
-                : "Help me connect data and choose a pipeline. Identify the source from my description, check the supported connectors and existing sources, then guide me through the secure connection form. Ask what data I have and what I want to do with it.");
+            var prompt = TaskHint switch
+            {
+                "new-job" => "Help me create a new job. Ask what it should do, what input it needs, and what output I want. Check existing jobs before building it.",
+                "new-workflow" => "Help me create a new workflow. Ask what outcome I want, what should trigger it, and what steps or approvals it needs. Check existing jobs and workflows for anything we can reuse.",
+                "sources" => SourceHint is { } source
+                    ? $"Help me choose and build a data pipeline for source {source}. Inspect its metadata and existing workflows, then ask what processing and retrieval outcome I need."
+                    : "Help me connect data and choose a pipeline. Identify the source from my description, check the supported connectors and existing sources, then guide me through the secure connection form. Ask what data I have and what I want to do with it.",
+                _ => null
+            };
+            if (prompt is not null)
+            {
+                _appliedTaskHint = hint;
+                _focusComposer = Vm.ApplyTaskHint(prompt);
+            }
         }
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)

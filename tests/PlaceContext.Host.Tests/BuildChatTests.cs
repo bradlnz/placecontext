@@ -1572,6 +1572,27 @@ public sealed partial class BuildChatTests
         Assert.Equal("", vm.Draft);
     }
 
+    [Theory]
+    [InlineData("new-job", "Help me create a new job.")]
+    [InlineData("new-workflow", "Help me create a new workflow.")]
+    [InlineData("sources", "Help me connect data and choose a pipeline.")]
+    public async Task Creation_links_open_chat_with_an_editable_starter_prompt(string task, string prompt)
+    {
+        await using var fixture = new Fixture();
+        await fixture.SeedAsync();
+        var vm = new BuildChatViewModel(fixture.Store, fixture.Connections, null!, new(), new NoJs(), fixture.Service, fixture.Permissions);
+        await using var provider = PageServices(vm).BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
+        var html = await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<PlaceContext.Host.Components.Pages.BuildChat>(ParameterView.FromDictionary(
+                new Dictionary<string, object?> { ["ProjectId"] = fixture.ProjectId, ["TaskHint"] = task }))).ToHtmlString());
+        Assert.True(vm.ChatOpen);
+        Assert.StartsWith(prompt, vm.Draft);
+        Assert.Contains(prompt, html);
+        Assert.Empty(vm.Conversation.Messages);
+        Assert.False(vm.Busy);
+    }
+
     [Fact]
     public async Task Dashboard_starts_with_tiles_and_opens_chat_only_after_selection()
     {
