@@ -49,13 +49,13 @@ public sealed partial class BuildChatTests
         await store.SaveAsync(f.ProjectId, new() { Agents = [profile] });
         var vm = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store);
         await vm.LoadPageAsync(f.ProjectId, profile.Id.ToString());
-        vm.AgentTab = "Markup";
+        vm.AgentTab = "Overview";
         var yaml = vm.MarkupText.Replace("name: Reviewer", "name: Analyst");
         Assert.True(vm.ApplyMarkup(yaml));
         await vm.SaveAgentAsync("Updated instructions", profile.Id.ToString());
         Assert.Null(vm.Error);
         Assert.True(vm.EditorOpen);
-        Assert.Equal("Markup", vm.AgentTab);
+        Assert.Equal("Overview", vm.AgentTab);
         Assert.Equal("Analyst", vm.Agent!.Name);
         Assert.Equal("Updated instructions", (await store.GetAsync(f.ProjectId)).Agents.Single().Instructions);
         Assert.False(vm.ApplyMarkup(yaml + "\nunknown: value"));
@@ -63,6 +63,52 @@ public sealed partial class BuildChatTests
         f.Permissions.Denied = Permission.ProjectsManage;
         await vm.LoadPageAsync(f.ProjectId, profile.Id.ToString());
         Assert.False(vm.ApplyMarkup(yaml));
+    }
+
+    [Fact]
+    public async Task Agent_canvas_and_yaml_share_a_draft_and_preserve_invalid_edits()
+    {
+        await using var f = new Fixture();
+        await f.SeedAsync();
+        var profile = new DashboardAgentProfile { Name = "Reviewer", Instructions = "Check evidence." };
+        var store = ProjectStore(f);
+        await store.SaveAsync(f.ProjectId, new() { Agents = [profile] });
+        var vm = new ProjectAgentsViewModel(store, f.Connections, new EmptyMcp(), f.Permissions, new(), f.Store);
+        await vm.LoadPageAsync(f.ProjectId, profile.Id.ToString());
+        var yaml = "# Keep this comment\n" + vm.MarkupText.Replace("name: Reviewer", "name: Analyst")
+            .Replace("Check evidence.", "Review the facts.");
+        Assert.True(vm.ApplyMarkup(yaml));
+        Assert.Equal("Analyst", vm.Agent!.Name);
+        Assert.Equal("Review the facts.", vm.Agent.Instructions);
+        Assert.Equal("Reviewer", Assert.Single((await store.GetAsync(f.ProjectId)).Agents).Name);
+        vm.SyncMarkupFromAgent();
+        Assert.Equal(yaml, vm.MarkupText);
+
+        Assert.False(vm.ApplyMarkup("name: [invalid"));
+        Assert.Equal("Analyst", vm.Agent.Name);
+        vm.AgentTab = "Data";
+        await vm.SaveAgentAsync(vm.Agent.Instructions, profile.Id.ToString());
+        Assert.NotNull(vm.Error);
+        Assert.Equal("Reviewer", Assert.Single((await store.GetAsync(f.ProjectId)).Agents).Name);
+        vm.SyncMarkupFromAgent();
+        Assert.Equal("name: [invalid", vm.MarkupText);
+        Assert.True(vm.ApplyMarkup(yaml));
+        Assert.Null(vm.MarkupError);
+
+        vm.Agent!.Instructions = "Changed in the instructions editor.";
+        vm.SyncMarkupFromAgent();
+        Assert.Contains("Changed in the instructions editor.", vm.MarkupText);
+        Assert.False(vm.ApplyMarkup("name: [invalid"));
+        vm.Agent.Name = "Canvas change";
+        Assert.False(vm.ApplyMarkup(yaml));
+        Assert.Equal("Canvas change", vm.Agent.Name);
+        Assert.Contains("Reset YAML", vm.MarkupError);
+        vm.ReloadMarkup();
+        Assert.Null(vm.MarkupError);
+        Assert.Contains("name: Canvas change", vm.MarkupText);
+        await vm.SaveAgentAsync(vm.Agent.Instructions, profile.Id.ToString());
+        Assert.Null(vm.Error);
+        Assert.Equal("Canvas change", Assert.Single((await store.GetAsync(f.ProjectId)).Agents).Name);
     }
 
     [Fact]

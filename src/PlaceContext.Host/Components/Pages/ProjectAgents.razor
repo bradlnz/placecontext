@@ -75,36 +75,77 @@ else
         </div>
 
         <div class="dctabs editor-tabs" aria-label="Agent settings sections">
-            @foreach (var tab in new[] { "Overview", "System prompt", "Workflows", "Observability", "Markup", "Data", "MCPs" })
+            @foreach (var tab in new[] { "Overview", "System prompt", "Workflows", "Observability", "Data", "MCPs" })
             {
                 <button type="button" class="dctab @(Vm.AgentTab == tab ? "active" : "")" aria-pressed="@(Vm.AgentTab == tab ? "true" : "false")" disabled="@Vm.Busy" @onclick="() => SetTabAsync(tab)">@(tab == "System prompt" ? "Instructions" : tab == "MCPs" ? "Connected tools" : tab)</button>
             }
         </div>
 
-        <div class="dcmodal-body editor-body">
-            @if (agent.Id == DashboardSettings.DefaultAgentId && Vm.AgentTab == "Overview")
+        <div class="dcmodal-body editor-body @(Vm.AgentTab == "Overview" ? "overview-body" : null)">
+            @if (Vm.AgentTab == "Overview")
             {
-                <p>The master agent coordinates workflows and the project agents assigned to their steps. Its instructions are private to you; its permissions still apply.</p>
+                <WorkflowSplit Label="Resize agent canvas and YAML">
+                    <Left>
+                        <section class="agent-canvas" aria-label="Agent configuration canvas" tabindex="0">
+                            <div class="agent-canvas-tree">
+                                <section class="agent-config-node agent-root">
+                                    <h3><AppIcon Kind="agent" /> @(agent.Id == DashboardSettings.DefaultAgentId ? "Master agent" : string.IsNullOrWhiteSpace(agent.Name) ? "New agent" : agent.Name)</h3>
+                                    <label for="project-agent-name">Agent name</label><input id="project-agent-name" class="dcinput" maxlength="60" @bind="agent.Name" disabled="@(!Vm.CanEdit || Vm.Busy)" />
+                                    @if (agent.Id != DashboardSettings.DefaultAgentId)
+                                    {
+                                        <label for="project-agent-parent">Parent agent</label>
+                                        <select id="project-agent-parent" class="dcinput" @bind="agent.ParentAgentId" disabled="@(!Vm.CanEdit || Vm.Busy)">
+                                            <option value="">Master agent</option>
+                                            @foreach (var parent in Vm.ParentAgents.OrderBy(a => a.Name)) { <option value="@parent.Id">@parent.DisplayName</option> }
+                                        </select>
+                                        <p>The parent reviews this agent's work and handles its automatic approval gates.</p>
+                                    }
+                                    else
+                                    {
+                                        <p>Coordinates workflows and project agents. Its instructions are private to you; its permissions still apply.</p>
+                                    }
+                                </section>
+                                <section class="agent-config-node">
+                                    <h3><AppIcon Kind="agent" /> Model</h3>
+                                    <label for="project-agent-connection">Model connection</label>
+                                    <select id="project-agent-connection" class="dcinput" value="@agent.ConnectionId" @onchange="e => Vm.SelectConnection(e.Value?.ToString())" disabled="@(!Vm.CanEdit || Vm.Busy)">
+                                        <option value="@Guid.Empty">Runner's default model</option>
+                                        @foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }
+                                        @if (agent.ConnectionId != Guid.Empty && !Vm.Connections.Any(c => c.Id == agent.ConnectionId)) { <option value="@agent.ConnectionId">Unavailable connection</option> }
+                                    </select>
+                                    @if (agent.ConnectionId != Guid.Empty)
+                                    {
+                                        <label for="project-agent-model">Model</label><select id="project-agent-model" class="dcinput" @bind="agent.Model" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="">Select model</option>@foreach (var model in Vm.Models) { <option>@model</option> }@if (!string.IsNullOrEmpty(agent.Model) && !Vm.Models.Contains(agent.Model)) { <option>@agent.Model</option> }</select>
+                                    }
+                                </section>
+                                <section class="agent-config-node">
+                                    <div class="panel-heading"><h3><AppIcon Kind="code" /> Instructions</h3><button type="button" class="dcbtn" @onclick='() => SetTabAsync("System prompt")'>@(Vm.CanEdit ? "Edit instructions" : "View instructions")</button></div>
+                                    <p class="agent-instruction-preview">@(string.IsNullOrWhiteSpace(agent.Instructions) ? "No instructions configured." : agent.Instructions)</p>
+                                </section>
+                                <section class="agent-config-node agent-capabilities" aria-label="Agent capabilities">
+                                    <button type="button" @onclick='() => SetTabAsync("Workflows")'><AppIcon Kind="chain" /><span><strong>Workflows</strong><small>@agent.WorkflowAccess access · @agent.WorkflowIds.Count linked</small></span><AppIcon Kind="chevron-right" /></button>
+                                    <button type="button" @onclick='() => SetTabAsync("Data")'><AppIcon Kind="database" /><span><strong>Data</strong><small>Tables: @agent.EffectiveTableAccess · Artifacts: @agent.EffectiveArtifactAccess · @agent.EffectiveSourceCapabilities.Count source capabilities</small></span><AppIcon Kind="chevron-right" /></button>
+                                    <button type="button" @onclick='() => SetTabAsync("MCPs")'><AppIcon Kind="settings" /><span><strong>Connected tools</strong><small>@agent.McpConnectionIds.Count MCP connections</small></span><AppIcon Kind="chevron-right" /></button>
+                                </section>
+                            </div>
+                        </section>
+                    </Left>
+                    <Right>
+                        <section class="agent-markup" aria-label="Agent YAML configuration">
+                            @if (Vm.MarkupError is not null)
+                            {
+                                <div><button type="button" class="dcbtn" @onclick="Vm.ReloadMarkup">Reset YAML</button></div>
+                                <p class="markup-error" role="alert">@Vm.MarkupError</p>
+                            }
+                            @if (Vm.CanEdit)
+                            {
+                                <div class="markup-editor" inert="@Vm.Busy"><WorkflowInstructionsEditor @key="agent.Id" @ref="_markup" Value="@Vm.MarkupText" ValueChanged="OnMarkupChanged" Language="yaml" FileName="agent.yaml" Label="Agent configuration in YAML" /></div>
+                            }
+                            else { <RunOutput Value="@Vm.MarkupText" Language="yaml" Label="Agent configuration in YAML" /> }
+                        </section>
+                    </Right>
+                </WorkflowSplit>
             }
-
-            <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Overview")">
-                <label for="project-agent-name">Agent name</label><input id="project-agent-name" class="dcinput" maxlength="60" @bind="agent.Name" disabled="@(!Vm.CanEdit || Vm.Busy)" />
-                @if (agent.Id != DashboardSettings.DefaultAgentId)
-                {
-                    <label for="project-agent-parent">Parent agent</label>
-                    <select id="project-agent-parent" class="dcinput" @bind="agent.ParentAgentId" disabled="@(!Vm.CanEdit || Vm.Busy)">
-                        <option value="">Master agent</option>
-                        @foreach (var parent in Vm.ParentAgents.OrderBy(a => a.Name)) { <option value="@parent.Id">@parent.DisplayName</option> }
-                    </select>
-                    <p>The parent approves this agent's work and handles its automatic workflow approval gates. Shared agents can report to other shared agents; private agents to your private agents.</p>
-                }
-                <label for="project-agent-connection">Model connection</label>
-                <select id="project-agent-connection" class="dcinput" value="@agent.ConnectionId" @onchange="e => Vm.SelectConnection(e.Value?.ToString())" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="@Guid.Empty">Runner's default model</option>@foreach (var connection in Vm.Connections) { <option value="@connection.Id">@connection.Name</option> }</select>
-                @if (agent.ConnectionId != Guid.Empty)
-                {
-                    <label for="project-agent-model">Model</label><select id="project-agent-model" class="dcinput" @bind="agent.Model" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="">Select model</option>@foreach (var model in Vm.Models) { <option>@model</option> }</select>
-                }
-            </div>
 
             @if (Vm.AgentTab == "System prompt")
             {
@@ -175,18 +216,6 @@ else
                 </section>
             }
 
-            @if (Vm.AgentTab == "Markup")
-            {
-                <section class="agent-tab-panel markup-panel" aria-label="Agent YAML configuration">
-                    <div class="panel-heading"><div><h3>Agent configuration</h3><p>Edit this agent as YAML. Save agent applies the configuration to new turns and runs.</p></div></div>
-                    @if (Vm.CanEdit)
-                    {
-                        <div class="markup-editor"><WorkflowInstructionsEditor @key="Vm.MarkupRevision" @ref="_markup" Value="@Vm.MarkupText" Language="yaml" FileName="agent.yaml" Label="Agent configuration in YAML" /></div>
-                    }
-                    else { <RunOutput Value="@Vm.MarkupText" Language="yaml" Label="Agent configuration in YAML" /> }
-                </section>
-            }
-
             <div class="agent-tab-panel" hidden="@(Vm.AgentTab != "Data")">
                 <label for="agent-tables">Tables and charts</label><select id="agent-tables" class="dcinput" @bind="agent.TableAccess" disabled="@(!Vm.CanEdit || Vm.Busy)"><option value="none">No access</option><option value="read">Inspect tables and query data for charts</option></select>
                 <fieldset disabled="@(!Vm.CanEdit || Vm.Busy)"><legend>Data source permissions</legend>
@@ -220,11 +249,12 @@ else
 
         <div class="dcmodal-foot">
             @if (Vm.Error is { } editorError) { <div class="editor-err" role="alert">@editorError</div> }
+            @if (Vm.MarkupError is not null && Vm.AgentTab != "Overview") { <span class="editor-err" role="alert">Fix the YAML errors in Overview before saving.</span> }
             @if (Vm.Notice is { } savedNotice) { <span role="status">@savedNotice</span> }
             <button class="dcbtn" disabled="@Vm.Busy" @onclick="() => Vm.CloseEditor(Section)">Close</button>
             @if (Vm.CanEdit)
             {
-                <button class="dcbtn primary" disabled="@Vm.Busy" @onclick="SaveAsync">@(Vm.Busy ? "Saving…" : "Save agent")</button>
+                <button class="dcbtn primary" disabled="@(Vm.Busy || Vm.MarkupError is not null)" @onclick="SaveAsync">@(Vm.Busy ? "Saving…" : "Save agent")</button>
             }
         </div>
     </section>
@@ -289,19 +319,25 @@ else
     private WorkflowInstructionsEditor? _markup;
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override Task OnParametersSetAsync() => Vm.LoadPageAsync(ProjectId, Section);
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (Vm.EditorOpen && Vm.AgentTab == "Overview") Vm.SyncMarkupFromAgent();
+    }
+    private void OnMarkupChanged(string yaml) => Vm.ApplyMarkup(yaml);
     private async Task<bool> ReadDraftAsync()
     {
         if (Vm.Agent is null) return false;
         if (Vm.AgentTab == "System prompt" && _instructions is not null) Vm.Agent.Instructions = await _instructions.ReadAsync();
-        if (Vm.AgentTab == "Markup" && Vm.CanEdit && _markup is not null) return Vm.ApplyMarkup(await _markup.ReadAsync());
-        return true;
+        if (Vm.AgentTab == "Overview" && Vm.CanEdit && _markup is not null) await _markup.FlushChangesAsync();
+        return Vm.MarkupError is null;
     }
     private async Task SetTabAsync(string tab)
     {
-        if (tab == Vm.AgentTab || !await ReadDraftAsync()) return;
+        if (Vm.Busy || tab == Vm.AgentTab) return;
+        await ReadDraftAsync();
         _instructions = _markup = null;
         Vm.AgentTab = tab;
-        if (tab == "Markup") Vm.ReloadMarkup();
+        if (tab == "Overview") Vm.SyncMarkupFromAgent();
         if (tab == "Observability") await Vm.LoadActivityAsync();
     }
     private async Task SaveAsync()

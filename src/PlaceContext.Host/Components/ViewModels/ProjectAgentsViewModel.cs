@@ -45,8 +45,9 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
     public bool Busy { get; private set; }
     public bool CanManage { get; private set; }
     public string AgentTab { get; set; } = "Overview";
-    public string MarkupText { get; set; } = "";
-    public int MarkupRevision { get; private set; }
+    public string MarkupText { get; private set; } = "";
+    public string? MarkupError { get; private set; }
+    private string? _markupSource;
     public IReadOnlyList<BuildConversationSummary> Sessions { get; private set; } = [];
     public bool ActivityLoading { get; private set; }
     public string? ActivityError { get; private set; }
@@ -81,6 +82,7 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
         if (Loading) return;
         Loading = true;
         Error = null;
+        MarkupError = null;
         Close();
         ProjectId = projectId;
         Catalog = new();
@@ -133,24 +135,35 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
     public void ReloadMarkup()
     {
         if (Agent is null) return;
-        MarkupText = AgentMarkup.Write(Agent);
-        MarkupRevision++;
+        MarkupText = _markupSource = AgentMarkup.Write(Agent);
+        MarkupError = null;
+        NotifyStateChanged();
+    }
+
+    public void SyncMarkupFromAgent()
+    {
+        if (Agent is not null && MarkupError is null && _markupSource != AgentMarkup.Write(Agent)) ReloadMarkup();
     }
 
     public bool ApplyMarkup(string yaml)
     {
         if (!CanEdit || Busy || Agent is null) return false;
+        if (yaml == MarkupText && MarkupError is null) return true;
         MarkupText = yaml;
         Error = null;
         try
         {
+            if (_markupSource != AgentMarkup.Write(Agent))
+                throw new InvalidOperationException("The agent changed while the YAML draft was invalid. Copy your edits, then use Reset YAML to load the current configuration.");
             var updated = AgentMarkup.Read(yaml, Agent.Id);
             if (!CanViewWorkflows && !updated.WorkflowIds.SequenceEqual(Agent.WorkflowIds))
                 throw new UnauthorizedAccessException("Workflow access is required to change links.");
             Agent = updated;
+            _markupSource = AgentMarkup.Write(Agent);
+            MarkupError = null;
             return true;
         }
-        catch (Exception ex) { Error = ex.Message; return false; }
+        catch (Exception ex) { MarkupError = ex.Message; return false; }
     }
 
     public async Task LoadActivityAsync()
@@ -240,6 +253,11 @@ public sealed class ProjectAgentsViewModel(IProjectAgentStore store, IModelConne
     public async Task SaveAsync(string instructions)
     {
         if (!CanEdit || Busy || !EditorOpen) return;
+        if (MarkupError is not null)
+        {
+            Error = "Fix the YAML errors before saving the agent.";
+            return;
+        }
         Busy = true;
         Error = Notice = null;
         try
