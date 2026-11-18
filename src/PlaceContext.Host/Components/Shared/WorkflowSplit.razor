@@ -1,0 +1,22 @@
+@inject IJSRuntime JS
+
+<div class="workflow-editor-split">
+    <div class="split-pane">@Left</div>
+    <div id="@_handleId" class="split-handle" role="separator" tabindex="0" aria-label="@Label" aria-orientation="vertical" aria-valuemin="140" aria-valuemax="1200" title="Drag to resize. Arrow keys adjust width; double-click resets it.">
+        <span class="split-grip"><AppIcon Kind="grip" /></span>
+    </div>
+    <div class="split-pane">@Right</div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Resize panes";
+    [Parameter] public RenderFragment? Right { get; set; }
+    [Parameter] public RenderFragment? Left { get; set; }
+    private readonly string _handleId = "workflow-split-" + Guid.NewGuid().ToString("N");
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("pcgraph.splitter", _handleId,
+                new { side = "next", cssProperty = "--right-pane-width", min = 140, max = 1200, reserve = 200, defaultWidth = 420 });
+    }
+}

@@ -1,13 +1,25 @@
-.branch-steps { margin:0; padding-left:20px; display:grid; gap:10px; color:var(--text-2); font-size:12px }
+.branch-steps { margin:0; padding:0; list-style:none; display:grid; gap:28px; color:var(--text-2); font-size:12px }
 .branch-job { display:flex; align-items:center; gap:6px; overflow-wrap:anywhere }
-.branch-action { display:flex; align-items:flex-start; gap:8px; padding:12px 14px; margin:4px 0; border:1px solid var(--border); border-radius:8px; background:var(--card); line-height:1.6; overflow-wrap:anywhere }
+.branch-action { display:flex; align-items:flex-start; gap:8px; padding:12px 14px; margin:0; border:1px solid var(--border); border-radius:8px; background:var(--card); line-height:1.6; overflow-wrap:anywhere }
 .branch-action span { min-width:0 }
 .branch-condition, small { color:var(--text-3); font-size:10px; margin:4px 0 }
 .branch-condition code { overflow-wrap:anywhere }
-.nested-paths { display:grid; gap:16px; margin:8px 0; padding:0 12px; border-left:2px solid var(--brand-2); border-right:2px solid var(--brand-2); }
+.nested-paths { position:relative; display:grid; grid-template-columns:repeat(2, minmax(180px, max-content)); gap:24px; margin:20px 0 8px; padding:16px 8px; }
 .nested-paths > .nested-path { position:relative; min-width:0; }
-.nested-paths > .nested-path::before, .nested-paths > .nested-path::after { content:""; position:absolute; top:50%; width:12px; border-top:2px solid var(--brand-2); }
-.nested-paths > .nested-path::before { right:100%; }
-.nested-paths > .nested-path::after { left:100%; }
-.nested-join { text-align:right; font-size:10px; color:var(--text-3); }
+.nested-paths > .nested-path::before, .nested-return { content:""; position:absolute; left:-12px; right:-12px; height:2px; background:var(--brand-2); }
+.nested-paths > .nested-path::before { top:-16px; }
+.nested-return { bottom:-16px; }
+.nested-paths > .nested-path:first-child::before, .nested-path:first-child > .nested-return { left:50%; }
+.nested-paths > .nested-path:last-child::before, .nested-path:last-child > .nested-return { right:50%; }
+.nested-paths > .nested-path::after { content:""; position:absolute; left:50%; width:2px; top:-16px; bottom:-16px; background:var(--brand-2); }
+.nested-path > :not(.nested-return) { position:relative; z-index:1; background-color:var(--card); }
+.branch-steps > li { position:relative; }
+.branch-steps > li + li::before { content:""; position:absolute; left:50%; top:-28px; height:28px; width:2px; background:var(--brand-2); }
+.nested-join { text-align:center; font-size:10px; color:var(--text-3); }
 button.branch-job { border: 0; background: transparent; color: var(--brand); font: inherit; text-align: left; cursor: pointer; }
+
+.branch-steps > li > .branch-condition { width:fit-content; max-width:280px; margin:0 auto; padding:8px 12px; border:1px solid var(--border); border-radius:8px; text-align:center; background:var(--card); }
+.nested-paths::before { content:""; position:absolute; left:50%; top:-20px; height:20px; width:2px; background:var(--brand-2); }
+
+.nested-paths::before, .nested-paths > .nested-path::after, .branch-steps > li + li::before { transform:translateX(-50%); }
+.nested-path > .branch-condition { width:fit-content; margin:4px auto; padding:0 6px; }

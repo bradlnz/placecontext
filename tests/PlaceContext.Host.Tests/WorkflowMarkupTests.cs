@@ -67,46 +67,79 @@ public sealed class WorkflowMarkupTests
     }
 
     [Fact]
-    public async Task Deploy_updates_workflow_and_canvas_but_keeps_invalid_or_stale_drafts()
+    public async Task Valid_yaml_updates_the_draft_immediately_and_only_saves_when_requested()
     {
         var store = new Store(); var vm = Editor(store);
         await vm.OpenChainEditorAsync(store.Workflow, view: "markup");
-        Assert.True(vm.IsMarkupView);
-        var initial = vm.MarkupText;
-        vm.MarkupText = initial.Replace("Original", "Edited");
-        vm.SetEditorView("canvas"); vm.SetEditorView("markup");
-        Assert.Contains("Edited", vm.MarkupText);
-        await vm.DeployMarkupAsync(vm.MarkupText);
-        Assert.Null(vm.EditorError); Assert.Equal("Edited", store.Workflow.Name); Assert.Equal("Edited", vm.EdName);
-        Assert.Equal(1, store.Saves); Assert.True(vm.IsMarkupView); Assert.Contains("deployed", vm.MarkupNotice);
-        await vm.DeployMarkupAsync("name: [invalid");
-        Assert.NotNull(vm.EditorError); Assert.Equal("name: [invalid", vm.MarkupText); Assert.Equal(1, store.Saves);
-        vm.ReloadMarkup();
-        vm.EdName = "Changed on canvas";
-        await vm.DeployMarkupAsync(vm.MarkupText);
-        Assert.Contains("canvas changed", vm.EditorError); Assert.Equal(1, store.Saves);
-        vm.ReloadMarkup(); store.Workflow = store.Workflow with { UpdatedAt = store.Workflow.UpdatedAt.AddSeconds(1) };
-        await vm.DeployMarkupAsync(vm.MarkupText);
+        Assert.True(vm.IsCanvasView);
+        var edited = "# Keep my comment\n" + vm.MarkupText.Replace("Original", "Edited").Replace("SELECT 1", "SELECT 2");
+        Assert.True(vm.ApplyMarkup(edited));
+        Assert.Equal("Edited", vm.EdName);
+        Assert.Equal("SELECT 2", Assert.IsType<QueryDataChainAction>(vm.EdStageActions[0]).Sql);
+        Assert.Equal(0, store.Saves);
+        vm.SyncMarkupFromCanvas();
+        vm.SetEditorView("details"); vm.SetEditorView("canvas");
+        Assert.Equal(edited, vm.MarkupText);
+        await vm.SaveChainAsync(closeEditor: false);
+        Assert.Null(vm.EditorError); Assert.Equal("Edited", store.Workflow.Name);
+        Assert.Equal(1, store.Saves);
+        store.Workflow = store.Workflow with { UpdatedAt = store.Workflow.UpdatedAt.AddSeconds(1) };
+        await vm.SaveChainAsync(closeEditor: false);
         Assert.Contains("newer revision", vm.EditorError); Assert.Equal(1, store.Saves);
     }
 
     [Fact]
-    public async Task Markup_navigation_preserves_editor_until_canvas_changes()
+    public async Task Invalid_yaml_preserves_the_last_valid_canvas_and_blocks_saving_until_fixed()
     {
         var store = new Store(); var vm = Editor(store);
-        await vm.OpenChainEditorAsync(store.Workflow, view: "markup");
-        var revision = vm.MarkupRevision;
-        vm.SetEditorView("markup");
-        Assert.Equal(revision, vm.MarkupRevision);
+        await vm.OpenChainEditorAsync(store.Workflow);
+        var initial = vm.MarkupText;
+        var stage = vm.EdStages[0];
+        Assert.False(vm.ApplyMarkup("name: [invalid"));
+        vm.SyncMarkupFromCanvas();
+        Assert.Same(stage, vm.EdStages[0]);
+        Assert.Equal("name: [invalid", vm.MarkupText);
+        Assert.NotNull(vm.MarkupError);
+        vm.SetEditorView("details");
+        await vm.SaveChainAsync();
+        Assert.Equal(0, store.Saves); Assert.NotNull(vm.EditorError);
         vm.SetEditorView("canvas");
-        vm.EdName = "Changed on canvas";
-        vm.SetEditorView("markup");
-        Assert.Equal(revision + 1, vm.MarkupRevision);
-        Assert.Contains("Changed on canvas", vm.MarkupText);
-        vm.MarkupText = "Unsaved draft";
-        vm.SetEditorView("markup");
-        Assert.Equal(revision + 1, vm.MarkupRevision);
-        Assert.Equal("Unsaved draft", vm.MarkupText);
+        Assert.Equal("name: [invalid", vm.MarkupText);
+        Assert.True(vm.ApplyMarkup(initial.Replace("Original", "Corrected")));
+        Assert.Null(vm.MarkupError); Assert.Equal("Corrected", vm.EdName);
+    }
+
+    [Fact]
+    public async Task Canvas_changes_refresh_yaml_without_overwriting_an_invalid_draft()
+    {
+        var store = new Store(); var vm = Editor(store);
+        await vm.OpenChainEditorAsync(store.Workflow);
+        vm.EdName = "Canvas edit";
+        vm.SyncMarkupFromCanvas();
+        Assert.Contains("Canvas edit", vm.MarkupText);
+        var valid = vm.MarkupText;
+        vm.ApplyMarkup("name: [invalid");
+        vm.EdName = "Another canvas edit";
+        vm.SyncMarkupFromCanvas();
+        Assert.Equal("name: [invalid", vm.MarkupText);
+        Assert.False(vm.ApplyMarkup(valid));
+        Assert.Contains("canvas changed", vm.MarkupError, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Another canvas edit", vm.EdName);
+        vm.ReloadMarkup();
+        Assert.Null(vm.MarkupError); Assert.Contains("Another canvas edit", vm.MarkupText);
+        vm.ApplyMarkup("name: [invalid");
+        await vm.OpenChainEditorAsync(store.Workflow);
+        Assert.Null(vm.MarkupError); Assert.Contains("Original", vm.MarkupText);
+    }
+
+    [Fact]
+    public void New_workflows_accept_yaml_before_they_have_a_saved_id()
+    {
+        var store = new Store(); var vm = Editor(store);
+        vm.NewChain("New", [new([], action: new QueryDataChainAction("SELECT 1", "result"))]);
+        Assert.True(vm.ApplyMarkup(vm.MarkupText.Replace("SELECT 1", "SELECT 2")));
+        Assert.Null(vm.EditChainId); Assert.Equal(0, store.Saves);
+        Assert.Equal("SELECT 2", Assert.IsType<QueryDataChainAction>(vm.EdStageActions[0]).Sql);
     }
 
     [Fact]

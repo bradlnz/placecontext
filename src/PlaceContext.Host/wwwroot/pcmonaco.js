@@ -9,6 +9,7 @@ window.pcmonaco = (function () {
   const models = new Map(); // "id::path" → Monaco TextModel
   const fallbacks = new Map(); // id → plain editor while Monaco loads or is unavailable
   const loadingViews = new Map(); // id → skeleton shown through Monaco's first render
+  const valueWatchers = new Map();
   const initLocks = new Map(); // id → in-flight init Promise (serializes concurrent inits)
   let loaderPromise = null;
 
@@ -638,6 +639,24 @@ window.pcmonaco = (function () {
     }
   }
 
+  function watchValue(id, receiver) {
+    valueWatchers.get(id)?.dispose();
+    let timer;
+    const changed = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => receiver.invokeMethodAsync('ValueEdited', getValue(id))
+        .catch(error => console.debug('Editor callback ended:', error)), 300);
+    };
+    const editor = editors.get(id), textarea = fallbacks.get(id);
+    const subscription = editor?.onDidChangeModelContent(changed);
+    textarea?.addEventListener('input', changed);
+    valueWatchers.set(id, { dispose() {
+      clearTimeout(timer);
+      subscription?.dispose();
+      textarea?.removeEventListener('input', changed);
+    } });
+  }
+
   function setValue(id, value, language) {
     try {
       const ta = fallbacks.get(id);
@@ -727,6 +746,8 @@ window.pcmonaco = (function () {
   }
 
   function destroy(id, preserveLoading = false) {
+    valueWatchers.get(id)?.dispose();
+    valueWatchers.delete(id);
     if (!preserveLoading) clearLoading(id);
     try {
       const ta = fallbacks.get(id);
@@ -763,7 +784,7 @@ window.pcmonaco = (function () {
     return !!(host && node && host.contains(node));
   }
 
-  return { isMounted, init, openFile, closeFile, setValue, getValue, insertText, destroy, setSqlSchema };
+  return { isMounted, init, openFile, closeFile, setValue, getValue, insertText, destroy, setSqlSchema, watchValue };
 })();
 
 // pcdata — downloads for project data and on-demand run output.

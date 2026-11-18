@@ -298,7 +298,7 @@ public sealed class WorkflowConditionalPathTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Canvas_shows_three_stacked_path_cards_with_nested_gates_and_edit_controls(bool readOnly)
+    public async Task Canvas_shows_three_tree_branches_with_nested_gates_and_edit_controls(bool readOnly)
     {
         var child = new JobChainView(Guid.NewGuid(), Guid.NewGuid(), "Branch actions", null,
             [new([new(Guid.NewGuid(), "Approved action")], new ConditionGateView("eq:ready:true"),

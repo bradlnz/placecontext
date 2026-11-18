@@ -1,7 +1,7 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<div id="@_id" class="workflow-instructions-editor pcmonaco-pending" aria-busy="true" style="flex:1; min-height:0; height:100%; width:100%">
+<div id="@_id" class="workflow-instructions-editor pcmonaco-pending" aria-busy="true" style="flex:1; min-width:0; min-height:0; height:100%; width:100%; overflow:hidden">
     <div class="pcmonaco-loading" role="status" aria-label="Loading code editor">
         <span class="pcmonaco-loading-label">Loading code editor…</span>
         @foreach (var width in new[] { 64, 82, 48, 72, 56, 88, 40, 68 })
@@ -13,23 +13,53 @@
 
 @code {
     [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
     [Parameter] public string Label { get; set; } = "Agent task instructions in Markdown";
     [Parameter] public string Language { get; set; } = "markdown";
     [Parameter] public string FileName { get; set; } = "instructions.md";
     private readonly string _id = "workflow-instructions-" + Guid.NewGuid().ToString("N");
 
+    private DotNetObjectReference<WorkflowInstructionsEditor>? _reference;
+    private string? _lastValue;
+    private bool _disposed;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
+        {
+            _lastValue = Value;
             await JS.InvokeVoidAsync("pcmonaco.init", _id, Value, Language, null, FileName, false, Label);
+            if (!_disposed && ValueChanged.HasDelegate)
+            {
+                _reference = DotNetObjectReference.Create(this);
+                await JS.InvokeVoidAsync("pcmonaco.watchValue", _id, _reference);
+            }
+        }
+        else if (ValueChanged.HasDelegate && Value != _lastValue)
+        {
+            _lastValue = Value;
+            await JS.InvokeVoidAsync("pcmonaco.setValue", _id, Value, Language);
+        }
     }
+
+    [JSInvokable]
+    public async Task ValueEdited(string? value)
+    {
+        if (_disposed || value is null || value == _lastValue) return;
+        _lastValue = value;
+        await ValueChanged.InvokeAsync(value);
+    }
+
+    public async Task FlushChangesAsync() => await ValueEdited(await ReadAsync());
 
     public async Task<string> ReadAsync() => await JS.InvokeAsync<string?>("pcmonaco.getValue", _id) ?? Value;
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         try { await JS.InvokeVoidAsync("pcmonaco.destroy", _id); }
         catch (JSDisconnectedException) { }
         catch (TaskCanceledException) { }
+        finally { _reference?.Dispose(); }
     }
 }

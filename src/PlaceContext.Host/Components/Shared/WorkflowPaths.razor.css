@@ -1,13 +1,20 @@
-.workflow-paths { --wire:var(--brand-2); position:relative; display:grid; gap:22px; padding:12px 24px; min-width:0; border-left:2px solid var(--wire); border-right:2px solid var(--wire); border-radius:16px; margin-bottom:22px; }
-.path-lane { min-width:0; }
-.path-label { margin:0 0 5px; color:var(--wire); font-size:11px; font-weight:700; }
-.path-caption { padding:10px 14px; margin-bottom:12px; color:var(--text); }
+.workflow-paths { --wire:var(--brand-2); position:relative; display:grid; grid-auto-flow:column; grid-auto-columns:max-content; gap:32px; padding:24px 16px; width:max-content; min-width:100%; box-sizing:border-box; margin-bottom:44px; }
+.workflow-paths::before { content:""; position:absolute; left:50%; top:-9px; height:9px; width:2px; background:var(--wire); }
+.workflow-paths::after { content:""; position:absolute; top:100%; left:50%; height:44px; width:2px; background:var(--wire); }
+.path-lane { position:relative; display:flex; flex-direction:column; width:280px; min-width:280px; }
+.path-lane::before, .path-return { content:""; position:absolute; left:-16px; right:-16px; height:2px; background:var(--wire); }
+.path-lane::before { top:-24px; }
+.path-return { bottom:-24px; }
+.path-lane:first-of-type::before, .path-lane:first-of-type > .path-return { left:50%; }
+.path-lane:last-of-type::before, .path-lane:last-of-type > .path-return { right:50%; }
+.path-lane::after { content:""; position:absolute; left:50%; width:2px; top:-24px; bottom:-24px; background:var(--wire); }
+.path-lane > :not(.path-return) { position:relative; z-index:1; background-color:var(--card); }
+.path-lane:has(.nested-paths), .path-lane:has(.workflow-paths) { width:max-content; }
+.path-label { align-self:center; padding:0 6px; margin:0 0 5px; color:var(--wire); font-size:11px; font-weight:700; }
+.path-caption { width:280px; box-sizing:border-box; align-self:center; padding:10px 14px; margin-bottom:12px; color:var(--text); }
 .path-caption strong { display:block; font-size:14px; line-height:1.4; font-weight:650; overflow-wrap:anywhere; }
 .path-caption p { margin:5px 0 0; color:var(--text-2); font-size:12px; line-height:1.5; }
 .path-card { position:relative; min-width:0; border:1px solid var(--border); border-top:3px solid var(--canvas-accent,#6b91d6); border-radius:12px; background:var(--card); box-shadow:0 4px 16px rgba(0,0,0,.06); }
-.path-card::before, .path-card::after { content:""; position:absolute; top:50%; width:25px; border-top:2px solid var(--wire); }
-.path-card::before { right:100%; }
-.path-card::after { left:100%; }
 .path-head { display:flex; align-items:center; gap:8px; min-height:44px; padding:0 12px; border-bottom:1px solid var(--border); border-radius:9px 9px 0 0; background:color-mix(in srgb, var(--canvas-accent,#6b91d6) 9%, var(--card)); color:var(--text-2); font-size:10px; font-weight:650; text-transform:uppercase; }
 .path-number { display:grid; place-items:center; width:18px; height:18px; border-radius:6px; background:color-mix(in srgb, var(--canvas-accent,#6b91d6) 18%, var(--card)); }
 .path-delete { display:grid; place-items:center; margin-left:auto; width:24px; height:24px; border:0; border-radius:5px; background:transparent; color:var(--text-3); cursor:pointer; }
@@ -18,7 +25,9 @@
 .path-condition { display:flex; align-items:center; gap:8px; width:100%; min-width:0; padding:8px 12px; border:0; border-top:1px solid var(--border); border-radius:0 0 11px 11px; background:var(--brand-bg); color:var(--wire); font-size:9px; text-align:left; cursor:pointer; }
 .path-condition:disabled { opacity:1; cursor:default; }
 .path-condition span { flex:none; font-weight:700; }
-.path-condition code { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9px; }
-.path-add { justify-self:start; min-height:28px; padding:4px 8px; }
-.path-join { position:absolute; right:0; top:100%; display:flex; align-items:center; gap:4px; margin-top:5px; font-size:10px; color:var(--text-3); }
+.path-condition code { max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:9px; }
+.path-add { position:absolute; top:100%; left:0; margin-top:8px; min-height:28px; padding:4px 8px; }
+.path-join { position:absolute; left:calc(50% + 12px); white-space:nowrap; top:100%; display:flex; align-items:center; gap:4px; margin-top:5px; font-size:10px; color:var(--text-3); }
 button:focus-visible { outline:2px solid var(--brand-2); outline-offset:3px; }
+
+.workflow-paths::before, .workflow-paths::after, .path-lane::after { transform:translateX(-50%); }

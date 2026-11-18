@@ -49,6 +49,7 @@
             {
                 <small><AppIcon Kind="parallel" /> Run together</small>
             }
+            @if (stage.Gate is ConditionGateView) { <span class="nested-return" aria-hidden="true"></span> }
             </div>
             @if (stage.Gate is ConditionGateView)
             {
@@ -59,6 +60,7 @@
                         <WorkflowBranchPreview Jobs="Jobs" Workflows="Workflows" Depth="@(Depth + 1)" OnOpenJob="OnOpenJob" OnEditCode="OnEditCode" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{path}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
                     }
                     else { <small>Continue without running this step</small> }
+                    <span class="nested-return" aria-hidden="true"></span>
                 </div>
             }
             </div>

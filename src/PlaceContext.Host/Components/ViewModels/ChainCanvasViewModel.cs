@@ -1,8 +1,10 @@
 using PlaceContext.Application.Dtos;
+using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 namespace PlaceContext.Host.Components.ViewModels;
 
-public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, IDisposable
+public sealed class ChainCanvasViewModel(IJSRuntime? js = null) : PageViewModel, IComponentViewModel, IDisposable
 {
     private string _pathJobId = string.Empty;
     private int? _draggedStage;
@@ -33,6 +35,13 @@ public sealed class ChainCanvasViewModel : PageViewModel, IComponentViewModel, I
         Stages = stages;
         Jobs = jobs;
         Gates = gates;
+    }
+
+    public async Task AfterRenderAsync(bool firstRender, ElementReference viewport)
+    {
+        if (!firstRender || js is null) return;
+        try { await js.InvokeVoidAsync("placecontext.centerWorkflow", viewport); }
+        catch (JSDisconnectedException) { }
     }
 
     public void SetPathJobId(string? value)

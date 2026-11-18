@@ -9,6 +9,7 @@
 .assistant-workspace:has(.agent-workspace, .workflow-editor, .workflow-dialog-overlay) > .context-assistant { position:fixed; inset:0 0 0 auto; width:var(--assistant-panel-width); max-width:100vw; z-index:51; }
 .assistant-workspace:has(.agent-workspace, .workflow-editor, .workflow-dialog-overlay) > .context-assistant { top:var(--workflow-header-height, 80px); }
 .assistant-workspace:has(.step-policy-overlay, .execution-overlay) > .context-assistant { z-index:71; }
+.assistant-workspace:has(.schedule-overlay) > .context-assistant { z-index:0; }
 .assistant-toggle { flex:none; margin:6px; align-self:flex-end; min-height:32px; }
 .assistant-toggle span { display:none; }
 .assistant-open .assistant-toggle span { display:inline; }

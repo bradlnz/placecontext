@@ -101,27 +101,23 @@ else if (EditorDepth == 0)
                     <div class="dcmodal-head" inert="@Vm.ShowWorkflowAssistant">
                         <div class="flex-min">
                             <div class="title-14">@(string.IsNullOrWhiteSpace(Vm.EdName) ? "New workflow" : Vm.EdName) <span class="workflow-step-count">@Vm.EdStages.Count steps</span></div>
-                            <div class="sub-115">@(Vm.IsDetailsView ? "Edit the workflow name, description and definition checks." : Vm.IsMarkupView ? "Edit and deploy this workflow as YAML." : Vm.IsCanvasView ? "Drag stages to reorder. Select a step to configure it." : Vm.IsSchedulesView ? "Choose when this workflow runs." : Vm.IsRunsView ? "Execution history, inputs, and job logs." : "Steps run in order. Jobs within a parallel stage run together.")</div>
+                            <div class="sub-115">@(Vm.IsDetailsView ? "Edit the workflow name, description and definition checks." : Vm.IsCanvasView ? "Edit YAML or configure steps on the canvas. Save workflow to keep your changes." : Vm.IsSchedulesView ? "Choose when this workflow runs." : Vm.IsRunsView ? "Execution history, inputs, and job logs." : "Steps run in order. Jobs within a parallel stage run together.")</div>
                         </div>
                         <div class="workflow-canvas-actions">
                             @if (Vm.EditChainId.HasValue && Vm.Chains?.FirstOrDefault(chain => chain.Id == Vm.EditChainId) is { } canvasWorkflow)
                             {
                                 <button type="button" class="dcbtn primary workflow-run" title="Run the saved workflow" disabled="@Vm.IsRunningChain(canvasWorkflow.Id)" @onclick="() => Vm.RunChainAsync(canvasWorkflow)"><AppIcon Kind="play" /> @(Vm.IsRunningChain(canvasWorkflow.Id) ? "Running…" : "Run")</button>
                             }
-                            @if (!Vm.IsMarkupView)
-                            {
                             <button type="button" class="dcbtn" @onclick="() => Vm.OpenStageNodePicker(Vm.EdStages.Count)"><AppIcon Kind="plus" /> Add step</button>
-                            <button type="button" class="dcbtn" disabled="@Vm.Saving" @onclick="SaveWorkflowAsync"><AppIcon Kind="save" /> @(Vm.Saving ? "Saving…" : "Save workflow")</button>
-                            }
+                            <button type="button" class="dcbtn" disabled="@(Vm.Saving || Vm.MarkupError is not null)" @onclick="SaveWorkflowAsync"><AppIcon Kind="save" /> @(Vm.Saving ? "Saving…" : "Save workflow")</button>
                         </div>
                         <button class="dcslide-x" aria-label="Close canvas" disabled="@Vm.Saving" @onclick="CloseWorkflowAsync"><AppIcon Kind="close" /></button>
                     </div>
                     <nav class="dctabs workflow-view-tabs" aria-label="Workflow view" inert="@(Vm.ShowWorkflowAssistant || Vm.Saving)">
                         <button type="button" class="dctab @(Vm.IsDetailsView ? "active" : null)" aria-pressed="@(Vm.IsDetailsView ? "true" : "false")" @onclick="ShowWorkflowDetailsAsync">Details</button>
-                        <button type="button" class="dctab @(Vm.IsCanvasView ? "active" : null)" aria-pressed="@(Vm.IsCanvasView ? "true" : "false")" @onclick='() => SetWorkflowViewAsync("canvas")'>Canvas</button>
+                        <button type="button" class="dctab @(Vm.IsCanvasView ? "active" : null)" aria-pressed="@(Vm.IsCanvasView ? "true" : "false")" @onclick='() => SetWorkflowViewAsync("canvas")'>Editor</button>
                         @if (Vm.EditChainId.HasValue)
                         {
-                            <button type="button" class="dctab @(Vm.IsMarkupView ? "active" : null)" aria-pressed="@(Vm.IsMarkupView ? "true" : "false")" @onclick='() => SetWorkflowViewAsync("markup")'>Markup</button>
                             <button type="button" class="dctab @(Vm.IsRunsView ? "active" : null)" aria-pressed="@(Vm.IsRunsView ? "true" : "false")" @onclick='() => SetWorkflowViewAsync("runs")'>Runs<span class="n">@(Vm.ChainRuns?.Count ?? 0)</span></button>
                             <AuthorizeView Policy="@Permission.TriggersManage">
                                 <button type="button" class="dctab @(Vm.IsSchedulesView ? "active" : null)" aria-pressed="@(Vm.IsSchedulesView ? "true" : "false")" @onclick='() => SetWorkflowViewAsync("schedules")'>Schedules</button>
@@ -136,7 +132,7 @@ else if (EditorDepth == 0)
                     {
                         <p class="workflow-canvas-error" role="alert">@canvasError</p>
                     }
-                    <div class="dcmodal-body @(Vm.IsDetailsView || Vm.IsListView || Vm.IsRunsView || Vm.IsSchedulesView || Vm.IsMarkupView ? "workflow-list-body" : null)" inert="@Vm.ShowWorkflowAssistant">
+                    <div class="dcmodal-body @(Vm.IsDetailsView || Vm.IsListView || (Vm.IsRunsView && Vm.OpenRun is null) || Vm.IsSchedulesView ? "workflow-list-body" : null)" inert="@Vm.ShowWorkflowAssistant">
                         @if (Vm.IsDetailsView)
                         {
                             <div class="workflow-details">
@@ -195,20 +191,6 @@ else if (EditorDepth == 0)
                             </section>
                                 </div>
                             </div>
-                        }
-                        else if (Vm.IsMarkupView)
-                        {
-                            <section class="workflow-markup" aria-label="Workflow YAML">
-                                <div class="markup-toolbar">
-                                    <p>Deploy validates and saves this definition. Run executes the saved workflow.</p>
-                                    <button type="button" class="dcbtn" disabled="@Vm.Saving" title="Replace the YAML draft with the current canvas definition" @onclick="Vm.ReloadMarkup">Reload from canvas</button>
-                                    <button type="button" class="dcbtn primary" disabled="@Vm.Saving" @onclick="DeployWorkflowMarkupAsync"><AppIcon Kind="save" /> @(Vm.Saving ? "Deploying…" : "Deploy")</button>
-                                </div>
-                                @if (Vm.MarkupNotice is not null) { <p class="markup-notice" role="status">@Vm.MarkupNotice</p> }
-                                <div class="markup-editor" inert="@Vm.Saving">
-                                    <WorkflowInstructionsEditor @key="Vm.MarkupRevision" @ref="_markupEditor" Value="@Vm.MarkupText" Language="yaml" FileName="workflow.yaml" Label="Workflow definition in YAML" />
-                                </div>
-                            </section>
                         }
                         else if (Vm.IsSchedulesView && Vm.EditChainId is { } scheduledWorkflowId)
                         {
@@ -311,6 +293,10 @@ else if (EditorDepth == 0)
                                         }
                                     </div>
 
+                                    <div class="workflow-run-split">
+                                    <WorkflowSplit Label="Resize run pipeline and output">
+                                    <Left>
+                                    <div class="run-pipeline-pane">
                                     <ExecutionApprovalPanel @key="Vm.OpenRun.Id" ProjectId="Vm.ProjectId" RunIds="@(new[] { Vm.OpenRun.Id }.Concat(Vm.OpenRun.Steps.Select(s => s.RunId).OfType<Guid>()).ToArray())" />
 
                                     @if (Vm.OpenRun.InputRequest is { } inputRequest)
@@ -392,6 +378,10 @@ else if (EditorDepth == 0)
                                                    OnStepCancel="@(step => Vm.CancelStepRunAsync(step.RunId!.Value))" />
                                     </div>
 
+                                    </div>
+                                    </Left>
+                                    <Right>
+                                    <section class="run-output-pane" aria-label="Pipeline output">
                                     @if (Vm.ContextRows.Count > 0)
                                     {
                                         <details class="chain-context-panel run-detail-fold">
@@ -434,17 +424,38 @@ else if (EditorDepth == 0)
 
                                     @if (Vm.OpenRun.FinalOutput is { Length: > 0 })
                                     {
-                                        <div>
+                                        <div class="pipeline-output-editor">
                                             <div class="out-label">Pipeline output</div>
                                             <RunOutput Value="@(Vm.Presentation.Json(Vm.OpenRun.FinalOutput))" />
                                         </div>
                                     }
-
+                                    else
+                                    {
+                                        <p class="output-waiting">No pipeline output yet.</p>
+                                    }
+                                    </section>
+                                    </Right>
+                                    </WorkflowSplit>
+                                    </div>
                                 }
                             </div>
                         }
                         @if (Vm.IsCanvasView)
                         {
+                        <WorkflowSplit Label="Resize YAML and canvas">
+                        <Right>
+                            <section class="workflow-markup" aria-label="Workflow YAML">
+                                @if (Vm.MarkupError is not null)
+                                {
+                                    <div class="markup-toolbar"><button type="button" class="dcbtn" @onclick="Vm.ReloadMarkup">Reset YAML</button></div>
+                                    <p class="markup-error" role="alert">@Vm.MarkupError</p>
+                                }
+                                <div class="markup-editor" inert="@Vm.Saving">
+                                    <WorkflowInstructionsEditor @ref="_markupEditor" Value="@Vm.MarkupText" ValueChanged="OnWorkflowMarkupChanged" Language="yaml" FileName="workflow.yaml" Label="Workflow definition in YAML" />
+                                </div>
+                            </section>
+                        </Right>
+                        <Left>
                         <ChainCanvas OnEditCode="OpenCodeAsync" Stages="Vm.BuildCanvasStageViews()"
                                      Workflows="@(Vm.Chains ?? [])"
                                      OnAddBranch="Vm.OpenStepBranches" CanAddBranch="Vm.CanBranchStep" OnAddPathways="Vm.OpenStepPathways"
@@ -467,6 +478,8 @@ else if (EditorDepth == 0)
                                      OnMovePath="@(move => Vm.MovePath(move.SourceStage, move.SourceBranch, move.TargetStage))"
                                      OnRemovePath="@(item => Vm.RemoveBranch(item.StageIndex, item.BranchIndex))"
                                      OnRemoveStage="@(stageIndex => Vm.RemoveStage(stageIndex))" />
+                        </Left>
+                        </WorkflowSplit>
                         }
                         @if (Vm.IsListView)
                         {
@@ -1932,13 +1945,14 @@ else if (EditorDepth == 0)
     private WorkflowInstructionsEditor? _markupEditor;
     private async Task SetWorkflowViewAsync(string view)
     {
-        if (Vm.IsMarkupView && _markupEditor is not null) Vm.MarkupText = await _markupEditor.ReadAsync();
+        await ReadWorkflowMarkupAsync();
         if (view == "runs") await Vm.ShowWorkflowRunsAsync();
         else Vm.SetEditorView(view);
     }
-    private async Task DeployWorkflowMarkupAsync()
+    private void OnWorkflowMarkupChanged(string yaml) => Vm.ApplyMarkup(yaml);
+    private async Task ReadWorkflowMarkupAsync()
     {
-        if (_markupEditor is not null) await Vm.DeployMarkupAsync(await _markupEditor.ReadAsync());
+        if (Vm.IsCanvasView && _markupEditor is not null) await _markupEditor.FlushChangesAsync();
     }
 
     private ElementReference _executionClose;
@@ -2117,6 +2131,7 @@ else if (EditorDepth == 0)
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (Vm.ShowEditor && Vm.IsCanvasView) Vm.SyncMarkupFromCanvas();
         if (_focusExecution && Vm.ExecutionStep is not null)
         {
             _focusExecution = false;
@@ -2165,7 +2180,7 @@ else if (EditorDepth == 0)
     {
         if (await CloseCodeAsync())
         {
-            if (Vm.IsMarkupView && _markupEditor is not null) Vm.MarkupText = await _markupEditor.ReadAsync();
+            await ReadWorkflowMarkupAsync();
             Vm.ShowWorkflowDetails();
         }
     }
@@ -2174,6 +2189,7 @@ else if (EditorDepth == 0)
     {
         if (await CloseCodeAsync())
         {
+            await ReadWorkflowMarkupAsync();
             await Vm.SaveChainAsync();
             await CompleteWorkflowSaveAsync();
         }

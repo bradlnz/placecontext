@@ -1,0 +1,7 @@
+.workflow-editor-split { display:grid; grid-template-columns:minmax(0, 1fr) 18px minmax(0, min(var(--right-pane-width, 38%), calc(100% - min(200px, 45%)))); grid-template-rows:minmax(0, 1fr); flex:1; min-width:0; min-height:0; }
+.split-pane { display:flex; min-width:0; min-height:0; overflow:hidden; }
+.split-handle { display:flex; align-items:center; justify-content:center; cursor:col-resize; touch-action:none; position:relative; }
+.split-handle::after { content:""; position:absolute; top:0; bottom:0; left:8px; width:2px; background:var(--border); }
+.split-grip { display:flex; position:relative; z-index:1; padding:6px 0; border:1px solid var(--border); border-radius:4px; background:var(--panel); color:var(--text-2); pointer-events:none; }
+.split-handle:hover::after, .split-handle.dragging::after, .split-handle:focus-visible::after { background:var(--brand-2); }
+.split-handle:focus-visible { outline:2px solid var(--brand-2); outline-offset:-2px; }

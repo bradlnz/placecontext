@@ -51,6 +51,9 @@ window.placecontext = {
       });
     });
   },
+  centerWorkflow(el) {
+    if (el) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+  },
   scrollToBottom(el) {
     if (el) {
       el.scrollTop = el.scrollHeight;

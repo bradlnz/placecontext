@@ -3,7 +3,7 @@ namespace PlaceContext.Host.Tests;
 public sealed class ChainPipelineResponsiveContractTests
 {
     [Fact]
-    public void Run_canvas_stacks_and_remains_contained_on_mobile()
+    public void Canvas_flows_downward_and_keeps_branches_scrollable_on_mobile()
     {
         var pipelineStyles = ReadHostSource("Components/Shared/ChainCanvas.razor.css");
         var chainsStyles = ReadHostSource("Components/Pages/JobChains.razor.css");
@@ -13,8 +13,11 @@ public sealed class ChainPipelineResponsiveContractTests
         var responsiveChains = chainsStyles.Split(breakpoint, 2)[1];
 
         Assert.Contains("flex-direction:column", responsivePipeline);
-        Assert.Contains(".canvas-stage { width:100%", responsivePipeline);
-        Assert.Contains("min-width:0", responsivePipeline);
+        Assert.Contains(".canvas-pipeline { display:flex; flex-direction:column", pipelineStyles);
+        Assert.Contains(".flow-group { display:flex; flex-direction:column", pipelineStyles);
+        Assert.Contains("grid-auto-flow:column", pipelineStyles);
+        Assert.Contains("overflow-x:auto", pipelineStyles);
+        Assert.DoesNotContain(".stage-routes { width:100%", responsivePipeline);
         Assert.DoesNotContain("flex-wrap:nowrap", responsivePipeline);
         Assert.Contains(".running-steps-panel", responsiveChains);
         Assert.Contains("max-width: 100%", responsiveChains);

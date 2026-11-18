@@ -129,7 +129,7 @@ public sealed partial class JobChainsViewModel : PageViewModel, IComponentViewMo
         if (!openEditor)
         {
             EditorView = NormalizeEditorView(view ?? (runId.HasValue ? "runs" : "canvas"));
-            if (IsMarkupView) PrepareMarkup();
+            if (IsCanvasView) SyncMarkupFromCanvas();
             if (EditorView is "runs" or "details")
             {
                 EditorTab = EditorView;

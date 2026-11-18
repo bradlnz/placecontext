@@ -208,6 +208,7 @@ public sealed partial class JobChainsViewModel
         EditorError = null;
         EditorTab = "details";
         EditorView = "canvas";
+        ReloadMarkup();
         ShowEditor = true;
         NotifyStateChanged();
     }
@@ -243,9 +244,10 @@ public sealed partial class JobChainsViewModel
         EditorView = "canvas";
         OpenRun = null;
         StepRunDetail = null;
+        ReloadMarkup();
         ShowEditor = true;
         EditorView = NormalizeEditorView(view ?? (runId.HasValue ? "runs" : "canvas"));
-        if (IsMarkupView) PrepareMarkup();
+        if (IsCanvasView) SyncMarkupFromCanvas();
         if (EditorView == "runs")
         {
             EditorTab = "runs";
@@ -279,7 +281,7 @@ public sealed partial class JobChainsViewModel
     public void SetEditorView(string view)
     {
         EditorView = NormalizeEditorView(view);
-        if (IsMarkupView) PrepareMarkup();
+        if (IsCanvasView) SyncMarkupFromCanvas();
         if (EditorView == "runs")
         {
             EditorTab = "runs";
@@ -348,7 +350,7 @@ public sealed partial class JobChainsViewModel
         "list" => "list",
         "runs" => "runs",
         "schedules" => "schedules",
-        "markup" => "markup",
+        "markup" => "canvas",
         _ => "canvas"
     };
 
@@ -1226,6 +1228,12 @@ public sealed partial class JobChainsViewModel
     public async Task SaveChainAsync(bool closeEditor = true)
     {
         EditorError = null;
+        if (MarkupError is not null)
+        {
+            EditorError = "Fix the YAML errors before saving the workflow.";
+            NotifyStateChanged();
+            return;
+        }
         if (string.IsNullOrWhiteSpace(EdName))
         {
             EditorError = "Name is required.";

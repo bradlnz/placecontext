@@ -50,6 +50,7 @@
     'insertText',
     'destroy',
     'setSqlSchema',
+    'watchValue',
   ]);
   register('pcdata', 'pcmonaco', ['download', 'downloadStream']);
   register('pcstudio', 'pcstudio', ['splitter']);

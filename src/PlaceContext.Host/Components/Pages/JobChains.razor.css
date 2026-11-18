@@ -65,6 +65,12 @@
 .editor-tabs { margin:0; padding:0 18px; border-bottom:1px solid var(--border) }
 .runs-body { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; display:flex; flex-direction:column; gap:12px }
 .runs-body ::deep > * { flex-shrink:0 }
+.runs-body:has(.workflow-run-split) { overflow:hidden }
+.runs-body .workflow-run-split { display:flex; flex:1; min-width:0; min-height:0 }
+.run-pipeline-pane, .run-output-pane { display:flex; flex-direction:column; flex:1; min-width:0; min-height:0; gap:12px; overflow:auto; overscroll-behavior:contain }
+.run-pipeline-pane > *, .run-output-pane > * { flex-shrink:0 }
+.pipeline-output-editor { display:flex; flex-direction:column; flex:1; min-height:180px; min-width:0 }
+.pipeline-output-editor ::deep .run-output { flex:1; height:0; min-height:160px; max-height:none }
 .no-runs { color:var(--text-3); font-size:13px; padding:14px 0 }
 .run-card { padding:12px 16px; cursor:pointer }
 .run-row { display:flex; align-items:center; gap:12px }
@@ -640,11 +646,10 @@ button.stage-job-chip:hover { border-color:var(--brand-2); background:var(--bran
 
 .workflow-canvas-dialog.assistant-open { position:relative; }
 
-.workflow-markup { flex:1; min-height:0; display:flex; flex-direction:column; gap:12px; }
+.workflow-markup { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; gap:12px; }
 .markup-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.markup-toolbar p { flex:1; margin:0; min-width:200px; font-size:12px; color:var(--text-2); }
-.markup-editor { flex:1; min-height:360px; border:1px solid var(--border); overflow:hidden; border-radius:8px; }
-.markup-notice { margin:0; font-size:12px; color:var(--good); }
+.markup-editor { flex:1; min-width:0; min-height:0; border:1px solid var(--border); overflow:hidden; border-radius:8px; }
+.markup-error { margin:0; font-size:12px; color:var(--bad); max-height:120px; overflow:auto; }
 .workflow-canvas-dialog .dcmodal-body:has(> .workflow-markup) { display:flex; }
 .sub-workflow-modal ::deep .chain-canvas { flex:none }
 .sub-workflow-modal ::deep .canvas-viewport { height:auto; overflow-y:hidden; overscroll-behavior-y:auto }

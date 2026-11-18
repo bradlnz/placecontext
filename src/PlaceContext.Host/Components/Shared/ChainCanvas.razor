@@ -20,7 +20,7 @@
         }
     </div>
 
-    <div class="canvas-viewport" tabindex="0" role="region" aria-label="Workflow canvas. Scroll to see all steps.">
+    <div class="canvas-viewport" @ref="_viewport" tabindex="0" role="region" aria-label="Workflow canvas. Scroll to see all steps.">
         <div class="canvas-pipeline">
             <div class="start-node">
                 <AppIcon Kind="play" />
@@ -76,7 +76,7 @@
                                 <span class="gate-icon"><AppIcon Kind="plus" /></span>
                             </button>
                         }
-                        <span class="connector-line"></span><span class="connector-arrow"><AppIcon Kind="chevron-right" /></span>
+                        <span class="connector-line"></span>
                     </div>
 
                     <div class="stage-routes @(gate is ConditionGateView ? "conditional-routes" : "")">
@@ -275,6 +275,7 @@
                             <button class="add-path" @onclick="() => OnAddPathways.InvokeAsync(stageIndex)"><AppIcon Kind="split" /> Add pathways after step</button>
                         }
                     </div>
+                    @if (gate is ConditionGateView) { <span class="route-return" aria-hidden="true"></span> }
                     </div>
                     @if (gate is ConditionGateView condition)
                     {
@@ -283,7 +284,7 @@
                             <div class="canvas-stage false-route">
                                 @if ((stage.ElseBranch ?? condition.ElseBranch) is { Count: > 0 } other)
                                 {
-                                    <WorkflowBranchPreview Jobs="@(ReadOnly ? Array.Empty<JobView>() : Jobs)" OnOpenJob="OnOpenJob" OnEditCode="OnEditCode" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{stageIndex}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
+                                    <WorkflowBranchPreview Workflows="Workflows" Jobs="@(ReadOnly ? Array.Empty<JobView>() : Jobs)" OnOpenJob="OnOpenJob" OnEditCode="OnEditCode" Stages="other" RunSteps="RunSteps" PathPrefix="@($"{stageIndex}/else")" OnStepClick="OnStepClick" OnStepCancel="OnStepCancel" InspectActions="InspectActions" />
                                 }
                                 else
                                 {
@@ -294,6 +295,7 @@
                                     <button class="dcbtn canvas-button" @onclick="@(() => OnEditFalsePath.InvokeAsync(stageIndex))">Edit false path</button>
                                 }
                             </div>
+                            <span class="route-return" aria-hidden="true"></span>
                         </div>
                         <span class="route-join"><AppIcon Kind="branch" /> Rejoin</span>
                         @if (RunSteps is null && !ReadOnly && OnAddBranch.HasDelegate && (CanAddBranch?.Invoke(stageIndex) ?? true))
@@ -307,7 +309,7 @@
 
             @if (Vm.Stages.Count > 0)
             {
-                <div class="finish-connector"><span></span><span class="connector-arrow"><AppIcon Kind="chevron-right" /></span></div>
+                <div class="finish-connector" aria-hidden="true"></div>
                 <div class="finish-node"><AppIcon Kind="file" /> Output</div>
             }
         </div>
@@ -362,6 +364,8 @@
     [Parameter] public EventCallback<int> OnRemoveStage { get; set; }
     [Parameter] public EventCallback<int> OnEditPolicy { get; set; }
 
+    private ElementReference _viewport;
+    protected override Task OnAfterRenderAsync(bool firstRender) => Vm.AfterRenderAsync(firstRender, _viewport);
     protected override void OnInitialized() => Vm.Attach(() => InvokeAsync(StateHasChanged));
     protected override void OnParametersSet() => Vm.SetParameters(Stages, Jobs, Gates);
     private void OnPathJobChanged(ChangeEventArgs args) => Vm.SetPathJobId(args.Value?.ToString());
